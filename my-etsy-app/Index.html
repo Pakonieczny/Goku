@@ -300,6 +300,7 @@
   
   <!-- Etsy OAuth and Shop Listings Section -->
   <button id="connectEtsyBtn" class="btn waves-effect waves-light configurable">Connect to Etsy</button>
+  <!-- "Fetch Shop Listings" button has been removed -->
   <div style="margin-top: -180px; margin-left: 10px;">
     <div class="section-heading configurable">My Etsy Shop Listings</div>
     <div class="textbox-container configurable">
@@ -365,12 +366,12 @@
     <div id="previewGrid"></div>
   </div>
   
-  <!-- Upload to Etsy Button (Bottom Center) -->
+  <!-- New Upload to Etsy button container -->
   <div id="uploadContainer">
     <button id="uploadToEtsyBtn" class="btn waves-effect waves-light configurable">Upload to Etsy</button>
   </div>
   
-  <!-- Modals -->
+  <!-- Modals (Title Rules, Description Rules, Analyze Rules, Button Config, Metadata, Crop) -->
   <div id="titleRulesModal" class="modal">
     <div class="modal-content">
       <h4>Title Rules</h4>
@@ -490,6 +491,34 @@ Default Photo Analysis Rules:
     </div>
   </div>
   
+  <!-- Helper function to fetch file content from GitHub using the correct API call path -->
+  <script>
+    // Example helper function to fetch a file from GitHub:
+    async function fetchFileContent(path) {
+      // Replace these with your actual GitHub username and repository name.
+      const repoOwner = "pakonieczny";
+      const repoName = "Goku";
+      const url = `https://api.github.com/repos/${repoOwner}/${repoName}/contents/${path}`;
+      try {
+        const response = await fetch(url);
+        const data = await response.json();
+        if (data.content) {
+          const decodedContent = atob(data.content);
+          console.log("File content of", path, ":", decodedContent);
+          return decodedContent;
+        } else {
+          console.error("No content found for", path, data);
+        }
+      } catch (error) {
+        console.error("Error fetching file content for", path, error);
+      }
+    }
+    
+    // You can test the helper function by calling, for example:
+    // fetchFileContent("index.html");
+    // fetchFileContent("netlify/functions/exchangeToken.js");
+  </script>
+  
   <script src="https://code.jquery.com/jquery-3.6.0.min.js"></script>
   <script src="https://cdnjs.cloudflare.com/ajax/libs/materialize/1.0.0/js/materialize.min.js"></script>
   <script>
@@ -527,8 +556,8 @@ Default Photo Analysis Rules:
       });
     }
     
-    // (uploadCSVFile, uploadDocFile, analyzeDocument, splitIntoChunks, summarizeTextChunk, iterativeSummarization,
-    // upscaleImageAfterAnalysis, verifyMetadata functions remain unchanged)
+    // (uploadCSVFile, uploadDocFile, analyzeDocument, splitIntoChunks, summarizeTextChunk,
+    // iterativeSummarization, upscaleImageAfterAnalysis, verifyMetadata functions remain unchanged)
     
     // PKCE Utility Functions
     function generateRandomString(length) {
