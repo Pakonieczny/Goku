@@ -1,0 +1,8 @@
+[build]
+  publish = "dist"  # or your publish directory
+  functions = "netlify/functions"
+
+[context.production.environment]
+  CLIENT_ID = "k75zdspz4r99txpqdji7i2em"
+  CLIENT_SECRET = "u2ie4fx5le"
+  REDIRECT_URI = "https://delicate-tanuki-616ac0.netlify.app/"
