@@ -1,0 +1,1265 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="UTF-8">
+  <title>Etsy Listing Generator & Shop Listings</title>
+  <!-- Favicon restored -->
+  <link rel="icon" type="image/png" href="assets/favicon.png">
+  <!-- Import Google Material Icons and Materialize CSS -->
+  <link href="https://fonts.googleapis.com/icon?family=Material+Icons" rel="stylesheet">
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/materialize/1.0.0/css/materialize.min.css">
+  <!-- Include piexifjs for EXIF manipulation -->
+  <script src="https://cdn.jsdelivr.net/npm/piexifjs@1.0.4/piexif.min.js"></script>
+  <style>
+    /* Basic layout */
+    html, body { margin: 0; padding: 0; width: 100vw; font-family: Arial, sans-serif; }
+    .container { width: 100vw; padding: 10px; box-sizing: border-box; text-align: left; }
+    h5, label, p { text-align: left; }
+    input, textarea { width: 100%; box-sizing: border-box; }
+    
+    /* --- Wrap Listing Description and File Drop Zones --- */
+    #descriptionAndFileUploadContainer { display: flex; align-items: center; }
+    .listing-desc-container {
+      position: relative;
+      display: inline-block;
+      width: 500px;
+    }
+    .listing-desc-container h5 {
+      margin: 0 0 10px 0;
+      font-size: 1.2rem;
+      font-weight: 500;
+    }
+    .listing-desc-container label.section-heading { 
+      font-size: 1.2rem; 
+      font-weight: 500; 
+    }
+    .listing-desc-container input {
+      width: 500px;
+      height: 30px;
+      border: 1px solid #000;
+      padding: 5px;
+    }
+    /* "User Provided Search Key Phrases" textarea */
+    #searchKeyPhrases {
+      resize: none;
+      box-sizing: border-box;
+      border: 1px solid grey;
+    }
+    #searchKeyPhrases[rows="14"] { height: auto; }
+    .flex-container { display: flex; gap: 10px; align-items: stretch; }
+    .textbox-container { flex: 1; }
+    .textbox-container textarea { width: 100%; padding: 0.8rem; font-size: 1rem; line-height: 1.2; resize: none; overflow: visible; box-sizing: border-box; }
+    .button-container { width: 200px; display: flex; flex-direction: column; gap: 10px; align-self: flex-start; }
+    #listingTitle { min-height: 45px; }
+    #listingDescInput { width: 500px; height: 30px; border: 1px solid #000; padding: 5px; }
+    #listingDescription { min-height: 150px; }
+    .section-heading { font-size: 1.2rem; font-weight: 500; margin-bottom: 5px; display: inline-block; }
+    .count-text { font-style: italic; font-size: 0.9em; margin-top: 5px; }
+    
+    /* Drag and Drop Boxes */
+    #dropZone, #ordersDropZone, #listingsDropZone {
+      width: 138px; 
+      height: 138px; 
+      border: 2px dashed #ccc; 
+      border-radius: 3px; 
+      display: inline-block; 
+      vertical-align: middle; 
+      text-align: center; 
+      line-height: 138px;
+      position: relative;
+    }
+    /* Orders container */
+    #ordersContainer { display: flex; flex-direction: column; }
+    /* CSV Progress Bar */
+    #csvProgressBar {
+      width: 100%; height: 20px; border: 1px solid blue; background-color: #e0f0ff; margin-top: 5px;
+      -webkit-appearance: none; appearance: none;
+    }
+    #csvProgressBar::-webkit-progress-bar { background-color: #e0f0ff; border: 1px solid blue; }
+    #csvProgressBar::-webkit-progress-value { background-color: blue; }
+    #csvProgressContainer { margin-left: 85px; }
+    /* File Drop Zones container */
+    #fileDropZonesContainer { display: flex; gap: 10px; margin-left: 100px; }
+    #uploadedFilesList {
+      width: 300px;
+      height: 125px;
+      resize: none;
+      box-sizing: border-box;
+      border: 1px solid grey;
+      margin-left: 85px;
+    }
+    
+    /* Primary Preview – clickable for cropping */
+    #primaryPreview { 
+      width: 138px; 
+      height: 138px; 
+      border: 1px solid #ccc; 
+      border-radius: 3px;
+      display: inline-block; 
+      vertical-align: middle; 
+      position: relative;
+      top: -250px;
+      left: 285px;
+      text-align: center; 
+      overflow: hidden; 
+      cursor: pointer;
+    }
+    #primaryPreview:empty { background: #fff; }
+    #primaryPreview img { width: 100%; height: 100%; object-fit: contain; border-radius: 3px; }
+    
+    /* Preview Grid */
+    #previewGridContainer {
+      position: relative;
+      margin: 20px auto;
+      width: auto;
+      max-width: 600px;
+      text-align: center;
+    }
+    #previewGrid {
+      display: grid;
+      grid-template-columns: repeat(5, 100px);
+      grid-column-gap: 23px;
+      grid-row-gap: 18px;
+      margin: 0 auto;
+    }
+    .preview-cell { position: relative; display: flex; flex-direction: column; align-items: center; }
+    .resolution-text { position: absolute; top: -12px; left: 0; right: 0; font-size: 8px; text-align: center; color: #333; pointer-events: none; }
+    .preview-box {
+      width: 100px; 
+      height: 132px; 
+      background-color: #fff; 
+      border: 2px solid #ccc; 
+      border-radius: 3px;
+      box-sizing: border-box; 
+      position: relative; 
+      overflow: visible;
+    }
+    .preview-box img { 
+      width: 100px; 
+      height: 100px; 
+      object-fit: cover; 
+      border-radius: 3px; 
+      display: block; 
+    }
+    .overlay { 
+      position: absolute; 
+      top: 0; left: 0; 
+      width: 100px; height: 100px; 
+      background-color: rgba(0,0,255,0.3);
+      opacity: 0; transition: opacity 0.2s ease; 
+      pointer-events: none; 
+      z-index: 1; 
+    }
+    .preview-box.dragover .overlay { opacity: 1; }
+    .preview-box progress { width: 100%; height: 13px; margin-top: 2px; }
+    .status-icon { position: absolute; bottom: 2px; left: 2px; font-size: 14px; font-weight: bold; z-index: 3; }
+    .status-icon.success { color: green; }
+    .status-icon.error { color: red; }
+    .remove-btn { 
+      position: absolute; top: -5px; left: -5px; 
+      width: 10px; height: 10px; 
+      background-color: black;
+      color: white; font-size: 8px; line-height: 10px; 
+      text-align: center; cursor: pointer; 
+      z-index: 999; border-radius: 3px; 
+    }
+    .number-overlay { 
+      position: absolute; top: 0; right: 0; 
+      width: 16px; height: 16px; 
+      background-color: rgba(0,0,0,0.7);
+      color: white; display: flex; align-items: center; 
+      justify-content: center; font-size: 10px; 
+      z-index: 999; border-radius: 3px; 
+    }
+    .file-name { text-align: center; font-size: 12px; margin-top: 4px; white-space: pre-line; }
+    
+    /* Container #13 */
+    #container13 { position: relative; width: 250px; top: -150px; }
+    
+    /* Components below search key phrases */
+    #belowSearch { margin-top: -180px; margin-left: 10px; }
+    .title-container { margin-top: -50px; }
+    .description-container { margin-top: 0px; }
+    #analyzeMetadataBtn { margin-left: 50px; }
+    #showAnalyzeRulesBtn { margin-top: 25px; }
+    
+    /* Adjust the position of "2. User Provided Search Key Phrases" container */
+    .phrases-header { 
+      position: relative; 
+      top: 125px;  
+      left: 10px; 
+    }
+    
+    /* Crop Modal (rebuilt) */
+    #photoCropModal {
+      display: none; 
+      position: fixed; 
+      top: 0; left: 0; 
+      width: 100vw; 
+      height: 100vh;
+      background: rgba(0,0,0,0.7); 
+      z-index: 10000; 
+      padding: 20px; 
+      box-sizing: border-box;
+      display: flex; 
+      align-items: center; 
+      justify-content: center;
+    }
+    #photoCropModal .crop-container {
+      background: #fff; 
+      width: 550px; 
+      height: 550px; 
+      box-shadow: 0 4px 10px rgba(0,0,0,0.3);
+      border-radius: 8px; 
+      overflow: hidden; 
+      position: relative; 
+      display: flex; 
+      flex-direction: column;
+    }
+    #photoCropModal .crop-container .img-container {
+      width: 550px; 
+      height: 550px; 
+      position: relative; 
+      overflow: hidden; 
+      background: #000; 
+      border: 2px dashed #fff;
+    }
+    #photoCropModal .crop-container .img-container img {
+      position: absolute; 
+      cursor: grab; 
+      touch-action: none; 
+      user-select: none; 
+      transition: none;
+    }
+    #photoCropModal .crop-container .controls { 
+      padding: 10px; 
+      background: #f5f5f5; 
+      text-align: center; 
+      border-top: 1px solid #ddd; 
+    }
+    #photoCropModal .crop-container .controls label { margin-right: 10px; }
+    #photoCropModal .crop-container .controls input[type="range"] { vertical-align: middle; }
+    #photoCropModal .crop-container button {
+      margin: 10px auto 0 auto; 
+      padding: 8px 16px; 
+      background-color: #2196f3; 
+      color: #fff;
+      border: none; 
+      border-radius: 4px; 
+      cursor: pointer; 
+      display: inline-block;
+    }
+    #photoCropModal .crop-container button:hover { background-color: #1976d2; }
+    #cancelCropBtn { margin-left: 10px; background-color: #f44336; }
+    
+    /* Metadata Modal */
+    #metadataModal .modal-content { padding: 20px; }
+    #metadataModal textarea { width: 100%; height: 300px; resize: none; }
+    
+    /* Analyze Rules Modal */
+    #analyzeRulesModal .modal-content { padding: 20px; }
+    #analyzeRulesModal textarea { width: 100%; height: 300px; resize: none; }
+    
+    body.modal-open { overflow: auto !important; }
+    .modal-overlay { background: transparent !important; pointer-events: none !important; }
+    
+    /* Additional widths for Etsy Link and Shop Listings */
+    #etsyLink, #shopListings { width: 500px !important; }
+    
+    /* Styles for the new Upload to Etsy button container at the bottom center */
+    #uploadContainer {
+      position: fixed;
+      bottom: 20px;
+      left: 50%;
+      transform: translateX(-50%);
+      display: inline-block;
+    }
+  </style>
+</head>
+<body>
+  <!-- Configure Buttons control -->
+  <button id="configureButtonsBtn" class="btn waves-effect waves-light configurable">Configure Buttons</button>
+  
+  <!-- Wrap Listing Description and File Drop Zones -->
+  <div id="descriptionAndFileUploadContainer">
+    <div class="listing-desc-container" id="listingDescContainer">
+      <h5>Listing Description</h5>
+      <input id="listingDescInput" type="text" placeholder="Enter your question here">
+    </div>
+    <div id="fileDropZonesContainer">
+      <div id="ordersContainer">
+        <div id="ordersDropZone">Etsy Sold Orders</div>
+        <div id="csvProgressContainer">
+          <progress id="csvProgressBar" max="100" value="0"></progress>
+        </div>
+      </div>
+      <div id="listingsDropZone">Etsy Listings</div>
+      <textarea id="uploadedFilesList" class="materialize-textarea" rows="2" placeholder="Uploaded .csv files will appear here"></textarea>
+    </div>
+  </div>
+  
+  <!-- Etsy OAuth and Shop Listings Section -->
+  <button id="connectEtsyBtn" class="btn waves-effect waves-light configurable">Connect to Etsy</button>
+  <!-- "Fetch Shop Listings" button has been removed -->
+  <div style="margin-top: -180px; margin-left: 10px;">
+    <div class="section-heading configurable">My Etsy Shop Listings</div>
+    <div class="textbox-container configurable">
+      <textarea id="shopListings" class="materialize-textarea"></textarea>
+    </div>
+  </div>
+  
+  <!-- Etsy Listing Generator UI -->
+  <div class="phrases-header configurable" style="position: relative; top: 125px; left: 10px;">
+    <span class="section-heading configurable">2. User Provided Search Key Phrases</span>
+    <button id="clearKeyPhrasesBtn" class="btn-small waves-effect waves-light configurable">Clear</button>
+    <button id="copyKeyPhrasesBtn" class="btn-small waves-effect waves-light configurable">Copy</button>
+    <div id="dropZone" class="configurable">Drop Image Here</div>
+    <!-- Primary Preview – solely for image cropping -->
+    <div id="primaryPreview" class="configurable"></div>
+    <button id="analyzeMetadataBtn" class="btn waves-effect waves-light configurable">Analyze Photos</button>
+    <button id="showAnalyzeRulesBtn" class="btn waves-effect waves-light configurable" style="margin-top:25px;">Analyze Rules</button>
+  </div>
+  <div id="container13" class="flex-container configurable">
+    <div class="textbox-container configurable">
+      <textarea id="searchKeyPhrases" class="materialize-textarea" rows="14"></textarea>
+    </div>
+  </div>
+  
+  <!-- Components below Search Key Phrases -->
+  <div id="belowSearch">
+    <button id="generateBtn" class="btn waves-effect waves-light configurable">Generate</button>
+    <div class="title-container" style="margin-top: -50px;">
+      <div class="section-heading configurable">Etsy Listing TITLE</div>
+      <div class="flex-container configurable">
+        <div class="textbox-container configurable">
+          <textarea id="listingTitle" class="materialize-textarea" rows="2"></textarea>
+        </div>
+        <div class="button-container configurable" style="margin-top: -60px;">
+          <button id="regenTitleBtn" class="btn-small waves-effect waves-light configurable">Re-Generate</button>
+          <button id="copyTitleBtn" class="btn-small waves-effect waves-light configurable">
+            <i class="material-icons">content_copy</i>
+          </button>
+        </div>
+        <button id="showTitleRulesBtn" class="btn waves-effect waves-light rules-button configurable">Title Rules</button>
+      </div>
+      <p id="titleCount" class="count-text configurable">Count: 0</p>
+    </div>
+    <div class="description-container" style="margin-top: 0px;">
+      <div class="section-heading configurable">Etsy Listing DESCRIPTION</div>
+      <div class="flex-container configurable">
+        <div class="textbox-container configurable">
+          <textarea id="listingDescription" class="materialize-textarea"></textarea>
+        </div>
+        <div class="button-container configurable">
+          <button id="regenDescriptionBtn" class="btn-small waves-effect waves-light configurable">Re-Generate</button>
+          <button id="copyDescriptionBtn" class="btn-small waves-effect waves-light configurable">
+            <i class="material-icons">content_copy</i>
+          </button>
+        </div>
+        <button id="showDescriptionRulesBtn" class="btn waves-effect waves-light rules-button configurable">Description Rules</button>
+      </div>
+    </div>
+  </div>
+  
+  <!-- Preview Grid Container -->
+  <div id="previewGridContainer">
+    <div id="previewGrid"></div>
+  </div>
+  
+  <!-- New Upload to Etsy button container -->
+  <div id="uploadContainer">
+    <button id="uploadToEtsyBtn" class="btn waves-effect waves-light configurable">Upload to Etsy</button>
+  </div>
+  
+  <!-- Modals (Title Rules, Description Rules, Analyze Rules, Button Config, Metadata, Crop) -->
+  <div id="titleRulesModal" class="modal">
+    <div class="modal-content">
+      <h4>Title Rules</h4>
+      <textarea id="titleRulesTextarea" style="width:100%; height:300px;">
+Title Structure & Formatting:
+- The goal is to maximize Etsy Listing SEO and conversions within the Etsy ecosystem.
+- Create 5-7 SEO optimized long-tail key phrases (3-5 words each) within the Title.
+• Every title must begin with the product type (e.g., "Angel Earrings", "Daisy Necklace", "Paperclip Necklace").
+- Be creative and ingenious with word placements and order, but always ensure that the words flow grammatically.
+- Always ensure that the output Title makes grammatical sense.
+- Never use any punctuation (no commas, periods, etc.).
+• If the product is a charm or pendant, the first word should describe that type.
+- If the piece is a necklace then ensure that the second word is always "necklace"; if it's an earring then ensure the second word is "Earring".
+Word Usage & Frequency:
+• No word may appear more than three times.
+Earrings & Studs:
+• "earrings" must always be plural, appear no more than three times, and follow a noun.
+• "stud" is allowed only in approved phrases and must come before "earrings."
+Required Words:
+• "Charm" must appear at least once and no more than once.
+Use of "For":
+• "for" must appear at least twice (e.g., "gift for her") in a grammatically correct manner.
+Title Length & Word Order:
+• Titles must be between 125 and 140 characters.
+• Adjectives must follow nouns (e.g., "Daisy Earrings," not "Earrings Daisy").
+• Avoid plurals for "stud" and "animal"; use plurals for "hoops" and "earrings" only when correct.
+SEO Optimization:
+• The title’s word order should naturally form at least eight SEO phrases (each 3-4 words long) with grammatical correctness.
+Prohibited Words & Formatting:
+• Do NOT include: "accessories", "unique", "simple", "minimalist", "whimsical", "cute", "filled", "gold filled", "silver", "solid gold", "gold vermeil", "rosegold", "14k", "handmade", "quirky", "delicate", "accessory", "for", "dangle", "gold plated", "jewelry", "custom", "celestial", "design", "lightweight".
+      </textarea>
+    </div>
+    <div class="modal-footer">
+      <a href="#!" id="updateTitleRulesBtn" class="modal-close waves-effect waves-green btn">Update</a>
+    </div>
+  </div>
+  
+  <div id="descriptionRulesModal" class="modal">
+    <div class="modal-content">
+      <h4>Description Rules</h4>
+      <textarea id="descriptionRulesTextarea" style="width:100%; height:300px;">
+Rules for Description:
+Merge the key word phrases I will provide you with (see options below) with your output. Use the context of the key phrases to modify the description to match the type of jewelry described.
+Keep the output paragraph to 80 words.
+
+Option 1:
+"This stunning gold Playing Card Charm is the perfect gift for her, featuring an intricately designed Ace of Spades charm. Ideal for jewelry lovers and card players alike, this versatile necklace pendant is perfect for creating your own unique accessories, whether you’re making a personalized piece or adding it as an add on charm. The detailed playing card charm makes a great addition to any jewelry making collection, or as an thoughtful gift for the card player in your life. This charm is the perfect way to showcase your love for playing cards and comes ready for jewelry charms enthusiasts."
+
+Option 2:
+"This playful Allosaurus charm is the perfect add on charm to enhance your charm necklace or huggie hoops. Crafted with attention to detail, this gold charm adds a whimsical touch to any jewelry collection, making it a delightful gift for her. Whether you're a fan of dinosaur jewelry or love the art of origami, this necklace charm can be personalized to reflect your unique style. Ideal for jewelry making enthusiasts, this dino charm can easily be mixed and matched with other jewelry charms for a custom look that showcases your personality. Elevate your accessory game with this charming Allosaurus pendant!"
+
+Option 3:
+"This charming gold Alligator Necklace is a delightful gift for her, especially for animal lovers or fans of Florida Gators. Featuring a beautifully designed crocodile pendant, this necklace charm can also be used as an add-on charm in your jewelry making projects. Whether worn as a standalone piece or part of a charm necklace, this crocodile charm adds a unique touch to any jewelry collection. It’s a perfect personalized jewelry option for those who appreciate handmade pieces, and it pairs beautifully with huggie hoops for a trendy look. Celebrate the love for wildlife with this whimsical addition to her jewelry collection!"
+      </textarea>
+    </div>
+    <div class="modal-footer">
+      <a href="#!" id="updateDescriptionRulesBtn" class="modal-close waves-effect waves-green btn">Update</a>
+    </div>
+  </div>
+  
+  <div id="analyzeRulesModal" class="modal">
+    <div class="modal-content">
+      <h4>Photo Analysis Rules</h4>
+      <textarea id="analyzeRulesTextarea" style="width:100%; height:300px;">
+Default Photo Analysis Rules:
+1. Use SEO-friendly descriptive long-tail key phrases without special characters, focus on factual
+2. Emphasize the charm details (What it is, Relevant occasion, Metal, Size, Style) of the jewelry.
+3. Focus primary on the jewelry details in the image.
+4. Do not consider the environment, model, setting or clothing etc...
+5. Organize into a short paragraph.
+6. Limit the description to a maximum of 300 characters.
+7. Never mention earrings unless explicitly identified in the photo by the AI. 
+8. Never mix necklace and earring descriptions together.
+      </textarea>
+    </div>
+    <div class="modal-footer">
+      <a href="#!" id="updateAnalyzeRulesBtn" class="modal-close waves-effect waves-green btn">Update</a>
+    </div>
+  </div>
+  
+  <div id="buttonConfigModal" class="modal">
+    <div class="modal-content">
+      <h4>Configure Button Positions</h4>
+      <div id="buttonConfigContainer"></div>
+      <textarea id="uploadedFilesListModal" class="materialize-textarea" rows="2" placeholder="Uploaded .csv files will appear here"></textarea>
+    </div>
+    <div class="modal-footer">
+      <a href="#!" id="saveButtonPositionsBtn" class="modal-close waves-effect waves-green btn">Save Positions</a>
+    </div>
+  </div>
+  
+  <div id="metadataModal" class="modal">
+    <div class="modal-content">
+      <h4>Photo Metadata</h4>
+      <textarea id="metadataTextarea" style="width:100%; height:300px;" readonly></textarea>
+    </div>
+    <div class="modal-footer">
+      <a href="#!" id="closeMetadataBtn" class="modal-close waves-effect waves-green btn">Close</a>
+    </div>
+  </div>
+  
+  <!-- Crop Modal (rebuilt) -->
+  <div id="photoCropModal" style="display: none;">
+    <div class="crop-container">
+      <h4 style="text-align:center; margin: 0 0 10px 0;">Crop Photo</h4>
+      <div class="img-container">
+        <img id="cropImage" src="" alt="Crop Image">
+      </div>
+      <div class="controls">
+        <label for="zoomSlider">Zoom:</label>
+        <input type="range" id="zoomSlider" min="0.1" max="3" step="0.01" value="1">
+      </div>
+      <div style="text-align:center; margin-top:10px;">
+        <button id="saveCropBtn" class="btn waves-effect waves-light">Save</button>
+        <button id="cancelCropBtn" class="btn waves-effect waves-light" style="background-color:#f44336; margin-left:10px;">Cancel</button>
+      </div>
+    </div>
+  </div>
+  
+  <!-- Helper function to fetch file content from GitHub using the correct API call path -->
+  <script>
+    // Example helper function to fetch a file from GitHub:
+    async function fetchFileContent(path) {
+      // Replace these with your actual GitHub username and repository name.
+      const repoOwner = "pakonieczny";
+      const repoName = "Goku";
+      const url = `https://api.github.com/repos/${repoOwner}/${repoName}/contents/${path}`;
+      try {
+        const response = await fetch(url);
+        const data = await response.json();
+        if (data.content) {
+          const decodedContent = atob(data.content);
+          console.log("File content of", path, ":", decodedContent);
+          return decodedContent;
+        } else {
+          console.error("No content found for", path, data);
+        }
+      } catch (error) {
+        console.error("Error fetching file content for", path, error);
+      }
+    }
+    
+    // You can test the helper function by calling, for example:
+    // fetchFileContent("index.html");
+    // fetchFileContent("netlify/functions/exchangeToken.js");
+  </script>
+  
+  <script src="https://code.jquery.com/jquery-3.6.0.min.js"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/materialize/1.0.0/js/materialize.min.js"></script>
+  <script>
+    // Global variable declarations
+    const ETSY_SHOP_URL = "https://www.etsy.com/shop/custombrites";
+    const CLIENT_ID = "k75zdspz4r99txpqdji7i2em";
+    const CLIENT_SECRET = "u2ie4fx5le";
+    const SHOP_ID = "YOUR_ASSISTANT_ID"; // Replace with your numeric shop ID if available.
+    const REDIRECT_URI = "https://delicate-tanuki-616ac0.netlify.app/";
+    const modelName = "chatgpt-4o-latest";
+    let accessToken;
+    
+    var analyzeRules = localStorage.getItem("analyzeRules") || `Default Photo Analysis Rules:
+1. Use SEO-friendly descriptive long-tail key phrases without special characters, focus on factual
+2. Emphasize the charm details (What it is, Relevant occasion, Metal, Size, Style) of the jewelry.
+3. Focus primary on the jewelry details in the image.
+4. Do not consider the environment, model, setting or clothing etc...
+5. Organize into a short paragraph.
+6. Limit the description to a maximum of 300 characters.
+7. Never mention earrings unless explicitly identified in the photo by the AI. 
+8. Never mix necklace and earring descriptions together.`;
+    
+    let soldOrdersCSV = [];
+    let listingsCSV = [];
+    let photoNames = [];
+    const MAX_CHUNK_SIZE = 450000;
+    function delay(ms) { return new Promise(resolve => setTimeout(resolve, ms)); }
+    
+    async function processUploadedImage(file) {
+      return new Promise((resolve, reject) => {
+        const reader = new FileReader();
+        reader.onload = event => { resolve(event.target.result); };
+        reader.onerror = reject;
+        reader.readAsDataURL(file);
+      });
+    }
+    
+    // (uploadCSVFile, uploadDocFile, analyzeDocument, splitIntoChunks, summarizeTextChunk,
+    // iterativeSummarization, upscaleImageAfterAnalysis, verifyMetadata functions remain unchanged)
+    
+    // PKCE Utility Functions
+    function generateRandomString(length) {
+      const possible = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789-._~';
+      let text = '';
+      for (let i = 0; i < length; i++) {
+        text += possible.charAt(Math.floor(Math.random() * possible.length));
+      }
+      return text;
+    }
+    
+    function base64urlEncode(buffer) {
+      return btoa(String.fromCharCode(...new Uint8Array(buffer)))
+        .replace(/\+/g, '-')
+        .replace(/\//g, '_')
+        .replace(/=+$/, '');
+    }
+    
+    async function generateCodeChallenge(codeVerifier) {
+      const encoder = new TextEncoder();
+      const data = encoder.encode(codeVerifier);
+      const digest = await crypto.subtle.digest("SHA-256", data);
+      return base64urlEncode(digest);
+    }
+    
+    // Updated Connect to Etsy button to initiate proper OAuth flow with PKCE.
+    document.getElementById("connectEtsyBtn").addEventListener("click", async () => {
+      const state = "randomState123"; // Ideally, use a truly random state value.
+      const scope = "listings_w listings_r";
+      const codeVerifier = generateRandomString(64);
+      localStorage.setItem("etsy_code_verifier", codeVerifier);
+      const codeChallenge = await generateCodeChallenge(codeVerifier);
+      const etsyAuthUrl = `https://www.etsy.com/oauth/connect?response_type=code&client_id=${CLIENT_ID}` +
+        `&redirect_uri=${encodeURIComponent(REDIRECT_URI)}` +
+        `&scope=${encodeURIComponent(scope)}` +
+        `&state=${state}` +
+        `&code_challenge=${encodeURIComponent(codeChallenge)}` +
+        `&code_challenge_method=S256`;
+      window.location.href = etsyAuthUrl;
+    });
+    
+    // On page load, check for an OAuth code in the URL and exchange it for an access token.
+    document.addEventListener("DOMContentLoaded", () => {
+      const urlParams = new URLSearchParams(window.location.search);
+      const code = urlParams.get("code");
+      if (code) {
+        exchangeCodeForToken(code);
+        window.history.replaceState({}, document.title, REDIRECT_URI);
+      }
+      renderPreviewGrid();
+      loadButtonPositions();
+      updateUploadedFilesList();
+    });
+    
+    // Fully Updated exchangeCodeForToken using Netlify Function.
+    async function exchangeCodeForToken(code) {
+      const codeVerifier = localStorage.getItem("etsy_code_verifier");
+      if (!codeVerifier) {
+        M.toast({ html: "No code verifier found. Please try connecting again." });
+        return;
+      }
+      try {
+        // Call the Netlify function instead of Etsy's endpoint directly.
+        const response = await fetch(`/.netlify/functions/exchangeToken?code=${encodeURIComponent(code)}&code_verifier=${encodeURIComponent(codeVerifier)}`);
+        const tokenData = await response.json();
+        if (tokenData.access_token) {
+          accessToken = tokenData.access_token;
+          M.toast({ html: "Connected to Etsy!" });
+        } else {
+          M.toast({ html: "Error obtaining token: " + JSON.stringify(tokenData) });
+        }
+      } catch (error) {
+        console.error("Error exchanging code:", error);
+        M.toast({ html: "Error exchanging code for token" });
+      }
+    }
+    
+    // Function to duplicate an existing listing as a Draft using the provided listing link.
+    async function duplicateListing() {
+      let listingLink = document.getElementById("shopListings").value.trim();
+      console.log("Listing Link:", listingLink);
+      if (!listingLink) {
+        M.toast({ html: "Please provide a listing link in 'My Etsy Shop Listings'" });
+        return;
+      }
+      let listingIdMatch = listingLink.match(/\/listing\/(\d+)/);
+      if (!listingIdMatch) {
+        M.toast({ html: "Invalid listing link. Please provide a valid Etsy listing URL (e.g. https://www.etsy.com/listing/123456789/example)" });
+        console.log("Regex did not match listing link.");
+        return;
+      }
+      let listingId = listingIdMatch[1];
+      console.log("Extracted Listing ID:", listingId);
+      if (!accessToken) {
+        M.toast({ html: "No access token. Please connect to Etsy first." });
+        return;
+      }
+      try {
+        console.log("Fetching listing details for listing ID:", listingId);
+        let getUrl = `https://api.etsy.com/v3/application/listings/${listingId}`;
+        let getResponse = await fetch(getUrl, {
+          method: "GET",
+          headers: { "Authorization": `Bearer ${accessToken}` }
+        });
+        if (!getResponse.ok) {
+          throw new Error("Error fetching listing details: " + getResponse.statusText);
+        }
+        let listingData = await getResponse.json();
+        console.log("Fetched listing data:", listingData);
+        let payload = {
+          quantity: listingData.quantity || 1,
+          title: listingData.title || "Duplicated Listing",
+          description: listingData.description || "",
+          price: listingData.price || 0,
+          who_made: listingData.who_made || "i_did",
+          when_made: listingData.when_made || "made_to_order",
+          taxonomy_id: listingData.taxonomy_id || 0
+        };
+        console.log("Payload for new listing:", payload);
+        let postUrl = `https://api.etsy.com/v3/application/shops/${SHOP_ID}/listings`;
+        let postResponse = await fetch(postUrl, {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/x-www-form-urlencoded",
+            "Authorization": `Bearer ${accessToken}`
+          },
+          body: new URLSearchParams(payload)
+        });
+        if (!postResponse.ok) {
+          throw new Error("Error duplicating listing: " + postResponse.statusText);
+        }
+        let newListingData = await postResponse.json();
+        M.toast({ html: "Listing duplicated as Draft successfully!" });
+        console.log("Duplicated Listing:", newListingData);
+      } catch(e) {
+        console.error(e);
+        M.toast({ html: "Error duplicating listing: " + e.message });
+      }
+    }
+    
+    // New event listener for the Upload to Etsy button.
+    document.getElementById("uploadToEtsyBtn").addEventListener("click", duplicateListing);
+    
+    document.getElementById("clearKeyPhrasesBtn").addEventListener("click", () => {
+      document.getElementById("searchKeyPhrases").value = "";
+    });
+    
+    let previewImages = [];
+    let photoStatuses = [];
+    let photoMeta = [];
+    let photoObjects = [];
+    const dropZone = document.getElementById("dropZone");
+    const previewGrid = document.getElementById("previewGrid");
+    const primaryPreview = document.getElementById("primaryPreview");
+    
+    function updatePrimaryPreview() {
+      if (previewImages.length > 0) {
+        primaryPreview.innerHTML = `<img src="${previewImages[0]}" alt="Primary Preview">`;
+      } else { 
+        primaryPreview.innerHTML = ""; 
+      }
+    }
+    
+    primaryPreview.addEventListener("click", function() {
+      if (previewImages.length > 0) {
+        document.getElementById("cropImage").src = previewImages[0];
+        let cropModalElem = document.getElementById("photoCropModal");
+        let cropModalInstance = M.Modal.getInstance(cropModalElem);
+        if (!cropModalInstance) {
+          cropModalInstance = M.Modal.init(cropModalElem, { preventScrolling: false });
+        }
+        cropModalInstance.open();
+      }
+    });
+    
+    dropZone.addEventListener("dragover", e => { 
+      e.preventDefault(); 
+      e.stopPropagation(); 
+      dropZone.style.borderColor = "#000"; 
+    });
+    dropZone.addEventListener("dragleave", e => { 
+      e.preventDefault(); 
+      e.stopPropagation(); 
+      dropZone.style.borderColor = "#ccc"; 
+    });
+    dropZone.addEventListener("drop", async e => {
+      e.preventDefault(); 
+      e.stopPropagation(); 
+      dropZone.style.borderColor = "#ccc";
+      const files = e.dataTransfer.files;
+      if (files.length > 10) { alert("Maximum 10 images allowed."); }
+      for (let i = 0; i < Math.min(files.length, 10); i++) {
+        const file = files[i];
+        if (file.type === "image/jpeg" || file.type === "image/png") {
+          try {
+            const dataURL = await processUploadedImage(file);
+            previewImages.push(dataURL);
+            photoStatuses.push(null);
+            photoMeta.push(null);
+            photoNames.push(file.name);
+            updatePrimaryPreview();
+            renderPreviewGrid();
+            updateUploadedFilesList();
+          } catch (err) { console.error("Error processing image:", err); }
+        } else {
+          M.toast({ html: "Only JPEG images are supported for metadata embedding." });
+        }
+      }
+    });
+    
+    const ordersDropZone = document.getElementById("ordersDropZone");
+    ordersDropZone.addEventListener("dragover", e => { 
+      e.preventDefault(); 
+      e.stopPropagation(); 
+      ordersDropZone.style.borderColor = "#000"; 
+    });
+    ordersDropZone.addEventListener("dragleave", e => { 
+      e.preventDefault(); 
+      e.stopPropagation(); 
+      ordersDropZone.style.borderColor = "#ccc"; 
+    });
+    ordersDropZone.addEventListener("drop", async e => {
+      e.preventDefault(); 
+      e.stopPropagation(); 
+      ordersDropZone.style.borderColor = "#ccc";
+      const files = e.dataTransfer.files;
+      const progressBar = document.getElementById("csvProgressBar");
+      for (let i = 0; i < files.length; i++) {
+         let file = files[i];
+         const fileName = file.name.toLowerCase();
+         if (fileName.endsWith(".csv") || fileName.endsWith(".doc") || fileName.endsWith(".docx")) {
+            try {
+              let fileData;
+              if (fileName.endsWith(".csv")) {
+                 fileData = await uploadCSVFile(file, percent => { progressBar.value = percent; });
+              } else {
+                 fileData = await uploadDocFile(file, percent => { progressBar.value = percent; });
+                 const analysisResult = await analyzeDocument(file);
+                 console.log("Document Analysis Result (Orders):", analysisResult);
+                 fileData.analysis = analysisResult;
+              }
+              progressBar.value = 0;
+              soldOrdersCSV.push(fileData);
+              console.log("Uploaded Sold Orders file:", fileData);
+              updateUploadedFilesList();
+              await updateAssistantWithCSVFiles();
+            } catch(err) { console.error("Error uploading file:", err); }
+         } else {
+            alert("Only .csv, .doc, and .docx files are supported for Etsy Sold Orders.");
+         }
+      }
+    });
+    
+    const listingsDropZone = document.getElementById("listingsDropZone");
+    listingsDropZone.addEventListener("dragover", e => { 
+      e.preventDefault(); 
+      e.stopPropagation(); 
+      listingsDropZone.style.borderColor = "#000"; 
+    });
+    listingsDropZone.addEventListener("dragleave", e => { 
+      e.preventDefault(); 
+      e.stopPropagation(); 
+      listingsDropZone.style.borderColor = "#ccc"; 
+    });
+    listingsDropZone.addEventListener("drop", async e => {
+      e.preventDefault(); 
+      e.stopPropagation(); 
+      listingsDropZone.style.borderColor = "#ccc";
+      const files = e.dataTransfer.files;
+      const progressBar = document.getElementById("csvProgressBar");
+      for (let i = 0; i < files.length; i++) {
+         let file = files[i];
+         const fileName = file.name.toLowerCase();
+         if (fileName.endsWith(".csv") || fileName.endsWith(".doc") || fileName.endsWith(".docx")) {
+            try {
+              let fileData;
+              if (fileName.endsWith(".csv")) {
+                 fileData = await uploadCSVFile(file, percent => { progressBar.value = percent; });
+              } else {
+                 fileData = await uploadDocFile(file, percent => { progressBar.value = percent; });
+                 const analysisResult = await analyzeDocument(file);
+                 console.log("Document Analysis Result (Listings):", analysisResult);
+                 fileData.analysis = analysisResult;
+              }
+              progressBar.value = 0;
+              listingsCSV.push(fileData);
+              console.log("Uploaded Listings file:", fileData);
+              updateUploadedFilesList();
+              await updateAssistantWithCSVFiles();
+            } catch(err) { console.error("Error uploading file:", err); }
+         } else {
+            alert("Only .csv, .doc, and .docx files are supported for Etsy Listings.");
+         }
+      }
+    });
+    
+    async function updateAssistantWithCSVFiles() {
+      const allFileIds = [...soldOrdersCSV, ...listingsCSV].map(file => file.id);
+      if(allFileIds.length === 0) {
+        console.log("No files uploaded yet.");
+        return;
+      }
+      try {
+        const vectorStorePayload = { name: "CSV Vector Store", file_ids: allFileIds };
+        const vectorStoreResponse = await fetch("https://api.openai.com/v1/beta/vector_stores", {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+            "Authorization": "Bearer " + openaiApiKey,
+            "OpenAI-Beta": "assistants=v2"
+          },
+          body: JSON.stringify(vectorStorePayload)
+        });
+        if (!vectorStoreResponse.ok) {
+          const errorData = await vectorStoreResponse.json();
+          throw new Error("Error creating vector store: " + (errorData.error ? errorData.error.message : vectorStoreResponse.statusText));
+        }
+        const vectorStoreData = await vectorStoreResponse.json();
+        console.log("Created Vector Store:", vectorStoreData);
+        const updatePayload = { tool_resources: { file_search: { vector_store_ids: [vectorStoreData.id] } } };
+        const assistantUpdateResponse = await fetch("https://api.openai.com/v1/assistants/YOUR_ASSISTANT_ID", {
+          method: "PATCH",
+          headers: {
+            "Content-Type": "application/json",
+            "Authorization": "Bearer " + openaiApiKey,
+            "OpenAI-Beta": "assistants=v2"
+          },
+          body: JSON.stringify(updatePayload)
+        });
+        if (!assistantUpdateResponse.ok) {
+          const errorData = await assistantUpdateResponse.json();
+          throw new Error("Error updating assistant: " + (errorData.error ? errorData.error.message : assistantUpdateResponse.statusText));
+        }
+        const updatedAssistantData = await assistantUpdateResponse.json();
+        console.log("Updated Assistant with File Search:", updatedAssistantData);
+      } catch (err) {
+        console.error("Error in updateAssistantWithCSVFiles:", err);
+      }
+    }
+    
+    function updateUploadedFilesList() {
+      let fileList = [];
+      soldOrdersCSV.forEach(file => {
+        if (file.name.toLowerCase().endsWith(".csv")) {
+          fileList.push(file.name);
+        }
+      });
+      listingsCSV.forEach(file => {
+        if (file.name.toLowerCase().endsWith(".csv")) {
+          fileList.push(file.name);
+        }
+      });
+      document.getElementById("uploadedFilesList").value = fileList.join("\n");
+      const modalTextarea = document.getElementById("uploadedFilesListModal");
+      if(modalTextarea){
+        modalTextarea.value = fileList.join("\n");
+      }
+    }
+    
+    document.getElementById("listingDescInput").addEventListener("input", function() {
+      console.log("Listing Description input changed. Resetting key phrase state.");
+      document.getElementById("searchKeyPhrases").value = "";
+    });
+    
+    window.addEventListener("load", function() {
+      var container13 = document.getElementById("container13");
+      var originalHeight = container13.offsetHeight;
+      container13.style.height = (originalHeight * 2.5) + "px";
+    });
+    
+    // Additional functions for generating title, description, and tag phrases.
+    async function generateBoth() {
+      await Promise.all([generateTitleOnly(), generateDescriptionOnly()]);
+      const titleEl = document.getElementById("listingTitle");
+      const descEl = document.getElementById("listingDescription");
+      const output = { title: titleEl.value, description: descEl.value };
+      console.log("Generate Output:", output);
+    }
+    
+    async function generateTitleOnly() {
+      const etsyLink = ETSY_SHOP_URL;
+      const keyPhrases = document.getElementById("searchKeyPhrases").value.trim();
+      if (!keyPhrases) { 
+        M.toast({ html: "Please provide the search key phrases." }); 
+        return; 
+      }
+      const promptText = `
+You are ChatGPT using ${modelName}.
+Based on the inputs below, generate an Etsy Listing TITLE only.
+Input Context:
+Etsy Link: "${etsyLink}"
+Search Key Phrases: "${keyPhrases}"
+--- Rules for TITLE ---
+${titleRules}
+Important: Return ONLY the title as plain text.`;
+      document.getElementById("listingTitle").value = "Generating title...";
+      const payload = {
+        model: modelName,
+        messages: [
+          { role: "system", content: "Return ONLY the title as plain text." },
+          { role: "user", content: promptText }
+        ],
+        temperature: 0.7
+      };
+      try {
+        const response = await fetch("https://api.openai.com/v1/chat/completions", {
+          method: "POST",
+          headers: { "Content-Type": "application/json", "Authorization": "Bearer " + openaiApiKey },
+          body: JSON.stringify(payload)
+        });
+        const data = await response.json();
+        if (data.choices && data.choices.length > 0) {
+          let output = stripMarkdownJSON(data.choices[0].message.content);
+          document.getElementById("listingTitle").value = output || "No title generated.";
+          updateTitleCount(document.getElementById("listingTitle").value);
+        } else {
+          document.getElementById("listingTitle").value = "No title generated.";
+        }
+      } catch (error) {
+        document.getElementById("listingTitle").value = "Error: " + error;
+      }
+    }
+    
+    async function generateDescriptionOnly() {
+      const etsyLink = ETSY_SHOP_URL;
+      const keyPhrases = document.getElementById("searchKeyPhrases").value.trim();
+      if (!keyPhrases) { 
+        M.toast({ html: "Please provide the search key phrases." }); 
+        return; 
+      }
+      const promptText = `
+You are ChatGPT using ${modelName}.
+Based on the inputs below, generate an Etsy Listing DESCRIPTION only.
+Input Context:
+Etsy Link: "${etsyLink}"
+Search Key Phrases: "${keyPhrases}"
+--- Rules for DESCRIPTION ---
+${descriptionRules}
+Important: Return ONLY the description as plain text.`;
+      document.getElementById("listingDescription").value = "Generating description...";
+      const payload = {
+        model: modelName,
+        messages: [
+          { role: "system", content: "Return ONLY the description as plain text." },
+          { role: "user", content: promptText }
+        ],
+        temperature: 0.7
+      };
+      try {
+        const response = await fetch("https://api.openai.com/v1/chat/completions", {
+          method: "POST",
+          headers: { "Content-Type": "application/json", "Authorization": "Bearer " + openaiApiKey },
+          body: JSON.stringify(payload)
+        });
+        const data = await response.json();
+        if (data.choices && data.choices.length > 0) {
+          let output = stripMarkdownJSON(data.choices[0].message.content);
+          document.getElementById("listingDescription").value = output || "No description generated.";
+        } else {
+          document.getElementById("listingDescription").value = "No description generated.";
+        }
+      } catch (error) {
+        document.getElementById("listingDescription").value = "Error: " + error;
+      }
+    }
+    
+    async function generateTagPhrases() {
+      let question = document.getElementById("listingDescInput").value;
+      if (!question.trim()) {
+        M.toast({ html: "Please enter a question in the Listing Description." });
+        return;
+      }
+      let listingDescription = question;
+      let extraText = "Emphasis on SEO friendliness with a focus on generating the most effective and efficient long tail tag phrases that will best suit Etsy search marketplace";
+      let soldOrdersInfo = soldOrdersCSV.map(item => `Filename: ${item.name}, FileID: ${item.id}`).join("\n");
+      let listingsInfo = listingsCSV.map(item => `Filename: ${item.name}, FileID: ${item.id}`).join("\n");
+      let prompt = `
+Listing Description (for emphasis): "${listingDescription}"
+${extraText}
+
+Using the Sales Report Files and Product List Files below, extrapolate the best tag phrases. Also consider any associated Titles and Descriptions to help guide your analysis. Focus especially on key terms such as "Necklace", "Earrings", "Studs", "Hoops" and details regarding the kind, type, and style of charm.
+Also put a lot of emphasis on the sales success of given key phrases based on the analysis from the Etsy sales report. Put more weight on better performing listings — the more sales a listing has, the more valuable its keywords; also correlate how fast a listing made sales over its lifetime — the faster a listing was able to accumulate sales, the more valuable its key phrases are.
+
+Generate exactly 13 separate tag phrases, each with a maximum length of 20 characters (including spaces).
+Ensure that "Gift for Her" is always included as one of the tag phrases.
+Ensure that the word "Charm" appears at least once as part of a multi-word tag phrase (do not use "Charm" alone) and verify that "charm" is not included more than 4 times in any set.
+Verify that "Necklace" is not included more than 3 times in any set.
+Verify that "Gift" is not included more than 3 times in any set.
+Verify that "Lover" is not included more than 2 times in any set.
+Also, ensure that none of the following words/phrases appear: "Gift for Him", "Statement Piece", "Unique", "Spiritual Gift", "Outdoor Style", "accessories", "unique", "simple", "minimalist", "whimsical", "cute", "filled", "gold filled", "silver", "solid gold", "gold vermeil", "rosegold", "14k", "handmade", "quirky", "delicate", "accessory", "for", "dangle", "gold plated", "jewelry", "custom", "celestial", "design", "lightweight", "Fine Chain Necklace", "Small", "Large", "Nice", "Long", "Dark", "Short", "and", "but", "light", "heavy", "Wanderlust", "Theme", "Minimal Chain Gift", "Tiny Pendant Chain", "Charm Look", "Charm Wear", "Chain Necklace", "Small Pendant Chain", "Everyday"
+Return your answer as plain text.
+      `;
+      try {
+        const payload = {
+          model: modelName,
+          messages: [
+            { role: "system", content: "Generate tag phrases according to the hard-coded rules." },
+            { role: "user", content: prompt }
+          ],
+          temperature: 0.7,
+          max_tokens: 500
+        };
+        const response = await fetch("https://api.openai.com/v1/chat/completions", {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+            "Authorization": "Bearer " + openaiApiKey
+          },
+          body: JSON.stringify(payload)
+        });
+        if (!response.ok) {
+          const errorData = await response.json();
+          throw new Error("API Error: " + (errorData.error ? errorData.error.message : response.statusText));
+        }
+        const data = await response.json();
+        let answer = data.choices[0].message.content;
+        let phrases = answer.split(/[\n,]+/)
+          .map(s => s.replace(/^\d+\.\s*/, "").trim())
+          .join("\n");
+        document.getElementById("searchKeyPhrases").value = phrases;
+      } catch (err) {
+        console.error("Error generating tag phrases:", err);
+        M.toast({ html: "Error generating tag phrases: " + err.message });
+      }
+    }
+    
+    document.getElementById("listingDescInput").addEventListener("keydown", async function(e) {
+      if (e.key === "Enter" && !e.shiftKey) {
+        e.preventDefault();
+        console.log("Enter key pressed in listingDescInput");
+        await generateTagPhrases();
+        await delay(100);
+        await processKeyPhrases();
+      }
+    });
+    
+    async function processKeyPhrases() {
+      let keyText = document.getElementById("searchKeyPhrases").value;
+      let phrases = keyText.split(/\n+/)
+        .map(phrase => phrase.trim())
+        .filter(phrase => phrase !== "");
+      
+      let processedPhrases = [];
+      for (let i = 0; i < phrases.length; i++) {
+        let phrase = phrases[i];
+        while (phrase.length > 20) {
+          try {
+            const altPayload = {
+              model: modelName,
+              messages: [
+                { role: "system", content: "Generate an alternate key phrase for the provided key phrase that is less than or equal to 20 characters (including spaces). Provide only the key phrase." },
+                { role: "user", content: phrase }
+              ],
+              temperature: 0.7,
+              max_tokens: 20
+            };
+            const altResponse = await fetch("https://api.openai.com/v1/chat/completions", {
+              method: "POST",
+              headers: { "Content-Type": "application/json", "Authorization": "Bearer " + openaiApiKey },
+              body: JSON.stringify(altPayload)
+            });
+            if (!altResponse.ok) {
+              const altErrorData = await altResponse.json();
+              throw new Error("API Error: " + (altErrorData.error ? altErrorData.error.message : altResponse.statusText));
+            }
+            const altData = await altResponse.json();
+            let altPhrase = stripMarkdownJSON(altData.choices[0].message.content).trim();
+            phrase = altPhrase;
+          } catch (error) {
+            console.error("Error generating alternate key phrase:", error);
+            break;
+          }
+          await delay(50);
+        }
+        while (processedPhrases.includes(phrase)) {
+          try {
+            const dupPayload = {
+              model: modelName,
+              messages: [
+                { role: "system", content: "Generate an alternate key phrase for the provided key phrase that is unique and less than or equal to 20 characters (including spaces). Provide only the key phrase." },
+                { role: "user", content: phrase }
+              ],
+              temperature: 0.7,
+              max_tokens: 20
+            };
+            const dupResponse = await fetch("https://api.openai.com/v1/chat/completions", {
+              method: "POST",
+              headers: { "Content-Type": "application/json", "Authorization": "Bearer " + openaiApiKey },
+              body: JSON.stringify(dupPayload)
+            });
+            if (!dupResponse.ok) {
+              const dupErrorData = await dupResponse.json();
+              throw new Error("API Error: " + (dupErrorData.error ? dupErrorData.error.message : dupResponse.statusText));
+            }
+            const dupData = await dupResponse.json();
+            let dupPhrase = stripMarkdownJSON(dupData.choices[0].message.content).trim();
+            phrase = dupPhrase;
+          } catch (error) {
+            console.error("Error generating alternate for duplicate key phrase:", error);
+            break;
+          }
+          await delay(50);
+        }
+        processedPhrases.push(phrase);
+        document.getElementById("searchKeyPhrases").value = processedPhrases.join("\n");
+        await delay(50);
+      }
+    }
+    
+    document.getElementById("copyKeyPhrasesBtn").addEventListener("click", () => {
+      let lines = document.getElementById("searchKeyPhrases").value.split(/\n+/).map(l => l.trim()).filter(l => l !== "");
+      const formatted = lines.join(", ");
+      navigator.clipboard.writeText(formatted).catch(err => console.error("Error copying key phrases: " + err));
+    });
+    
+    document.getElementById("generateBtn").addEventListener("click", generateBoth);
+    
+    document.getElementById("regenTitleBtn").addEventListener("click", generateTitleOnly);
+    document.getElementById("regenDescriptionBtn").addEventListener("click", generateDescriptionOnly);
+    document.getElementById("copyTitleBtn").addEventListener("click", () => {
+      const titleText = document.getElementById("listingTitle").value;
+      navigator.clipboard.writeText(titleText).catch(err => console.error("Error copying title: " + err));
+    });
+    document.getElementById("copyDescriptionBtn").addEventListener("click", () => {
+      const descText = document.getElementById("listingDescription").value;
+      navigator.clipboard.writeText(descText).catch(err => console.error("Error copying description: " + err));
+    });
+    
+    document.getElementById("configureButtonsBtn").addEventListener("click", function() {
+      var configContainer = document.getElementById("buttonConfigContainer");
+      configContainer.innerHTML = "";
+      var selectors = "button:not(#configureButtonsBtn), #listingDescContainer, #ordersDropZone, #listingsDropZone, #dropZone, #csvProgressContainer, #previewGridContainer, #primaryPreview, #container13, #uploadedFilesList";
+      var elements = document.querySelectorAll(selectors);
+      var table = document.createElement("table");
+      table.className = "striped";
+      var thead = document.createElement("thead");
+      thead.innerHTML = "<tr><th>Element ID</th><th>Top (px)</th><th>Left (px)</th></tr>";
+      table.appendChild(thead);
+      var tbody = document.createElement("tbody");
+      elements.forEach(function(el) {
+        var id = el.id;
+        var currentTop = el.style.top || "0";
+        var currentLeft = el.style.left || "0";
+        var tr = document.createElement("tr");
+        tr.innerHTML = `<td>${id}</td>
+                        <td><input type="number" id="${id}_top" value="${parseInt(currentTop)||0}"></td>
+                        <td><input type="number" id="${id}_left" value="${parseInt(currentLeft)||0}"></td>`;
+        var topInput = tr.querySelector(`#${id}_top`);
+        var leftInput = tr.querySelector(`#${id}_left`);
+        topInput.addEventListener("input", function() { el.style.top = topInput.value + "px"; });
+        leftInput.addEventListener("input", function() { el.style.left = leftInput.value + "px"; });
+        tbody.appendChild(tr);
+      });
+      table.appendChild(tbody);
+      configContainer.appendChild(table);
+      var modalElem = document.getElementById("buttonConfigModal");
+      var modalInstance = M.Modal.getInstance(modalElem);
+      if (!modalInstance) { 
+        modalInstance = M.Modal.init(modalElem, { preventScrolling: false }); 
+      }
+      modalInstance.open();
+    });
+    
+    document.getElementById("saveButtonPositionsBtn").addEventListener("click", function() {
+      var selectors = "button:not(#configureButtonsBtn), #listingDescContainer, #ordersDropZone, #listingsDropZone, #dropZone, #csvProgressContainer, #previewGridContainer, #primaryPreview, #container13, #uploadedFilesList";
+      var elements = document.querySelectorAll(selectors);
+      var positions = {};
+      elements.forEach(function(el) {
+        var id = el.id;
+        var topVal = document.getElementById(id + "_top").value;
+        var leftVal = document.getElementById(id + "_left").value;
+        positions[id] = { top: topVal + "px", left: leftVal + "px" };
+        el.style.top = topVal + "px";
+        el.style.left = leftVal + "px";
+      });
+      localStorage.setItem("buttonPositions", JSON.stringify(positions));
+    });
+    
+    function loadButtonPositions() {
+      var stored = localStorage.getItem("buttonPositions");
+      if (stored) {
+        var positions = JSON.parse(stored);
+        for (var id in positions) {
+          var el = document.getElementById(id);
+          if (el) { 
+            el.style.top = positions[id].top; 
+            el.style.left = positions[id].left; 
+          }
+        }
+      }
+    }
+    
+    window.addEventListener("load", function() {
+      var container13 = document.getElementById("container13");
+      var originalHeight = container13.offsetHeight;
+      container13.style.height = (originalHeight * 2.5) + "px";
+    });
+    
+    document.getElementById("listingDescInput").addEventListener("input", function() {
+      console.log("Listing Description input changed. Resetting key phrase state.");
+      document.getElementById("searchKeyPhrases").value = "";
+    });
+  </script>
+</body>
+</html>
