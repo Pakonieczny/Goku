@@ -22,9 +22,7 @@ exports.handler = async (event, context) => {
   try {
     const tokenResponse = await fetch("https://api.etsy.com/v3/public/oauth/token", {
       method: "POST",
-      headers: {
-        "Content-Type": "application/x-www-form-urlencoded"
-      },
+      headers: { "Content-Type": "application/x-www-form-urlencoded" },
       body: params
     });
     const tokenData = await tokenResponse.json();
