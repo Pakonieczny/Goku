@@ -306,7 +306,7 @@
         </div>
       </div>
       <div id="listingsDropZone">Etsy Listings</div>
-      <textarea id="uploadedFilesList" class="materialize-textarea" rows="2" placeholder="Uploaded .csv files will appear here"></textarea>
+      <textarea id="uploadedFilesList" class="materialize-textarea" rows="2" placeholder="Uploaded .csv/.jsonl files will appear here"></textarea>
     </div>
   </div>
   
@@ -489,7 +489,7 @@ Rules:
     <div class="modal-content">
       <h4>Configure Button Positions</h4>
       <div id="buttonConfigContainer"></div>
-      <textarea id="uploadedFilesListModal" class="materialize-textarea" rows="2" placeholder="Uploaded .csv files will appear here"></textarea>
+      <textarea id="uploadedFilesListModal" class="materialize-textarea" rows="2" placeholder="Uploaded .csv/.jsonl files will appear here"></textarea>
     </div>
     <div class="modal-footer">
       <a href="#!" id="saveButtonPositionsBtn" class="modal-close waves-effect waves-green btn">Save Positions</a>
@@ -575,41 +575,22 @@ Rules:
       return data;
     }
     
-    // CSV to JSONL converter function.
-    function csvToJsonl(csvText) {
-      const lines = csvText.split(/\r?\n/).filter(line => line.trim() !== "");
-      if (lines.length < 2) return "";
-      const headers = lines[0].split(",").map(h => h.trim());
-      const jsonlArray = [];
-      for (let i = 1; i < lines.length; i++) {
-        const values = lines[i].split(",").map(v => v.trim());
-        let obj = {};
-        headers.forEach((header, index) => {
-          obj[header] = values[index] || "";
-        });
-        jsonlArray.push(JSON.stringify(obj));
-      }
-      return jsonlArray.join("\n");
-    }
-    
-    // Updated CSV file upload function: converts CSV to JSONL, encodes in Base64, then uploads.
+    // Updated file upload function: reads CSV or JSONL file as text and encodes it in Base64.
     async function uploadCSVFile(file, progressCallback) {
       return new Promise((resolve, reject) => {
         const reader = new FileReader();
         reader.onload = async (event) => {
           try {
-            // Read CSV as text
-            const csvText = event.target.result;
-            // Convert CSV text to JSONL format
-            const jsonlText = csvToJsonl(csvText);
-            if (!jsonlText.trim()) {
-              throw new Error("Converted JSONL content is empty. Please check your CSV file structure.");
+            // Read file as text (works for CSV or JSONL)
+            const textContent = event.target.result;
+            if (!textContent.trim()) {
+              throw new Error("File content is empty. Please check your file structure.");
             }
-            // Convert JSONL text to Base64
-            const base64Content = btoa(unescape(encodeURIComponent(jsonlText)));
+            // Encode text content in Base64
+            const base64Content = btoa(unescape(encodeURIComponent(textContent)));
             const payload = {
               file: base64Content,
-              fileName: file.name.replace(/\.csv$/i, ".jsonl"),
+              fileName: file.name,
               purpose: "fine-tune"
             };
             const response = await fetch("/.netlify/functions/uploadFile", {
@@ -631,7 +612,6 @@ Rules:
       });
     }
     
-    // DOC file upload function
     async function uploadDocFile(file, progressCallback) {
       return new Promise((resolve, reject) => {
         const reader = new FileReader();
@@ -884,10 +864,10 @@ Rules:
       for (let i = 0; i < files.length; i++) {
          let file = files[i];
          const fileName = file.name.toLowerCase();
-         if (fileName.endsWith(".csv") || fileName.endsWith(".doc") || fileName.endsWith(".docx")) {
+         if (fileName.endsWith(".csv") || fileName.endsWith(".jsonl") || fileName.endsWith(".doc") || fileName.endsWith(".docx")) {
             try {
               let fileData;
-              if (fileName.endsWith(".csv")) {
+              if (fileName.endsWith(".csv") || fileName.endsWith(".jsonl")) {
                  fileData = await uploadCSVFile(file, percent => { progressBar.value = percent; });
               } else {
                  fileData = await uploadDocFile(file, percent => { progressBar.value = percent; });
@@ -899,7 +879,7 @@ Rules:
               await updateAssistantWithCSVFiles();
             } catch(err) { console.error("Error uploading file:", err); }
          } else {
-            alert("Only .csv, .doc, and .docx files are supported for Etsy Sold Orders.");
+            alert("Only .csv, .jsonl, .doc, and .docx files are supported for Etsy Sold Orders.");
          }
       }
     });
@@ -924,10 +904,10 @@ Rules:
       for (let i = 0; i < files.length; i++) {
          let file = files[i];
          const fileName = file.name.toLowerCase();
-         if (fileName.endsWith(".csv") || fileName.endsWith(".doc") || fileName.endsWith(".docx")) {
+         if (fileName.endsWith(".csv") || fileName.endsWith(".jsonl") || fileName.endsWith(".doc") || fileName.endsWith(".docx")) {
             try {
               let fileData;
-              if (fileName.endsWith(".csv")) {
+              if (fileName.endsWith(".csv") || fileName.endsWith(".jsonl")) {
                  fileData = await uploadCSVFile(file, percent => { progressBar.value = percent; });
               } else {
                  fileData = await uploadDocFile(file, percent => { progressBar.value = percent; });
@@ -939,7 +919,7 @@ Rules:
               await updateAssistantWithCSVFiles();
             } catch(err) { console.error("Error uploading file:", err); }
          } else {
-            alert("Only .csv, .doc, and .docx files are supported for Etsy Listings.");
+            alert("Only .csv, .jsonl, .doc, and .docx files are supported for Etsy Listings.");
          }
       }
     });
