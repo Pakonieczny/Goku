@@ -11,8 +11,273 @@
   <!-- Include piexifjs for EXIF manipulation -->
   <script src="https://cdn.jsdelivr.net/npm/piexifjs@1.0.4/piexif.min.js"></script>
   <style>
-    /* [Your CSS styles remain unchanged] */
-    /* ... */
+    /* Basic layout */
+    html, body { margin: 0; padding: 0; width: 100vw; font-family: Arial, sans-serif; }
+    .container { width: 100vw; padding: 10px; box-sizing: border-box; text-align: left; }
+    h5, label, p { text-align: left; }
+    input, textarea { width: 100%; box-sizing: border-box; }
+    
+    /* --- Wrap Listing Description and File Drop Zones --- */
+    #descriptionAndFileUploadContainer { display: flex; align-items: center; }
+    .listing-desc-container {
+      position: relative;
+      display: inline-block;
+      width: 500px;
+    }
+    .listing-desc-container h5 {
+      margin: 0 0 10px 0;
+      font-size: 1.2rem;
+      font-weight: 500;
+    }
+    .listing-desc-container label.section-heading { 
+      font-size: 1.2rem; 
+      font-weight: 500; 
+    }
+    .listing-desc-container input {
+      width: 500px;
+      height: 30px;
+      border: 1px solid #000;
+      padding: 5px;
+    }
+    /* "User Provided Search Key Phrases" textarea */
+    #searchKeyPhrases {
+      resize: none;
+      box-sizing: border-box;
+      border: 1px solid grey;
+    }
+    #searchKeyPhrases[rows="14"] { height: auto; }
+    .flex-container { display: flex; gap: 10px; align-items: stretch; }
+    .textbox-container { flex: 1; }
+    .textbox-container textarea { width: 100%; padding: 0.8rem; font-size: 1rem; line-height: 1.2; resize: none; overflow: visible; box-sizing: border-box; }
+    .button-container { width: 200px; display: flex; flex-direction: column; gap: 10px; align-self: flex-start; }
+    #listingTitle { min-height: 45px; }
+    #listingDescInput { width: 500px; height: 30px; border: 1px solid #000; padding: 5px; }
+    #listingDescription { min-height: 150px; }
+    .section-heading { font-size: 1.2rem; font-weight: 500; margin-bottom: 5px; display: inline-block; }
+    .count-text { font-style: italic; font-size: 0.9em; margin-top: 5px; }
+    
+    /* Drag and Drop Boxes */
+    #dropZone, #ordersDropZone, #listingsDropZone {
+      width: 138px; 
+      height: 138px; 
+      border: 2px dashed #ccc; 
+      border-radius: 3px; 
+      display: inline-block; 
+      vertical-align: middle; 
+      text-align: center; 
+      line-height: 138px;
+      position: relative;
+    }
+    /* Orders container */
+    #ordersContainer { display: flex; flex-direction: column; }
+    /* CSV Progress Bar */
+    #csvProgressBar {
+      width: 100%; height: 20px; border: 1px solid blue; background-color: #e0f0ff; margin-top: 5px;
+      -webkit-appearance: none; appearance: none;
+    }
+    #csvProgressBar::-webkit-progress-bar { background-color: #e0f0ff; border: 1px solid blue; }
+    #csvProgressBar::-webkit-progress-value { background-color: blue; }
+    #csvProgressContainer { margin-left: 85px; }
+    /* File Drop Zones container */
+    #fileDropZonesContainer { display: flex; gap: 10px; margin-left: 100px; }
+    #uploadedFilesList {
+      width: 300px;
+      height: 125px;
+      resize: none;
+      box-sizing: border-box;
+      border: 1px solid grey;
+      margin-left: 85px;
+    }
+    
+    /* Primary Preview – clickable for cropping */
+    #primaryPreview { 
+      width: 138px; 
+      height: 138px; 
+      border: 1px solid #ccc; 
+      border-radius: 3px;
+      display: inline-block; 
+      vertical-align: middle; 
+      position: relative;
+      top: -250px;
+      left: 285px;
+      text-align: center; 
+      overflow: hidden; 
+      cursor: pointer;
+    }
+    #primaryPreview:empty { background: #fff; }
+    #primaryPreview img { width: 100%; height: 100%; object-fit: contain; border-radius: 3px; }
+    
+    /* Preview Grid */
+    #previewGridContainer {
+      position: relative;
+      margin: 20px auto;
+      width: auto;
+      max-width: 600px;
+      text-align: center;
+    }
+    #previewGrid {
+      display: grid;
+      grid-template-columns: repeat(5, 100px);
+      grid-column-gap: 23px;
+      grid-row-gap: 18px;
+      margin: 0 auto;
+    }
+    .preview-cell { position: relative; display: flex; flex-direction: column; align-items: center; }
+    .resolution-text { position: absolute; top: -12px; left: 0; right: 0; font-size: 8px; text-align: center; color: #333; pointer-events: none; }
+    .preview-box {
+      width: 100px; 
+      height: 132px; 
+      background-color: #fff; 
+      border: 2px solid #ccc; 
+      border-radius: 3px;
+      box-sizing: border-box; 
+      position: relative; 
+      overflow: visible;
+    }
+    .preview-box img { 
+      width: 100px; 
+      height: 100px; 
+      object-fit: cover; 
+      border-radius: 3px; 
+      display: block; 
+    }
+    .overlay { 
+      position: absolute; 
+      top: 0; left: 0; 
+      width: 100px; height: 100px; 
+      background-color: rgba(0,0,255,0.3);
+      opacity: 0; transition: opacity 0.2s ease; 
+      pointer-events: none; 
+      z-index: 1; 
+    }
+    .preview-box.dragover .overlay { opacity: 1; }
+    .preview-box progress { width: 100%; height: 13px; margin-top: 2px; }
+    .status-icon { position: absolute; bottom: 2px; left: 2px; font-size: 14px; font-weight: bold; z-index: 3; }
+    .status-icon.success { color: green; }
+    .status-icon.error { color: red; }
+    .remove-btn { 
+      position: absolute; top: -5px; left: -5px; 
+      width: 10px; height: 10px; 
+      background-color: black;
+      color: white; font-size: 8px; line-height: 10px; 
+      text-align: center; cursor: pointer; 
+      z-index: 999; border-radius: 3px; 
+    }
+    .number-overlay { 
+      position: absolute; top: 0; right: 0; 
+      width: 16px; height: 16px; 
+      background-color: rgba(0,0,0,0.7);
+      color: white; display: flex; align-items: center; 
+      justify-content: center; font-size: 10px; 
+      z-index: 999; border-radius: 3px; 
+    }
+    .file-name { text-align: center; font-size: 12px; margin-top: 4px; white-space: pre-line; }
+    
+    /* Container #13 */
+    #container13 { position: relative; width: 250px; top: -150px; }
+    
+    /* Components below search key phrases */
+    #belowSearch { margin-top: -180px; margin-left: 10px; }
+    .title-container { margin-top: -50px; }
+    .description-container { margin-top: 0px; }
+    #analyzeMetadataBtn { margin-left: 50px; }
+    #showAnalyzeRulesBtn { margin-top: 25px; }
+    
+    /* Adjust the position of "2. User Provided Search Key Phrases" container */
+    .phrases-header { 
+      position: relative; 
+      top: 125px;  
+      left: 10px; 
+    }
+    
+    /* Crop Modal (rebuilt) */
+    #photoCropModal {
+      display: none; 
+      position: fixed; 
+      top: 0; left: 0; 
+      width: 100vw; 
+      height: 100vh;
+      background: rgba(0,0,0,0.7); 
+      z-index: 10000; 
+      padding: 20px; 
+      box-sizing: border-box;
+      display: flex; 
+      align-items: center; 
+      justify-content: center;
+    }
+    #photoCropModal .crop-container {
+      background: #fff; 
+      width: 550px; 
+      height: 550px; 
+      box-shadow: 0 4px 10px rgba(0,0,0,0.3);
+      border-radius: 8px; 
+      overflow: hidden; 
+      position: relative; 
+      display: flex; 
+      flex-direction: column;
+    }
+    #photoCropModal .crop-container .img-container {
+      width: 550px; 
+      height: 550px; 
+      position: relative; 
+      overflow: hidden; 
+      background: #000; 
+      border: 2px dashed #fff;
+    }
+    #photoCropModal .crop-container .img-container img {
+      position: absolute; 
+      cursor: grab; 
+      touch-action: none; 
+      user-select: none; 
+      transition: none;
+    }
+    #photoCropModal .crop-container .controls { 
+      padding: 10px; 
+      background: #f5f5f5; 
+      text-align: center; 
+      border-top: 1px solid #ddd; 
+    }
+    #photoCropModal .crop-container .controls label { margin-right: 10px; }
+    #photoCropModal .crop-container .controls input[type="range"] { vertical-align: middle; }
+    #photoCropModal .crop-container button {
+      margin: 10px auto 0 auto; 
+      padding: 8px 16px; 
+      background-color: #2196f3; 
+      color: #fff;
+      border: none; 
+      border-radius: 4px; 
+      cursor: pointer; 
+      display: inline-block;
+    }
+    #photoCropModal .crop-container button:hover { background-color: #1976d2; }
+    #cancelCropBtn { margin-left: 10px; background-color: #f44336; }
+    
+    /* Metadata Modal */
+    #metadataModal .modal-content { padding: 20px; }
+    #metadataModal textarea { width: 100%; height: 300px; resize: none; }
+    
+    /* Analyze Rules Modal */
+    #analyzeRulesModal .modal-content { padding: 20px; }
+    #analyzeRulesModal textarea { width: 100%; height: 300px; resize: none; }
+    
+    /* Title Rules Modal */
+    #titleRulesModal .modal-content { padding: 20px; }
+    #titleRulesModal textarea { width: 100%; height: 300px; resize: none; }
+    
+    /* Description Rules Modal */
+    #descriptionRulesModal .modal-content { padding: 20px; }
+    #descriptionRulesModal textarea { width: 100%; height: 300px; resize: none; }
+    
+    /* Keyword Rules Modal */
+    #keywordRulesModal .modal-content { padding: 20px; }
+    #keywordRulesModal textarea { width: 100%; height: 300px; resize: none; }
+    
+    body.modal-open { overflow: auto !important; }
+    .modal-overlay { background: transparent !important; pointer-events: none !important; }
+    
+    /* Additional widths for Etsy Link and Shop Listings */
+    #etsyLink, #shopListings { width: 500px !important; }
+    
     /* Styles for the new Upload to Etsy button container at the bottom center */
     #uploadContainer {
       position: fixed;
@@ -60,7 +325,6 @@
     <button id="clearKeyPhrasesBtn" class="btn-small waves-effect waves-light configurable">Clear</button>
     <button id="copyKeyPhrasesBtn" class="btn-small waves-effect waves-light configurable">Copy</button>
     <div id="dropZone" class="configurable">Drop Image Here</div>
-    <!-- Primary Preview – solely for image cropping -->
     <div id="primaryPreview" class="configurable"></div>
     <button id="analyzeMetadataBtn" class="btn waves-effect waves-light configurable">Analyze Photos</button>
     <button id="showAnalyzeRulesBtn" class="btn waves-effect waves-light configurable" style="margin-top:25px;">Analyze Rules</button>
@@ -86,7 +350,7 @@
             <i class="material-icons">content_copy</i>
           </button>
         </div>
-        <button id="showTitleRulesBtn" class="btn waves-effect waves-light rules-button configurable">Title Rules</button>
+        <button id="showTitleRulesBtn" class="btn waves-effect waves-light rules-button configurable" data-target="titleRulesModal">Title Rules</button>
       </div>
       <p id="titleCount" class="count-text configurable">Count: 0</p>
     </div>
@@ -102,7 +366,7 @@
             <i class="material-icons">content_copy</i>
           </button>
         </div>
-        <button id="showDescriptionRulesBtn" class="btn waves-effect waves-light rules-button configurable">Description Rules</button>
+        <button id="showDescriptionRulesBtn" class="btn waves-effect waves-light rules-button configurable" data-target="descriptionRulesModal">Description Rules</button>
       </div>
     </div>
   </div>
@@ -117,14 +381,155 @@
     <button id="uploadToEtsyBtn" class="btn waves-effect waves-light configurable">Upload to Etsy</button>
   </div>
   
-  <!-- Modals (Title Rules, Description Rules, Analyze Rules, Button Config, Metadata, Crop) -->
-  <!-- [Modals content remains unchanged] -->
+  <!-- Modals -->
+  <!-- Title Rules Modal -->
+  <div id="titleRulesModal" class="modal">
+    <div class="modal-content">
+      <h4>Title Rules</h4>
+      <textarea id="titleRulesTextarea">
+Title Structure & Formatting:
+- The goal is to maximize Etsy Listing SEO and conversions.
+- Create 5-7 SEO optimized long-tail key phrases (3-5 words each) within the Title.
+• Every title must begin with the product type (e.g., "Angel Earrings", "Daisy Necklace", "Paperclip Necklace").
+- Ensure creative yet grammatically correct word order.
+- Do NOT use punctuation (no commas, periods, etc.).
+• If the product is a charm or pendant, the first word should describe that type.
+- For necklaces, the second word must be "necklace"; for earrings, it must be "Earring".
+Word Usage & Frequency:
+• No word may appear more than three times.
+• "Earrings" must be plural, appear no more than three times, and follow a noun.
+• "Stud" is allowed only in approved phrases and must precede "earrings".
+Required Words:
+• "Charm" must appear exactly once.
+Use of "For":
+• "for" must appear at least twice (e.g., "gift for her").
+Title Length & Order:
+• Titles must be between 125 and 140 characters.
+• Adjectives must follow nouns.
+SEO Optimization:
+• Title word order should naturally form at least eight SEO phrases (each 3-4 words).
+Prohibited Words:
+• Do NOT include: "accessories", "unique", "simple", "minimalist", "whimsical", "cute", "filled", "gold filled", "silver", "solid gold", "gold vermeil", "rosegold", "14k", "handmade", "quirky", "delicate", "accessory", "for", "dangle", "gold plated", "jewelry", "custom", "celestial", "design", "lightweight".
+      </textarea>
+    </div>
+    <div class="modal-footer">
+      <a href="#!" id="updateTitleRulesBtn" class="modal-close waves-effect waves-green btn">Update</a>
+    </div>
+  </div>
+  
+  <!-- Description Rules Modal -->
+  <div id="descriptionRulesModal" class="modal">
+    <div class="modal-content">
+      <h4>Description Rules</h4>
+      <textarea id="descriptionRulesTextarea">
+Rules for Description:
+Merge the key phrases provided with your output. Modify the description to match the type of jewelry.
+Keep the output paragraph to 80 words.
+
+Option 1:
+"This stunning gold Playing Card Charm is the perfect gift for her, featuring an intricately designed Ace of Spades charm. Ideal for jewelry lovers and card players alike, this versatile necklace pendant is perfect for creating your own personalized piece or as an add-on charm. The detailed charm makes a great addition to any collection."
+
+Option 2:
+"This playful Allosaurus charm is the perfect add-on to enhance your charm necklace or huggie hoops. Crafted with attention to detail, this gold charm adds a whimsical touch to any collection. Ideal for jewelry enthusiasts, this charm can be mixed with other charms for a custom look."
+
+Option 3:
+"This charming gold Alligator Necklace is a delightful gift for her, especially for animal lovers. Featuring a beautifully designed crocodile pendant, this charm can also be used as an add-on for jewelry making. It adds a unique touch to any collection."
+      </textarea>
+    </div>
+    <div class="modal-footer">
+      <a href="#!" id="updateDescriptionRulesBtn" class="modal-close waves-effect waves-green btn">Update</a>
+    </div>
+  </div>
+  
+  <!-- Analyze Rules Modal (Photo Metadata Analysis) -->
+  <div id="analyzeRulesModal" class="modal">
+    <div class="modal-content">
+      <h4>Photo Metadata Analysis Rules</h4>
+      <textarea id="analyzeRulesTextarea">
+Default Photo Analysis Rules:
+1. Use SEO-friendly descriptive long-tail key phrases without special characters.
+2. Emphasize the charm details (what it is, occasion, metal, size, style).
+3. Focus primarily on the jewelry details in the image.
+4. Do not include environment, model, or clothing details.
+5. Organize the description into a short paragraph.
+6. Limit the description to a maximum of 300 characters.
+7. Never mention earrings unless the photo explicitly shows them.
+8. Do not mix necklace and earring descriptions.
+      </textarea>
+    </div>
+    <div class="modal-footer">
+      <a href="#!" id="updateAnalyzeRulesBtn" class="modal-close waves-effect waves-green btn">Update</a>
+    </div>
+  </div>
+  
+  <!-- Keyword Rules Modal -->
+  <div id="keywordRulesModal" class="modal">
+    <div class="modal-content">
+      <h4>Keyword (Tag Phrase) Rules</h4>
+      <textarea id="keywordRulesTextarea">
+Using the Sales Report Files and Product List Files, extrapolate the best tag phrases.
+Focus on key terms like "Necklace", "Earrings", "Studs", "Hoops" and charm details.
+Rules:
+1. Generate exactly 13 tag phrases; each must be ≤ 20 characters (including spaces).
+2. "Gift for Her" must be included.
+3. "Charm" must appear at least once as part of a multi-word phrase (not alone) and not more than 4 times overall.
+4. "Necklace" must not appear more than 3 times.
+5. "Gift" must not appear more than 3 times.
+6. "Lover" must not appear more than 2 times.
+7. Exclude: "Gift for Him", "Statement Piece", "Unique", "Spiritual Gift", "Outdoor Style", "accessories", "simple", "minimalist", "whimsical", "cute", "filled", "gold filled", "silver", "solid gold", "gold vermeil", "rosegold", "14k", "handmade", "quirky", "delicate", "accessory", "for", "dangle", "gold plated", "jewelry", "custom", "celestial", "design", "lightweight", "Fine Chain Necklace", "Small", "Large", "Nice", "Long", "Dark", "Short", "and", "but", "light", "heavy", "Wanderlust", "Theme", "Minimal Chain Gift", "Tiny Pendant Chain", "Charm Look", "Charm Wear", "Chain Necklace", "Small Pendant Chain", "Everyday"
+      </textarea>
+    </div>
+    <div class="modal-footer">
+      <a href="#!" id="updateKeywordRulesBtn" class="modal-close waves-effect waves-green btn">Update</a>
+    </div>
+  </div>
+  
+  <!-- Button Config Modal -->
+  <div id="buttonConfigModal" class="modal">
+    <div class="modal-content">
+      <h4>Configure Button Positions</h4>
+      <div id="buttonConfigContainer"></div>
+      <textarea id="uploadedFilesListModal" class="materialize-textarea" rows="2" placeholder="Uploaded .csv files will appear here"></textarea>
+    </div>
+    <div class="modal-footer">
+      <a href="#!" id="saveButtonPositionsBtn" class="modal-close waves-effect waves-green btn">Save Positions</a>
+    </div>
+  </div>
+  
+  <!-- Metadata Modal -->
+  <div id="metadataModal" class="modal">
+    <div class="modal-content">
+      <h4>Photo Metadata</h4>
+      <textarea id="metadataTextarea" style="width:100%; height:300px;" readonly></textarea>
+    </div>
+    <div class="modal-footer">
+      <a href="#!" id="closeMetadataBtn" class="modal-close waves-effect waves-green btn">Close</a>
+    </div>
+  </div>
+  
+  <!-- Crop Modal (rebuilt) -->
+  <div id="photoCropModal" style="display: none;">
+    <div class="crop-container">
+      <h4 style="text-align:center; margin: 0 0 10px 0;">Crop Photo</h4>
+      <div class="img-container">
+        <img id="cropImage" src="" alt="Crop Image">
+      </div>
+      <div class="controls">
+        <label for="zoomSlider">Zoom:</label>
+        <input type="range" id="zoomSlider" min="0.1" max="3" step="0.01" value="1">
+      </div>
+      <div style="text-align:center; margin-top:10px;">
+        <button id="saveCropBtn" class="btn waves-effect waves-light">Save</button>
+        <button id="cancelCropBtn" class="btn waves-effect waves-light" style="background-color:#f44336; margin-left:10px;">Cancel</button>
+      </div>
+    </div>
+  </div>
   
   <!-- Helper function to fetch file content from GitHub (if needed) -->
   <script>
     async function fetchFileContent(path) {
       const repoOwner = "your-username"; // Replace with your GitHub username
-      const repoName = "your-repo-name"; // Replace with your repository name
+      const repoName = "your-repo-name";   // Replace with your repository name
       const url = `https://api.github.com/repos/${repoOwner}/${repoName}/contents/${path}`;
       try {
         const response = await fetch(url);
@@ -155,7 +560,7 @@
     const modelName = "chatgpt-4o-latest";
     let accessToken;
     
-    // All OpenAI API calls are proxied via Netlify functions.
+    // All OpenAI API calls are proxied via Netlify functions
     async function callOpenAI(payload) {
       const response = await fetch("/.netlify/functions/openaiProxy", {
         method: "POST",
@@ -170,7 +575,7 @@
       return data;
     }
     
-    // CSV to JSONL converter function.
+    // CSV to JSONL converter
     function csvToJsonl(csvText) {
       const lines = csvText.split(/\r?\n/).filter(line => line.trim() !== "");
       if (lines.length < 2) return "";
@@ -223,13 +628,11 @@
       });
     }
     
-    // For DOC files, we continue to use the DataURL approach (not converting)
     async function uploadDocFile(file, progressCallback) {
       return new Promise((resolve, reject) => {
         const reader = new FileReader();
         reader.onload = async (event) => {
           try {
-            // For DOC files, we assume the content is acceptable as is
             const base64Content = event.target.result.split(',')[1];
             const payload = {
               file: base64Content,
@@ -277,7 +680,7 @@
       return base64urlEncode(digest);
     }
     
-    // OAuth Flow for Etsy
+    // OAuth Flow
     document.getElementById("connectEtsyBtn").addEventListener("click", async () => {
       const state = "randomState123";
       const scope = "listings_w listings_r";
@@ -549,8 +952,7 @@
           method: "POST",
           headers: {
             "Content-Type": "application/json",
-            // WARNING: For security, this call should also be proxied via a Netlify function.
-            "Authorization": "Bearer " + "YOUR_OPENAI_API_KEY"
+            "Authorization": "Bearer " + "OPENAI_API_KEY"
           },
           body: JSON.stringify(vectorStorePayload)
         });
@@ -565,7 +967,7 @@
           method: "PATCH",
           headers: {
             "Content-Type": "application/json",
-            "Authorization": "Bearer " + "YOUR_OPENAI_API_KEY"
+            "Authorization": "Bearer " + "OPENAI_API_KEY"
           },
           body: JSON.stringify(updatePayload)
         });
@@ -610,6 +1012,15 @@
       container13.style.height = (originalHeight * 2.5) + "px";
     });
     
+    // Utility: Strip Markdown formatting from JSON responses.
+    function stripMarkdownJSON(text) { 
+      return text.replace(/^```json\s*/, "").replace(/\s*```$/, "").trim(); 
+    }
+    
+    function updateTitleCount(text) { 
+      document.getElementById("titleCount").textContent = "Count: " + text.length; 
+    }
+    
     // Functions for generating title, description, and tag phrases via OpenAI proxy.
     async function generateBoth() {
       await Promise.all([generateTitleOnly(), generateDescriptionOnly()]);
@@ -633,7 +1044,7 @@ Input Context:
 Etsy Link: "${etsyLink}"
 Search Key Phrases: "${keyPhrases}"
 --- Rules for TITLE ---
-${titleRules}
+${stripMarkdownJSON(document.getElementById("titleRulesTextarea").value)}
 Important: Return ONLY the title as plain text.`;
       document.getElementById("listingTitle").value = "Generating title...";
       const payload = {
@@ -672,7 +1083,7 @@ Input Context:
 Etsy Link: "${etsyLink}"
 Search Key Phrases: "${keyPhrases}"
 --- Rules for DESCRIPTION ---
-${descriptionRules}
+${stripMarkdownJSON(document.getElementById("descriptionRulesTextarea").value)}
 Important: Return ONLY the description as plain text.`;
       document.getElementById("listingDescription").value = "Generating description...";
       const payload = {
@@ -703,30 +1114,30 @@ Important: Return ONLY the description as plain text.`;
         return;
       }
       let listingDescription = question;
-      let extraText = "Emphasis on SEO friendliness with a focus on generating the most effective and efficient long tail tag phrases that will best suit Etsy search marketplace";
+      let extraText = "Emphasis on SEO friendliness with a focus on generating the most effective long tail tag phrases for Etsy.";
       let soldOrdersInfo = soldOrdersCSV.map(item => `Filename: ${item.name}, FileID: ${item.id}`).join("\n");
       let listingsInfo = listingsCSV.map(item => `Filename: ${item.name}, FileID: ${item.id}`).join("\n");
+      // Include keyword rules from the modal textarea.
+      const keywordRules = stripMarkdownJSON(document.getElementById("keywordRulesTextarea").value);
       let prompt = `
 Listing Description (for emphasis): "${listingDescription}"
 ${extraText}
 
-Using the Sales Report Files and Product List Files below, extrapolate the best tag phrases. Also consider any associated Titles and Descriptions to help guide your analysis. Focus especially on key terms such as "Necklace", "Earrings", "Studs", "Hoops" and details regarding the kind, type, and style of charm.
-Also put a lot of emphasis on the sales success of given key phrases based on the analysis from the Etsy sales report. Put more weight on better performing listings — the more sales a listing has, the more valuable its keywords; also correlate how fast a listing made sales over its lifetime — the faster a listing was able to accumulate sales, the more valuable its key phrases are.
-
-Generate exactly 13 separate tag phrases, each with a maximum length of 20 characters (including spaces).
-Ensure that "Gift for Her" is always included as one of the tag phrases.
-Ensure that the word "Charm" appears at least once as part of a multi-word tag phrase (do not use "Charm" alone) and verify that "charm" is not included more than 4 times in any set.
-Verify that "Necklace" is not included more than 3 times in any set.
-Verify that "Gift" is not included more than 3 times in any set.
-Verify that "Lover" is not included more than 2 times in any set.
-Also, ensure that none of the following words/phrases appear: "Gift for Him", "Statement Piece", "Unique", "Spiritual Gift", "Outdoor Style", "accessories", "unique", "simple", "minimalist", "whimsical", "cute", "filled", "gold filled", "silver", "solid gold", "gold vermeil", "rosegold", "14k", "handmade", "quirky", "delicate", "accessory", "for", "dangle", "gold plated", "jewelry", "custom", "celestial", "design", "lightweight", "Fine Chain Necklace", "Small", "Large", "Nice", "Long", "Dark", "Short", "and", "but", "light", "heavy", "Wanderlust", "Theme", "Minimal Chain Gift", "Tiny Pendant Chain", "Charm Look", "Charm Wear", "Chain Necklace", "Small Pendant Chain", "Everyday"
+Keyword Rules:
+${keywordRules}
+      
+Using the Sales Report Files and Product List Files below, extrapolate the best tag phrases.
+Generate exactly 13 separate tag phrases, each ≤ 20 characters.
+Include "Gift for Her" and ensure "Charm" appears at least once in a multi-word phrase (max 4 times total).
+"Necklace" must appear ≤ 3 times, "Gift" ≤ 3 times, "Lover" ≤ 2 times.
+Exclude: "Gift for Him", "Statement Piece", "Unique", "Spiritual Gift", "Outdoor Style", "accessories", "simple", "minimalist", "whimsical", "cute", "filled", "gold filled", "silver", "solid gold", "gold vermeil", "rosegold", "14k", "handmade", "quirky", "delicate", "accessory", "for", "dangle", "gold plated", "jewelry", "custom", "celestial", "design", "lightweight", "Fine Chain Necklace", "Small", "Large", "Nice", "Long", "Dark", "Short", "and", "but", "light", "heavy", "Wanderlust", "Theme", "Minimal Chain Gift", "Tiny Pendant Chain", "Charm Look", "Charm Wear", "Chain Necklace", "Small Pendant Chain", "Everyday"
 Return your answer as plain text.
       `;
       try {
         const payload = {
           model: modelName,
           messages: [
-            { role: "system", content: "Generate tag phrases according to the hard-coded rules." },
+            { role: "system", content: "Generate tag phrases according to the provided rules." },
             { role: "user", content: prompt }
           ],
           temperature: 0.7,
@@ -768,7 +1179,7 @@ Return your answer as plain text.
             const altPayload = {
               model: modelName,
               messages: [
-                { role: "system", content: "Generate an alternate key phrase for the provided key phrase that is less than or equal to 20 characters (including spaces). Provide only the key phrase." },
+                { role: "system", content: "Generate an alternate key phrase that is ≤ 20 characters." },
                 { role: "user", content: phrase }
               ],
               temperature: 0.7,
@@ -788,7 +1199,7 @@ Return your answer as plain text.
             const dupPayload = {
               model: modelName,
               messages: [
-                { role: "system", content: "Generate an alternate key phrase for the provided key phrase that is unique and less than or equal to 20 characters (including spaces). Provide only the key phrase." },
+                { role: "system", content: "Generate a unique key phrase ≤ 20 characters." },
                 { role: "user", content: phrase }
               ],
               temperature: 0.7,
@@ -901,15 +1312,6 @@ Return your answer as plain text.
       console.log("Listing Description input changed. Resetting key phrase state.");
       document.getElementById("searchKeyPhrases").value = "";
     });
-    
-    // Utility: Strip Markdown formatting from JSON responses.
-    function stripMarkdownJSON(text) { 
-      return text.replace(/^```json\s*/, "").replace(/\s*```$/, "").trim(); 
-    }
-    
-    function updateTitleCount(text) { 
-      document.getElementById("titleCount").textContent = "Count: " + text.length; 
-    }
   </script>
 </body>
 </html>
