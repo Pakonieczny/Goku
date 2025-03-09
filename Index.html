@@ -560,6 +560,15 @@ Rules:
     const modelName = "chatgpt-4o-latest";
     let accessToken;
     
+    // Reintroduce missing global variables
+    let soldOrdersCSV = [];
+    let listingsCSV = [];
+    let photoNames = [];
+    let previewImages = [];
+    let photoStatuses = [];
+    let photoMeta = [];
+    let photoObjects = [];
+    
     // All OpenAI API calls are proxied via Netlify functions
     async function callOpenAI(payload) {
       const response = await fetch("/.netlify/functions/openaiProxy", {
@@ -781,10 +790,7 @@ Rules:
       document.getElementById("searchKeyPhrases").value = "";
     });
     
-    let previewImages = [];
-    let photoStatuses = [];
-    let photoMeta = [];
-    let photoObjects = [];
+    // Drop zone and file upload event handlers
     const dropZone = document.getElementById("dropZone");
     const previewGrid = document.getElementById("previewGrid");
     const primaryPreview = document.getElementById("primaryPreview");
