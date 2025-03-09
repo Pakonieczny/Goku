@@ -327,7 +327,7 @@
     <div id="dropZone" class="configurable">Drop Image Here</div>
     <div id="primaryPreview" class="configurable"></div>
     <button id="analyzeMetadataBtn" class="btn waves-effect waves-light configurable">Analyze Photos</button>
-    <button id="showAnalyzeRulesBtn" class="btn waves-effect waves-light configurable" style="margin-top:25px;">Analyze Rules</button>
+    <button id="showAnalyzeRulesBtn" class="btn waves-effect waves-light configurable" data-target="analyzeRulesModal" style="margin-top:25px;">Analyze Rules</button>
   </div>
   <div id="container13" class="flex-container configurable">
     <div class="textbox-container configurable">
@@ -397,7 +397,7 @@ Title Structure & Formatting:
 - For necklaces, the second word must be "necklace"; for earrings, it must be "Earring".
 Word Usage & Frequency:
 • No word may appear more than three times.
-• "Earrings" must be plural, appear no more than three times, and follow a noun.
+• "Earrings" must be plural and appear no more than three times.
 • "Stud" is allowed only in approved phrases and must precede "earrings".
 Required Words:
 • "Charm" must appear exactly once.
@@ -423,8 +423,8 @@ Prohibited Words:
       <h4>Description Rules</h4>
       <textarea id="descriptionRulesTextarea">
 Rules for Description:
-Merge the key phrases provided with your output. Modify the description to match the type of jewelry.
-Keep the output paragraph to 80 words.
+Merge the provided key phrases with your output. Modify the description to match the jewelry type.
+Keep the description to 80 words.
 
 Option 1:
 "This stunning gold Playing Card Charm is the perfect gift for her, featuring an intricately designed Ace of Spades charm. Ideal for jewelry lovers and card players alike, this versatile necklace pendant is perfect for creating your own personalized piece or as an add-on charm. The detailed charm makes a great addition to any collection."
@@ -467,15 +467,15 @@ Default Photo Analysis Rules:
     <div class="modal-content">
       <h4>Keyword (Tag Phrase) Rules</h4>
       <textarea id="keywordRulesTextarea">
-Using the Sales Report Files and Product List Files, extrapolate the best tag phrases.
+Using Sales Report and Product List Files, extrapolate the best tag phrases.
 Focus on key terms like "Necklace", "Earrings", "Studs", "Hoops" and charm details.
 Rules:
-1. Generate exactly 13 tag phrases; each must be ≤ 20 characters (including spaces).
+1. Generate exactly 13 tag phrases; each must be ≤ 20 characters.
 2. "Gift for Her" must be included.
-3. "Charm" must appear at least once as part of a multi-word phrase (not alone) and not more than 4 times overall.
-4. "Necklace" must not appear more than 3 times.
-5. "Gift" must not appear more than 3 times.
-6. "Lover" must not appear more than 2 times.
+3. "Charm" must appear at least once as part of a multi-word phrase (max 4 times total).
+4. "Necklace" must appear ≤ 3 times.
+5. "Gift" must appear ≤ 3 times.
+6. "Lover" must appear ≤ 2 times.
 7. Exclude: "Gift for Him", "Statement Piece", "Unique", "Spiritual Gift", "Outdoor Style", "accessories", "simple", "minimalist", "whimsical", "cute", "filled", "gold filled", "silver", "solid gold", "gold vermeil", "rosegold", "14k", "handmade", "quirky", "delicate", "accessory", "for", "dangle", "gold plated", "jewelry", "custom", "celestial", "design", "lightweight", "Fine Chain Necklace", "Small", "Large", "Nice", "Long", "Dark", "Short", "and", "but", "light", "heavy", "Wanderlust", "Theme", "Minimal Chain Gift", "Tiny Pendant Chain", "Charm Look", "Charm Wear", "Chain Necklace", "Small Pendant Chain", "Everyday"
       </textarea>
     </div>
@@ -575,7 +575,7 @@ Rules:
       return data;
     }
     
-    // CSV to JSONL converter
+    // CSV to JSONL converter function.
     function csvToJsonl(csvText) {
       const lines = csvText.split(/\r?\n/).filter(line => line.trim() !== "");
       if (lines.length < 2) return "";
@@ -592,7 +592,7 @@ Rules:
       return jsonlArray.join("\n");
     }
     
-    // Update file upload functions to convert CSV files to JSONL.
+    // Updated CSV file upload function: converts CSV to JSONL, encodes in Base64, then uploads.
     async function uploadCSVFile(file, progressCallback) {
       return new Promise((resolve, reject) => {
         const reader = new FileReader();
@@ -602,6 +602,9 @@ Rules:
             const csvText = event.target.result;
             // Convert CSV text to JSONL format
             const jsonlText = csvToJsonl(csvText);
+            if (!jsonlText.trim()) {
+              throw new Error("Converted JSONL content is empty. Please check your CSV file structure.");
+            }
             // Convert JSONL text to Base64
             const base64Content = btoa(unescape(encodeURIComponent(jsonlText)));
             const payload = {
@@ -628,6 +631,7 @@ Rules:
       });
     }
     
+    // DOC file upload function
     async function uploadDocFile(file, progressCallback) {
       return new Promise((resolve, reject) => {
         const reader = new FileReader();
@@ -680,7 +684,7 @@ Rules:
       return base64urlEncode(digest);
     }
     
-    // OAuth Flow
+    // OAuth Flow for Etsy
     document.getElementById("connectEtsyBtn").addEventListener("click", async () => {
       const state = "randomState123";
       const scope = "listings_w listings_r";
@@ -952,7 +956,8 @@ Rules:
           method: "POST",
           headers: {
             "Content-Type": "application/json",
-            "Authorization": "Bearer " + "OPENAI_API_KEY"
+            // For security, these calls should ideally be proxied via a Netlify function.
+            "Authorization": "Bearer " + "YOUR_OPENAI_API_KEY"
           },
           body: JSON.stringify(vectorStorePayload)
         });
@@ -967,7 +972,7 @@ Rules:
           method: "PATCH",
           headers: {
             "Content-Type": "application/json",
-            "Authorization": "Bearer " + "OPENAI_API_KEY"
+            "Authorization": "Bearer " + "YOUR_OPENAI_API_KEY"
           },
           body: JSON.stringify(updatePayload)
         });
@@ -1117,7 +1122,6 @@ Important: Return ONLY the description as plain text.`;
       let extraText = "Emphasis on SEO friendliness with a focus on generating the most effective long tail tag phrases for Etsy.";
       let soldOrdersInfo = soldOrdersCSV.map(item => `Filename: ${item.name}, FileID: ${item.id}`).join("\n");
       let listingsInfo = listingsCSV.map(item => `Filename: ${item.name}, FileID: ${item.id}`).join("\n");
-      // Include keyword rules from the modal textarea.
       const keywordRules = stripMarkdownJSON(document.getElementById("keywordRulesTextarea").value);
       let prompt = `
 Listing Description (for emphasis): "${listingDescription}"
@@ -1126,7 +1130,7 @@ ${extraText}
 Keyword Rules:
 ${keywordRules}
       
-Using the Sales Report Files and Product List Files below, extrapolate the best tag phrases.
+Using the Sales Report and Product List Files, extrapolate the best tag phrases.
 Generate exactly 13 separate tag phrases, each ≤ 20 characters.
 Include "Gift for Her" and ensure "Charm" appears at least once in a multi-word phrase (max 4 times total).
 "Necklace" must appear ≤ 3 times, "Gift" ≤ 3 times, "Lover" ≤ 2 times.
@@ -1199,7 +1203,7 @@ Return your answer as plain text.
             const dupPayload = {
               model: modelName,
               messages: [
-                { role: "system", content: "Generate a unique key phrase ≤ 20 characters." },
+                { role: "system", content: "Generate a unique key phrase that is ≤ 20 characters." },
                 { role: "user", content: phrase }
               ],
               temperature: 0.7,
