@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8">
   <title>Etsy Listing Generator & Shop Listings</title>
-  <!-- Favicon restored -->
+  <!-- Favicon -->
   <link rel="icon" type="image/png" href="assets/favicon.png">
   <!-- Import Google Material Icons and Materialize CSS -->
   <link href="https://fonts.googleapis.com/icon?family=Material+Icons" rel="stylesheet">
@@ -491,13 +491,11 @@ Default Photo Analysis Rules:
     </div>
   </div>
   
-  <!-- Helper function to fetch file content from GitHub using the correct API call path -->
+  <!-- Helper function to fetch file content from GitHub -->
   <script>
-    // Example helper function to fetch a file from GitHub:
     async function fetchFileContent(path) {
-      // Replace these with your actual GitHub username and repository name.
-      const repoOwner = "pakonieczny";
-      const repoName = "Goku";
+      const repoOwner = "your-username"; // Replace with your GitHub username
+      const repoName = "your-repo-name"; // Replace with your repository name (no extra folder)
       const url = `https://api.github.com/repos/${repoOwner}/${repoName}/contents/${path}`;
       try {
         const response = await fetch(url);
@@ -513,10 +511,6 @@ Default Photo Analysis Rules:
         console.error("Error fetching file content for", path, error);
       }
     }
-    
-    // You can test the helper function by calling, for example:
-    // fetchFileContent("index.html");
-    // fetchFileContent("netlify/functions/exchangeToken.js");
   </script>
   
   <script src="https://code.jquery.com/jquery-3.6.0.min.js"></script>
@@ -530,6 +524,8 @@ Default Photo Analysis Rules:
     const REDIRECT_URI = "https://delicate-tanuki-616ac0.netlify.app/";
     const modelName = "chatgpt-4o-latest";
     let accessToken;
+    
+    // NOTE: openaiApiKey is no longer used on the client side.
     
     var analyzeRules = localStorage.getItem("analyzeRules") || `Default Photo Analysis Rules:
 1. Use SEO-friendly descriptive long-tail key phrases without special characters, focus on factual
@@ -556,8 +552,38 @@ Default Photo Analysis Rules:
       });
     }
     
-    // (uploadCSVFile, uploadDocFile, analyzeDocument, splitIntoChunks, summarizeTextChunk,
-    // iterativeSummarization, upscaleImageAfterAnalysis, verifyMetadata functions remain unchanged)
+    // --- OpenAI API Calls via Netlify Function ---
+    // All calls to OpenAI are now proxied via the Netlify function openaiProxy.
+    
+    async function callOpenAI(payload) {
+      const response = await fetch("/.netlify/functions/openaiProxy", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(payload)
+      });
+      if (!response.ok) {
+        const errorData = await response.json();
+        throw new Error("API Error: " + (errorData.error ? errorData.error.message : response.statusText));
+      }
+      const data = await response.json();
+      return data;
+    }
+    
+    async function analyzeImageBase64(dataUrl) {
+      const payload = {
+        model: photoAnalysisModel,
+        messages: [
+          { role: "user", content: [
+              { type: "text", text: "Using SEO friendly descriptive long tail key phrases without special characters and max 300 characters, generate a short paragraph describing only the jewelry worn by the model. Skip the environment, model, and clothing. For necklaces, focus on chain details (metal, color, style) and describe how the necklace hangs, shimmers and is dainty. For earrings, focus on the charm details (metal, color, size, style)." },
+              { type: "image_url", image_url: { url: dataUrl } }
+          ] }
+        ],
+        max_tokens: 300,
+        temperature: 0.7
+      };
+      const data = await callOpenAI(payload);
+      return data.choices[0].message.content;
+    }
     
     // PKCE Utility Functions
     function generateRandomString(length) {
@@ -585,7 +611,7 @@ Default Photo Analysis Rules:
     
     // Updated Connect to Etsy button to initiate proper OAuth flow with PKCE.
     document.getElementById("connectEtsyBtn").addEventListener("click", async () => {
-      const state = "randomState123"; // Ideally, use a truly random state value.
+      const state = "randomState123";
       const scope = "listings_w listings_r";
       const codeVerifier = generateRandomString(64);
       localStorage.setItem("etsy_code_verifier", codeVerifier);
@@ -612,7 +638,7 @@ Default Photo Analysis Rules:
       updateUploadedFilesList();
     });
     
-    // Fully Updated exchangeCodeForToken using Netlify Function.
+    // Updated exchangeCodeForToken using Netlify Function.
     async function exchangeCodeForToken(code) {
       const codeVerifier = localStorage.getItem("etsy_code_verifier");
       if (!codeVerifier) {
@@ -620,7 +646,6 @@ Default Photo Analysis Rules:
         return;
       }
       try {
-        // Call the Netlify function instead of Etsy's endpoint directly.
         const response = await fetch(`/.netlify/functions/exchangeToken?code=${encodeURIComponent(code)}&code_verifier=${encodeURIComponent(codeVerifier)}`);
         const tokenData = await response.json();
         if (tokenData.access_token) {
@@ -635,7 +660,7 @@ Default Photo Analysis Rules:
       }
     }
     
-    // Function to duplicate an existing listing as a Draft using the provided listing link.
+    // Function to duplicate an existing listing as a Draft.
     async function duplicateListing() {
       let listingLink = document.getElementById("shopListings").value.trim();
       console.log("Listing Link:", listingLink);
@@ -645,7 +670,7 @@ Default Photo Analysis Rules:
       }
       let listingIdMatch = listingLink.match(/\/listing\/(\d+)/);
       if (!listingIdMatch) {
-        M.toast({ html: "Invalid listing link. Please provide a valid Etsy listing URL (e.g. https://www.etsy.com/listing/123456789/example)" });
+        M.toast({ html: "Invalid listing link. Please provide a valid Etsy listing URL." });
         console.log("Regex did not match listing link.");
         return;
       }
@@ -698,7 +723,7 @@ Default Photo Analysis Rules:
       }
     }
     
-    // New event listener for the Upload to Etsy button.
+    // Event listener for Upload to Etsy button.
     document.getElementById("uploadToEtsyBtn").addEventListener("click", duplicateListing);
     
     document.getElementById("clearKeyPhrasesBtn").addEventListener("click", () => {
@@ -866,7 +891,7 @@ Default Photo Analysis Rules:
           method: "POST",
           headers: {
             "Content-Type": "application/json",
-            "Authorization": "Bearer " + openaiApiKey,
+            "Authorization": "Bearer " + process.env.OPENAI_API_KEY, // Alternatively, use your stored key if allowed
             "OpenAI-Beta": "assistants=v2"
           },
           body: JSON.stringify(vectorStorePayload)
@@ -882,7 +907,7 @@ Default Photo Analysis Rules:
           method: "PATCH",
           headers: {
             "Content-Type": "application/json",
-            "Authorization": "Bearer " + openaiApiKey,
+            "Authorization": "Bearer " + process.env.OPENAI_API_KEY,
             "OpenAI-Beta": "assistants=v2"
           },
           body: JSON.stringify(updatePayload)
@@ -928,7 +953,7 @@ Default Photo Analysis Rules:
       container13.style.height = (originalHeight * 2.5) + "px";
     });
     
-    // Additional functions for generating title, description, and tag phrases.
+    // Functions for generating title, description, and tag phrases via OpenAI proxy.
     async function generateBoth() {
       await Promise.all([generateTitleOnly(), generateDescriptionOnly()]);
       const titleEl = document.getElementById("listingTitle");
@@ -963,12 +988,7 @@ Important: Return ONLY the title as plain text.`;
         temperature: 0.7
       };
       try {
-        const response = await fetch("https://api.openai.com/v1/chat/completions", {
-          method: "POST",
-          headers: { "Content-Type": "application/json", "Authorization": "Bearer " + openaiApiKey },
-          body: JSON.stringify(payload)
-        });
-        const data = await response.json();
+        const data = await callOpenAI(payload);
         if (data.choices && data.choices.length > 0) {
           let output = stripMarkdownJSON(data.choices[0].message.content);
           document.getElementById("listingTitle").value = output || "No title generated.";
@@ -1007,12 +1027,7 @@ Important: Return ONLY the description as plain text.`;
         temperature: 0.7
       };
       try {
-        const response = await fetch("https://api.openai.com/v1/chat/completions", {
-          method: "POST",
-          headers: { "Content-Type": "application/json", "Authorization": "Bearer " + openaiApiKey },
-          body: JSON.stringify(payload)
-        });
-        const data = await response.json();
+        const data = await callOpenAI(payload);
         if (data.choices && data.choices.length > 0) {
           let output = stripMarkdownJSON(data.choices[0].message.content);
           document.getElementById("listingDescription").value = output || "No description generated.";
@@ -1060,19 +1075,7 @@ Return your answer as plain text.
           temperature: 0.7,
           max_tokens: 500
         };
-        const response = await fetch("https://api.openai.com/v1/chat/completions", {
-          method: "POST",
-          headers: {
-            "Content-Type": "application/json",
-            "Authorization": "Bearer " + openaiApiKey
-          },
-          body: JSON.stringify(payload)
-        });
-        if (!response.ok) {
-          const errorData = await response.json();
-          throw new Error("API Error: " + (errorData.error ? errorData.error.message : response.statusText));
-        }
-        const data = await response.json();
+        const data = await callOpenAI(payload);
         let answer = data.choices[0].message.content;
         let phrases = answer.split(/[\n,]+/)
           .map(s => s.replace(/^\d+\.\s*/, "").trim())
@@ -1114,16 +1117,7 @@ Return your answer as plain text.
               temperature: 0.7,
               max_tokens: 20
             };
-            const altResponse = await fetch("https://api.openai.com/v1/chat/completions", {
-              method: "POST",
-              headers: { "Content-Type": "application/json", "Authorization": "Bearer " + openaiApiKey },
-              body: JSON.stringify(altPayload)
-            });
-            if (!altResponse.ok) {
-              const altErrorData = await altResponse.json();
-              throw new Error("API Error: " + (altErrorData.error ? altErrorData.error.message : altResponse.statusText));
-            }
-            const altData = await altResponse.json();
+            const altData = await callOpenAI(altPayload);
             let altPhrase = stripMarkdownJSON(altData.choices[0].message.content).trim();
             phrase = altPhrase;
           } catch (error) {
@@ -1143,16 +1137,7 @@ Return your answer as plain text.
               temperature: 0.7,
               max_tokens: 20
             };
-            const dupResponse = await fetch("https://api.openai.com/v1/chat/completions", {
-              method: "POST",
-              headers: { "Content-Type": "application/json", "Authorization": "Bearer " + openaiApiKey },
-              body: JSON.stringify(dupPayload)
-            });
-            if (!dupResponse.ok) {
-              const dupErrorData = await dupResponse.json();
-              throw new Error("API Error: " + (dupErrorData.error ? dupErrorData.error.message : dupResponse.statusText));
-            }
-            const dupData = await dupResponse.json();
+            const dupData = await callOpenAI(dupPayload);
             let dupPhrase = stripMarkdownJSON(dupData.choices[0].message.content).trim();
             phrase = dupPhrase;
           } catch (error) {
@@ -1174,7 +1159,6 @@ Return your answer as plain text.
     });
     
     document.getElementById("generateBtn").addEventListener("click", generateBoth);
-    
     document.getElementById("regenTitleBtn").addEventListener("click", generateTitleOnly);
     document.getElementById("regenDescriptionBtn").addEventListener("click", generateDescriptionOnly);
     document.getElementById("copyTitleBtn").addEventListener("click", () => {
@@ -1254,11 +1238,6 @@ Return your answer as plain text.
       var container13 = document.getElementById("container13");
       var originalHeight = container13.offsetHeight;
       container13.style.height = (originalHeight * 2.5) + "px";
-    });
-    
-    document.getElementById("listingDescInput").addEventListener("input", function() {
-      console.log("Listing Description input changed. Resetting key phrase state.");
-      document.getElementById("searchKeyPhrases").value = "";
     });
   </script>
 </body>
