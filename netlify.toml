@@ -2,8 +2,7 @@
   publish = "."
   functions = "netlify/functions"
 
-[context.production.environment]
-  CLIENT_ID = "k75zdspz4r99txpqdji7i2em"
-  CLIENT_SECRET = "u2ie4fx5le"
-  REDIRECT_URI = "https://delicate-tanuki-616ac0.netlify.app/"
-  OPENAI_API_KEY = "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"
+[[redirects]]
+  from = "/*"
+  to = "/index.html"
+  status = 200
