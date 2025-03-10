@@ -192,7 +192,7 @@
     /* Additional widths for Etsy Link and Shop Listings */
     #etsyLink, #shopListings { width: 500px !important; }
     
-    /* Styles for the new Upload to Etsy button container at the bottom center */
+    /* Styles for the Upload to Etsy button container at the bottom center */
     #uploadContainer {
       position: fixed;
       bottom: 20px;
@@ -486,9 +486,10 @@ Using Sales Report and Product List Files:
         const reader = new FileReader();
         reader.onload = async (event) => {
           try {
-            const textContent = event.target.result;
-            if (!textContent.trim()) throw new Error("File content is empty.");
-            const base64Content = btoa(unescape(encodeURIComponent(textContent)));
+            // Read as Data URL so that we can extract the base64 string.
+            const dataURL = event.target.result;
+            const base64Content = dataURL.split(',')[1];
+            if (!base64Content) throw new Error("File content is empty.");
             const payload = {
               file: base64Content,
               fileName: file.name,
@@ -507,7 +508,7 @@ Using Sales Report and Product List Files:
           }
         };
         reader.onerror = reject;
-        reader.readAsText(file);
+        reader.readAsDataURL(file);
       });
     }
     
@@ -516,7 +517,9 @@ Using Sales Report and Product List Files:
         const reader = new FileReader();
         reader.onload = async (event) => {
           try {
-            const base64Content = event.target.result.split(',')[1];
+            const dataURL = event.target.result;
+            const base64Content = dataURL.split(',')[1];
+            if (!base64Content) throw new Error("File content is empty.");
             const payload = {
               file: base64Content,
               fileName: file.name,
