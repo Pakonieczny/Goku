@@ -483,9 +483,7 @@ Using Sales Report and Product List Files:
         reader.onload = async (event) => {
           try {
             const textContent = event.target.result;
-            if (!textContent.trim()) {
-              throw new Error("File content is empty.");
-            }
+            if (!textContent.trim()) throw new Error("File content is empty.");
             const base64Content = btoa(unescape(encodeURIComponent(textContent)));
             const payload = {
               file: base64Content,
@@ -755,7 +753,9 @@ Using Sales Report and Product List Files:
               soldOrdersCSV.push(fileData);
               updateUploadedFilesList();
               await updateAssistantWithCSVFiles();
-            } catch(err) { console.error("Error uploading file:", err); }
+            } catch(err) {
+              console.error("Error uploading file:", err);
+            }
          } else {
             alert("Only .csv, .jsonl, .doc, and .docx files are supported for Etsy Sold Orders.");
          }
@@ -788,7 +788,9 @@ Using Sales Report and Product List Files:
               listingsCSV.push(fileData);
               updateUploadedFilesList();
               await updateAssistantWithCSVFiles();
-            } catch(err) { console.error("Error uploading file:", err); }
+            } catch(err) {
+              console.error("Error uploading file:", err);
+            }
          } else {
             alert("Only .csv, .jsonl, .doc, and .docx files are supported for Etsy Listings.");
          }
@@ -810,7 +812,7 @@ Using Sales Report and Product List Files:
         });
         if (!vectorStoreResponse.ok) {
           const errorData = await vectorStoreResponse.json();
-          throw new Error("Error creating vector store: " + (errorData.error ? errorData.error.message : vectorStoreResponse.statusText));
+          throw new Error("Error creating vector store: " + JSON.stringify(errorData));
         }
         const vectorStoreData = await vectorStoreResponse.json();
         const updatePayload = { tool_resources: { file_search: { vector_store_ids: [vectorStoreData.id] } } };
@@ -821,7 +823,7 @@ Using Sales Report and Product List Files:
         });
         if (!assistantUpdateResponse.ok) {
           const errorData = await assistantUpdateResponse.json();
-          throw new Error("Error updating assistant: " + (errorData.error ? errorData.error.message : assistantUpdateResponse.statusText));
+          throw new Error("Error updating assistant: " + JSON.stringify(errorData));
         }
         const updatedAssistantData = await assistantUpdateResponse.json();
         console.log("Updated Assistant with File Search:", updatedAssistantData);
@@ -848,269 +850,6 @@ Using Sales Report and Product List Files:
     document.getElementById("listingDescInput").addEventListener("input", function() {
       document.getElementById("searchKeyPhrases").value = "";
     });
-    
-    window.addEventListener("load", function() {
-      var container13 = document.getElementById("container13");
-      container13.style.height = (container13.offsetHeight * 2.5) + "px";
-    });
-    
-    // Utility: Strip Markdown formatting from JSON responses.
-    function stripMarkdownJSON(text) {
-      return text.replace(/^```json\s*/, "").replace(/\s*```$/, "").trim();
-    }
-    
-    function updateTitleCount(text) {
-      document.getElementById("titleCount").textContent = "Count: " + text.length;
-    }
-    
-    async function generateBoth() {
-      await Promise.all([generateTitleOnly(), generateDescriptionOnly()]);
-      const titleEl = document.getElementById("listingTitle");
-      const descEl = document.getElementById("listingDescription");
-      console.log("Generate Output:", { title: titleEl.value, description: descEl.value });
-    }
-    
-    async function generateTitleOnly() {
-      const etsyLink = ETSY_SHOP_URL;
-      const keyPhrases = document.getElementById("searchKeyPhrases").value.trim();
-      if (!keyPhrases) {
-        M.toast({ html: "Please provide the search key phrases." });
-        return;
-      }
-      const promptText = `
-You are ChatGPT using ${modelName}.
-Based on the inputs below, generate an Etsy Listing TITLE only.
-Input Context:
-Etsy Link: "${etsyLink}"
-Search Key Phrases: "${keyPhrases}"
---- Rules for TITLE ---
-${stripMarkdownJSON(document.getElementById("titleRulesTextarea").value)}
-Important: Return ONLY the title as plain text.`;
-      document.getElementById("listingTitle").value = "Generating title...";
-      const payload = {
-        model: modelName,
-        messages: [
-          { role: "system", content: "Return ONLY the title as plain text." },
-          { role: "user", content: promptText }
-        ],
-        temperature: 0.7
-      };
-      try {
-        const data = await callOpenAI(payload);
-        if (data.choices && data.choices.length > 0) {
-          let output = stripMarkdownJSON(data.choices[0].message.content);
-          document.getElementById("listingTitle").value = output || "No title generated.";
-          updateTitleCount(output);
-        } else {
-          document.getElementById("listingTitle").value = "No title generated.";
-        }
-      } catch (error) {
-        document.getElementById("listingTitle").value = "Error: " + error;
-      }
-    }
-    
-    async function generateDescriptionOnly() {
-      const etsyLink = ETSY_SHOP_URL;
-      const keyPhrases = document.getElementById("searchKeyPhrases").value.trim();
-      if (!keyPhrases) {
-        M.toast({ html: "Please provide the search key phrases." });
-        return;
-      }
-      const promptText = `
-You are ChatGPT using ${modelName}.
-Based on the inputs below, generate an Etsy Listing DESCRIPTION only.
-Input Context:
-Etsy Link: "${etsyLink}"
-Search Key Phrases: "${keyPhrases}"
---- Rules for DESCRIPTION ---
-${stripMarkdownJSON(document.getElementById("descriptionRulesTextarea").value)}
-Important: Return ONLY the description as plain text.`;
-      document.getElementById("listingDescription").value = "Generating description...";
-      const payload = {
-        model: modelName,
-        messages: [
-          { role: "system", content: "Return ONLY the description as plain text." },
-          { role: "user", content: promptText }
-        ],
-        temperature: 0.7
-      };
-      try {
-        const data = await callOpenAI(payload);
-        if (data.choices && data.choices.length > 0) {
-          let output = stripMarkdownJSON(data.choices[0].message.content);
-          document.getElementById("listingDescription").value = output || "No description generated.";
-        } else {
-          document.getElementById("listingDescription").value = "No description generated.";
-        }
-      } catch (error) {
-        document.getElementById("listingDescription").value = "Error: " + error;
-      }
-    }
-    
-    async function generateTagPhrases() {
-      let question = document.getElementById("listingDescInput").value;
-      if (!question.trim()) {
-        M.toast({ html: "Please enter a question in the Listing Description." });
-        return;
-      }
-      let extraText = "Emphasis on SEO friendliness with a focus on generating effective long tail tag phrases for Etsy.";
-      const keywordRules = stripMarkdownJSON(document.getElementById("keywordRulesTextarea").value);
-      let prompt = `
-Listing Description (for emphasis): "${question}"
-${extraText}
-
-Keyword Rules:
-${keywordRules}
-
-Using Sales Report and Product List Files, generate exactly 13 tag phrases (each ≤ 20 characters).
-Include "Gift for Her", ensure "Charm" appears at least once in a multi-word phrase (max 4 times total),
-"Necklace" appears no more than 3 times, "Gift" no more than 3 times, "Lover" no more than 2 times, and exclude prohibited words.
-Return your answer as plain text.`;
-      try {
-        const payload = {
-          model: modelName,
-          messages: [
-            { role: "system", content: "Generate tag phrases according to the provided rules." },
-            { role: "user", content: prompt }
-          ],
-          temperature: 0.7,
-          max_tokens: 500
-        };
-        const data = await callOpenAI(payload);
-        let answer = data.choices[0].message.content;
-        let phrases = answer.split(/[\n,]+/)
-          .map(s => s.replace(/^\d+\.\s*/, "").trim())
-          .join("\n");
-        document.getElementById("searchKeyPhrases").value = phrases;
-      } catch (err) {
-        console.error("Error generating tag phrases:", err);
-        M.toast({ html: "Error generating tag phrases: " + err.message });
-      }
-    }
-    
-    document.getElementById("listingDescInput").addEventListener("keydown", async function(e) {
-      if (e.key === "Enter" && !e.shiftKey) {
-        e.preventDefault();
-        await generateTagPhrases();
-        await delay(100);
-        await processKeyPhrases();
-      }
-    });
-    
-    async function processKeyPhrases() {
-      let keyText = document.getElementById("searchKeyPhrases").value;
-      let phrases = keyText.split(/\n+/).map(phrase => phrase.trim()).filter(phrase => phrase !== "");
-      let processedPhrases = [];
-      for (let phrase of phrases) {
-        while (phrase.length > 20) {
-          try {
-            const altPayload = {
-              model: modelName,
-              messages: [
-                { role: "system", content: "Generate an alternate key phrase that is ≤ 20 characters." },
-                { role: "user", content: phrase }
-              ],
-              temperature: 0.7,
-              max_tokens: 20
-            };
-            const altData = await callOpenAI(altPayload);
-            phrase = stripMarkdownJSON(altData.choices[0].message.content).trim();
-          } catch (error) {
-            break;
-          }
-          await delay(50);
-        }
-        while (processedPhrases.includes(phrase)) {
-          try {
-            const dupPayload = {
-              model: modelName,
-              messages: [
-                { role: "system", content: "Generate a unique key phrase that is ≤ 20 characters." },
-                { role: "user", content: phrase }
-              ],
-              temperature: 0.7,
-              max_tokens: 20
-            };
-            const dupData = await callOpenAI(dupPayload);
-            phrase = stripMarkdownJSON(dupData.choices[0].message.content).trim();
-          } catch (error) {
-            break;
-          }
-          await delay(50);
-        }
-        processedPhrases.push(phrase);
-      }
-      document.getElementById("searchKeyPhrases").value = processedPhrases.join("\n");
-    }
-    
-    document.getElementById("copyKeyPhrasesBtn").addEventListener("click", () => {
-      const lines = document.getElementById("searchKeyPhrases").value.split(/\n+/).map(l => l.trim()).filter(l => l !== "");
-      navigator.clipboard.writeText(lines.join(", ")).catch(err => console.error("Error copying key phrases: " + err));
-    });
-    
-    document.getElementById("generateBtn").addEventListener("click", generateBoth);
-    document.getElementById("regenTitleBtn").addEventListener("click", generateTitleOnly);
-    document.getElementById("regenDescriptionBtn").addEventListener("click", generateDescriptionOnly);
-    document.getElementById("copyTitleBtn").addEventListener("click", () => {
-      navigator.clipboard.writeText(document.getElementById("listingTitle").value).catch(err => console.error("Error copying title: " + err));
-    });
-    document.getElementById("copyDescriptionBtn").addEventListener("click", () => {
-      navigator.clipboard.writeText(document.getElementById("listingDescription").value).catch(err => console.error("Error copying description: " + err));
-    });
-    
-    document.getElementById("configureButtonsBtn").addEventListener("click", function() {
-      var configContainer = document.getElementById("buttonConfigContainer");
-      configContainer.innerHTML = "";
-      var selectors = "button:not(#configureButtonsBtn), #listingDescContainer, #ordersDropZone, #listingsDropZone, #dropZone, #csvProgressContainer, #previewGridContainer, #primaryPreview, #container13, #uploadedFilesList";
-      var elements = document.querySelectorAll(selectors);
-      var table = document.createElement("table");
-      table.className = "striped";
-      var thead = document.createElement("thead");
-      thead.innerHTML = "<tr><th>Element ID</th><th>Top (px)</th><th>Left (px)</th></tr>";
-      table.appendChild(thead);
-      var tbody = document.createElement("tbody");
-      elements.forEach(function(el) {
-        var id = el.id;
-        var currentTop = el.style.top || "0";
-        var currentLeft = el.style.left || "0";
-        var tr = document.createElement("tr");
-        tr.innerHTML = `<td>${id}</td>
-                        <td><input type="number" id="${id}_top" value="${parseInt(currentTop)||0}"></td>
-                        <td><input type="number" id="${id}_left" value="${parseInt(currentLeft)||0}"></td>`;
-        tbody.appendChild(tr);
-      });
-      table.appendChild(tbody);
-      configContainer.appendChild(table);
-      var modalElem = document.getElementById("buttonConfigModal");
-      var modalInstance = M.Modal.getInstance(modalElem) || M.Modal.init(modalElem, { preventScrolling: false });
-      modalInstance.open();
-    });
-    
-    document.getElementById("saveButtonPositionsBtn").addEventListener("click", function() {
-      var selectors = "button:not(#configureButtonsBtn), #listingDescContainer, #ordersDropZone, #listingsDropZone, #dropZone, #csvProgressContainer, #previewGridContainer, #primaryPreview, #container13, #uploadedFilesList";
-      var elements = document.querySelectorAll(selectors);
-      var positions = {};
-      elements.forEach(function(el) {
-        positions[el.id] = { top: document.getElementById(el.id + "_top").value + "px", left: document.getElementById(el.id + "_left").value + "px" };
-        el.style.top = document.getElementById(el.id + "_top").value + "px";
-        el.style.left = document.getElementById(el.id + "_left").value + "px";
-      });
-      localStorage.setItem("buttonPositions", JSON.stringify(positions));
-    });
-    
-    function loadButtonPositions() {
-      var stored = localStorage.getItem("buttonPositions");
-      if (stored) {
-        var positions = JSON.parse(stored);
-        for (var id in positions) {
-          var el = document.getElementById(id);
-          if (el) {
-            el.style.top = positions[id].top;
-            el.style.left = positions[id].left;
-          }
-        }
-      }
-    }
     
     window.addEventListener("load", function() {
       var container13 = document.getElementById("container13");
