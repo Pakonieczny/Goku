@@ -4,28 +4,38 @@ const FormData = require("form-data");
 exports.handler = async function(event, context) {
   try {
     console.log("uploadFile function invoked with event:", event);
-    const { file, fileName, purpose } = JSON.parse(event.body);
+    const body = JSON.parse(event.body);
+    const { file, fileName, purpose } = body;
+    
     const apiKey = process.env.OPENAI_API_KEY;
-    if (!apiKey) throw new Error("Missing OPENAI_API_KEY environment variable");
-
-    // Convert the provided base64 file string into a Buffer.
+    if (!apiKey) {
+      throw new Error("Missing OPENAI_API_KEY environment variable");
+    }
+    
+    if (!file || !file.trim()) {
+      throw new Error("No file content provided in request body");
+    }
+    
+    // Create a Buffer from the base64 file content.
     const buffer = Buffer.from(file, "base64");
-    console.log("File buffer created for", fileName);
-
-    // Determine the correct content type based on file extension.
-    let contentType = "text/csv"; // default for .csv files
+    console.log(`File "${fileName}" loaded. Buffer length: ${buffer.length} bytes`);
+    
+    // Determine content type based on file extension.
+    let contentType = "text/csv"; // Default for CSV files
     if (fileName.toLowerCase().endsWith(".docx")) {
       contentType = "application/vnd.openxmlformats-officedocument.wordprocessingml.document";
     } else if (fileName.toLowerCase().endsWith(".doc")) {
       contentType = "application/msword";
     }
-    // Create FormData and append the file and purpose.
+    
+    // Prepare form-data for the file upload.
     const form = new FormData();
-    form.append("file", buffer, { filename: fileName, contentType: contentType });
+    form.append("file", buffer, { filename: fileName, contentType });
     form.append("purpose", purpose);
-
-    console.log("Form headers:", form.getHeaders());
-
+    
+    console.log("FormData prepared. Headers:", form.getHeaders());
+    
+    // Call the OpenAI file upload endpoint.
     const response = await fetch("https://api.openai.com/v1/files", {
       method: "POST",
       headers: {
@@ -34,23 +44,26 @@ exports.handler = async function(event, context) {
       },
       body: form
     });
-
-    const text = await response.text();
+    
+    const responseText = await response.text();
+    console.log("Response text from OpenAI API:", responseText);
+    
+    let data;
     try {
-      const data = JSON.parse(text);
-      if (!response.ok) {
-        console.error("Error uploading file:", data);
-        throw new Error(`Upload failed with status ${response.status}: ${JSON.stringify(data)}`);
-      }
-      console.log("File uploaded successfully:", data);
-      return {
-        statusCode: response.status,
-        body: JSON.stringify(data)
-      };
-    } catch (e) {
-      console.error("Error parsing response:", e, text);
-      throw new Error(`Upload failed with status ${response.status}: ${text}`);
+      data = JSON.parse(responseText);
+    } catch (parseError) {
+      throw new Error(`Failed to parse response JSON: ${responseText}`);
     }
+    
+    if (!response.ok) {
+      throw new Error(`Upload failed with status ${response.status}: ${JSON.stringify(data)}`);
+    }
+    
+    console.log("File uploaded successfully:", data);
+    return {
+      statusCode: response.status,
+      body: JSON.stringify(data)
+    };
   } catch (error) {
     console.error("Exception in uploadFile function:", error);
     return {
