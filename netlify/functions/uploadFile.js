@@ -1,3 +1,4 @@
+const fetch = require("node-fetch");
 const FormData = require("form-data");
 
 exports.handler = async function(event, context) {
@@ -11,9 +12,16 @@ exports.handler = async function(event, context) {
     const buffer = Buffer.from(file, "base64");
     console.log("File buffer created for", fileName);
 
-    // Create a FormData instance and append the file and purpose.
+    // Determine the correct content type based on file extension.
+    let contentType = "text/csv"; // default for .csv files
+    if (fileName.toLowerCase().endsWith(".docx")) {
+      contentType = "application/vnd.openxmlformats-officedocument.wordprocessingml.document";
+    } else if (fileName.toLowerCase().endsWith(".doc")) {
+      contentType = "application/msword";
+    }
+    // Create FormData and append the file and purpose.
     const form = new FormData();
-    form.append("file", buffer, { filename: fileName });
+    form.append("file", buffer, { filename: fileName, contentType: contentType });
     form.append("purpose", purpose);
 
     console.log("Form headers:", form.getHeaders());
@@ -27,18 +35,22 @@ exports.handler = async function(event, context) {
       body: form
     });
 
-    if (!response.ok) {
-      const errorText = await response.text();
-      console.error(`Upload failed with status ${response.status}: ${errorText}`);
-      throw new Error(`Upload failed with status ${response.status}: ${errorText}`);
+    const text = await response.text();
+    try {
+      const data = JSON.parse(text);
+      if (!response.ok) {
+        console.error("Error uploading file:", data);
+        throw new Error(`Upload failed with status ${response.status}: ${JSON.stringify(data)}`);
+      }
+      console.log("File uploaded successfully:", data);
+      return {
+        statusCode: response.status,
+        body: JSON.stringify(data)
+      };
+    } catch (e) {
+      console.error("Error parsing response:", e, text);
+      throw new Error(`Upload failed with status ${response.status}: ${text}`);
     }
-
-    const data = await response.json();
-    console.log("File uploaded successfully:", data);
-    return {
-      statusCode: 200,
-      body: JSON.stringify(data)
-    };
   } catch (error) {
     console.error("Exception in uploadFile function:", error);
     return {
