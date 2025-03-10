@@ -2,23 +2,34 @@ exports.handler = async function(event, context) {
   try {
     const payload = JSON.parse(event.body);
     const apiKey = process.env.OPENAI_API_KEY;
-    const assistantId = process.env.ASSISTANT_ID; // If you had it already; otherwise, call getAssistant.
-    const url = `https://api.openai.com/v1/assistants/${assistantId}`;
-    const response = await fetch(url, {
+    if (!apiKey) throw new Error("Missing OPENAI_API_KEY environment variable");
+    
+    // The ASSISTANT_ID should ideally be stored in a persistent cache.
+    // For simplicity, we assume it's set as an environment variable.
+    const assistantId = process.env.ASSISTANT_ID;
+    if (!assistantId) throw new Error("Missing ASSISTANT_ID environment variable");
+    
+    const response = await fetch(`https://api.openai.com/v1/assistants/${assistantId}`, {
       method: "PATCH",
       headers: {
         "Content-Type": "application/json",
-        "Authorization": `Bearer ${apiKey}`,
-        "OpenAI-Beta": "assistants=v2"
+        "Authorization": `Bearer ${apiKey}`
       },
       body: JSON.stringify(payload)
     });
+    
+    if (!response.ok) {
+      const errorData = await response.json();
+      throw new Error("Error updating assistant: " + JSON.stringify(errorData));
+    }
+    
     const data = await response.json();
     return {
-      statusCode: response.status,
+      statusCode: 200,
       body: JSON.stringify(data)
     };
   } catch (error) {
+    console.error("Exception in updateAssistant function:", error);
     return {
       statusCode: 500,
       body: JSON.stringify({ error: error.message })

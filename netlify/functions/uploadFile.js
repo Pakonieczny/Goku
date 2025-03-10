@@ -1,48 +1,37 @@
-const fetch = require("node-fetch");
 const FormData = require("form-data");
 
-exports.handler = async (event, context) => {
+exports.handler = async function(event, context) {
   try {
-    // Expect a JSON body with: file (Base64-encoded), fileName, and purpose
-    const { file, fileName } = JSON.parse(event.body);
+    const { file, fileName, purpose } = JSON.parse(event.body);
+    const apiKey = process.env.OPENAI_API_KEY;
+    if (!apiKey) throw new Error("Missing OPENAI_API_KEY environment variable");
     
-    // Use the allowed purpose "fine-tune" for uploading files to OpenAI.
-    const purpose = "fine-tune";
-    
-    if (!file || !fileName || !purpose) {
-      return {
-        statusCode: 400,
-        body: JSON.stringify({ error: "Missing file, fileName, or purpose in request body" })
-      };
-    }
-
-    // Convert Base64 string to a Buffer
-    const buffer = Buffer.from(file, "base64");
-
-    // Create a new FormData instance and append fields
     const form = new FormData();
-    form.append("file", buffer, {
-      filename: fileName,
-      contentType: "application/octet-stream"
-    });
+    const buffer = Buffer.from(file, "base64");
+    form.append("file", buffer, { filename: fileName });
     form.append("purpose", purpose);
-
-    // Make a POST request to OpenAI's file upload endpoint using the API key from environment variables.
+    
     const response = await fetch("https://api.openai.com/v1/files", {
       method: "POST",
       headers: {
-        // Do not set the Content-Type header here; FormData will set it including the proper boundary.
-        "Authorization": "Bearer " + process.env.OPENAI_API_KEY
+        "Authorization": `Bearer ${apiKey}`,
+        ...form.getHeaders()
       },
       body: form
     });
-
+    
+    if (!response.ok) {
+      const errorData = await response.text();
+      throw new Error(`Upload failed with status ${response.status}: ${errorData}`);
+    }
+    
     const data = await response.json();
     return {
-      statusCode: response.ok ? 200 : response.status,
+      statusCode: 200,
       body: JSON.stringify(data)
     };
   } catch (error) {
+    console.error("Exception in uploadFile function:", error);
     return {
       statusCode: 500,
       body: JSON.stringify({ error: error.message })

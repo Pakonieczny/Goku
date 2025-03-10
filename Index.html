@@ -484,6 +484,7 @@ Using Sales Report and Product List Files:
           try {
             const textContent = event.target.result;
             if (!textContent.trim()) throw new Error("File content is empty.");
+            // Encode text content to base64
             const base64Content = btoa(unescape(encodeURIComponent(textContent)));
             const payload = {
               file: base64Content,
@@ -497,7 +498,7 @@ Using Sales Report and Product List Files:
             });
             if (!response.ok) throw new Error("Upload failed with status " + response.status);
             const responseData = await response.json();
-            resolve({ id: responseData.id, name: responseData.filename });
+            resolve({ id: responseData.id, name: file.name });
           } catch (err) {
             reject(err);
           }
@@ -525,7 +526,7 @@ Using Sales Report and Product List Files:
             });
             if (!response.ok) throw new Error("Upload failed with status " + response.status);
             const responseData = await response.json();
-            resolve({ id: responseData.id, name: responseData.filename });
+            resolve({ id: responseData.id, name: file.name });
           } catch (err) {
             reject(err);
           }
@@ -705,12 +706,12 @@ Using Sales Report and Product List Files:
         const file = files[i];
         if (file.type === "image/jpeg" || file.type === "image/png") {
           try {
-            const dataURL = await (new Promise((resolve, reject) => {
+            const dataURL = await new Promise((resolve, reject) => {
               const reader = new FileReader();
               reader.onload = event => resolve(event.target.result);
               reader.onerror = reject;
               reader.readAsDataURL(file);
-            }));
+            });
             previewImages.push(dataURL);
             photoStatuses.push(null);
             photoMeta.push(null);
@@ -750,7 +751,7 @@ Using Sales Report and Product List Files:
                  fileData = await uploadDocFile(file, percent => { progressBar.value = percent; });
               }
               progressBar.value = 0;
-              // Exclude .jsonl files from the vector store retrieval.
+              // Note: For vector store creation, we filter out .jsonl files.
               soldOrdersCSV.push(fileData);
               updateUploadedFilesList();
               await updateAssistantWithCSVFiles();
@@ -798,9 +799,8 @@ Using Sales Report and Product List Files:
       }
     });
     
-    // Updated function: Filter out files with .jsonl extension for vector store creation.
+    // Only include files not ending with .jsonl when creating the vector store
     async function updateAssistantWithCSVFiles() {
-      // Filter out .jsonl files from both sold orders and listings arrays.
       const allFileIds = [...soldOrdersCSV, ...listingsCSV]
         .filter(file => !file.name.toLowerCase().endsWith(".jsonl"))
         .map(file => file.id);

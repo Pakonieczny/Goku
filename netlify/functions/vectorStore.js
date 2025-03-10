@@ -3,21 +3,17 @@ exports.handler = async function(event, context) {
     console.log("vectorStore function invoked with event:", event);
     const payload = JSON.parse(event.body);
     const apiKey = process.env.OPENAI_API_KEY;
-    if (!apiKey) {
-      throw new Error("Missing OPENAI_API_KEY environment variable");
-    }
+    if (!apiKey) throw new Error("Missing OPENAI_API_KEY environment variable");
     
     const response = await fetch("https://api.openai.com/v1/vector_stores", {
       method: "POST",
       headers: {
         "Content-Type": "application/json",
-        "Authorization": `Bearer ${apiKey}`,
-        "OpenAI-Beta": "assistants=v2"
+        "Authorization": `Bearer ${apiKey}`
       },
       body: JSON.stringify(payload)
     });
     
-    // Check if the response is not OK.
     if (!response.ok) {
       const contentType = response.headers.get("content-type");
       let errorData;
