@@ -1,15 +1,14 @@
 {
   "name": "my-etsy-app",
   "version": "1.0.0",
-  "description": "Etsy Listing Generator & Shop Listings App",
+  "description": "Etsy Listing Generator & Shop Listings",
   "main": "index.html",
-  "scripts": {
-    "start": "netlify dev",
-    "build": "echo \"Building project...\""
-  },
   "dependencies": {
-    "node-fetch": "^2.6.7",
     "form-data": "^4.0.0"
+  },
+  "devDependencies": {},
+  "scripts": {
+    "start": "netlify dev"
   },
   "author": "",
   "license": "ISC"
