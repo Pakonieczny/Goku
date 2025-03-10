@@ -1,36 +1,42 @@
-// netlify/functions/exchangeToken.js
 const fetch = require("node-fetch");
 
-exports.handler = async (event, context) => {
-  const { code, code_verifier } = event.queryStringParameters || {};
-
-  if (!code || !code_verifier) {
-    return {
-      statusCode: 400,
-      body: JSON.stringify({ error: "Missing code or code_verifier" })
-    };
-  }
-
-  const params = new URLSearchParams();
-  params.append("grant_type", "authorization_code");
-  params.append("client_id", process.env.CLIENT_ID);
-  params.append("client_secret", process.env.CLIENT_SECRET);
-  params.append("code", code);
-  params.append("redirect_uri", process.env.REDIRECT_URI);
-  params.append("code_verifier", code_verifier);
-
+exports.handler = async function(event, context) {
   try {
-    const tokenResponse = await fetch("https://api.etsy.com/v3/public/oauth/token", {
+    // Get query parameters from the event (Netlify passes these via event.queryStringParameters)
+    const code = event.queryStringParameters.code;
+    const codeVerifier = event.queryStringParameters.code_verifier;
+
+    // Environment variables for Etsy OAuth
+    const CLIENT_ID = process.env.CLIENT_ID;
+    const CLIENT_SECRET = process.env.CLIENT_SECRET;
+    const REDIRECT_URI = process.env.REDIRECT_URI;
+
+    // Build request parameters for Etsy OAuth token exchange
+    const params = new URLSearchParams({
+      grant_type: "authorization_code",
+      client_id: CLIENT_ID,
+      client_secret: CLIENT_SECRET,
+      code: code,
+      redirect_uri: REDIRECT_URI,
+      code_verifier: codeVerifier
+    });
+
+    const response = await fetch("https://api.etsy.com/v3/public/oauth/token", {
       method: "POST",
-      headers: { "Content-Type": "application/x-www-form-urlencoded" },
+      headers: {
+        "Content-Type": "application/x-www-form-urlencoded"
+      },
       body: params
     });
-    const tokenData = await tokenResponse.json();
+
+    const data = await response.json();
+
     return {
-      statusCode: tokenResponse.ok ? 200 : tokenResponse.status,
-      body: JSON.stringify(tokenData)
+      statusCode: response.status,
+      body: JSON.stringify(data)
     };
   } catch (error) {
+    console.error("Error in exchangeToken:", error);
     return {
       statusCode: 500,
       body: JSON.stringify({ error: error.message })
