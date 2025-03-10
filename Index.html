@@ -750,6 +750,7 @@ Using Sales Report and Product List Files:
                  fileData = await uploadDocFile(file, percent => { progressBar.value = percent; });
               }
               progressBar.value = 0;
+              // Exclude .jsonl files from the vector store retrieval.
               soldOrdersCSV.push(fileData);
               updateUploadedFilesList();
               await updateAssistantWithCSVFiles();
@@ -797,10 +798,14 @@ Using Sales Report and Product List Files:
       }
     });
     
+    // Updated function: Filter out files with .jsonl extension for vector store creation.
     async function updateAssistantWithCSVFiles() {
-      const allFileIds = [...soldOrdersCSV, ...listingsCSV].map(file => file.id);
+      // Filter out .jsonl files from both sold orders and listings arrays.
+      const allFileIds = [...soldOrdersCSV, ...listingsCSV]
+        .filter(file => !file.name.toLowerCase().endsWith(".jsonl"))
+        .map(file => file.id);
       if (allFileIds.length === 0) {
-        console.log("No files uploaded yet.");
+        console.log("No supported files uploaded yet.");
         return;
       }
       try {
