@@ -7,7 +7,7 @@ exports.handler = async function(event, context) {
       throw new Error("Missing OPENAI_API_KEY environment variable");
     }
     
-    const response = await fetch("https://api.openai.com/v1/beta/vector_stores", {
+    const response = await fetch("https://api.openai.com/v1/vector_stores", {
       method: "POST",
       headers: {
         "Content-Type": "application/json",
