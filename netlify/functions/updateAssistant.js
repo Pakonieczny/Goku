@@ -4,8 +4,6 @@ exports.handler = async function(event, context) {
     const apiKey = process.env.OPENAI_API_KEY;
     if (!apiKey) throw new Error("Missing OPENAI_API_KEY environment variable");
     
-    // The ASSISTANT_ID should ideally be stored in a persistent cache.
-    // For simplicity, we assume it's set as an environment variable.
     const assistantId = process.env.ASSISTANT_ID;
     if (!assistantId) throw new Error("Missing ASSISTANT_ID environment variable");
     

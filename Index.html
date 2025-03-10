@@ -220,7 +220,7 @@
         </div>
       </div>
       <div id="listingsDropZone">Etsy Listings</div>
-      <textarea id="uploadedFilesList" class="materialize-textarea" rows="2" placeholder="Uploaded .csv/.jsonl files will appear here"></textarea>
+      <textarea id="uploadedFilesList" class="materialize-textarea" rows="2" placeholder="Uploaded .csv, .doc, .docx files will appear here"></textarea>
     </div>
   </div>
   
@@ -404,7 +404,7 @@ Using Sales Report and Product List Files:
     <div class="modal-content">
       <h4>Configure Button Positions</h4>
       <div id="buttonConfigContainer"></div>
-      <textarea id="uploadedFilesListModal" class="materialize-textarea" rows="2" placeholder="Uploaded .csv/.jsonl files will appear here"></textarea>
+      <textarea id="uploadedFilesListModal" class="materialize-textarea" rows="2" placeholder="Uploaded .csv files will appear here"></textarea>
     </div>
     <div class="modal-footer">
       <a href="#!" id="saveButtonPositionsBtn" class="modal-close waves-effect waves-green btn">Save Positions</a>
@@ -489,7 +489,7 @@ Using Sales Report and Product List Files:
             const payload = {
               file: base64Content,
               fileName: file.name,
-              purpose: "fine-tune"
+              purpose: "file-search"
             };
             const response = await fetch("/.netlify/functions/uploadFile", {
               method: "POST",
@@ -517,7 +517,7 @@ Using Sales Report and Product List Files:
             const payload = {
               file: base64Content,
               fileName: file.name,
-              purpose: "fine-tune"
+              purpose: "file-search"
             };
             const response = await fetch("/.netlify/functions/uploadFile", {
               method: "POST",
@@ -730,28 +730,33 @@ Using Sales Report and Product List Files:
     
     const ordersDropZone = document.getElementById("ordersDropZone");
     ordersDropZone.addEventListener("dragover", e => { 
-      e.preventDefault(); e.stopPropagation(); ordersDropZone.style.borderColor = "#000"; 
+      e.preventDefault(); 
+      e.stopPropagation(); 
+      ordersDropZone.style.borderColor = "#000"; 
     });
     ordersDropZone.addEventListener("dragleave", e => { 
-      e.preventDefault(); e.stopPropagation(); ordersDropZone.style.borderColor = "#ccc"; 
+      e.preventDefault(); 
+      e.stopPropagation(); 
+      ordersDropZone.style.borderColor = "#ccc"; 
     });
     ordersDropZone.addEventListener("drop", async e => {
-      e.preventDefault(); e.stopPropagation(); ordersDropZone.style.borderColor = "#ccc";
+      e.preventDefault(); 
+      e.stopPropagation(); 
+      ordersDropZone.style.borderColor = "#ccc";
       const files = e.dataTransfer.files;
       const progressBar = document.getElementById("csvProgressBar");
       for (let i = 0; i < files.length; i++) {
          let file = files[i];
          const fileName = file.name.toLowerCase();
-         if (fileName.endsWith(".csv") || fileName.endsWith(".jsonl") || fileName.endsWith(".doc") || fileName.endsWith(".docx")) {
+         if (fileName.endsWith(".csv") || fileName.endsWith(".doc") || fileName.endsWith(".docx")) {
             try {
               let fileData;
-              if (fileName.endsWith(".csv") || fileName.endsWith(".jsonl")) {
+              if (fileName.endsWith(".csv")) {
                  fileData = await uploadCSVFile(file, percent => { progressBar.value = percent; });
               } else {
                  fileData = await uploadDocFile(file, percent => { progressBar.value = percent; });
               }
               progressBar.value = 0;
-              // Note: For vector store creation, we filter out .jsonl files.
               soldOrdersCSV.push(fileData);
               updateUploadedFilesList();
               await updateAssistantWithCSVFiles();
@@ -759,29 +764,35 @@ Using Sales Report and Product List Files:
               console.error("Error uploading file:", err);
             }
          } else {
-            alert("Only .csv, .jsonl, .doc, and .docx files are supported for Etsy Sold Orders.");
+            alert("Only .csv, .doc, and .docx files are supported for Etsy Sold Orders.");
          }
       }
     });
     
     const listingsDropZone = document.getElementById("listingsDropZone");
     listingsDropZone.addEventListener("dragover", e => { 
-      e.preventDefault(); e.stopPropagation(); listingsDropZone.style.borderColor = "#000"; 
+      e.preventDefault(); 
+      e.stopPropagation(); 
+      listingsDropZone.style.borderColor = "#000"; 
     });
     listingsDropZone.addEventListener("dragleave", e => { 
-      e.preventDefault(); e.stopPropagation(); listingsDropZone.style.borderColor = "#ccc"; 
+      e.preventDefault(); 
+      e.stopPropagation(); 
+      listingsDropZone.style.borderColor = "#ccc"; 
     });
     listingsDropZone.addEventListener("drop", async e => {
-      e.preventDefault(); e.stopPropagation(); listingsDropZone.style.borderColor = "#ccc";
+      e.preventDefault(); 
+      e.stopPropagation(); 
+      listingsDropZone.style.borderColor = "#ccc";
       const files = e.dataTransfer.files;
       const progressBar = document.getElementById("csvProgressBar");
       for (let i = 0; i < files.length; i++) {
          let file = files[i];
          const fileName = file.name.toLowerCase();
-         if (fileName.endsWith(".csv") || fileName.endsWith(".jsonl") || fileName.endsWith(".doc") || fileName.endsWith(".docx")) {
+         if (fileName.endsWith(".csv") || fileName.endsWith(".doc") || fileName.endsWith(".docx")) {
             try {
               let fileData;
-              if (fileName.endsWith(".csv") || fileName.endsWith(".jsonl")) {
+              if (fileName.endsWith(".csv")) {
                  fileData = await uploadCSVFile(file, percent => { progressBar.value = percent; });
               } else {
                  fileData = await uploadDocFile(file, percent => { progressBar.value = percent; });
@@ -794,16 +805,14 @@ Using Sales Report and Product List Files:
               console.error("Error uploading file:", err);
             }
          } else {
-            alert("Only .csv, .jsonl, .doc, and .docx files are supported for Etsy Listings.");
+            alert("Only .csv, .doc, and .docx files are supported for Etsy Listings.");
          }
       }
     });
     
-    // Only include files not ending with .jsonl when creating the vector store
+    // Only include CSV/DOC/DOCX files when creating the vector store
     async function updateAssistantWithCSVFiles() {
-      const allFileIds = [...soldOrdersCSV, ...listingsCSV]
-        .filter(file => !file.name.toLowerCase().endsWith(".jsonl"))
-        .map(file => file.id);
+      const allFileIds = [...soldOrdersCSV, ...listingsCSV].map(file => file.id);
       if (allFileIds.length === 0) {
         console.log("No supported files uploaded yet.");
         return;
@@ -839,16 +848,8 @@ Using Sales Report and Product List Files:
     
     function updateUploadedFilesList() {
       let fileList = [];
-      soldOrdersCSV.forEach(file => {
-        if (file.name.toLowerCase().endsWith(".csv") || file.name.toLowerCase().endsWith(".jsonl")) {
-          fileList.push(file.name);
-        }
-      });
-      listingsCSV.forEach(file => {
-        if (file.name.toLowerCase().endsWith(".csv") || file.name.toLowerCase().endsWith(".jsonl")) {
-          fileList.push(file.name);
-        }
-      });
+      soldOrdersCSV.forEach(file => fileList.push(file.name));
+      listingsCSV.forEach(file => fileList.push(file.name));
       document.getElementById("uploadedFilesList").value = fileList.join("\n");
     }
     
