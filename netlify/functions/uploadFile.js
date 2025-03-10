@@ -6,12 +6,9 @@ exports.handler = async function(event, context) {
     console.log("uploadFile function invoked with event:", event);
     const body = JSON.parse(event.body);
     const { file, fileName, purpose } = body;
-    
     const apiKey = process.env.OPENAI_API_KEY;
-    if (!apiKey) {
-      throw new Error("Missing OPENAI_API_KEY environment variable");
-    }
-    
+    if (!apiKey) throw new Error("Missing OPENAI_API_KEY environment variable");
+
     if (!file || !file.trim()) {
       throw new Error("No file content provided in request body");
     }
@@ -21,14 +18,14 @@ exports.handler = async function(event, context) {
     console.log(`File "${fileName}" loaded. Buffer length: ${buffer.length} bytes`);
     
     // Determine content type based on file extension.
-    let contentType = "text/csv"; // Default for CSV files
+    let contentType = "text/csv"; // default for CSV files
     if (fileName.toLowerCase().endsWith(".docx")) {
       contentType = "application/vnd.openxmlformats-officedocument.wordprocessingml.document";
     } else if (fileName.toLowerCase().endsWith(".doc")) {
       contentType = "application/msword";
     }
     
-    // Prepare form-data for the file upload.
+    // Prepare form-data.
     const form = new FormData();
     form.append("file", buffer, { filename: fileName, contentType });
     form.append("purpose", purpose);
@@ -66,9 +63,10 @@ exports.handler = async function(event, context) {
     };
   } catch (error) {
     console.error("Exception in uploadFile function:", error);
+    // For development only: include error details in the response so you can see them on the client side.
     return {
       statusCode: 500,
-      body: JSON.stringify({ error: error.message })
+      body: JSON.stringify({ error: error.message, stack: error.stack })
     };
   }
 };
