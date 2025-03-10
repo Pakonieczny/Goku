@@ -3,7 +3,7 @@ exports.handler = async function(event, context) {
     const payload = JSON.parse(event.body);
     const apiKey = process.env.OPENAI_API_KEY;
     if (!apiKey) throw new Error("Missing OPENAI_API_KEY environment variable");
-    
+
     const response = await fetch("https://api.openai.com/v1/chat/completions", {
       method: "POST",
       headers: {
@@ -12,7 +12,7 @@ exports.handler = async function(event, context) {
       },
       body: JSON.stringify(payload)
     });
-    
+
     if (!response.ok) {
       const errorData = await response.json();
       return {
@@ -20,7 +20,7 @@ exports.handler = async function(event, context) {
         body: JSON.stringify({ error: errorData })
       };
     }
-    
+
     const data = await response.json();
     return {
       statusCode: 200,

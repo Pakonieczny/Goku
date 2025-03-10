@@ -6,16 +6,18 @@ exports.handler = async function(event, context) {
     const { file, fileName, purpose } = JSON.parse(event.body);
     const apiKey = process.env.OPENAI_API_KEY;
     if (!apiKey) throw new Error("Missing OPENAI_API_KEY environment variable");
-    
+
+    // Convert the provided base64 file string into a Buffer.
     const buffer = Buffer.from(file, "base64");
     console.log("File buffer created for", fileName);
-    
+
+    // Create a FormData instance and append the file and purpose.
     const form = new FormData();
     form.append("file", buffer, { filename: fileName });
     form.append("purpose", purpose);
-    
+
     console.log("Form headers:", form.getHeaders());
-    
+
     const response = await fetch("https://api.openai.com/v1/files", {
       method: "POST",
       headers: {
@@ -24,13 +26,13 @@ exports.handler = async function(event, context) {
       },
       body: form
     });
-    
+
     if (!response.ok) {
       const errorText = await response.text();
       console.error(`Upload failed with status ${response.status}: ${errorText}`);
       throw new Error(`Upload failed with status ${response.status}: ${errorText}`);
     }
-    
+
     const data = await response.json();
     console.log("File uploaded successfully:", data);
     return {
