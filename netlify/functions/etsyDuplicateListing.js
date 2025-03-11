@@ -45,9 +45,10 @@ exports.handler = async function(event, context) {
     const listingData = await getResponse.json();
     console.log("Listing data fetched:", listingData);
 
-    // Convert the price to a float value
-    let priceNumber = listingData.price ? parseFloat(listingData.price) : 0;
-    // Format price to two decimals as string then convert back to float
+    // Ensure the price is defined; use 0.00 if missing
+    let priceNumber = listingData.price !== null && listingData.price !== undefined 
+      ? parseFloat(listingData.price)
+      : 0.00;
     let formattedPrice = parseFloat(priceNumber.toFixed(2));
     
     // Build the payload for the new listing
@@ -55,7 +56,7 @@ exports.handler = async function(event, context) {
       quantity: listingData.quantity || 1,
       title: listingData.title || "Duplicated Listing",
       description: listingData.description || "",
-      price: formattedPrice, // Now a float, e.g. 12.00
+      price: formattedPrice, // This is now guaranteed to be a float (e.g., 0.00 or 12.34)
       who_made: listingData.who_made || "i_did",
       when_made: listingData.when_made || "made_to_order",
       taxonomy_id: listingData.taxonomy_id || 0
