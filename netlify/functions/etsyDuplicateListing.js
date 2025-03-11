@@ -14,7 +14,7 @@ exports.handler = async function(event, context) {
     console.log("Received listingId:", listingId);
     console.log("Received token:", token);
 
-    // Retrieve the API key from the environment variables
+    // Retrieve the API key from environment variables
     const apiKey = process.env.CLIENT_ID;
     if (!apiKey) {
       console.error("CLIENT_ID environment variable is not set.");
@@ -45,16 +45,17 @@ exports.handler = async function(event, context) {
     const listingData = await getResponse.json();
     console.log("Listing data fetched:", listingData);
 
-    // Convert the price to a float and format it to two decimals (e.g., "12.00")
+    // Convert the price to a float value
     let priceNumber = listingData.price ? parseFloat(listingData.price) : 0;
-    let formattedPrice = priceNumber.toFixed(2);
-
+    // Format price to two decimals as string then convert back to float
+    let formattedPrice = parseFloat(priceNumber.toFixed(2));
+    
     // Build the payload for the new listing
     const payload = {
       quantity: listingData.quantity || 1,
       title: listingData.title || "Duplicated Listing",
       description: listingData.description || "",
-      price: formattedPrice,
+      price: formattedPrice, // Now a float, e.g. 12.00
       who_made: listingData.who_made || "i_did",
       when_made: listingData.when_made || "made_to_order",
       taxonomy_id: listingData.taxonomy_id || 0
