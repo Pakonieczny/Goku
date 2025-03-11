@@ -62,10 +62,10 @@ exports.handler = async function(event, context) {
     const postUrl = `https://api.etsy.com/v3/application/shops/${process.env.SHOP_ID}/listings`;
 
     // Option 1: Send as application/x-www-form-urlencoded
-    const urlEncodedBody = new URLSearchParams(payload);
+    // const urlEncodedBody = new URLSearchParams(payload);
 
     // Option 2 (alternative): Send as JSON
-    // const jsonBody = JSON.stringify(payload);
+    const jsonBody = JSON.stringify(payload);
 
     // Choose one approach. Here we try the URL-encoded approach:
     const postResponse = await fetch(postUrl, {
