@@ -39,7 +39,6 @@ exports.handler = async function(event, context) {
         body: JSON.stringify({ error: "GET request failed", details: errorText })
       };
     }
-
     const listingData = await getResponse.json();
     console.log("Listing data fetched:", listingData);
 
@@ -76,7 +75,8 @@ exports.handler = async function(event, context) {
       is_personalizable: (typeof listingData.is_personalizable === "boolean") ? listingData.is_personalizable : false
     };
 
-    // If the listing has variations, fetch inventory data to retrieve SKUs and variations.
+    // Variable to hold inventory data (if variations exist)
+    let inventoryPayloadData = null;
     if (payload.has_variations) {
       const inventoryUrl = `https://api.etsy.com/v3/application/listings/${listingId}/inventory`;
       const inventoryResponse = await fetch(inventoryUrl, {
@@ -92,12 +92,12 @@ exports.handler = async function(event, context) {
       } else {
         const inventoryData = await inventoryResponse.json();
         console.log("Inventory data fetched:", inventoryData);
-        // Etsy's inventory endpoint returns an object under "inventory"
         if (inventoryData.inventory) {
-          const inv = inventoryData.inventory;
-          payload.skus = inv.skus || listingData.skus || [];
-          payload.variations = inv.variations || listingData.variations || [];
-          // Optionally, you can merge inv.products if needed.
+          // Merge SKU and variations details.
+          payload.skus = inventoryData.inventory.skus || listingData.skus || [];
+          payload.variations = inventoryData.inventory.variations || listingData.variations || [];
+          // Optionally, you can include products if needed.
+          inventoryPayloadData = inventoryData.inventory;
         }
       }
     }
@@ -135,6 +135,37 @@ exports.handler = async function(event, context) {
     }
     const newListingData = await postResponse.json();
     console.log("New listing created:", newListingData);
+
+    // If the listing had variations and we retrieved inventory data, update the new listing's inventory.
+    if (payload.has_variations && inventoryPayloadData && newListingData.listing_id) {
+      const newListingId = newListingData.listing_id;
+      // Build an inventory payload; adjust as needed based on your original inventory data.
+      const inventoryPayload = {
+        products: inventoryPayloadData.products || [],
+        variations: inventoryPayloadData.variations || [],
+        skus: payload.skus  // Using the SKUs we got earlier.
+      };
+      const inventoryUpdateUrl = `https://api.etsy.com/v3/application/listings/${newListingId}/inventory`;
+      console.log("Updating inventory for duplicated listing using payload:", inventoryPayload);
+      const inventoryUpdateResponse = await fetch(inventoryUpdateUrl, {
+        method: "PUT",
+        headers: {
+          "Content-Type": "application/json",
+          "Authorization": `Bearer ${token}`,
+          "x-api-key": clientId
+        },
+        body: JSON.stringify(inventoryPayload)
+      });
+      console.log("Inventory update response status:", inventoryUpdateResponse.status);
+      if (!inventoryUpdateResponse.ok) {
+        const invErrorText = await inventoryUpdateResponse.text();
+        console.error("Error updating inventory for duplicated listing:", invErrorText);
+        // Note: You might choose to return an error here or simply log it.
+      } else {
+        console.log("Inventory updated successfully for duplicated listing.");
+      }
+    }
+
     return {
       statusCode: 200,
       body: JSON.stringify(newListingData)
