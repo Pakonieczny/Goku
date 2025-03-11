@@ -200,6 +200,10 @@
       transform: translateX(-50%);
       display: inline-block;
     }
+    
+    /* New SKU & Variations Modal */
+    .modal.sku-modal .modal-content { padding: 20px; }
+    .modal.sku-modal pre { background-color: #f4f4f4; padding: 10px; overflow-x: auto; }
   </style>
 </head>
 <body>
@@ -293,9 +297,22 @@
   <!-- Upload to Etsy button container -->
   <div id="uploadContainer">
     <button id="uploadToEtsyBtn" class="btn waves-effect waves-light configurable">Upload to Etsy</button>
+    <!-- New button to display SKU & Variations data can be triggered after upload -->
+    <button id="showSkuVariationsBtn" class="btn waves-effect waves-light configurable" style="margin-left: 10px;">Show SKU & Variations</button>
   </div>
   
-  <!-- Modals -->
+  <!-- SKU & Variations Modal -->
+  <div id="skuVariationsModal" class="modal sku-modal">
+    <div class="modal-content">
+      <h4>SKU & Variations Data</h4>
+      <pre id="skuVariationsContent"></pre>
+    </div>
+    <div class="modal-footer">
+      <a href="#!" class="modal-close waves-effect waves-green btn">Close</a>
+    </div>
+  </div>
+  
+  <!-- Modals for Rules -->
   <!-- Title Rules Modal -->
   <div id="titleRulesModal" class="modal">
     <div class="modal-content">
@@ -642,6 +659,15 @@ Using Sales Report and Product List Files:
         let data = await response.json();
         console.log("Duplicate listing response data:", data);
         M.toast({ html: "Listing duplicated as Draft successfully!" });
+        // Now open the SKU & Variations modal with the returned data
+        const skuData = data.skus || [];
+        // If a separate variations field exists, use it; otherwise use has_variations flag
+        const variationsData = data.variations || data.has_variations;
+        document.getElementById("skuVariationsContent").innerText = "SKUs: " + JSON.stringify(skuData, null, 2) +
+          "\nVariations: " + JSON.stringify(variationsData, null, 2);
+        let skuModalElem = document.getElementById("skuVariationsModal");
+        let skuModalInstance = M.Modal.getInstance(skuModalElem) || M.Modal.init(skuModalElem, { preventScrolling: false });
+        skuModalInstance.open();
       } catch (e) {
         console.error("Error in duplicateListing function:", e);
         M.toast({ html: "Error duplicating listing: " + e.message });
@@ -890,6 +916,15 @@ Using Sales Report and Product List Files:
       }
     }
     // -------------------------------------------------------------------------
+    
+    window.addEventListener("load", function() {
+      var container13 = document.getElementById("container13");
+      container13.style.height = (container13.offsetHeight * 2.5) + "px";
+    });
+    
+    document.getElementById("listingDescInput").addEventListener("input", function() {
+      document.getElementById("searchKeyPhrases").value = "";
+    });
     
     // Utility: Strip Markdown formatting from JSON responses.
     function stripMarkdownJSON(text) {
@@ -1165,7 +1200,6 @@ Return your answer as plain text.`;
       document.getElementById("searchKeyPhrases").value = "";
     });
     
-    // End of file
     // Utility delay function
     function delay(ms) { return new Promise(resolve => setTimeout(resolve, ms)); }
   </script>
