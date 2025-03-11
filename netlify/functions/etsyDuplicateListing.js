@@ -14,7 +14,7 @@ exports.handler = async function(event, context) {
     console.log("Received listingId:", listingId);
     console.log("Received token:", token);
 
-    // Retrieve the API key from environment variables
+    // Retrieve the API key from environment variables (CLIENT_ID is used as x-api-key)
     const apiKey = process.env.CLIENT_ID;
     if (!apiKey) {
       console.error("CLIENT_ID environment variable is not set.");
@@ -45,7 +45,7 @@ exports.handler = async function(event, context) {
     const listingData = await getResponse.json();
     console.log("Listing data fetched:", listingData);
 
-    // Handle the price: if listingData.price is an object (with amount & divisor), compute the float value.
+    // Handle the price: if listingData.price is an object with amount & divisor, compute the float value.
     let priceValue;
     if (listingData.price && typeof listingData.price === "object" &&
         listingData.price.amount && listingData.price.divisor) {
@@ -57,7 +57,7 @@ exports.handler = async function(event, context) {
     }
     let formattedPrice = parseFloat(priceValue.toFixed(2));
     
-    // Build the payload for the new listing
+    // Build the payload for the new listing including shipping_profile_id and return_policy_id
     const payload = {
       quantity: listingData.quantity || 1,
       title: listingData.title || "Duplicated Listing",
@@ -65,7 +65,9 @@ exports.handler = async function(event, context) {
       price: formattedPrice, // Always a float value
       who_made: listingData.who_made || "i_did",
       when_made: listingData.when_made || "made_to_order",
-      taxonomy_id: listingData.taxonomy_id || 0
+      taxonomy_id: listingData.taxonomy_id || 0,
+      shipping_profile_id: listingData.shipping_profile_id,  // Must match original listing exactly
+      return_policy_id: listingData.return_policy_id         // Must match original listing exactly
     };
 
     console.log("Payload for new listing:", payload);
