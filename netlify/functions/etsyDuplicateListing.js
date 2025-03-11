@@ -2,7 +2,7 @@ const fetch = require("node-fetch");
 
 exports.handler = async function(event, context) {
   try {
-    // Extract query parameters from the incoming request
+    // Extract query parameters: listingId and token
     const { listingId, token } = event.queryStringParameters;
     if (!listingId || !token) {
       return {
@@ -10,11 +10,10 @@ exports.handler = async function(event, context) {
         body: JSON.stringify({ error: "Missing listingId or token" })
       };
     }
-
     console.log("Received listingId:", listingId);
     console.log("Received token:", token);
 
-    // Retrieve the API key from environment variables (CLIENT_ID is used as x-api-key)
+    // Retrieve the API key from environment variables (using CLIENT_ID as x-api-key)
     const apiKey = process.env.CLIENT_ID;
     if (!apiKey) {
       console.error("CLIENT_ID environment variable is not set.");
@@ -31,7 +30,6 @@ exports.handler = async function(event, context) {
         "x-api-key": apiKey
       }
     });
-
     console.log("GET response status:", getResponse.status);
     if (!getResponse.ok) {
       const errorText = await getResponse.text();
@@ -45,37 +43,39 @@ exports.handler = async function(event, context) {
     const listingData = await getResponse.json();
     console.log("Listing data fetched:", listingData);
 
-    // Handle the price: if listingData.price is an object with amount & divisor, compute the float value.
+    // Handle price conversion: if listingData.price is an object with amount & divisor, compute the float value.
     let priceValue;
     if (listingData.price && typeof listingData.price === "object" &&
         listingData.price.amount && listingData.price.divisor) {
       priceValue = listingData.price.amount / listingData.price.divisor;
-    } else if (listingData.price === null || listingData.price === undefined || listingData.price === "") {
+    } else if (listingData.price == null || listingData.price === "") {
       priceValue = 0.00;
     } else {
       priceValue = parseFloat(listingData.price);
     }
     let formattedPrice = parseFloat(priceValue.toFixed(2));
-    
-    // Build the payload for the new listing including shipping_profile_id and return_policy_id
+
+    // Build the payload for the new listing, including additional fields exactly as in the original.
     const payload = {
       quantity: listingData.quantity || 1,
       title: listingData.title || "Duplicated Listing",
       description: listingData.description || "",
-      price: formattedPrice, // Always a float value
+      price: formattedPrice, // float value
       who_made: listingData.who_made || "i_did",
       when_made: listingData.when_made || "made_to_order",
       taxonomy_id: listingData.taxonomy_id || 0,
-      shipping_profile_id: listingData.shipping_profile_id,  // Must match original listing exactly
-      return_policy_id: listingData.return_policy_id         // Must match original listing exactly
+      shipping_profile_id: listingData.shipping_profile_id,
+      return_policy_id: listingData.return_policy_id,
+      tags: listingData.tags || [],
+      materials: listingData.materials || [],
+      skus: listingData.skus || [],
+      style: listingData.style || []
     };
 
     console.log("Payload for new listing:", payload);
 
-    // Build the Etsy API URL for creating a new listing using SHOP_ID from environment
+    // Build the Etsy API URL for creating a new listing using SHOP_ID from environment variables.
     const postUrl = `https://api.etsy.com/v3/application/shops/${process.env.SHOP_ID}/listings`;
-
-    // Send the payload as a JSON body
     const jsonBody = JSON.stringify(payload);
 
     const postResponse = await fetch(postUrl, {
