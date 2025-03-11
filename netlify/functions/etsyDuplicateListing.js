@@ -45,18 +45,21 @@ exports.handler = async function(event, context) {
     const listingData = await getResponse.json();
     console.log("Listing data fetched:", listingData);
 
-    // Ensure the price is defined; use 0.00 if missing
-    let priceNumber = listingData.price !== null && listingData.price !== undefined 
-      ? parseFloat(listingData.price)
-      : 0.00;
-    let formattedPrice = parseFloat(priceNumber.toFixed(2));
+    // Handle the price: if null, undefined, or empty string, set to 0.00
+    let priceValue = listingData.price;
+    if (priceValue === null || priceValue === undefined || priceValue === "") {
+      priceValue = 0.00;
+    } else {
+      priceValue = parseFloat(priceValue);
+    }
+    let formattedPrice = parseFloat(priceValue.toFixed(2));
     
     // Build the payload for the new listing
     const payload = {
       quantity: listingData.quantity || 1,
       title: listingData.title || "Duplicated Listing",
       description: listingData.description || "",
-      price: formattedPrice, // This is now guaranteed to be a float (e.g., 0.00 or 12.34)
+      price: formattedPrice, // Always a float value
       who_made: listingData.who_made || "i_did",
       when_made: listingData.when_made || "made_to_order",
       taxonomy_id: listingData.taxonomy_id || 0
