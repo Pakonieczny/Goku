@@ -2,7 +2,7 @@ const fetch = require("node-fetch");
 
 exports.handler = async function(event, context) {
   try {
-    // Extract query parameters: listingId and token
+    // Extract listingId and token from query parameters.
     const { listingId, token } = event.queryStringParameters;
     if (!listingId || !token) {
       return {
@@ -13,21 +13,21 @@ exports.handler = async function(event, context) {
     console.log("Received listingId:", listingId);
     console.log("Received token:", token);
 
-    // Retrieve the API key from environment variables (using CLIENT_ID as x-api-key)
-    const apiKey = process.env.CLIENT_ID;
-    if (!apiKey) {
+    // Retrieve CLIENT_ID from environment variables; used as x-api-key.
+    const clientId = process.env.CLIENT_ID;
+    if (!clientId) {
       console.error("CLIENT_ID environment variable is not set.");
     } else {
-      console.log("Using CLIENT_ID:", apiKey.slice(0, 5) + "*****");
+      console.log("Using CLIENT_ID:", clientId.slice(0, 5) + "*****");
     }
 
-    // Build the Etsy API URL for fetching listing details
-    const etsyApiUrl = `https://api.etsy.com/v3/application/listings/${listingId}`;
-    const getResponse = await fetch(etsyApiUrl, {
+    // Build GET request URL to fetch original listing details.
+    const etsyGetUrl = `https://api.etsy.com/v3/application/listings/${listingId}`;
+    const getResponse = await fetch(etsyGetUrl, {
       method: "GET",
       headers: {
         "Authorization": `Bearer ${token}`,
-        "x-api-key": apiKey
+        "x-api-key": clientId
       }
     });
     console.log("GET response status:", getResponse.status);
@@ -43,7 +43,7 @@ exports.handler = async function(event, context) {
     const listingData = await getResponse.json();
     console.log("Listing data fetched:", listingData);
 
-    // Handle price conversion: if listingData.price is an object with amount & divisor, compute the float value.
+    // Convert price: if price is an object with amount/divisor, compute the float value.
     let priceValue;
     if (listingData.price && typeof listingData.price === "object" &&
         listingData.price.amount && listingData.price.divisor) {
@@ -53,41 +53,50 @@ exports.handler = async function(event, context) {
     } else {
       priceValue = parseFloat(listingData.price);
     }
-    let formattedPrice = parseFloat(priceValue.toFixed(2));
+    const formattedPrice = parseFloat(priceValue.toFixed(2));
 
-    // Build the payload for the new listing, including additional fields exactly as in the original.
+    // Build payload for duplicating the listing including additional fields.
     const payload = {
       quantity: listingData.quantity || 1,
       title: listingData.title || "Duplicated Listing",
       description: listingData.description || "",
-      price: formattedPrice, // float value
+      price: formattedPrice,
       who_made: listingData.who_made || "i_did",
       when_made: listingData.when_made || "made_to_order",
       taxonomy_id: listingData.taxonomy_id || 0,
-      shipping_profile_id: listingData.shipping_profile_id,
-      return_policy_id: listingData.return_policy_id,
+      shipping_profile_id: listingData.shipping_profile_id, // Must be present for physical listings.
+      return_policy_id: listingData.return_policy_id,       // Must be present.
       tags: listingData.tags || [],
       materials: listingData.materials || [],
       skus: listingData.skus || [],
-      style: listingData.style || []
+      style: listingData.style || [],
+      has_variations: (typeof listingData.has_variations === "boolean") ? listingData.has_variations : false,
+      is_customizable: (typeof listingData.is_customizable === "boolean") ? listingData.is_customizable : false,
+      is_personalizable: (typeof listingData.is_personalizable === "boolean") ? listingData.is_personalizable : false
     };
 
     console.log("Payload for new listing:", payload);
 
-    // Build the Etsy API URL for creating a new listing using SHOP_ID from environment variables.
-    const postUrl = `https://api.etsy.com/v3/application/shops/${process.env.SHOP_ID}/listings`;
-    const jsonBody = JSON.stringify(payload);
+    // Retrieve SHOP_ID from environment variables.
+    const shopId = process.env.SHOP_ID;
+    if (!shopId) {
+      return {
+        statusCode: 500,
+        body: JSON.stringify({ error: "SHOP_ID environment variable is not set." })
+      };
+    }
+    const etsyPostUrl = `https://api.etsy.com/v3/application/shops/${shopId}/listings`;
 
-    const postResponse = await fetch(postUrl, {
+    // Make POST request to duplicate the listing.
+    const postResponse = await fetch(etsyPostUrl, {
       method: "POST",
       headers: {
         "Content-Type": "application/json",
         "Authorization": `Bearer ${token}`,
-        "x-api-key": apiKey
+        "x-api-key": clientId
       },
-      body: jsonBody
+      body: JSON.stringify(payload)
     });
-
     console.log("POST response status:", postResponse.status);
     if (!postResponse.ok) {
       const errorText = await postResponse.text();
@@ -97,7 +106,6 @@ exports.handler = async function(event, context) {
         body: JSON.stringify({ error: "Error duplicating listing", details: errorText })
       };
     }
-
     const newListingData = await postResponse.json();
     console.log("New listing created:", newListingData);
     return {
