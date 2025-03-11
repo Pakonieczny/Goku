@@ -43,7 +43,7 @@ exports.handler = async function(event, context) {
     const listingData = await getResponse.json();
     console.log("Listing data fetched:", listingData);
 
-    // Compute price value
+    // Compute price value: if price is an object with amount/divisor, compute the float.
     let priceValue;
     if (listingData.price && typeof listingData.price === "object" &&
         listingData.price.amount && listingData.price.divisor) {
@@ -64,11 +64,11 @@ exports.handler = async function(event, context) {
       who_made: listingData.who_made || "i_did",
       when_made: listingData.when_made || "made_to_order",
       taxonomy_id: listingData.taxonomy_id || 0,
-      shipping_profile_id: listingData.shipping_profile_id, // Must be present for physical listings.
-      return_policy_id: listingData.return_policy_id,       // Must be present.
+      shipping_profile_id: listingData.shipping_profile_id, // Required for physical listings.
+      return_policy_id: listingData.return_policy_id,       // Required.
       tags: listingData.tags || [],
       materials: listingData.materials || [],
-      // We'll attempt to update these using the inventory endpoint.
+      // Initially set skus and variations from listingData (if any)
       skus: listingData.skus || [],
       style: listingData.style || [],
       has_variations: (typeof listingData.has_variations === "boolean") ? listingData.has_variations : false,
@@ -76,7 +76,7 @@ exports.handler = async function(event, context) {
       is_personalizable: (typeof listingData.is_personalizable === "boolean") ? listingData.is_personalizable : false
     };
 
-    // If the listing has variations, fetch inventory data to get SKUs and variations.
+    // If the listing has variations, fetch inventory data to retrieve SKUs and variations.
     if (payload.has_variations) {
       const inventoryUrl = `https://api.etsy.com/v3/application/listings/${listingId}/inventory`;
       const inventoryResponse = await fetch(inventoryUrl, {
@@ -92,15 +92,12 @@ exports.handler = async function(event, context) {
       } else {
         const inventoryData = await inventoryResponse.json();
         console.log("Inventory data fetched:", inventoryData);
-        // Merge SKU details if available
-        if (inventoryData.skus) {
-          payload.skus = inventoryData.skus;
-        }
-        // Merge variation details – adjust property names as needed.
-        if (inventoryData.variations) {
-          payload.variations = inventoryData.variations;
-        } else if (inventoryData.listing_variations) {
-          payload.variations = inventoryData.listing_variations;
+        // Etsy's inventory endpoint returns an object under "inventory"
+        if (inventoryData.inventory) {
+          const inv = inventoryData.inventory;
+          payload.skus = inv.skus || listingData.skus || [];
+          payload.variations = inv.variations || listingData.variations || [];
+          // Optionally, you can merge inv.products if needed.
         }
       }
     }
