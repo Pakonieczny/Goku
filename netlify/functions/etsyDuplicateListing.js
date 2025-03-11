@@ -43,7 +43,7 @@ exports.handler = async function(event, context) {
     const listingData = await getResponse.json();
     console.log("Listing data fetched:", listingData);
 
-    // Convert price: if price is an object with amount/divisor, compute the float value.
+    // Compute price value
     let priceValue;
     if (listingData.price && typeof listingData.price === "object" &&
         listingData.price.amount && listingData.price.divisor) {
@@ -55,7 +55,7 @@ exports.handler = async function(event, context) {
     }
     const formattedPrice = parseFloat(priceValue.toFixed(2));
 
-    // Build payload for duplicating the listing including additional fields.
+    // Build the initial payload using available fields.
     const payload = {
       quantity: listingData.quantity || 1,
       title: listingData.title || "Duplicated Listing",
@@ -68,12 +68,42 @@ exports.handler = async function(event, context) {
       return_policy_id: listingData.return_policy_id,       // Must be present.
       tags: listingData.tags || [],
       materials: listingData.materials || [],
+      // We'll attempt to update these using the inventory endpoint.
       skus: listingData.skus || [],
       style: listingData.style || [],
       has_variations: (typeof listingData.has_variations === "boolean") ? listingData.has_variations : false,
       is_customizable: (typeof listingData.is_customizable === "boolean") ? listingData.is_customizable : false,
       is_personalizable: (typeof listingData.is_personalizable === "boolean") ? listingData.is_personalizable : false
     };
+
+    // If the listing has variations, fetch inventory data to get SKUs and variations.
+    if (payload.has_variations) {
+      const inventoryUrl = `https://api.etsy.com/v3/application/listings/${listingId}/inventory`;
+      const inventoryResponse = await fetch(inventoryUrl, {
+        method: "GET",
+        headers: {
+          "Authorization": `Bearer ${token}`,
+          "x-api-key": clientId
+        }
+      });
+      if (!inventoryResponse.ok) {
+        const invErrorText = await inventoryResponse.text();
+        console.error("Error fetching inventory:", invErrorText);
+      } else {
+        const inventoryData = await inventoryResponse.json();
+        console.log("Inventory data fetched:", inventoryData);
+        // Merge SKU details if available
+        if (inventoryData.skus) {
+          payload.skus = inventoryData.skus;
+        }
+        // Merge variation details – adjust property names as needed.
+        if (inventoryData.variations) {
+          payload.variations = inventoryData.variations;
+        } else if (inventoryData.listing_variations) {
+          payload.variations = inventoryData.listing_variations;
+        }
+      }
+    }
 
     console.log("Payload for new listing:", payload);
 
