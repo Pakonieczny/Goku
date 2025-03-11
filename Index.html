@@ -453,7 +453,7 @@ Using Sales Report and Product List Files:
     const ETSY_SHOP_URL = "https://www.etsy.com/shop/custombrites";
     const CLIENT_ID = "k75zdspz4r99txpqdji7i2em";
     const REDIRECT_URI = "https://delicate-tanuki-616ac0.netlify.app/";
-    const SHOP_ID = "YOUR_ASSISTANT_ID"; // Not used; kept for legacy reference.
+    // Note: SHOP_ID is no longer used since we’re proxying Etsy API calls directly using the token.
     const modelName = "chatgpt-4o-latest";
     let accessToken;
     
@@ -613,7 +613,7 @@ Using Sales Report and Product List Files:
       }
     }
     
-    // Duplicate listing using our proxy functions
+    // Duplicate a listing as a draft using the Etsy API.
     async function duplicateListing() {
       let listingLink = document.getElementById("shopListings").value.trim();
       if (!listingLink) {
@@ -631,11 +631,10 @@ Using Sales Report and Product List Files:
         return;
       }
       try {
-        // Call our Netlify function to get listing details
-        let proxyUrl = `/.netlify/functions/etsyProxy?listingId=${listingId}`;
-        let getResponse = await fetch(proxyUrl, {
+        let getUrl = `https://api.etsy.com/v3/application/listings/${listingId}`;
+        let getResponse = await fetch(getUrl, {
           method: "GET",
-          headers: { "access-token": accessToken }
+          headers: { "Authorization": `Bearer ${accessToken}` }
         });
         if (!getResponse.ok) throw new Error("Error fetching listing details: " + getResponse.statusText);
         let listingData = await getResponse.json();
@@ -648,15 +647,14 @@ Using Sales Report and Product List Files:
           when_made: listingData.when_made || "made_to_order",
           taxonomy_id: listingData.taxonomy_id || 0
         };
-        // Call our Netlify function to duplicate the listing
-        let duplicateUrl = `/.netlify/functions/duplicateListing`;
-        let postResponse = await fetch(duplicateUrl, {
+        let postUrl = `https://api.etsy.com/v3/application/shops/${SHOP_ID}/listings`;
+        let postResponse = await fetch(postUrl, {
           method: "POST",
           headers: {
-            "Content-Type": "application/json",
-            "access-token": accessToken
+            "Content-Type": "application/x-www-form-urlencoded",
+            "Authorization": `Bearer ${accessToken}`
           },
-          body: JSON.stringify({ payload: payload })
+          body: new URLSearchParams(payload)
         });
         if (!postResponse.ok) throw new Error("Error duplicating listing: " + postResponse.statusText);
         let newListingData = await postResponse.json();
@@ -908,15 +906,7 @@ Using Sales Report and Product List Files:
         }
       }
     }
-    
-    window.addEventListener("load", function() {
-      var container13 = document.getElementById("container13");
-      container13.style.height = (container13.offsetHeight * 2.5) + "px";
-    });
-    
-    document.getElementById("listingDescInput").addEventListener("input", function() {
-      document.getElementById("searchKeyPhrases").value = "";
-    });
+    // -------------------------------------------------------------------------
     
     // Utility: Strip Markdown formatting from JSON responses.
     function stripMarkdownJSON(text) {
