@@ -453,7 +453,7 @@ Using Sales Report and Product List Files:
     const ETSY_SHOP_URL = "https://www.etsy.com/shop/custombrites";
     const CLIENT_ID = "k75zdspz4r99txpqdji7i2em";
     const REDIRECT_URI = "https://delicate-tanuki-616ac0.netlify.app/";
-    // Note: SHOP_ID is no longer used since we’re proxying Etsy API calls directly using the token.
+    // SHOP_ID is no longer used as we now rely on the token for Etsy API calls via our proxy.
     const modelName = "chatgpt-4o-latest";
     let accessToken;
     
@@ -613,7 +613,7 @@ Using Sales Report and Product List Files:
       }
     }
     
-    // Duplicate a listing as a draft using the Etsy API.
+    // Duplicate a listing as a draft via our Netlify function to bypass CORS.
     async function duplicateListing() {
       let listingLink = document.getElementById("shopListings").value.trim();
       if (!listingLink) {
@@ -631,33 +631,11 @@ Using Sales Report and Product List Files:
         return;
       }
       try {
-        let getUrl = `https://api.etsy.com/v3/application/listings/${listingId}`;
-        let getResponse = await fetch(getUrl, {
-          method: "GET",
-          headers: { "Authorization": `Bearer ${accessToken}` }
-        });
-        if (!getResponse.ok) throw new Error("Error fetching listing details: " + getResponse.statusText);
-        let listingData = await getResponse.json();
-        let payload = {
-          quantity: listingData.quantity || 1,
-          title: listingData.title || "Duplicated Listing",
-          description: listingData.description || "",
-          price: listingData.price || 0,
-          who_made: listingData.who_made || "i_did",
-          when_made: listingData.when_made || "made_to_order",
-          taxonomy_id: listingData.taxonomy_id || 0
-        };
-        let postUrl = `https://api.etsy.com/v3/application/shops/${SHOP_ID}/listings`;
-        let postResponse = await fetch(postUrl, {
-          method: "POST",
-          headers: {
-            "Content-Type": "application/x-www-form-urlencoded",
-            "Authorization": `Bearer ${accessToken}`
-          },
-          body: new URLSearchParams(payload)
-        });
-        if (!postResponse.ok) throw new Error("Error duplicating listing: " + postResponse.statusText);
-        let newListingData = await postResponse.json();
+        // Call our Netlify function which will proxy the request to Etsy.
+        let proxyUrl = `/.netlify/functions/etsyDuplicateListing?listingId=${listingId}&token=${encodeURIComponent(accessToken)}`;
+        let response = await fetch(proxyUrl);
+        if (!response.ok) throw new Error("Error duplicating listing: " + response.statusText);
+        let newListingData = await response.json();
         M.toast({ html: "Listing duplicated as Draft successfully!" });
       } catch(e) {
         console.error(e);
