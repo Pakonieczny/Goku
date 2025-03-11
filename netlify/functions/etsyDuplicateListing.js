@@ -11,11 +11,9 @@ exports.handler = async function(event, context) {
       };
     }
 
-    // Log the received parameters for debugging
     console.log("Received listingId:", listingId);
     console.log("Received token:", token);
 
-    // Log the API key from environment (masking most characters)
     const apiKey = process.env.CLIENT_ID;
     if (!apiKey) {
       console.error("CLIENT_ID environment variable is not set.");
@@ -23,10 +21,7 @@ exports.handler = async function(event, context) {
       console.log("Using CLIENT_ID:", apiKey.slice(0, 5) + "*****");
     }
 
-    // Etsy API URL to fetch listing details
     const etsyApiUrl = `https://api.etsy.com/v3/application/listings/${listingId}`;
-
-    // Fetch the listing details from Etsy
     const getResponse = await fetch(etsyApiUrl, {
       method: "GET",
       headers: {
@@ -48,13 +43,15 @@ exports.handler = async function(event, context) {
     const listingData = await getResponse.json();
     console.log("Listing data fetched:", listingData);
 
-    // Build the payload to duplicate the listing,
-    // ensuring that the price is converted to a float.
+    // Ensure that the price is formatted as a number with at least one decimal.
+    let priceNumber = listingData.price ? parseFloat(listingData.price) : 0;
+    let formattedPrice = priceNumber.toFixed(2); // e.g., "12.00"
+    
     const payload = {
       quantity: listingData.quantity || 1,
       title: listingData.title || "Duplicated Listing",
       description: listingData.description || "",
-      price: listingData.price ? parseFloat(listingData.price) : 0,
+      price: formattedPrice, // This will now be a string like "12.00"
       who_made: listingData.who_made || "i_did",
       when_made: listingData.when_made || "made_to_order",
       taxonomy_id: listingData.taxonomy_id || 0
@@ -62,18 +59,23 @@ exports.handler = async function(event, context) {
 
     console.log("Payload for new listing:", payload);
 
-    // Etsy API URL to create a new listing (using SHOP_ID from environment)
     const postUrl = `https://api.etsy.com/v3/application/shops/${process.env.SHOP_ID}/listings`;
 
-    // Post the new listing to Etsy
+    // Option 1: Send as application/x-www-form-urlencoded
+    const urlEncodedBody = new URLSearchParams(payload);
+
+    // Option 2 (alternative): Send as JSON
+    // const jsonBody = JSON.stringify(payload);
+
+    // Choose one approach. Here we try the URL-encoded approach:
     const postResponse = await fetch(postUrl, {
       method: "POST",
       headers: {
-        "Content-Type": "application/x-www-form-urlencoded",
+        "Content-Type": "application/x-www-form-urlencoded", // Change to "application/json" if needed
         "Authorization": `Bearer ${token}`,
         "x-api-key": apiKey
       },
-      body: new URLSearchParams(payload)
+      body: urlEncodedBody // Or jsonBody if using JSON
     });
 
     console.log("POST response status:", postResponse.status);
