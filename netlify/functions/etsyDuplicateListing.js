@@ -1,113 +1,102 @@
+// etsyDuplicateListing.js
 const fetch = require("node-fetch");
 
 exports.handler = async function(event, context) {
   try {
-    // Extract listingId and token from query parameters.
-    const { listingId, token } = event.queryStringParameters;
-    if (!listingId || !token) {
+    // Expect listingId to be passed as a query parameter and accessToken as well.
+    const { listingId, accessToken } = event.queryStringParameters;
+    if (!listingId || !accessToken) {
       return {
         statusCode: 400,
-        body: JSON.stringify({ error: "Missing listingId or token" })
+        body: JSON.stringify({ error: "Missing listingId or accessToken" })
       };
     }
     console.log("Received listingId:", listingId);
-    console.log("Received token:", token);
+    console.log("Received token:", accessToken);
 
-    // Retrieve CLIENT_ID from environment variables; used as x-api-key.
-    const clientId = process.env.CLIENT_ID;
-    if (!clientId) {
-      console.error("CLIENT_ID environment variable is not set.");
-    } else {
-      console.log("Using CLIENT_ID:", clientId.slice(0, 5) + "*****");
-    }
-
-    // Build GET request URL to fetch original listing details.
-    const etsyGetUrl = `https://api.etsy.com/v3/application/listings/${listingId}`;
-    const getResponse = await fetch(etsyGetUrl, {
+    // Fetch the original listing details from Etsy
+    const getUrl = `https://api.etsy.com/v3/application/listings/${listingId}`;
+    const getResponse = await fetch(getUrl, {
       method: "GET",
-      headers: {
-        "Authorization": `Bearer ${token}`,
-        "x-api-key": clientId
-      }
+      headers: { "Authorization": `Bearer ${accessToken}` }
     });
-    console.log("GET response status:", getResponse.status);
     if (!getResponse.ok) {
       const errorText = await getResponse.text();
-      console.error("GET request failed:", errorText);
-      return {
-        statusCode: getResponse.status,
-        body: JSON.stringify({ error: "GET request failed", details: errorText })
-      };
+      console.error("Error fetching listing details:", errorText);
+      return { statusCode: getResponse.status, body: errorText };
     }
-
     const listingData = await getResponse.json();
-    console.log("Listing data fetched:", listingData);
+    console.log("Fetched listing data:", listingData);
 
-    // Convert price: if price is an object with amount/divisor, compute the float value.
-    let priceValue;
-    if (listingData.price && typeof listingData.price === "object" &&
-        listingData.price.amount && listingData.price.divisor) {
+    // Convert price from object to float (if present)
+    let priceValue = null;
+    if (listingData.price && listingData.price.amount && listingData.price.divisor) {
       priceValue = listingData.price.amount / listingData.price.divisor;
-    } else if (listingData.price == null || listingData.price === "") {
-      priceValue = 0.00;
     } else {
-      priceValue = parseFloat(listingData.price);
+      console.warn("Price object not found or incomplete in listing data.");
     }
-    const formattedPrice = parseFloat(priceValue.toFixed(2));
 
-    // Build payload for duplicating the listing including additional fields.
+    // Build payload with as many fields as allowed
+    // (Fields not accepted by the API when creating a listing will be ignored.)
     const payload = {
       quantity: listingData.quantity || 1,
       title: listingData.title || "Duplicated Listing",
       description: listingData.description || "",
-      price: formattedPrice,
+      price: priceValue, // must be a float
       who_made: listingData.who_made || "i_did",
       when_made: listingData.when_made || "made_to_order",
       taxonomy_id: listingData.taxonomy_id || 0,
-      shipping_profile_id: listingData.shipping_profile_id, // Must be present for physical listings.
-      return_policy_id: listingData.return_policy_id,       // Must be present.
-      tags: listingData.tags || [],
-      materials: listingData.materials || [],
-      skus: listingData.skus || [],
-      style: listingData.style || [],
-      has_variations: (typeof listingData.has_variations === "boolean") ? listingData.has_variations : false,
-      is_customizable: (typeof listingData.is_customizable === "boolean") ? listingData.is_customizable : false,
-      is_personalizable: (typeof listingData.is_personalizable === "boolean") ? listingData.is_personalizable : false
+      shipping_profile_id: listingData.shipping_profile_id, // required for physical listings
+      return_policy_id: listingData.return_policy_id,
+      // For arrays, if not present, default to empty array
+      tags: listingData.tags ? listingData.tags : [],
+      materials: listingData.materials ? listingData.materials : [],
+      skus: listingData.skus ? listingData.skus : [],
+      style: listingData.style ? listingData.style : [],
+      // Boolean flags – default to false if not present
+      has_variations: listingData.has_variations || false,
+      is_customizable: listingData.is_customizable || false,
+      is_personalizable: listingData.is_personalizable || false
     };
 
-    console.log("Payload for new listing:", payload);
+    // Convert the payload to URL-encoded form for POST
+    // For array values, join them with commas.
+    const urlEncodedBody = new URLSearchParams();
+    for (const key in payload) {
+      let value = payload[key];
+      if (Array.isArray(value)) {
+        value = value.join(",");
+      } else if (value === null || value === undefined) {
+        value = "";
+      }
+      urlEncodedBody.append(key, value);
+    }
+    console.log("Constructed payload:", payload);
 
-    // Retrieve SHOP_ID from environment variables.
+    // Build the POST URL. (Ensure that SHOP_ID is set in your environment variables.)
     const shopId = process.env.SHOP_ID;
     if (!shopId) {
       return {
         statusCode: 500,
-        body: JSON.stringify({ error: "SHOP_ID environment variable is not set." })
+        body: JSON.stringify({ error: "SHOP_ID is not defined in environment variables." })
       };
     }
-    const etsyPostUrl = `https://api.etsy.com/v3/application/shops/${shopId}/listings`;
-
-    // Make POST request to duplicate the listing.
-    const postResponse = await fetch(etsyPostUrl, {
+    const postUrl = `https://api.etsy.com/v3/application/shops/${shopId}/listings`;
+    const postResponse = await fetch(postUrl, {
       method: "POST",
       headers: {
-        "Content-Type": "application/json",
-        "Authorization": `Bearer ${token}`,
-        "x-api-key": clientId
+        "Content-Type": "application/x-www-form-urlencoded",
+        "Authorization": `Bearer ${accessToken}`
       },
-      body: JSON.stringify(payload)
+      body: urlEncodedBody.toString()
     });
-    console.log("POST response status:", postResponse.status);
     if (!postResponse.ok) {
       const errorText = await postResponse.text();
       console.error("Error duplicating listing. POST failed:", errorText);
-      return {
-        statusCode: postResponse.status,
-        body: JSON.stringify({ error: "Error duplicating listing", details: errorText })
-      };
+      return { statusCode: postResponse.status, body: errorText };
     }
     const newListingData = await postResponse.json();
-    console.log("New listing created:", newListingData);
+    console.log("Duplicated listing data:", newListingData);
     return {
       statusCode: 200,
       body: JSON.stringify(newListingData)
