@@ -453,7 +453,7 @@ Using Sales Report and Product List Files:
     const ETSY_SHOP_URL = "https://www.etsy.com/shop/custombrites";
     const CLIENT_ID = "k75zdspz4r99txpqdji7i2em";
     const REDIRECT_URI = "https://delicate-tanuki-616ac0.netlify.app/";
-    // SHOP_ID is no longer used as we now rely on the token for Etsy API calls via our proxy.
+    // SHOP_ID is no longer used client-side since all Etsy calls are now proxied.
     const modelName = "chatgpt-4o-latest";
     let accessToken;
     
@@ -563,7 +563,7 @@ Using Sales Report and Product List Files:
       return base64urlEncode(digest);
     }
     
-    // OAuth Flow for Etsy
+    // OAuth Flow for Etsy (all Etsy API calls will be proxied via Netlify functions)
     document.getElementById("connectEtsyBtn").addEventListener("click", async () => {
       const state = "randomState123";
       const scope = "listings_w listings_r";
@@ -613,7 +613,7 @@ Using Sales Report and Product List Files:
       }
     }
     
-    // Duplicate a listing as a draft via our Netlify function to bypass CORS.
+    // Duplicate Listing: All Etsy API calls are now proxied via our Netlify function.
     async function duplicateListing() {
       let listingLink = document.getElementById("shopListings").value.trim();
       if (!listingLink) {
@@ -631,11 +631,11 @@ Using Sales Report and Product List Files:
         return;
       }
       try {
-        // Call our Netlify function which will proxy the request to Etsy.
-        let proxyUrl = `/.netlify/functions/etsyDuplicateListing?listingId=${listingId}&token=${encodeURIComponent(accessToken)}`;
-        let response = await fetch(proxyUrl);
-        if (!response.ok) throw new Error("Error duplicating listing: " + response.statusText);
-        let newListingData = await response.json();
+        let response = await fetch(`/.netlify/functions/etsyDuplicateListing?listingId=${listingId}&token=${encodeURIComponent(accessToken)}`);
+        if (!response.ok) {
+          throw new Error("Error duplicating listing: " + response.statusText);
+        }
+        let data = await response.json();
         M.toast({ html: "Listing duplicated as Draft successfully!" });
       } catch(e) {
         console.error(e);
