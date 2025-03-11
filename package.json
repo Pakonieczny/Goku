@@ -3,13 +3,14 @@
   "version": "1.0.0",
   "description": "Etsy Listing Generator & Shop Listings",
   "main": "index.html",
+  "scripts": {
+    "start": "netlify dev",
+    "build": "netlify build"
+  },
   "dependencies": {
-    "form-data": "^4.0.0",
     "node-fetch": "^2.6.7"
   },
-  "scripts": {
-    "start": "netlify dev"
-  },
+  "devDependencies": {},
   "author": "",
   "license": "ISC"
 }
