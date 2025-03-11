@@ -290,12 +290,12 @@
     <div id="previewGrid"></div>
   </div>
   
-  <!-- New Upload to Etsy button container -->
+  <!-- Upload to Etsy button container -->
   <div id="uploadContainer">
     <button id="uploadToEtsyBtn" class="btn waves-effect waves-light configurable">Upload to Etsy</button>
   </div>
   
-  <!-- Modals -->
+  <!-- Modals (Title Rules, Description Rules, Analyze Rules, Keyword Rules, Button Config, Metadata, Crop) -->
   <!-- Title Rules Modal -->
   <div id="titleRulesModal" class="modal">
     <div class="modal-content">
@@ -486,14 +486,14 @@ Using Sales Report and Product List Files:
         const reader = new FileReader();
         reader.onload = async (event) => {
           try {
-            // Read as Data URL so that we can extract the base64 string.
+            // Read file as Data URL and extract base64 string.
             const dataURL = event.target.result;
             const base64Content = dataURL.split(',')[1];
             if (!base64Content) throw new Error("File content is empty.");
             const payload = {
               file: base64Content,
               fileName: file.name,
-              purpose: "file-search"
+              purpose: "user_data" // Changed purpose from "file-search" to "user_data"
             };
             const response = await fetch("/.netlify/functions/uploadFile", {
               method: "POST",
@@ -523,7 +523,7 @@ Using Sales Report and Product List Files:
             const payload = {
               file: base64Content,
               fileName: file.name,
-              purpose: "file-search"
+              purpose: "user_data" // Changed purpose to "user_data"
             };
             const response = await fetch("/.netlify/functions/uploadFile", {
               method: "POST",

@@ -3,21 +3,15 @@ const FormData = require("form-data");
 
 exports.handler = async function(event, context) {
   try {
-    // Check if the request body is present and non-empty.
     if (!event.body || event.body.trim() === "") {
       throw new Error("No request body provided");
     }
-    
     const payload = JSON.parse(event.body);
     const { file, fileName, purpose } = payload;
-    
     const apiKey = process.env.OPENAI_API_KEY;
-    if (!apiKey) {
-      throw new Error("Missing OPENAI_API_KEY environment variable");
-    }
-    
+    if (!apiKey) throw new Error("Missing OPENAI_API_KEY environment variable");
     if (!file || !file.trim()) {
-      throw new Error("File content is empty");
+      throw new Error("No file content provided in request body");
     }
     
     // Create a Buffer from the provided base64 file content.
@@ -39,7 +33,6 @@ exports.handler = async function(event, context) {
     
     console.log("FormData prepared. Headers:", form.getHeaders());
     
-    // Call the OpenAI file upload endpoint.
     const response = await fetch("https://api.openai.com/v1/files", {
       method: "POST",
       headers: {
@@ -70,7 +63,6 @@ exports.handler = async function(event, context) {
     };
   } catch (error) {
     console.error("Exception in uploadFile function:", error);
-    // For debugging purposes only: return detailed error info.
     return {
       statusCode: 500,
       body: JSON.stringify({ error: error.message, stack: error.stack })
