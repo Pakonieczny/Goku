@@ -31,7 +31,7 @@ exports.handler = async function(event, context) {
       method: "GET",
       headers: {
         "Authorization": `Bearer ${token}`,
-        "x-api-key": apiKey  // Using environment variable for API key
+        "x-api-key": apiKey
       }
     });
 
@@ -48,12 +48,13 @@ exports.handler = async function(event, context) {
     const listingData = await getResponse.json();
     console.log("Listing data fetched:", listingData);
 
-    // Build the payload to duplicate the listing
+    // Build the payload to duplicate the listing,
+    // ensuring that the price is converted to a float.
     const payload = {
       quantity: listingData.quantity || 1,
       title: listingData.title || "Duplicated Listing",
       description: listingData.description || "",
-      price: listingData.price || 0,
+      price: listingData.price ? parseFloat(listingData.price) : 0,
       who_made: listingData.who_made || "i_did",
       when_made: listingData.when_made || "made_to_order",
       taxonomy_id: listingData.taxonomy_id || 0
