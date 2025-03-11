@@ -3,17 +3,24 @@ const FormData = require("form-data");
 
 exports.handler = async function(event, context) {
   try {
-    console.log("uploadFile function invoked with event:", event);
-    const body = JSON.parse(event.body);
-    const { file, fileName, purpose } = body;
-    const apiKey = process.env.OPENAI_API_KEY;
-    if (!apiKey) throw new Error("Missing OPENAI_API_KEY environment variable");
-
-    if (!file || !file.trim()) {
-      throw new Error("No file content provided in request body");
+    // Check if the request body is present and non-empty.
+    if (!event.body || event.body.trim() === "") {
+      throw new Error("No request body provided");
     }
     
-    // Create a Buffer from the base64 file content.
+    const payload = JSON.parse(event.body);
+    const { file, fileName, purpose } = payload;
+    
+    const apiKey = process.env.OPENAI_API_KEY;
+    if (!apiKey) {
+      throw new Error("Missing OPENAI_API_KEY environment variable");
+    }
+    
+    if (!file || !file.trim()) {
+      throw new Error("File content is empty");
+    }
+    
+    // Create a Buffer from the provided base64 file content.
     const buffer = Buffer.from(file, "base64");
     console.log(`File "${fileName}" loaded. Buffer length: ${buffer.length} bytes`);
     
@@ -63,7 +70,7 @@ exports.handler = async function(event, context) {
     };
   } catch (error) {
     console.error("Exception in uploadFile function:", error);
-    // For development only: include error details in the response so you can see them on the client side.
+    // For debugging purposes only: return detailed error info.
     return {
       statusCode: 500,
       body: JSON.stringify({ error: error.message, stack: error.stack })
