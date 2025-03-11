@@ -1,10 +1,9 @@
 [build]
-  publish = "public"
+  publish = "."
   functions = "netlify/functions"
 
 [dev]
   functions = "netlify/functions"
 
 [build.environment]
-  # (Do not store sensitive keys here; they should be set in the Netlify dashboard.)
   NODE_ENV = "production"
