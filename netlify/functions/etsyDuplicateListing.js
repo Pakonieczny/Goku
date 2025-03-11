@@ -45,12 +45,15 @@ exports.handler = async function(event, context) {
     const listingData = await getResponse.json();
     console.log("Listing data fetched:", listingData);
 
-    // Handle the price: if null, undefined, or empty string, set to 0.00
-    let priceValue = listingData.price;
-    if (priceValue === null || priceValue === undefined || priceValue === "") {
+    // Handle the price: if listingData.price is an object (with amount & divisor), compute the float value.
+    let priceValue;
+    if (listingData.price && typeof listingData.price === "object" &&
+        listingData.price.amount && listingData.price.divisor) {
+      priceValue = listingData.price.amount / listingData.price.divisor;
+    } else if (listingData.price === null || listingData.price === undefined || listingData.price === "") {
       priceValue = 0.00;
     } else {
-      priceValue = parseFloat(priceValue);
+      priceValue = parseFloat(listingData.price);
     }
     let formattedPrice = parseFloat(priceValue.toFixed(2));
     
