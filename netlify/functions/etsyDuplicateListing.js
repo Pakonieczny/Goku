@@ -5,6 +5,7 @@ exports.handler = async function(event, context) {
     const listingId = event.queryStringParameters.listingId;
     const token = event.queryStringParameters.token;
     if (!listingId || !token) {
+      console.error("Missing listingId or token", { listingId, token });
       return { statusCode: 400, body: JSON.stringify({ error: "Missing listingId or token" }) };
     }
     // Fetch listing details from Etsy
@@ -15,10 +16,13 @@ exports.handler = async function(event, context) {
     });
     if (!getResponse.ok) {
       const errorText = await getResponse.text();
-      return { statusCode: getResponse.status, body: errorText };
+      console.error("GET request failed", { status: getResponse.status, errorText });
+      return { statusCode: getResponse.status, body: JSON.stringify({ error: "GET request failed", details: errorText }) };
     }
     const listingData = await getResponse.json();
-    // Build payload for duplicating listing
+    console.log("Fetched listing data:", listingData);
+    
+    // Build payload for duplicating the listing
     const payload = {
       quantity: listingData.quantity || 1,
       title: listingData.title || "Duplicated Listing",
@@ -40,14 +44,17 @@ exports.handler = async function(event, context) {
     });
     if (!postResponse.ok) {
       const errorText = await postResponse.text();
-      return { statusCode: postResponse.status, body: errorText };
+      console.error("POST request failed", { status: postResponse.status, errorText });
+      return { statusCode: postResponse.status, body: JSON.stringify({ error: "POST request failed", details: errorText }) };
     }
     const newListing = await postResponse.json();
+    console.log("New listing created successfully:", newListing);
     return {
       statusCode: 200,
       body: JSON.stringify(newListing)
     };
   } catch (error) {
+    console.error("Unexpected error in etsyDuplicateListing:", error);
     return {
       statusCode: 500,
       body: JSON.stringify({ error: error.message })
