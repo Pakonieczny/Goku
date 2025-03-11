@@ -394,7 +394,7 @@ Using Sales Report and Product List Files:
 - Generate exactly 13 tag phrases, each ≤ 20 characters.
 - Include "Gift for Her".
 - "Charm" must appear at least once in a multi-word phrase (max 4 times total).
-- "Necklace" ≤ 3 times, "Gift" ≤ 3 times, "Lover" ≤ 2 times.
+- "Necklace" appears no more than 3 times, "Gift" no more than 3 times, "Lover" no more than 2 times.
 - Exclude: "Gift for Him", "Statement Piece", "Unique", "Spiritual Gift", "Outdoor Style", "accessories", "simple", "minimalist", "whimsical", "cute", "filled", "gold filled", "silver", "solid gold", "gold vermeil", "rosegold", "14k", "handmade", "quirky", "delicate", "accessory", "for", "dangle", "gold plated", "jewelry", "custom", "celestial", "design", "lightweight", "Fine Chain Necklace", "Small", "Large", "Nice", "Long", "Dark", "Short", "and", "but", "light", "heavy", "Wanderlust", "Theme", "Minimal Chain Gift", "Tiny Pendant Chain", "Charm Look", "Charm Wear", "Chain Necklace", "Small Pendant Chain", "Everyday"
       </textarea>
     </div>
@@ -453,7 +453,7 @@ Using Sales Report and Product List Files:
     const ETSY_SHOP_URL = "https://www.etsy.com/shop/custombrites";
     const CLIENT_ID = "k75zdspz4r99txpqdji7i2em";
     const REDIRECT_URI = "https://delicate-tanuki-616ac0.netlify.app/";
-    // SHOP_ID is no longer used on the client; it is set in the Netlify function.
+    const SHOP_ID = "YOUR_ASSISTANT_ID"; // Not used; kept for legacy reference.
     const modelName = "chatgpt-4o-latest";
     let accessToken;
     
@@ -580,7 +580,6 @@ Using Sales Report and Product List Files:
     });
     
     document.addEventListener("DOMContentLoaded", () => {
-      // Load stored UI positions on page load
       loadButtonPositions();
       const urlParams = new URLSearchParams(window.location.search);
       const code = urlParams.get("code");
@@ -629,27 +628,21 @@ Using Sales Report and Product List Files:
         M.toast({ html: "No access token. Please connect to Etsy first." });
         return;
       }
-      
-      console.log("Duplicate Listing Debug:");
-      console.log("Listing ID:", listingId);
-      console.log("Access Token:", accessToken);
-      
       try {
-        // Call our Netlify function to duplicate the listing.
-        const duplicateUrl = `/.netlify/functions/etsyDuplicateListing?listingId=${listingId}&accessToken=${encodeURIComponent(accessToken)}`;
-        const response = await fetch(duplicateUrl, {
-          method: "POST",
-          headers: { "Content-Type": "application/x-www-form-urlencoded" }
-          // Body is built in our serverless function from the original listing.
-        });
+        // Proxy the duplicate listing call through our Netlify function
+        const duplicateUrl = `/.netlify/functions/etsyDuplicateListing?listingId=${listingId}&token=${encodeURIComponent(accessToken)}`;
+        console.log("Calling duplicate listing URL:", duplicateUrl);
+        let response = await fetch(duplicateUrl);
+        console.log("Response status:", response.status, response.statusText);
         if (!response.ok) {
-          const errorText = await response.text();
-          throw new Error("Error duplicating listing: " + errorText);
+          let errorText = await response.text();
+          console.error("Error duplicating listing. Status:", response.status, "Text:", errorText);
+          throw new Error(`Error duplicating listing: ${response.status} - ${response.statusText}`);
         }
-        const newListingData = await response.json();
+        let data = await response.json();
+        console.log("Duplicate listing response data:", data);
         M.toast({ html: "Listing duplicated as Draft successfully!" });
-        console.log("Duplicated Listing Data:", newListingData);
-      } catch(e) {
+      } catch (e) {
         console.error("Error in duplicateListing function:", e);
         M.toast({ html: "Error duplicating listing: " + e.message });
       }
@@ -1103,6 +1096,7 @@ Return your answer as plain text.`;
       navigator.clipboard.writeText(document.getElementById("listingDescription").value).catch(err => console.error("Error copying description: " + err));
     });
     
+    // ----- UI Position Persistence & Live Preview for Configure Buttons -----
     document.getElementById("configureButtonsBtn").addEventListener("click", function() {
       var configContainer = document.getElementById("buttonConfigContainer");
       configContainer.innerHTML = "";
@@ -1160,6 +1154,7 @@ Return your answer as plain text.`;
         }
       }
     }
+    // -------------------------------------------------------------------------
     
     window.addEventListener("load", function() {
       var container13 = document.getElementById("container13");
@@ -1169,6 +1164,10 @@ Return your answer as plain text.`;
     document.getElementById("listingDescInput").addEventListener("input", function() {
       document.getElementById("searchKeyPhrases").value = "";
     });
+    
+    // End of file
+    // Utility delay function
+    function delay(ms) { return new Promise(resolve => setTimeout(resolve, ms)); }
   </script>
 </body>
 </html>
