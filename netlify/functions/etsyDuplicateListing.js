@@ -43,12 +43,12 @@ exports.handler = async function (event, context) {
     const listingData = await getResponse.json();
     console.log("Listing data fetched:", listingData);
 
-    // For this example we set a static price placeholder of $1.00 (i.e. 1.00)
-    // since we want variations to dictate the price.
+    // Set a static placeholder price of $1.00 for the duplicated listing.
     const staticPrice = 1.00;
 
-    // Build the basic payload for duplicating the listing.
-    // (Note: Variations/inventory are not included in the initial creation.)
+    // Build the payload for duplicating the listing.
+    // We include the entire inventory object as-is (if it exists)
+    // so that variations (and SKU) are passed exactly as fetched.
     const payload = {
       quantity: listingData.quantity || 1,
       title: listingData.title || "Duplicated Listing",
@@ -64,49 +64,11 @@ exports.handler = async function (event, context) {
       materials: listingData.materials || [],
       skus: listingData.skus || [],
       style: listingData.style || [],
-      has_variations: (typeof listingData.has_variations === "boolean") ? listingData.has_variations : false,
-      is_customizable: (typeof listingData.is_customizable === "boolean") ? listingData.is_customizable : false,
-      is_personalizable: (typeof listingData.is_personalizable === "boolean") ? listingData.is_personalizable : false,
-      // We'll include a transformed inventory if available (this example assumes you have fetched it separately)
-      // For each product in the inventory, we map the property_values so that only allowed keys are sent.
-      inventory: listingData.inventory && Array.isArray(listingData.inventory.products)
-        ? {
-            products: listingData.inventory.products.map((product) => {
-              // Transform property_values: only include property_id and value_ids
-              const transformedProps = product.property_values
-                ? product.property_values.map((prop) => ({
-                    property_id: prop.property_id,
-                    value_ids: prop.value_ids,
-                  }))
-                : [];
-              // Also, for offerings we need to extract the price as a float.
-              const transformedOfferings = product.offerings
-                ? product.offerings.map((offering) => {
-                    let offeringPrice = staticPrice; // default placeholder
-                    if (
-                      offering.price &&
-                      typeof offering.price === "object" &&
-                      offering.price.amount &&
-                      offering.price.divisor
-                    ) {
-                      offeringPrice = offering.price.amount / offering.price.divisor;
-                    }
-                    return {
-                      // Omit keys that cause issues (like offering_id, is_deleted, etc.)
-                      price: parseFloat(offeringPrice.toFixed(2)),
-                      quantity: offering.quantity,
-                      is_enabled: offering.is_enabled,
-                    };
-                  })
-                : [];
-              return {
-                sku: product.sku,
-                offerings: transformedOfferings,
-                property_values: transformedProps,
-              };
-            }),
-          }
-        : null,
+      has_variations: listingData.has_variations || false,
+      is_customizable: listingData.is_customizable || false,
+      is_personalizable: listingData.is_personalizable || false,
+      // Pass the inventory data exactly as fetched, if available.
+      inventory: listingData.inventory || null,
     };
 
     console.log("Creation payload for new listing:", payload);
@@ -143,9 +105,8 @@ exports.handler = async function (event, context) {
     const newListingData = await postResponse.json();
     console.log("New listing created:", newListingData);
 
-    // Optionally, call a separate function to update inventory (variations) after listing creation.
-    // For example:
-    // await updateInventory(newListingData.listing_id, payload.inventory);
+    // Optional: Call a separate function to update inventory (variations) after the listing is created.
+    // await updateInventory(newListingData.listing_id, listingData.inventory);
 
     return {
       statusCode: 200,
