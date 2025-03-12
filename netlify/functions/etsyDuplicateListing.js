@@ -59,14 +59,25 @@ exports.handler = async function(event, context) {
     const listingData = await getResponse.json();
     console.log("Listing data fetched:", listingData);
 
+    // Calculate base price if available.
+    let basePrice = 0.00;
+    if (listingData.price) {
+      if (typeof listingData.price === "object" && listingData.price.amount && listingData.price.divisor) {
+        basePrice = listingData.price.amount / listingData.price.divisor;
+      } else {
+        basePrice = parseFloat(listingData.price);
+      }
+      basePrice = parseFloat(basePrice.toFixed(2));
+    }
+    console.log("Calculated base price:", basePrice);
+
     // Build payload for duplicating the listing.
-    // Note: We are omitting recalculation of price so that the variations (inventory update) will determine it.
+    // Note: Although the variations will determine the final pricing, Etsy requires a base price.
     const creationPayload = {
       quantity: listingData.quantity || 1,
       title: listingData.title || "Duplicated Listing",
       description: listingData.description || "",
-      // Optionally, you can include the original price if desired:
-      // price: listingData.price, 
+      price: basePrice,
       who_made: listingData.who_made || "i_did",
       when_made: listingData.when_made || "made_to_order",
       taxonomy_id: listingData.taxonomy_id || 0,
@@ -83,7 +94,7 @@ exports.handler = async function(event, context) {
 
     console.log("Creation payload for new listing:", creationPayload);
 
-    // If the listing has variations, attempt to fetch the inventory data separately.
+    // If the listing has variations, fetch the inventory data separately.
     let inventoryPayload = null;
     if (listingData.has_variations) {
       console.log("Listing has variations; fetching inventory data...");
@@ -140,11 +151,7 @@ exports.handler = async function(event, context) {
 
     // If we fetched inventory data, update the new listing's inventory.
     if (inventoryPayload) {
-      // Optionally, remove any keys from inventoryPayload that shouldn't be sent.
-      // For example, if "price" is managed by variations, you might remove it.
-      // inventoryPayload = removeInvalidKeys(inventoryPayload);
       const etsyInventoryUrl = `https://api.etsy.com/v3/application/shops/${shopId}/listings/${newListingData.listing_id}/inventory`;
-
       const inventoryResponse = await fetch(etsyInventoryUrl, {
         method: "PUT",
         headers: {
@@ -158,7 +165,6 @@ exports.handler = async function(event, context) {
       if (!inventoryResponse.ok) {
         const inventoryErrorText = await inventoryResponse.text();
         console.error("Error updating inventory. PUT failed:", inventoryErrorText);
-        // You might choose to return a warning or merge the error details into the response.
         return {
           statusCode: inventoryResponse.status,
           body: JSON.stringify({ error: "Error updating inventory", details: inventoryErrorText })
