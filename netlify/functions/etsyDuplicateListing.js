@@ -70,6 +70,7 @@ exports.handler = async function(event, context) {
           let newProduct = { ...product };
           delete newProduct.product_id;
           delete newProduct.is_deleted;
+          delete newProduct.scale_name; // Remove scale_name key as well.
           return newProduct;
         });
       }
@@ -91,7 +92,7 @@ exports.handler = async function(event, context) {
     }
     const formattedPrice = parseFloat(priceValue.toFixed(2));
 
-    // Build payload for duplicating the listing (without inventory).
+    // Build payload for duplicating the listing (without inventory update).
     const payload = {
       quantity: listingData.quantity || 1,
       title: listingData.title || "Duplicated Listing",
