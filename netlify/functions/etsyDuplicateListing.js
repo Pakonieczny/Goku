@@ -19,11 +19,11 @@ function cleanObject(obj) {
   return obj;
 }
 
-// Transform price fields in the inventory payload
+// Transform price fields in the inventory payload so that they are floats.
 function transformInventoryPayload(payload) {
   if (payload.products && Array.isArray(payload.products)) {
     payload.products.forEach((product, prodIndex) => {
-      // Check if product.price exists and is an array
+      // If product.price is an array, take the first element and convert to float.
       if (product.price && Array.isArray(product.price) && product.price.length > 0) {
         console.log(`Product ${prodIndex}: transforming product.price from array ${JSON.stringify(product.price)}`);
         product.price = parseFloat(product.price[0]);
@@ -88,17 +88,29 @@ exports.handler = async function(event, context) {
     const listingData = await getResponse.json();
     console.log("Listing data fetched:", listingData);
 
-    // Build the creation payload for the new listing.
-    // If the listing has variations, we omit the top-level price.
+    // Compute a base price from listingData.price (always include a price field).
+    let basePrice = 0.00;
+    if (listingData.price && typeof listingData.price === "object" &&
+        listingData.price.amount && listingData.price.divisor) {
+      basePrice = listingData.price.amount / listingData.price.divisor;
+    } else if (listingData.price && typeof listingData.price !== "object") {
+      basePrice = parseFloat(listingData.price);
+    }
+    basePrice = parseFloat(basePrice.toFixed(2));
+    console.log("Calculated base price:", basePrice);
+
+    // Build payload for duplicating the listing.
+    // Always include a price field (required by Etsy), even if the listing has variations.
     let creationPayload = {
       quantity: listingData.quantity || 1,
       title: listingData.title || "Duplicated Listing",
       description: listingData.description || "",
+      price: basePrice, // Always include price as float.
       who_made: listingData.who_made || "i_did",
       when_made: listingData.when_made || "made_to_order",
       taxonomy_id: listingData.taxonomy_id || 0,
-      shipping_profile_id: listingData.shipping_profile_id, // required for physical listings
-      return_policy_id: listingData.return_policy_id,       // required
+      shipping_profile_id: listingData.shipping_profile_id, // required for physical listings.
+      return_policy_id: listingData.return_policy_id,       // required.
       tags: listingData.tags || [],
       materials: listingData.materials || [],
       skus: listingData.skus || [],
@@ -107,22 +119,6 @@ exports.handler = async function(event, context) {
       is_customizable: (typeof listingData.is_customizable === "boolean") ? listingData.is_customizable : false,
       is_personalizable: (typeof listingData.is_personalizable === "boolean") ? listingData.is_personalizable : false
     };
-
-    // Only include a base price if the listing does NOT have variations.
-    if (!listingData.has_variations) {
-      let basePrice = 0.00;
-      if (listingData.price && typeof listingData.price === "object" &&
-          listingData.price.amount && listingData.price.divisor) {
-        basePrice = listingData.price.amount / listingData.price.divisor;
-      } else if (listingData.price && typeof listingData.price !== "object") {
-        basePrice = parseFloat(listingData.price);
-      }
-      basePrice = parseFloat(basePrice.toFixed(2));
-      creationPayload.price = basePrice;
-      console.log("Calculated base price (no variations):", basePrice);
-    } else {
-      console.log("Listing has variations; omitting top-level price.");
-    }
 
     console.log("Creation payload for new listing:", creationPayload);
 
@@ -136,7 +132,7 @@ exports.handler = async function(event, context) {
     }
     const etsyPostUrl = `https://api.etsy.com/v3/application/shops/${shopId}/listings`;
 
-    // Create the duplicated listing.
+    // Make POST request to duplicate the listing.
     const postResponse = await fetch(etsyPostUrl, {
       method: "POST",
       headers: {
@@ -206,7 +202,6 @@ exports.handler = async function(event, context) {
               const errorText = await response.text();
               console.error(`PUT inventory update attempt ${attempt + 1} failed:`, errorText);
               lastError = errorText;
-              // If 404, wait and retry.
               if (response.status === 404) {
                 console.log("Inventory resource not found; waiting before retrying...");
                 await new Promise(resolve => setTimeout(resolve, delayMs));
