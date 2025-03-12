@@ -63,10 +63,20 @@ exports.handler = async function(event, context) {
     if (inventoryResponse.ok) {
       inventoryData = await inventoryResponse.json();
       console.log("Inventory data fetched:", inventoryData);
+      // Remove invalid keys from each product
+      if (inventoryData.products && Array.isArray(inventoryData.products)) {
+        inventoryData.products = inventoryData.products.map(product => {
+          // Create a shallow copy and delete invalid keys
+          let newProduct = { ...product };
+          delete newProduct.product_id;
+          delete newProduct.is_deleted;
+          return newProduct;
+        });
+      }
     } else {
       const invError = await inventoryResponse.text();
       console.error("GET inventory request failed:", invError);
-      // If inventory is not available, we continue with empty inventory.
+      // Continue with empty inventory if not available.
     }
 
     // Process the price field.
@@ -94,12 +104,10 @@ exports.handler = async function(event, context) {
       return_policy_id: listingData.return_policy_id,       // required for physical listings.
       tags: listingData.tags || [],
       materials: listingData.materials || [],
-      // For SKUs and variations, we try to copy from inventory if available;
-      // Otherwise, fallback to any listingData.skus if provided.
+      // For SKUs and variations, try to copy from inventory if available.
       skus: (inventoryData && inventoryData.products)
               ? inventoryData.products.map(p => p.sku || "")
               : (listingData.skus || []),
-      // For variations, copy the products array (if available).
       variations: (inventoryData && inventoryData.products)
               ? inventoryData.products.map(p => p.variations || [])
               : [],
@@ -140,11 +148,8 @@ exports.handler = async function(event, context) {
     }
 
     // --- Step 4: Update inventory for the new listing ---
-    // If inventoryData was fetched successfully, we want to update the new listing's inventory.
-    // (This assumes that the inventory update endpoint accepts a PUT with the same inventory payload.)
     if (inventoryData && Object.keys(inventoryData).length > 0) {
       const etsyInventoryUpdateUrl = `https://api.etsy.com/v3/application/listings/${newListingId}/inventory`;
-      // Here we assume that the entire inventoryData object can be re-used.
       const putResponse = await fetch(etsyInventoryUpdateUrl, {
         method: "PUT",
         headers: {
@@ -158,11 +163,10 @@ exports.handler = async function(event, context) {
       if (!putResponse.ok) {
         const putError = await putResponse.text();
         console.error("Error updating inventory. PUT failed:", putError);
-        // Optionally, you could choose to return an error or continue.
+        // Optionally, return error details or continue
       } else {
         const updatedInventory = await putResponse.json();
         console.log("Inventory updated for new listing:", updatedInventory);
-        // You may want to merge updated inventory info into newListingData.
         newListingData.updated_inventory = updatedInventory;
       }
     } else {
