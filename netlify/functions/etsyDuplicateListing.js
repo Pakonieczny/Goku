@@ -7,7 +7,7 @@ function removeInvalidKeys(obj) {
   } else if (obj !== null && typeof obj === "object") {
     const newObj = {};
     for (const key in obj) {
-      // Remove keys that are not allowed in the inventory update
+      // Remove keys that Etsy’s API does not accept
       if (key === "scale_name") continue;
       newObj[key] = removeInvalidKeys(obj[key]);
     }
@@ -59,10 +59,14 @@ exports.handler = async function(event, context) {
     const listingData = await getResponse.json();
     console.log("Listing data fetched:", listingData);
 
-    // Calculate base price if available.
+    // Calculate base price if available. (Etsy requires a valid base price even if variations control final pricing.)
     let basePrice = 0.00;
     if (listingData.price) {
-      if (typeof listingData.price === "object" && listingData.price.amount && listingData.price.divisor) {
+      if (
+        typeof listingData.price === "object" &&
+        listingData.price.amount &&
+        listingData.price.divisor
+      ) {
         basePrice = listingData.price.amount / listingData.price.divisor;
       } else {
         basePrice = parseFloat(listingData.price);
@@ -71,8 +75,7 @@ exports.handler = async function(event, context) {
     }
     console.log("Calculated base price:", basePrice);
 
-    // Build payload for duplicating the listing.
-    // Note: Although the variations will determine the final pricing, Etsy requires a base price.
+    // Build creation payload for duplicating the listing.
     const creationPayload = {
       quantity: listingData.quantity || 1,
       title: listingData.title || "Duplicated Listing",
@@ -87,14 +90,14 @@ exports.handler = async function(event, context) {
       materials: listingData.materials || [],
       skus: listingData.skus || [],
       style: listingData.style || [],
-      has_variations: (typeof listingData.has_variations === "boolean") ? listingData.has_variations : false,
-      is_customizable: (typeof listingData.is_customizable === "boolean") ? listingData.is_customizable : false,
-      is_personalizable: (typeof listingData.is_personalizable === "boolean") ? listingData.is_personalizable : false
+      has_variations: typeof listingData.has_variations === "boolean" ? listingData.has_variations : false,
+      is_customizable: typeof listingData.is_customizable === "boolean" ? listingData.is_customizable : false,
+      is_personalizable: typeof listingData.is_personalizable === "boolean" ? listingData.is_personalizable : false
     };
 
     console.log("Creation payload for new listing:", creationPayload);
 
-    // If the listing has variations, fetch the inventory data separately.
+    // If the listing has variations, fetch the inventory data from the original listing.
     let inventoryPayload = null;
     if (listingData.has_variations) {
       console.log("Listing has variations; fetching inventory data...");
@@ -109,7 +112,6 @@ exports.handler = async function(event, context) {
       if (invResponse.ok) {
         const invData = await invResponse.json();
         console.log("Original inventory data:", invData);
-        // Clean the inventory payload by removing invalid keys.
         inventoryPayload = removeInvalidKeys(invData);
       } else {
         const invErrorText = await invResponse.text();
@@ -127,7 +129,7 @@ exports.handler = async function(event, context) {
     }
     const etsyPostUrl = `https://api.etsy.com/v3/application/shops/${shopId}/listings`;
 
-    // Make POST request to duplicate the listing.
+    // Create the duplicate listing.
     const postResponse = await fetch(etsyPostUrl, {
       method: "POST",
       headers: {
@@ -149,10 +151,10 @@ exports.handler = async function(event, context) {
     const newListingData = await postResponse.json();
     console.log("New listing created:", newListingData);
 
-    // If we fetched inventory data, update the new listing's inventory.
+    // If inventory data was fetched, attempt to update the new listing's inventory.
     if (inventoryPayload) {
       const etsyInventoryUrl = `https://api.etsy.com/v3/application/shops/${shopId}/listings/${newListingData.listing_id}/inventory`;
-      const inventoryResponse = await fetch(etsyInventoryUrl, {
+      let inventoryResponse = await fetch(etsyInventoryUrl, {
         method: "PUT",
         headers: {
           "Content-Type": "application/json",
@@ -165,13 +167,38 @@ exports.handler = async function(event, context) {
       if (!inventoryResponse.ok) {
         const inventoryErrorText = await inventoryResponse.text();
         console.error("Error updating inventory. PUT failed:", inventoryErrorText);
-        return {
-          statusCode: inventoryResponse.status,
-          body: JSON.stringify({ error: "Error updating inventory", details: inventoryErrorText })
-        };
+        // If the inventory resource is not found (404), wait and then try a separate POST call.
+        if (inventoryResponse.status === 404) {
+          console.log("Inventory resource not found; waiting 5 seconds before attempting POST to create inventory.");
+          await new Promise(resolve => setTimeout(resolve, 5000));
+          // Try a POST call to create the inventory resource.
+          inventoryResponse = await fetch(etsyInventoryUrl, {
+            method: "POST",
+            headers: {
+              "Content-Type": "application/json",
+              "Authorization": `Bearer ${token}`,
+              "x-api-key": clientId
+            },
+            body: JSON.stringify(inventoryPayload)
+          });
+          console.log("POST inventory creation response status:", inventoryResponse.status);
+          if (!inventoryResponse.ok) {
+            const invPostErrorText = await inventoryResponse.text();
+            console.error("Error creating inventory. POST failed:", invPostErrorText);
+            return {
+              statusCode: inventoryResponse.status,
+              body: JSON.stringify({ error: "Error creating inventory", details: invPostErrorText })
+            };
+          }
+        } else {
+          return {
+            statusCode: inventoryResponse.status,
+            body: JSON.stringify({ error: "Error updating inventory", details: inventoryErrorText })
+          };
+        }
       }
       const updatedInventoryData = await inventoryResponse.json();
-      console.log("Inventory updated:", updatedInventoryData);
+      console.log("Inventory updated/created:", updatedInventoryData);
       newListingData.inventory = updatedInventoryData;
     } else {
       console.log("No inventory data available; skipping inventory update.");
