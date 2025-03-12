@@ -10,13 +10,30 @@ function cleanObject(obj) {
       // Remove keys that Etsy API does not accept in inventory updates
       const invalidKeys = ["scale_name", "product_id", "is_deleted", "offering_id"];
       if (invalidKeys.includes(key)) continue;
-      // For "price", if it's an array, skip it
-      if (key === "price" && Array.isArray(obj[key])) continue;
       newObj[key] = cleanObject(obj[key]);
     }
     return newObj;
   }
   return obj;
+}
+
+// Transform the inventory payload to ensure that "price" is a float value instead of an array
+function transformInventoryPayload(payload) {
+  if (payload.products && Array.isArray(payload.products)) {
+    payload.products.forEach(product => {
+      if (product.offerings && Array.isArray(product.offerings)) {
+        product.offerings.forEach(offering => {
+          if (Array.isArray(offering.price)) {
+            // Use the first element from the array and convert to float.
+            offering.price = parseFloat(offering.price[0]);
+          } else if (typeof offering.price === "string") {
+            offering.price = parseFloat(offering.price);
+          }
+        });
+      }
+    });
+  }
+  return payload;
 }
 
 exports.handler = async function(event, context) {
@@ -64,7 +81,8 @@ exports.handler = async function(event, context) {
 
     // Calculate a base price from the listing data.
     let basePrice = 0.00;
-    if (listingData.price && typeof listingData.price === "object" && listingData.price.amount && listingData.price.divisor) {
+    if (listingData.price && typeof listingData.price === "object" &&
+        listingData.price.amount && listingData.price.divisor) {
       basePrice = listingData.price.amount / listingData.price.divisor;
     } else if (listingData.price && typeof listingData.price !== "object") {
       basePrice = parseFloat(listingData.price);
@@ -73,17 +91,16 @@ exports.handler = async function(event, context) {
     console.log("Calculated base price:", basePrice);
 
     // Build creation payload for the new listing.
-    // Even if there are variations, we always include a price.
     let creationPayload = {
       quantity: listingData.quantity || 1,
       title: listingData.title || "Duplicated Listing",
       description: listingData.description || "",
-      price: basePrice, // Always include price to satisfy Etsy API.
+      price: basePrice, // Always include a base price to satisfy Etsy API.
       who_made: listingData.who_made || "i_did",
       when_made: listingData.when_made || "made_to_order",
       taxonomy_id: listingData.taxonomy_id || 0,
-      shipping_profile_id: listingData.shipping_profile_id,
-      return_policy_id: listingData.return_policy_id,
+      shipping_profile_id: listingData.shipping_profile_id, // Required for physical listings.
+      return_policy_id: listingData.return_policy_id,       // Required.
       tags: listingData.tags || [],
       materials: listingData.materials || [],
       skus: listingData.skus || [],
@@ -105,7 +122,7 @@ exports.handler = async function(event, context) {
     }
     const etsyPostUrl = `https://api.etsy.com/v3/application/shops/${shopId}/listings`;
 
-    // Make POST request to create the duplicated listing.
+    // Create the duplicated listing
     const postResponse = await fetch(etsyPostUrl, {
       method: "POST",
       headers: {
@@ -142,8 +159,10 @@ exports.handler = async function(event, context) {
       if (invResponse.ok) {
         const invData = await invResponse.json();
         console.log("Original inventory data:", invData);
-        // Clean the inventory payload.
+        // Clean the inventory payload to remove invalid keys.
         inventoryPayload = cleanObject(invData);
+        // Transform the inventory payload to ensure price fields are floats.
+        inventoryPayload = transformInventoryPayload(inventoryPayload);
       } else {
         const invErrorText = await invResponse.text();
         console.error("Error fetching inventory data:", invErrorText);
