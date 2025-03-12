@@ -59,24 +59,14 @@ exports.handler = async function(event, context) {
     const listingData = await getResponse.json();
     console.log("Listing data fetched:", listingData);
 
-    // Convert price: if price is an object with amount/divisor, compute the float value.
-    let priceValue;
-    if (listingData.price && typeof listingData.price === "object" &&
-        listingData.price.amount && listingData.price.divisor) {
-      priceValue = listingData.price.amount / listingData.price.divisor;
-    } else if (listingData.price == null || listingData.price === "") {
-      priceValue = 0.00;
-    } else {
-      priceValue = parseFloat(listingData.price);
-    }
-    const formattedPrice = parseFloat(priceValue.toFixed(2));
-
-    // Build payload for duplicating the listing with allowed fields.
+    // Build payload for duplicating the listing.
+    // Note: We are omitting recalculation of price so that the variations (inventory update) will determine it.
     const creationPayload = {
       quantity: listingData.quantity || 1,
       title: listingData.title || "Duplicated Listing",
       description: listingData.description || "",
-      price: formattedPrice,
+      // Optionally, you can include the original price if desired:
+      // price: listingData.price, 
       who_made: listingData.who_made || "i_did",
       when_made: listingData.when_made || "made_to_order",
       taxonomy_id: listingData.taxonomy_id || 0,
@@ -92,6 +82,29 @@ exports.handler = async function(event, context) {
     };
 
     console.log("Creation payload for new listing:", creationPayload);
+
+    // If the listing has variations, attempt to fetch the inventory data separately.
+    let inventoryPayload = null;
+    if (listingData.has_variations) {
+      console.log("Listing has variations; fetching inventory data...");
+      const inventoryUrl = `https://api.etsy.com/v3/application/listings/${listingId}/inventory`;
+      const invResponse = await fetch(inventoryUrl, {
+        method: "GET",
+        headers: {
+          "Authorization": `Bearer ${token}`,
+          "x-api-key": clientId
+        }
+      });
+      if (invResponse.ok) {
+        const invData = await invResponse.json();
+        console.log("Original inventory data:", invData);
+        // Clean the inventory payload by removing invalid keys.
+        inventoryPayload = removeInvalidKeys(invData);
+      } else {
+        const invErrorText = await invResponse.text();
+        console.error("Error fetching inventory data:", invErrorText);
+      }
+    }
 
     // Retrieve SHOP_ID from environment variables.
     const shopId = process.env.SHOP_ID;
@@ -125,12 +138,11 @@ exports.handler = async function(event, context) {
     const newListingData = await postResponse.json();
     console.log("New listing created:", newListingData);
 
-    // Now update inventory if the original listing has inventory details.
-    if (listingData.inventory) {
-      // Clean the inventory payload by removing invalid keys (e.g., "scale_name").
-      const cleanedInventoryPayload = removeInvalidKeys(listingData.inventory);
-      console.log("Cleaned inventory payload:", cleanedInventoryPayload);
-
+    // If we fetched inventory data, update the new listing's inventory.
+    if (inventoryPayload) {
+      // Optionally, remove any keys from inventoryPayload that shouldn't be sent.
+      // For example, if "price" is managed by variations, you might remove it.
+      // inventoryPayload = removeInvalidKeys(inventoryPayload);
       const etsyInventoryUrl = `https://api.etsy.com/v3/application/shops/${shopId}/listings/${newListingData.listing_id}/inventory`;
 
       const inventoryResponse = await fetch(etsyInventoryUrl, {
@@ -140,12 +152,13 @@ exports.handler = async function(event, context) {
           "Authorization": `Bearer ${token}`,
           "x-api-key": clientId
         },
-        body: JSON.stringify(cleanedInventoryPayload)
+        body: JSON.stringify(inventoryPayload)
       });
       console.log("PUT inventory update response status:", inventoryResponse.status);
       if (!inventoryResponse.ok) {
         const inventoryErrorText = await inventoryResponse.text();
         console.error("Error updating inventory. PUT failed:", inventoryErrorText);
+        // You might choose to return a warning or merge the error details into the response.
         return {
           statusCode: inventoryResponse.status,
           body: JSON.stringify({ error: "Error updating inventory", details: inventoryErrorText })
@@ -153,10 +166,9 @@ exports.handler = async function(event, context) {
       }
       const updatedInventoryData = await inventoryResponse.json();
       console.log("Inventory updated:", updatedInventoryData);
-      // Optionally, merge the inventory update result with the new listing data.
       newListingData.inventory = updatedInventoryData;
     } else {
-      console.log("No inventory data found in original listing; skipping inventory update.");
+      console.log("No inventory data available; skipping inventory update.");
     }
 
     return {
