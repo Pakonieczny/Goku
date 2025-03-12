@@ -66,16 +66,16 @@ exports.handler = async function(event, context) {
       // Process each product: remove invalid keys.
       if (inventoryData.products && Array.isArray(inventoryData.products)) {
         inventoryData.products = inventoryData.products.map(product => {
-          // Create a shallow copy.
           let newProduct = { ...product };
+          // Remove keys that Etsy may not accept on update.
           delete newProduct.product_id;
           delete newProduct.is_deleted;
-          delete newProduct.scale_name; // Remove scale_name from product.
+          delete newProduct.scale_name;
           // Process offerings if available.
           if (newProduct.offerings && Array.isArray(newProduct.offerings)) {
             newProduct.offerings = newProduct.offerings.map(offering => {
               let newOffering = { ...offering };
-              delete newOffering.scale_name; // Remove scale_name from each offering.
+              delete newOffering.scale_name;
               return newOffering;
             });
           }
@@ -88,7 +88,7 @@ exports.handler = async function(event, context) {
       // Continue with empty inventory if not available.
     }
 
-    // Process the price field.
+    // --- Step 3: Process price ---
     let priceValue;
     if (listingData.price && typeof listingData.price === "object" &&
         listingData.price.amount && listingData.price.divisor) {
@@ -100,7 +100,7 @@ exports.handler = async function(event, context) {
     }
     const formattedPrice = parseFloat(priceValue.toFixed(2));
 
-    // Build payload for duplicating the listing.
+    // --- Step 4: Build payload for duplicating the listing ---
     const payload = {
       quantity: listingData.quantity || 1,
       title: listingData.title || "Duplicated Listing",
@@ -113,21 +113,23 @@ exports.handler = async function(event, context) {
       return_policy_id: listingData.return_policy_id,       // required for physical listings.
       tags: listingData.tags || [],
       materials: listingData.materials || [],
-      // For SKUs and variations, try to copy from inventory if available.
-      skus: (inventoryData && inventoryData.products)
-              ? inventoryData.products.map(p => p.sku || "")
-              : (listingData.skus || []),
-      variations: (inventoryData && inventoryData.products)
-              ? inventoryData.products.map(p => p.variations || [])
-              : [],
+      personalization_instructions: listingData.personalization_instructions || "",
+      style: listingData.style || [],
+      // Use inventory data if available; otherwise fallback to listingData.
+      skus: (inventoryData && inventoryData.products && inventoryData.products.length > 0)
+             ? inventoryData.products.map(product => product.sku || "")
+             : (listingData.skus || []),
+      variations: (inventoryData && inventoryData.products && inventoryData.products.length > 0)
+             ? inventoryData.products.map(product => product.variations || [])
+             : [],
       has_variations: (typeof listingData.has_variations === "boolean") ? listingData.has_variations : false,
       is_customizable: (typeof listingData.is_customizable === "boolean") ? listingData.is_customizable : false,
       is_personalizable: (typeof listingData.is_personalizable === "boolean") ? listingData.is_personalizable : false
     };
 
-    console.log("Payload for new listing (without inventory):", payload);
+    console.log("Payload for new listing:", payload);
 
-    // --- Step 3: Create the new (duplicated) listing ---
+    // --- Step 5: Create the new (duplicated) listing ---
     const etsyPostUrl = `https://api.etsy.com/v3/application/shops/${shopId}/listings`;
     const postResponse = await fetch(etsyPostUrl, {
       method: "POST",
@@ -156,7 +158,7 @@ exports.handler = async function(event, context) {
       throw new Error("New listing ID not found in response.");
     }
 
-    // --- Step 4: Update inventory for the new listing ---
+    // --- Step 6: Update inventory for the new listing ---
     if (inventoryData && Object.keys(inventoryData).length > 0) {
       const etsyInventoryUpdateUrl = `https://api.etsy.com/v3/application/listings/${newListingId}/inventory`;
       const putResponse = await fetch(etsyInventoryUpdateUrl, {
