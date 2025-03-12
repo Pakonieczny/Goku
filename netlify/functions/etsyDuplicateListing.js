@@ -25,19 +25,25 @@ function cleanInventoryData(data) {
   const newObj = {};
   for (const key in data) {
     let value = data[key];
-    // If the key is "price" and its value is an array, convert it.
     if (key === "price" && Array.isArray(value)) {
-      if (value.length > 0 && typeof value[0] === "object" && value[0].amount && value[0].divisor) {
-         const computedPrice = value[0].amount / value[0].divisor;
-         newObj[key] = parseFloat(computedPrice.toFixed(2));
-         continue;
-      } else if (value.length > 0 && typeof value[0] === "number") {
-         newObj[key] = value[0];
-         continue;
-      } else {
-         // If no valid price data, skip the key.
-         continue;
+      // If array has exactly one numeric element, use that number.
+      if (value.length === 1 && typeof value[0] === "number") {
+        newObj[key] = value[0];
+        continue;
       }
+      // If the first element is an object with amount and divisor, compute price.
+      if (
+        value.length > 0 &&
+        typeof value[0] === "object" &&
+        value[0].amount &&
+        value[0].divisor
+      ) {
+        const computedPrice = value[0].amount / value[0].divisor;
+        newObj[key] = parseFloat(computedPrice.toFixed(2));
+        continue;
+      }
+      // Otherwise, omit the key so it won't cause an error.
+      continue;
     }
     newObj[key] = cleanInventoryData(value);
   }
@@ -139,7 +145,7 @@ exports.handler = async function(event, context) {
     const listingData = await getResponse.json();
     console.log("Listing data fetched:", listingData);
 
-    // Calculate a base price from the listing (if available).
+    // Calculate base price from the listing (if available)
     let basePrice = 0.00;
     if (listingData.price) {
       if (typeof listingData.price === "object" && listingData.price.amount && listingData.price.divisor) {
@@ -219,7 +225,7 @@ exports.handler = async function(event, context) {
       if (invResponse.ok) {
         const invData = await invResponse.json();
         console.log("Original inventory data:", invData);
-        // Clean the inventory data to remove invalid keys and convert any array price values.
+        // Clean the inventory data to remove invalid keys and fix price fields.
         inventoryPayload = cleanInventoryData(removeInvalidKeys(invData));
       } else {
         const invErrorText = await invResponse.text();
