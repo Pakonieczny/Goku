@@ -1,101 +1,15 @@
 const fetch = require("node-fetch");
 
-// Helper: delay in milliseconds
-const delay = ms => new Promise(resolve => setTimeout(resolve, ms));
+const RETRY_DELAY = 5000; // 5 seconds delay between retries
+const MAX_RETRIES = 3;
 
-/**
- * Fetch the original listing’s inventory.
- */
-async function fetchOriginalInventory(listingId, token, clientId) {
-  const inventoryUrl = `https://api.etsy.com/v3/application/listings/${listingId}/inventory`;
-  const invResponse = await fetch(inventoryUrl, {
-    method: "GET",
-    headers: {
-      "Authorization": `Bearer ${token}`,
-      "x-api-key": clientId
-    }
-  });
-  if (!invResponse.ok) {
-    const errorText = await invResponse.text();
-    console.error("Failed to fetch original inventory:", invResponse.status, errorText);
-    return null;
-  }
-  const invData = await invResponse.json();
-  console.log("Fetched original inventory data:", JSON.stringify(invData));
-  return invData;
-}
-
-/**
- * Transform the fetched inventory data to include only allowed keys.
- * Each product’s offerings will have a float price.
- */
-function transformInventory(invData) {
-  if (!invData || !Array.isArray(invData.products)) return null;
-  const newProducts = invData.products.map(prod => {
-    const newOfferings = Array.isArray(prod.offerings)
-      ? prod.offerings.map(offering => {
-          let offeringPrice;
-          if (
-            offering.price &&
-            typeof offering.price === "object" &&
-            offering.price.amount &&
-            offering.price.divisor
-          ) {
-            offeringPrice = parseFloat((offering.price.amount / offering.price.divisor).toFixed(2));
-          } else if (Array.isArray(offering.price)) {
-            offeringPrice = parseFloat(offering.price[0]);
-          } else {
-            offeringPrice = parseFloat(offering.price);
-          }
-          // Return only allowed keys. Do not include disallowed keys like offering_id.
-          return {
-            price: isNaN(offeringPrice) ? 0.20 : offeringPrice, // Must be above min price (e.g. $0.20)
-            quantity: offering.quantity || 0,
-            is_enabled: (typeof offering.is_enabled === "boolean") ? offering.is_enabled : true
-          };
-        })
-      : [];
-    return {
-      sku: prod.sku || "",
-      offerings: newOfferings,
-      properties: prod.property_values || [] // Map property_values to properties (if needed)
-    };
-  });
-  return { products: newProducts };
-}
-
-/**
- * Attempt to update the inventory of the new listing using a PUT request.
- * If the PUT returns 404, try a POST request to create the inventory resource.
- */
-async function updateInventoryResource(shopId, newListingId, token, clientId, inventoryPayload) {
-  const inventoryEndpoint = `https://api.etsy.com/v3/application/shops/${shopId}/listings/${newListingId}/inventory`;
-
-  // First try PUT update
-  console.log("Attempting PUT inventory update...");
-  let response = await fetch(inventoryEndpoint, {
-    method: "PUT",
-    headers: {
-      "Content-Type": "application/json",
-      "Authorization": `Bearer ${token}`,
-      "x-api-key": clientId
-    },
-    body: JSON.stringify(inventoryPayload)
-  });
-  console.log("PUT inventory update response status:", response.status);
-  if (response.ok) {
-    const data = await response.json();
-    console.log("Inventory updated successfully via PUT:", data);
-    return data;
-  }
-  
-  // If PUT returns 404, try POST to create the inventory resource.
-  if (response.status === 404) {
-    console.warn("PUT returned 404. Inventory resource not found. Waiting 5 seconds before trying POST...");
-    await delay(5000);
-    console.log("Attempting POST inventory creation...");
-    response = await fetch(inventoryEndpoint, {
-      method: "POST",
+async function updateInventory(newListingId, token, clientId, inventoryPayload) {
+  const inventoryUrl = `https://api.etsy.com/v3/application/listings/${newListingId}/inventory`;
+  let retries = 0;
+  while (retries < MAX_RETRIES) {
+    console.log(`Attempting PUT inventory update (attempt ${retries + 1})...`);
+    const putResponse = await fetch(inventoryUrl, {
+      method: "PUT",
       headers: {
         "Content-Type": "application/json",
         "Authorization": `Bearer ${token}`,
@@ -103,22 +17,41 @@ async function updateInventoryResource(shopId, newListingId, token, clientId, in
       },
       body: JSON.stringify(inventoryPayload)
     });
-    console.log("POST inventory creation response status:", response.status);
-    if (response.ok) {
-      const data = await response.json();
-      console.log("Inventory created successfully via POST:", data);
-      return data;
+    console.log("PUT inventory update response status:", putResponse.status);
+    if (putResponse.ok) {
+      return await putResponse.json();
     } else {
-      const errorText = await response.text();
-      console.error("POST inventory creation failed:", errorText);
-      throw new Error(`Inventory creation failed: ${response.status} - ${errorText}`);
+      const errorText = await putResponse.text();
+      console.error("PUT inventory update attempt failed:", errorText);
+      if (putResponse.status === 404) {
+        console.log("Inventory resource not found; waiting before retrying...");
+      }
+      retries++;
+      await new Promise(resolve => setTimeout(resolve, RETRY_DELAY));
     }
   }
-  
-  // For other errors, log and throw.
-  const errorText = await response.text();
-  console.error("Inventory update failed:", errorText);
-  throw new Error(`Inventory update failed: ${response.status} - ${errorText}`);
+  throw new Error("Inventory update failed after all retries");
+}
+
+async function createInventory(newListingId, token, clientId, inventoryPayload) {
+  const inventoryUrl = `https://api.etsy.com/v3/application/listings/${newListingId}/inventory`;
+  console.log("Attempting POST inventory creation...");
+  const postResponse = await fetch(inventoryUrl, {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+      "Authorization": `Bearer ${token}`,
+      "x-api-key": clientId
+    },
+    body: JSON.stringify(inventoryPayload)
+  });
+  console.log("POST inventory creation response status:", postResponse.status);
+  if (postResponse.ok) {
+    return await postResponse.json();
+  } else {
+    const errorText = await postResponse.text();
+    throw new Error("Error creating inventory with POST: " + errorText);
+  }
 }
 
 exports.handler = async function(event, context) {
@@ -142,7 +75,7 @@ exports.handler = async function(event, context) {
       console.log("Using CLIENT_ID:", clientId.slice(0, 5) + "*****");
     }
 
-    // Fetch the original listing details.
+    // Build GET request URL to fetch original listing details.
     const etsyGetUrl = `https://api.etsy.com/v3/application/listings/${listingId}`;
     const getResponse = await fetch(etsyGetUrl, {
       method: "GET",
@@ -160,32 +93,16 @@ exports.handler = async function(event, context) {
         body: JSON.stringify({ error: "GET request failed", details: errorText })
       };
     }
+
     const listingData = await getResponse.json();
-    console.log("Listing data fetched:", JSON.stringify(listingData));
+    console.log("Listing data fetched:", listingData);
 
-    // Determine top-level price.
-    let formattedPrice;
-    if (listingData.has_variations) {
-      formattedPrice = 0.20; // default minimal price for listings with variations
-      console.log("Listing has variations; setting default top-level price:", formattedPrice);
-    } else {
-      if (listingData.price && typeof listingData.price === "object" &&
-          listingData.price.amount && listingData.price.divisor) {
-        formattedPrice = parseFloat((listingData.price.amount / listingData.price.divisor).toFixed(2));
-      } else if (listingData.price == null || listingData.price === "") {
-        formattedPrice = 0.20;
-      } else {
-        formattedPrice = parseFloat(listingData.price);
-      }
-      console.log("Computed price for duplicate (no variations):", formattedPrice);
-    }
-
-    // Build the creation payload for the new listing (inventory details will be updated separately if variations exist).
+    // Build payload for duplicating the listing.
+    // Note: We are intentionally omitting a top-level "price" field because when variations exist, price comes from each offering.
     const creationPayload = {
       quantity: listingData.quantity || 1,
       title: listingData.title || "Duplicated Listing",
       description: listingData.description || "",
-      price: formattedPrice,
       who_made: listingData.who_made || "i_did",
       when_made: listingData.when_made || "made_to_order",
       taxonomy_id: listingData.taxonomy_id || 0,
@@ -195,11 +112,9 @@ exports.handler = async function(event, context) {
       materials: listingData.materials || [],
       skus: listingData.skus || [],
       style: listingData.style || [],
-      has_variations: listingData.has_variations || false,
-      is_customizable: listingData.is_customizable || false,
-      is_personalizable: listingData.is_personalizable || false,
-      processing_min: listingData.processing_min || null,
-      processing_max: listingData.processing_max || null
+      has_variations: (typeof listingData.has_variations === "boolean") ? listingData.has_variations : false,
+      is_customizable: (typeof listingData.is_customizable === "boolean") ? listingData.is_customizable : false,
+      is_personalizable: (typeof listingData.is_personalizable === "boolean") ? listingData.is_personalizable : false
     };
 
     console.log("Creation payload for new listing:", creationPayload);
@@ -236,30 +151,59 @@ exports.handler = async function(event, context) {
     const newListingData = await postResponse.json();
     console.log("New listing created:", newListingData);
 
-    // If the original listing has variations, update the new listing's inventory.
-    if (listingData.has_variations) {
-      const originalInventory = await fetchOriginalInventory(listingId, token, clientId);
-      if (!originalInventory) {
-        console.warn("No inventory data fetched from original listing.");
-      } else {
-        const newInventoryPayload = transformInventory(originalInventory);
-        console.log("Transformed inventory payload:", JSON.stringify(newInventoryPayload));
-        console.log("Waiting 5 seconds before updating inventory...");
-        await delay(5000);
+    // Prepare inventory payload if original listing has inventory data.
+    let inventoryPayload = null;
+    if (listingData.inventory && listingData.inventory.products) {
+      inventoryPayload = {
+        products: listingData.inventory.products.map(product => {
+          return {
+            sku: product.sku || "",
+            offerings: product.offerings.map(offering => ({
+              // Convert price to a float (Etsy expects a single float value).
+              price: parseFloat((offering.price.amount / offering.price.divisor).toFixed(2)),
+              quantity: offering.quantity,
+              is_enabled: offering.is_enabled
+            })),
+            // Map property_values to properties while excluding disallowed keys.
+            properties: (product.property_values || []).map(prop => ({
+              name: prop.property_name,
+              value: (prop.values && prop.values[0]) ? prop.values[0] : ""
+            }))
+          };
+        })
+      };
+    } else {
+      console.log("No inventory data present in original listing.");
+    }
+
+    if (inventoryPayload) {
+      console.log("Transformed inventory payload:", inventoryPayload);
+      // Wait before attempting inventory update.
+      await new Promise(resolve => setTimeout(resolve, RETRY_DELAY));
+
+      let inventoryUpdateResult;
+      try {
+        inventoryUpdateResult = await updateInventory(newListingData.listing_id, token, clientId, inventoryPayload);
+        console.log("Inventory update result:", inventoryUpdateResult);
+      } catch (updateError) {
+        console.error("Error updating inventory. Attempting inventory creation...");
         try {
-          await updateInventoryResource(shopId, newListingData.listing_id, token, clientId, newInventoryPayload);
-        } catch (invError) {
-          console.error("Final inventory update error:", invError);
+          inventoryUpdateResult = await createInventory(newListingData.listing_id, token, clientId, inventoryPayload);
+          console.log("Inventory creation result:", inventoryUpdateResult);
+        } catch (creationError) {
+          console.error("Error creating inventory with POST:", creationError);
+          throw creationError;
         }
       }
     } else {
-      console.log("Listing does not have variations; no inventory update needed.");
+      console.log("No inventory payload to update.");
     }
 
     return {
       statusCode: 200,
       body: JSON.stringify(newListingData)
     };
+
   } catch (error) {
     console.error("Exception in etsyDuplicateListing:", error);
     return {
