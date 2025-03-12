@@ -16,41 +16,51 @@ function removeInvalidKeys(obj) {
   return obj;
 }
 
-// Traverse the object and fix any "price" fields that are arrays.
-function cleanInventoryData(data) {
-  if (data === null || typeof data !== "object") return data;
-  if (Array.isArray(data)) {
-    return data.map(cleanInventoryData);
-  }
-  const newObj = {};
-  for (const key in data) {
-    let value = data[key];
-    if (key === "price" && Array.isArray(value)) {
-      // If array has exactly one numeric element, use that number.
-      if (value.length === 1 && typeof value[0] === "number") {
-        newObj[key] = value[0];
-        continue;
+// For any key "price" that is an array, convert it to a float.
+function fixPriceFields(obj) {
+  if (Array.isArray(obj)) {
+    return obj.map(fixPriceFields);
+  } else if (obj !== null && typeof obj === "object") {
+    for (const key in obj) {
+      if (key === "price" && Array.isArray(obj[key])) {
+        let value = obj[key];
+        // If array has exactly one numeric element, use that number.
+        if (value.length === 1 && typeof value[0] === "number") {
+          obj[key] = value[0];
+        }
+        // If first element is an object with amount/divisor, compute float.
+        else if (
+          value.length > 0 &&
+          typeof value[0] === "object" &&
+          value[0].amount &&
+          value[0].divisor
+        ) {
+          const computed = value[0].amount / value[0].divisor;
+          obj[key] = parseFloat(computed.toFixed(2));
+        }
+        // Otherwise, remove the key (or you might decide to set a default value).
+        else {
+          delete obj[key];
+        }
+      } else {
+        obj[key] = fixPriceFields(obj[key]);
       }
-      // If the first element is an object with amount and divisor, compute price.
-      if (
-        value.length > 0 &&
-        typeof value[0] === "object" &&
-        value[0].amount &&
-        value[0].divisor
-      ) {
-        const computedPrice = value[0].amount / value[0].divisor;
-        newObj[key] = parseFloat(computedPrice.toFixed(2));
-        continue;
-      }
-      // Otherwise, omit the key so it won't cause an error.
-      continue;
     }
-    newObj[key] = cleanInventoryData(value);
+    return obj;
   }
-  return newObj;
+  return obj;
 }
 
-// Helper: Retry inventory update (PUT) with delays.
+// Combined cleaning for inventory payload.
+function cleanInventoryPayload(invData) {
+  // First remove invalid keys.
+  let cleaned = removeInvalidKeys(invData);
+  // Then fix any price fields that are arrays (this will recurse into nested objects such as products and offerings).
+  cleaned = fixPriceFields(cleaned);
+  return cleaned;
+}
+
+// Retry helper for PUT inventory update.
 async function retryInventoryUpdate(url, token, clientId, inventoryPayload, retries = 5, delayMs = 5000) {
   let lastError = null;
   for (let attempt = 0; attempt < retries; attempt++) {
@@ -82,7 +92,7 @@ async function retryInventoryUpdate(url, token, clientId, inventoryPayload, retr
   throw new Error("Inventory update failed after all retries: " + lastError);
 }
 
-// Helper: Create inventory via POST if PUT fails.
+// Helper to create inventory via POST if PUT fails.
 async function createInventory(url, token, clientId, inventoryPayload) {
   console.log("Attempting POST inventory creation...");
   const response = await fetch(url, {
@@ -226,7 +236,7 @@ exports.handler = async function(event, context) {
         const invData = await invResponse.json();
         console.log("Original inventory data:", invData);
         // Clean the inventory data to remove invalid keys and fix price fields.
-        inventoryPayload = cleanInventoryData(removeInvalidKeys(invData));
+        inventoryPayload = cleanInventoryPayload(invData);
       } else {
         const invErrorText = await invResponse.text();
         console.error("Error fetching inventory data:", invErrorText);
