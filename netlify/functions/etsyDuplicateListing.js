@@ -44,18 +44,18 @@ exports.handler = async function(event, context) {
     console.log("Listing data fetched:", listingData);
 
     // Determine price:
-    // If the listing has variations, we set a default price (e.g., 0.01) because the inventory (variations) will dictate actual prices.
+    // If the listing has variations, we set a default price of 0.20 USD (above the minimum).
     // Otherwise, compute the price from listingData.price.
     let formattedPrice;
     if (listingData.has_variations) {
-      formattedPrice = 0.01;
+      formattedPrice = 0.20;
       console.log("Listing has variations; setting default price:", formattedPrice);
     } else {
       if (listingData.price && typeof listingData.price === "object" &&
           listingData.price.amount && listingData.price.divisor) {
         formattedPrice = parseFloat((listingData.price.amount / listingData.price.divisor).toFixed(2));
       } else if (listingData.price == null || listingData.price === "") {
-        formattedPrice = 0.01; // Use a minimal default value
+        formattedPrice = 0.20; // Use a minimal default value above the min.
       } else {
         formattedPrice = parseFloat(listingData.price);
       }
