@@ -1,13 +1,15 @@
 const fetch = require("node-fetch");
 
-// Utility function to recursively remove invalid keys from an object
+// --- Utility Functions ---
+
+// Recursively remove keys that Etsy’s API rejects from an object
 function cleanObject(obj) {
   if (Array.isArray(obj)) {
     return obj.map(cleanObject);
   } else if (obj && typeof obj === "object") {
     const newObj = {};
     for (const key in obj) {
-      // Remove keys that Etsy API does not accept in inventory updates
+      // Remove keys that are not allowed in the inventory update payload
       const invalidKeys = ["scale_name", "product_id", "is_deleted", "offering_id"];
       if (invalidKeys.includes(key)) continue;
       newObj[key] = cleanObject(obj[key]);
@@ -17,16 +19,22 @@ function cleanObject(obj) {
   return obj;
 }
 
-// Transform the inventory payload to ensure that "price" is a float value instead of an array
+// Transform price fields in the inventory payload
 function transformInventoryPayload(payload) {
   if (payload.products && Array.isArray(payload.products)) {
-    payload.products.forEach(product => {
+    payload.products.forEach((product, prodIndex) => {
+      // Check if product.price exists and is an array
+      if (product.price && Array.isArray(product.price) && product.price.length > 0) {
+        console.log(`Product ${prodIndex}: transforming product.price from array ${JSON.stringify(product.price)}`);
+        product.price = parseFloat(product.price[0]);
+      }
       if (product.offerings && Array.isArray(product.offerings)) {
-        product.offerings.forEach(offering => {
-          if (Array.isArray(offering.price)) {
-            // Use the first element from the array and convert to float.
+        product.offerings.forEach((offering, offIndex) => {
+          if (offering.price && Array.isArray(offering.price) && offering.price.length > 0) {
+            console.log(`Product ${prodIndex}, Offering ${offIndex}: transforming offering.price from array ${JSON.stringify(offering.price)}`);
             offering.price = parseFloat(offering.price[0]);
           } else if (typeof offering.price === "string") {
+            console.log(`Product ${prodIndex}, Offering ${offIndex}: parsing offering.price string "${offering.price}"`);
             offering.price = parseFloat(offering.price);
           }
         });
@@ -36,6 +44,7 @@ function transformInventoryPayload(payload) {
   return payload;
 }
 
+// --- Main Handler ---
 exports.handler = async function(event, context) {
   try {
     // Extract listingId and token from query parameters.
@@ -79,28 +88,17 @@ exports.handler = async function(event, context) {
     const listingData = await getResponse.json();
     console.log("Listing data fetched:", listingData);
 
-    // Calculate a base price from the listing data.
-    let basePrice = 0.00;
-    if (listingData.price && typeof listingData.price === "object" &&
-        listingData.price.amount && listingData.price.divisor) {
-      basePrice = listingData.price.amount / listingData.price.divisor;
-    } else if (listingData.price && typeof listingData.price !== "object") {
-      basePrice = parseFloat(listingData.price);
-    }
-    basePrice = parseFloat(basePrice.toFixed(2));
-    console.log("Calculated base price:", basePrice);
-
-    // Build creation payload for the new listing.
+    // Build the creation payload for the new listing.
+    // If the listing has variations, we omit the top-level price.
     let creationPayload = {
       quantity: listingData.quantity || 1,
       title: listingData.title || "Duplicated Listing",
       description: listingData.description || "",
-      price: basePrice, // Always include a base price to satisfy Etsy API.
       who_made: listingData.who_made || "i_did",
       when_made: listingData.when_made || "made_to_order",
       taxonomy_id: listingData.taxonomy_id || 0,
-      shipping_profile_id: listingData.shipping_profile_id, // Required for physical listings.
-      return_policy_id: listingData.return_policy_id,       // Required.
+      shipping_profile_id: listingData.shipping_profile_id, // required for physical listings
+      return_policy_id: listingData.return_policy_id,       // required
       tags: listingData.tags || [],
       materials: listingData.materials || [],
       skus: listingData.skus || [],
@@ -109,6 +107,22 @@ exports.handler = async function(event, context) {
       is_customizable: (typeof listingData.is_customizable === "boolean") ? listingData.is_customizable : false,
       is_personalizable: (typeof listingData.is_personalizable === "boolean") ? listingData.is_personalizable : false
     };
+
+    // Only include a base price if the listing does NOT have variations.
+    if (!listingData.has_variations) {
+      let basePrice = 0.00;
+      if (listingData.price && typeof listingData.price === "object" &&
+          listingData.price.amount && listingData.price.divisor) {
+        basePrice = listingData.price.amount / listingData.price.divisor;
+      } else if (listingData.price && typeof listingData.price !== "object") {
+        basePrice = parseFloat(listingData.price);
+      }
+      basePrice = parseFloat(basePrice.toFixed(2));
+      creationPayload.price = basePrice;
+      console.log("Calculated base price (no variations):", basePrice);
+    } else {
+      console.log("Listing has variations; omitting top-level price.");
+    }
 
     console.log("Creation payload for new listing:", creationPayload);
 
@@ -122,7 +136,7 @@ exports.handler = async function(event, context) {
     }
     const etsyPostUrl = `https://api.etsy.com/v3/application/shops/${shopId}/listings`;
 
-    // Create the duplicated listing
+    // Create the duplicated listing.
     const postResponse = await fetch(etsyPostUrl, {
       method: "POST",
       headers: {
@@ -144,7 +158,7 @@ exports.handler = async function(event, context) {
     const newListingData = await postResponse.json();
     console.log("New listing created:", newListingData);
 
-    // If the original listing has variations, update the inventory.
+    // If the original listing has variations, attempt to update the inventory.
     if (listingData.has_variations) {
       console.log("Listing has variations; fetching inventory data...");
       const inventoryUrl = `https://api.etsy.com/v3/application/listings/${listingId}/inventory`;
@@ -159,10 +173,10 @@ exports.handler = async function(event, context) {
       if (invResponse.ok) {
         const invData = await invResponse.json();
         console.log("Original inventory data:", invData);
-        // Clean the inventory payload to remove invalid keys.
+        // Clean and transform the inventory payload.
         inventoryPayload = cleanObject(invData);
-        // Transform the inventory payload to ensure price fields are floats.
         inventoryPayload = transformInventoryPayload(inventoryPayload);
+        console.log("Transformed inventory payload:", inventoryPayload);
       } else {
         const invErrorText = await invResponse.text();
         console.error("Error fetching inventory data:", invErrorText);
@@ -171,6 +185,7 @@ exports.handler = async function(event, context) {
       if (inventoryPayload) {
         const etsyInventoryUrl = `https://api.etsy.com/v3/application/listings/${newListingData.listing_id}/inventory`;
 
+        // Retry inventory update in case the resource is not yet ready.
         async function retryInventoryUpdate(url, payload, retries = 5, delayMs = 5000) {
           let lastError = null;
           for (let attempt = 0; attempt < retries; attempt++) {
@@ -189,8 +204,9 @@ exports.handler = async function(event, context) {
               return await response.json();
             } else {
               const errorText = await response.text();
-              console.error("PUT inventory update attempt failed:", errorText);
+              console.error(`PUT inventory update attempt ${attempt + 1} failed:`, errorText);
               lastError = errorText;
+              // If 404, wait and retry.
               if (response.status === 404) {
                 console.log("Inventory resource not found; waiting before retrying...");
                 await new Promise(resolve => setTimeout(resolve, delayMs));
