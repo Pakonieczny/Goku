@@ -1,13 +1,12 @@
 const fetch = require("node-fetch");
 
-// Helper to remove invalid keys from an object
+// Recursively remove keys that Etsy’s API does not accept.
 function removeInvalidKeys(obj) {
   if (Array.isArray(obj)) {
     return obj.map(removeInvalidKeys);
   } else if (obj !== null && typeof obj === "object") {
     const newObj = {};
     for (const key in obj) {
-      // Remove keys that Etsy's API does not accept
       if (["scale_name", "product_id", "is_deleted", "offering_id"].includes(key)) continue;
       newObj[key] = removeInvalidKeys(obj[key]);
     }
@@ -16,7 +15,26 @@ function removeInvalidKeys(obj) {
   return obj;
 }
 
-// Retry helper for inventory update via PUT
+// Recursively clean inventory data – remove any "price" field that is an array.
+function cleanInventoryData(data) {
+  if (data === null || typeof data !== "object") return data;
+  if (Array.isArray(data)) {
+    return data.map(cleanInventoryData);
+  }
+  const newObj = {};
+  for (const key in data) {
+    let value = data[key];
+    // If the key is "price" and the value is an array, skip it.
+    if (key === "price" && Array.isArray(value)) {
+      console.warn(`Removing invalid price array for key "${key}"`);
+      continue;
+    }
+    newObj[key] = cleanInventoryData(value);
+  }
+  return newObj;
+}
+
+// Helper: Retry PUT inventory update with delays.
 async function retryInventoryUpdate(url, token, clientId, inventoryPayload, retries = 5, delayMs = 5000) {
   let lastError = null;
   for (let attempt = 0; attempt < retries; attempt++) {
@@ -48,7 +66,7 @@ async function retryInventoryUpdate(url, token, clientId, inventoryPayload, retr
   throw new Error("Inventory update failed after all retries: " + lastError);
 }
 
-// Helper to create inventory via POST if PUT fails
+// Helper: Create inventory via POST if PUT fails.
 async function createInventory(url, token, clientId, inventoryPayload) {
   console.log("Attempting POST inventory creation...");
   const response = await fetch(url, {
@@ -81,7 +99,7 @@ exports.handler = async function(event, context) {
     console.log("Received listingId:", listingId);
     console.log("Received token:", token);
 
-    // Retrieve CLIENT_ID from environment variables; used as x-api-key.
+    // Retrieve CLIENT_ID from environment variables.
     const clientId = process.env.CLIENT_ID;
     if (!clientId) {
       console.error("CLIENT_ID environment variable is not set.");
@@ -89,7 +107,7 @@ exports.handler = async function(event, context) {
       console.log("Using CLIENT_ID:", clientId.slice(0, 5) + "*****");
     }
 
-    // Build GET request URL to fetch original listing details.
+    // Fetch original listing details.
     const etsyGetUrl = `https://api.etsy.com/v3/application/listings/${listingId}`;
     const getResponse = await fetch(etsyGetUrl, {
       method: "GET",
@@ -107,11 +125,10 @@ exports.handler = async function(event, context) {
         body: JSON.stringify({ error: "GET request failed", details: errorText })
       };
     }
-
     const listingData = await getResponse.json();
     console.log("Listing data fetched:", listingData);
 
-    // Calculate a base price (Etsy requires a price value even if variations determine the final pricing)
+    // Calculate a base price.
     let basePrice = 0.00;
     if (listingData.price) {
       if (typeof listingData.price === "object" && listingData.price.amount && listingData.price.divisor) {
@@ -123,12 +140,12 @@ exports.handler = async function(event, context) {
     }
     console.log("Calculated base price:", basePrice);
 
-    // Build payload for duplicating the listing
+    // Build creation payload.
     const creationPayload = {
       quantity: listingData.quantity || 1,
       title: listingData.title || "Duplicated Listing",
       description: listingData.description || "",
-      price: basePrice, // Provide a base price even if variations dictate the final price.
+      price: basePrice, // Use base price; variations will override as needed.
       who_made: listingData.who_made || "i_did",
       when_made: listingData.when_made || "made_to_order",
       taxonomy_id: listingData.taxonomy_id || 0,
@@ -142,7 +159,6 @@ exports.handler = async function(event, context) {
       is_customizable: (typeof listingData.is_customizable === "boolean") ? listingData.is_customizable : false,
       is_personalizable: (typeof listingData.is_personalizable === "boolean") ? listingData.is_personalizable : false
     };
-
     console.log("Creation payload for new listing:", creationPayload);
 
     // Retrieve SHOP_ID from environment variables.
@@ -155,7 +171,7 @@ exports.handler = async function(event, context) {
     }
     const etsyPostUrl = `https://api.etsy.com/v3/application/shops/${shopId}/listings`;
 
-    // Create the duplicate listing
+    // Create duplicate listing.
     const postResponse = await fetch(etsyPostUrl, {
       method: "POST",
       headers: {
@@ -177,7 +193,7 @@ exports.handler = async function(event, context) {
     const newListingData = await postResponse.json();
     console.log("New listing created:", newListingData);
 
-    // If the original listing has variations, attempt to update the new listing's inventory
+    // If the original listing has variations, update the new listing's inventory.
     if (listingData.has_variations) {
       console.log("Listing has variations; fetching inventory data...");
       const inventoryUrl = `https://api.etsy.com/v3/application/listings/${listingId}/inventory`;
@@ -192,14 +208,15 @@ exports.handler = async function(event, context) {
       if (invResponse.ok) {
         const invData = await invResponse.json();
         console.log("Original inventory data:", invData);
-        inventoryPayload = removeInvalidKeys(invData);
+        // Remove invalid keys and clean data (e.g. remove array price fields)
+        inventoryPayload = cleanInventoryData(removeInvalidKeys(invData));
       } else {
         const invErrorText = await invResponse.text();
         console.error("Error fetching inventory data:", invErrorText);
       }
 
       if (inventoryPayload) {
-        // Use the inventory endpoint for the new listing
+        // Use the inventory endpoint for the new listing.
         const etsyInventoryUrl = `https://api.etsy.com/v3/application/listings/${newListingData.listing_id}/inventory`;
         try {
           const updatedInventory = await retryInventoryUpdate(etsyInventoryUrl, token, clientId, inventoryPayload);
