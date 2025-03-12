@@ -1,5 +1,21 @@
 const fetch = require("node-fetch");
 
+// Helper function to recursively remove invalid keys (e.g., "scale_name") from an object
+function removeInvalidKeys(obj) {
+  if (Array.isArray(obj)) {
+    return obj.map(removeInvalidKeys);
+  } else if (obj !== null && typeof obj === "object") {
+    const newObj = {};
+    for (const key in obj) {
+      // Remove keys that are not allowed in the inventory update
+      if (key === "scale_name") continue;
+      newObj[key] = removeInvalidKeys(obj[key]);
+    }
+    return newObj;
+  }
+  return obj;
+}
+
 exports.handler = async function(event, context) {
   try {
     // Extract listingId and token from query parameters.
@@ -43,7 +59,7 @@ exports.handler = async function(event, context) {
     const listingData = await getResponse.json();
     console.log("Listing data fetched:", listingData);
 
-    // Convert price to a float value.
+    // Convert price: if price is an object with amount/divisor, compute the float value.
     let priceValue;
     if (listingData.price && typeof listingData.price === "object" &&
         listingData.price.amount && listingData.price.divisor) {
@@ -55,7 +71,7 @@ exports.handler = async function(event, context) {
     }
     const formattedPrice = parseFloat(priceValue.toFixed(2));
 
-    // Build the creation payload (do not include the inventory object here).
+    // Build payload for duplicating the listing with allowed fields.
     const creationPayload = {
       quantity: listingData.quantity || 1,
       title: listingData.title || "Duplicated Listing",
@@ -87,7 +103,7 @@ exports.handler = async function(event, context) {
     }
     const etsyPostUrl = `https://api.etsy.com/v3/application/shops/${shopId}/listings`;
 
-    // Create the duplicated listing via POST.
+    // Make POST request to duplicate the listing.
     const postResponse = await fetch(etsyPostUrl, {
       method: "POST",
       headers: {
@@ -109,49 +125,38 @@ exports.handler = async function(event, context) {
     const newListingData = await postResponse.json();
     console.log("New listing created:", newListingData);
 
-    // If the original listing contains inventory data, update inventory separately.
-    if (listingData.inventory && Object.keys(listingData.inventory).length > 0) {
-      // Prepare the inventory payload.
-      // Remove any keys that Etsy's API does not accept (e.g. 'scale_name').
-      let inventoryPayload = { ...listingData.inventory };
-      if (inventoryPayload.products && Array.isArray(inventoryPayload.products)) {
-        inventoryPayload.products = inventoryPayload.products.map(product => {
-          let { scale_name, ...rest } = product;
-          return rest;
-        });
+    // Now update inventory if the original listing has inventory details.
+    if (listingData.inventory) {
+      // Clean the inventory payload by removing invalid keys (e.g., "scale_name").
+      const cleanedInventoryPayload = removeInvalidKeys(listingData.inventory);
+      console.log("Cleaned inventory payload:", cleanedInventoryPayload);
+
+      const etsyInventoryUrl = `https://api.etsy.com/v3/application/shops/${shopId}/listings/${newListingData.listing_id}/inventory`;
+
+      const inventoryResponse = await fetch(etsyInventoryUrl, {
+        method: "PUT",
+        headers: {
+          "Content-Type": "application/json",
+          "Authorization": `Bearer ${token}`,
+          "x-api-key": clientId
+        },
+        body: JSON.stringify(cleanedInventoryPayload)
+      });
+      console.log("PUT inventory update response status:", inventoryResponse.status);
+      if (!inventoryResponse.ok) {
+        const inventoryErrorText = await inventoryResponse.text();
+        console.error("Error updating inventory. PUT failed:", inventoryErrorText);
+        return {
+          statusCode: inventoryResponse.status,
+          body: JSON.stringify({ error: "Error updating inventory", details: inventoryErrorText })
+        };
       }
-      // Determine the new listing ID (it might be under 'listing_id' or 'id').
-      const newListingId = newListingData.listing_id || newListingData.id;
-      if (newListingId) {
-        const etsyInventoryUrl = `https://api.etsy.com/v3/application/shops/${shopId}/listings/${newListingId}/inventory`;
-        console.log("Updating inventory for new listing with ID:", newListingId);
-        const putResponse = await fetch(etsyInventoryUrl, {
-          method: "PUT",
-          headers: {
-            "Content-Type": "application/json",
-            "Authorization": `Bearer ${token}`,
-            "x-api-key": clientId
-          },
-          body: JSON.stringify(inventoryPayload)
-        });
-        console.log("PUT inventory update response status:", putResponse.status);
-        if (!putResponse.ok) {
-          const putErrorText = await putResponse.text();
-          console.error("Error updating inventory. PUT failed:", putErrorText);
-          // You can choose to return a warning or continue.
-          return {
-            statusCode: putResponse.status,
-            body: JSON.stringify({
-              error: "Listing duplicated but inventory update failed",
-              details: putErrorText,
-              listing: newListingData
-            })
-          };
-        }
-        const updatedInventoryData = await putResponse.json();
-        console.log("Inventory updated:", updatedInventoryData);
-        newListingData.updated_inventory = updatedInventoryData;
-      }
+      const updatedInventoryData = await inventoryResponse.json();
+      console.log("Inventory updated:", updatedInventoryData);
+      // Optionally, merge the inventory update result with the new listing data.
+      newListingData.inventory = updatedInventoryData;
+    } else {
+      console.log("No inventory data found in original listing; skipping inventory update.");
     }
 
     return {
