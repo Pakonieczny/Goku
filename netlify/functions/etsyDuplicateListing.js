@@ -1,5 +1,3 @@
-Use the below as base code, wait for further instructions:
-
 const fetch = require("node-fetch");
 
 exports.handler = async function (event, context) {
