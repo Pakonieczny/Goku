@@ -1,6 +1,6 @@
 const fetch = require("node-fetch");
 
-// Helper function to transform a price field into a float value.
+// Helper to convert a price field into a float value
 function transformPrice(priceField) {
   if (typeof priceField === "object" && priceField.amount && priceField.divisor) {
     return parseFloat((priceField.amount / priceField.divisor).toFixed(2));
@@ -11,25 +11,31 @@ function transformPrice(priceField) {
   }
 }
 
-// Transform the inventory data by iterating over products and offerings.
-// We are only including allowed keys.
+// Transform the inventory data for updating the listing
 function transformInventoryData(inventoryData) {
   if (!inventoryData || !inventoryData.products) return null;
   const transformedProducts = inventoryData.products.map((product) => {
+    // Transform property_values: keep only property_id and value_ids.
+    const transformedProperties = (product.property_values || []).map(pv => ({
+      property_id: pv.property_id,
+      value_ids: pv.value_ids || []
+    }));
+    
+    // Transform offerings: ensure price is a float.
+    const transformedOfferings = (product.offerings || []).map(offering => ({
+      price: transformPrice(offering.price),
+      quantity: offering.quantity,
+      is_enabled: offering.is_enabled
+    }));
+    
     return {
       sku: product.sku,
-      offerings: product.offerings.map((offering) => ({
-        // Only allowed keys: price, quantity, is_enabled.
-        price: transformPrice(offering.price),
-        quantity: offering.quantity,
-        is_enabled: offering.is_enabled,
-      })),
-      // Do not pass the properties array since it causes errors.
-      properties: []
+      offerings: transformedOfferings,
+      // Use 'properties' key instead of 'property_values'
+      properties: transformedProperties
     };
   });
 
-  // Build the final transformed payload.
   return {
     products: transformedProducts,
     price_on_property: [],
@@ -38,7 +44,8 @@ function transformInventoryData(inventoryData) {
   };
 }
 
-// Function to update the inventory resource. First, try a PUT update; if that returns a 404, try a POST.
+// Function to update inventory data with retries.
+// It first attempts a PUT update; if a 404 is returned, it waits and then tries a POST.
 async function updateInventory(newListingId, inventoryData, token, clientId) {
   if (!inventoryData) {
     console.log("No inventory data available to update.");
@@ -58,43 +65,52 @@ async function updateInventory(newListingId, inventoryData, token, clientId) {
     "x-api-key": clientId,
   };
 
-  // Attempt PUT update
-  console.log("Attempting PUT inventory update...");
-  let response = await fetch(inventoryUrl, {
-    method: "PUT",
-    headers,
-    body: JSON.stringify(transformedInventory),
-  });
-  console.log("PUT inventory update response status:", response.status);
-  if (response.ok) {
-    const data = await response.json();
-    console.log("Inventory updated successfully via PUT:", data);
-    return data;
-  } else if (response.status === 404) {
-    console.warn("PUT returned 404. Inventory resource not found. Waiting 5 seconds before trying POST...");
-    await new Promise((resolve) => setTimeout(resolve, 5000));
-    console.log("Attempting POST inventory creation...");
+  // Attempt PUT update with up to 3 retries
+  const maxRetries = 3;
+  let attempt = 0;
+  let response;
+  while (attempt < maxRetries) {
+    console.log(`Attempting PUT inventory update, attempt ${attempt + 1}...`);
     response = await fetch(inventoryUrl, {
-      method: "POST",
+      method: "PUT",
       headers,
       body: JSON.stringify(transformedInventory),
     });
-    console.log("POST inventory creation response status:", response.status);
+    console.log("PUT inventory update response status:", response.status);
     if (response.ok) {
       const data = await response.json();
-      console.log("Inventory created successfully via POST:", data);
+      console.log("Inventory updated successfully via PUT:", data);
       return data;
+    } else if (response.status === 404) {
+      console.warn("PUT returned 404. Inventory resource not found. Waiting 5 seconds before trying POST...");
+      await new Promise(resolve => setTimeout(resolve, 5000));
+      break; // break out of retry loop to try POST
     } else {
       const errorText = await response.text();
-      console.error("Error creating inventory with POST:", errorText);
-      throw new Error(`Inventory creation failed: ${response.status} - ${errorText}`);
+      console.error("PUT inventory update attempt failed:", errorText);
+      attempt++;
+      await new Promise(resolve => setTimeout(resolve, 2000));
     }
+  }
+
+  // Attempt POST creation if PUT did not succeed
+  console.log("Attempting POST inventory creation...");
+  response = await fetch(inventoryUrl, {
+    method: "POST",
+    headers,
+    body: JSON.stringify(transformedInventory),
+  });
+  console.log("POST inventory creation response status:", response.status);
+  if (response.ok) {
+    const data = await response.json();
+    console.log("Inventory created successfully via POST:", data);
+    return data;
   } else {
     const errorText = await response.text();
-    console.error("PUT inventory update failed:", errorText);
-    throw new Error(`Inventory update failed: ${response.status} - ${errorText}`);
+    console.error("Error creating inventory with POST:", errorText);
+    throw new Error(`Inventory creation failed: ${response.status} - ${errorText}`);
   }
-}
+};
 
 exports.handler = async function (event, context) {
   try {
@@ -135,14 +151,15 @@ exports.handler = async function (event, context) {
         body: JSON.stringify({ error: "GET request failed", details: errorText }),
       };
     }
+
     const listingData = await getResponse.json();
     console.log("Listing data fetched:", listingData);
 
-    // Set a static placeholder price of $1.00 for the duplicated listing.
+    // Use a static placeholder price of $1.00 for the duplicated listing.
     const staticPrice = 1.00;
 
     // Build the payload for duplicating the listing.
-    // We exclude the inventory object in this call.
+    // Do not include inventory in this payload; it will be updated separately.
     const payload = {
       quantity: listingData.quantity || 1,
       title: listingData.title || "Duplicated Listing",
@@ -151,8 +168,8 @@ exports.handler = async function (event, context) {
       who_made: listingData.who_made || "i_did",
       when_made: listingData.when_made || "made_to_order",
       taxonomy_id: listingData.taxonomy_id || 0,
-      shipping_profile_id: listingData.shipping_profile_id,
-      return_policy_id: listingData.return_policy_id,
+      shipping_profile_id: listingData.shipping_profile_id, // required for physical listings
+      return_policy_id: listingData.return_policy_id,       // required field
       tags: listingData.tags || [],
       materials: listingData.materials || [],
       skus: listingData.skus || [],
@@ -160,7 +177,7 @@ exports.handler = async function (event, context) {
       has_variations: listingData.has_variations || false,
       is_customizable: listingData.is_customizable || false,
       is_personalizable: listingData.is_personalizable || false,
-      // Do not include inventory here; it will be updated separately.
+      // Do not include inventory here; it will be updated in a separate call.
     };
 
     console.log("Creation payload for new listing:", payload);
@@ -198,7 +215,7 @@ exports.handler = async function (event, context) {
     console.log("New listing created:", newListingData);
 
     // --- INVENTORY UPDATE STEP ---
-    // First, try to retrieve the inventory data from the original listing.
+    // Retrieve inventory data from original listing (try from listing details first, then inventory endpoint)
     let inventoryData = listingData.inventory;
     if (!inventoryData) {
       console.warn("No inventory data available in original listing; attempting to fetch from inventory endpoint...");
