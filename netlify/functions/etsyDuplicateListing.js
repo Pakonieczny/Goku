@@ -63,14 +63,22 @@ exports.handler = async function(event, context) {
     if (inventoryResponse.ok) {
       inventoryData = await inventoryResponse.json();
       console.log("Inventory data fetched:", inventoryData);
-      // Remove invalid keys from each product
+      // Process each product: remove invalid keys.
       if (inventoryData.products && Array.isArray(inventoryData.products)) {
         inventoryData.products = inventoryData.products.map(product => {
-          // Create a shallow copy and delete invalid keys
+          // Create a shallow copy.
           let newProduct = { ...product };
           delete newProduct.product_id;
           delete newProduct.is_deleted;
-          delete newProduct.scale_name; // Remove scale_name key as well.
+          delete newProduct.scale_name; // Remove scale_name from product.
+          // Process offerings if available.
+          if (newProduct.offerings && Array.isArray(newProduct.offerings)) {
+            newProduct.offerings = newProduct.offerings.map(offering => {
+              let newOffering = { ...offering };
+              delete newOffering.scale_name; // Remove scale_name from each offering.
+              return newOffering;
+            });
+          }
           return newProduct;
         });
       }
@@ -92,7 +100,7 @@ exports.handler = async function(event, context) {
     }
     const formattedPrice = parseFloat(priceValue.toFixed(2));
 
-    // Build payload for duplicating the listing (without inventory update).
+    // Build payload for duplicating the listing.
     const payload = {
       quantity: listingData.quantity || 1,
       title: listingData.title || "Duplicated Listing",
@@ -164,7 +172,7 @@ exports.handler = async function(event, context) {
       if (!putResponse.ok) {
         const putError = await putResponse.text();
         console.error("Error updating inventory. PUT failed:", putError);
-        // Optionally, return error details or continue
+        // Optionally, you can return error details or continue.
       } else {
         const updatedInventory = await putResponse.json();
         console.log("Inventory updated for new listing:", updatedInventory);
