@@ -1,6 +1,6 @@
 const fetch = require("node-fetch");
 
-// Helper to remove invalid keys from an object (e.g., remove "scale_name")
+// Helper to remove invalid keys from an object (e.g., remove "scale_name", "product_id", and "is_deleted")
 function removeInvalidKeys(obj) {
   if (Array.isArray(obj)) {
     return obj.map(removeInvalidKeys);
@@ -8,7 +8,7 @@ function removeInvalidKeys(obj) {
     const newObj = {};
     for (const key in obj) {
       // Remove keys that Etsy's API does not accept
-      if (key === "scale_name") continue;
+      if (["scale_name", "product_id", "is_deleted"].includes(key)) continue;
       newObj[key] = removeInvalidKeys(obj[key]);
     }
     return newObj;
@@ -111,7 +111,7 @@ exports.handler = async function(event, context) {
     const listingData = await getResponse.json();
     console.log("Listing data fetched:", listingData);
 
-    // Calculate a base price (Etsy requires one even if variations control final pricing)
+    // Calculate a base price (Etsy requires one even if variations dictate final pricing)
     let basePrice = 0.00;
     if (listingData.price) {
       if (typeof listingData.price === "object" && listingData.price.amount && listingData.price.divisor) {
