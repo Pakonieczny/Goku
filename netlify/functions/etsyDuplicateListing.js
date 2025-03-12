@@ -1,14 +1,16 @@
 const fetch = require("node-fetch");
 
-// Remove keys that Etsy’s API does not allow.
+// Recursively remove invalid keys from an object.
+// (Keys like scale_name, product_id, is_deleted, and offering_id are not allowed.)
 function removeInvalidKeys(obj) {
   if (Array.isArray(obj)) {
     return obj.map(removeInvalidKeys);
   } else if (obj !== null && typeof obj === "object") {
     const newObj = {};
     for (const key in obj) {
-      // Remove these keys entirely:
-      if (["scale_name", "product_id", "is_deleted", "offering_id"].includes(key)) continue;
+      if (["scale_name", "product_id", "is_deleted", "offering_id"].includes(key)) {
+        continue; // Skip these keys entirely.
+      }
       newObj[key] = removeInvalidKeys(obj[key]);
     }
     return newObj;
@@ -16,32 +18,16 @@ function removeInvalidKeys(obj) {
   return obj;
 }
 
-// For any key "price" that is an array, convert it to a float.
+// Recursively traverse the object and remove any "price" key that is an array.
+// For listings with variations, the overall "price" in the inventory payload should not be an array.
 function fixPriceFields(obj) {
   if (Array.isArray(obj)) {
     return obj.map(fixPriceFields);
   } else if (obj !== null && typeof obj === "object") {
     for (const key in obj) {
       if (key === "price" && Array.isArray(obj[key])) {
-        let value = obj[key];
-        // If array has exactly one numeric element, use that number.
-        if (value.length === 1 && typeof value[0] === "number") {
-          obj[key] = value[0];
-        }
-        // If first element is an object with amount/divisor, compute float.
-        else if (
-          value.length > 0 &&
-          typeof value[0] === "object" &&
-          value[0].amount &&
-          value[0].divisor
-        ) {
-          const computed = value[0].amount / value[0].divisor;
-          obj[key] = parseFloat(computed.toFixed(2));
-        }
-        // Otherwise, remove the key (or you might decide to set a default value).
-        else {
-          delete obj[key];
-        }
+        // Remove the price key if its value is an array.
+        delete obj[key];
       } else {
         obj[key] = fixPriceFields(obj[key]);
       }
@@ -55,12 +41,12 @@ function fixPriceFields(obj) {
 function cleanInventoryPayload(invData) {
   // First remove invalid keys.
   let cleaned = removeInvalidKeys(invData);
-  // Then fix any price fields that are arrays (this will recurse into nested objects such as products and offerings).
+  // Then remove any "price" fields that are arrays.
   cleaned = fixPriceFields(cleaned);
   return cleaned;
 }
 
-// Retry helper for PUT inventory update.
+// Retry helper for updating inventory via PUT.
 async function retryInventoryUpdate(url, token, clientId, inventoryPayload, retries = 5, delayMs = 5000) {
   let lastError = null;
   for (let attempt = 0; attempt < retries; attempt++) {
@@ -155,7 +141,8 @@ exports.handler = async function(event, context) {
     const listingData = await getResponse.json();
     console.log("Listing data fetched:", listingData);
 
-    // Calculate base price from the listing (if available)
+    // Calculate base price from the listing (if available).
+    // Note: Even if the listing has variations, a base price is required for creation.
     let basePrice = 0.00;
     if (listingData.price) {
       if (typeof listingData.price === "object" && listingData.price.amount && listingData.price.divisor) {
@@ -235,7 +222,7 @@ exports.handler = async function(event, context) {
       if (invResponse.ok) {
         const invData = await invResponse.json();
         console.log("Original inventory data:", invData);
-        // Clean the inventory data to remove invalid keys and fix price fields.
+        // Clean the inventory data to remove invalid keys and any problematic "price" fields.
         inventoryPayload = cleanInventoryPayload(invData);
       } else {
         const invErrorText = await invResponse.text();
