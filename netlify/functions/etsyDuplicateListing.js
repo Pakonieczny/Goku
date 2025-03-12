@@ -1,15 +1,15 @@
 const fetch = require("node-fetch");
 
-// Recursively remove invalid keys from an object.
-// (Keys like scale_name, product_id, is_deleted, and offering_id are not allowed.)
+// Remove invalid keys that Etsy API does not accept
 function removeInvalidKeys(obj) {
   if (Array.isArray(obj)) {
     return obj.map(removeInvalidKeys);
-  } else if (obj !== null && typeof obj === "object") {
+  } else if (obj && typeof obj === "object") {
     const newObj = {};
     for (const key in obj) {
+      // Remove keys that are not allowed (example keys)
       if (["scale_name", "product_id", "is_deleted", "offering_id"].includes(key)) {
-        continue; // Skip these keys entirely.
+        continue;
       }
       newObj[key] = removeInvalidKeys(obj[key]);
     }
@@ -18,15 +18,14 @@ function removeInvalidKeys(obj) {
   return obj;
 }
 
-// Recursively traverse the object and remove any "price" key that is an array.
-// For listings with variations, the overall "price" in the inventory payload should not be an array.
+// Remove the overall price key if it is an array (when variations exist)
 function fixPriceFields(obj) {
   if (Array.isArray(obj)) {
     return obj.map(fixPriceFields);
-  } else if (obj !== null && typeof obj === "object") {
+  } else if (obj && typeof obj === "object") {
     for (const key in obj) {
       if (key === "price" && Array.isArray(obj[key])) {
-        // Remove the price key if its value is an array.
+        // Remove the price key if its value is an array
         delete obj[key];
       } else {
         obj[key] = fixPriceFields(obj[key]);
@@ -37,16 +36,12 @@ function fixPriceFields(obj) {
   return obj;
 }
 
-// Combined cleaning for inventory payload.
 function cleanInventoryPayload(invData) {
-  // First remove invalid keys.
   let cleaned = removeInvalidKeys(invData);
-  // Then remove any "price" fields that are arrays.
   cleaned = fixPriceFields(cleaned);
   return cleaned;
 }
 
-// Retry helper for updating inventory via PUT.
 async function retryInventoryUpdate(url, token, clientId, inventoryPayload, retries = 5, delayMs = 5000) {
   let lastError = null;
   for (let attempt = 0; attempt < retries; attempt++) {
@@ -78,7 +73,6 @@ async function retryInventoryUpdate(url, token, clientId, inventoryPayload, retr
   throw new Error("Inventory update failed after all retries: " + lastError);
 }
 
-// Helper to create inventory via POST if PUT fails.
 async function createInventory(url, token, clientId, inventoryPayload) {
   console.log("Attempting POST inventory creation...");
   const response = await fetch(url, {
@@ -100,7 +94,6 @@ async function createInventory(url, token, clientId, inventoryPayload) {
 
 exports.handler = async function(event, context) {
   try {
-    // Extract listingId and token from query parameters.
     const { listingId, token } = event.queryStringParameters;
     if (!listingId || !token) {
       return {
@@ -111,7 +104,6 @@ exports.handler = async function(event, context) {
     console.log("Received listingId:", listingId);
     console.log("Received token:", token);
 
-    // Retrieve CLIENT_ID from environment variables.
     const clientId = process.env.CLIENT_ID;
     if (!clientId) {
       console.error("CLIENT_ID environment variable is not set.");
@@ -119,7 +111,6 @@ exports.handler = async function(event, context) {
       console.log("Using CLIENT_ID:", clientId.slice(0, 5) + "*****");
     }
 
-    // Build GET request URL to fetch original listing details.
     const etsyGetUrl = `https://api.etsy.com/v3/application/listings/${listingId}`;
     const getResponse = await fetch(etsyGetUrl, {
       method: "GET",
@@ -141,8 +132,7 @@ exports.handler = async function(event, context) {
     const listingData = await getResponse.json();
     console.log("Listing data fetched:", listingData);
 
-    // Calculate base price from the listing (if available).
-    // Note: Even if the listing has variations, a base price is required for creation.
+    // Calculate a base price for the listing (useful even if variations exist)
     let basePrice = 0.00;
     if (listingData.price) {
       if (typeof listingData.price === "object" && listingData.price.amount && listingData.price.divisor) {
@@ -154,12 +144,11 @@ exports.handler = async function(event, context) {
     }
     console.log("Calculated base price:", basePrice);
 
-    // Build payload for duplicating the listing.
     const creationPayload = {
       quantity: listingData.quantity || 1,
       title: listingData.title || "Duplicated Listing",
       description: listingData.description || "",
-      price: basePrice, // Use the calculated base price.
+      price: basePrice,
       who_made: listingData.who_made || "i_did",
       when_made: listingData.when_made || "made_to_order",
       taxonomy_id: listingData.taxonomy_id || 0,
@@ -175,7 +164,6 @@ exports.handler = async function(event, context) {
     };
     console.log("Creation payload for new listing:", creationPayload);
 
-    // Retrieve SHOP_ID from environment variables.
     const shopId = process.env.SHOP_ID;
     if (!shopId) {
       return {
@@ -185,7 +173,6 @@ exports.handler = async function(event, context) {
     }
     const etsyPostUrl = `https://api.etsy.com/v3/application/shops/${shopId}/listings`;
 
-    // Create duplicate listing via POST.
     const postResponse = await fetch(etsyPostUrl, {
       method: "POST",
       headers: {
@@ -207,7 +194,7 @@ exports.handler = async function(event, context) {
     const newListingData = await postResponse.json();
     console.log("New listing created:", newListingData);
 
-    // If the original listing has variations, update the new listing's inventory.
+    // Update inventory if variations exist.
     if (listingData.has_variations) {
       console.log("Listing has variations; fetching inventory data...");
       const inventoryUrl = `https://api.etsy.com/v3/application/listings/${listingId}/inventory`;
@@ -222,7 +209,6 @@ exports.handler = async function(event, context) {
       if (invResponse.ok) {
         const invData = await invResponse.json();
         console.log("Original inventory data:", invData);
-        // Clean the inventory data to remove invalid keys and any problematic "price" fields.
         inventoryPayload = cleanInventoryPayload(invData);
       } else {
         const invErrorText = await invResponse.text();
