@@ -43,27 +43,30 @@ exports.handler = async function(event, context) {
     const listingData = await getResponse.json();
     console.log("Listing data fetched:", listingData);
 
-    // Determine price: if the listing has variations, set price to 0.00
-    // because the variations (inventory) will determine the actual prices.
-    let formattedPrice = 0.00;
-    if (!listingData.has_variations) {
+    // Determine price:
+    // If the listing has variations, we set a default price (e.g., 0.01) because the inventory (variations) will dictate actual prices.
+    // Otherwise, compute the price from listingData.price.
+    let formattedPrice;
+    if (listingData.has_variations) {
+      formattedPrice = 0.01;
+      console.log("Listing has variations; setting default price:", formattedPrice);
+    } else {
       if (listingData.price && typeof listingData.price === "object" &&
           listingData.price.amount && listingData.price.divisor) {
         formattedPrice = parseFloat((listingData.price.amount / listingData.price.divisor).toFixed(2));
       } else if (listingData.price == null || listingData.price === "") {
-        formattedPrice = 0.00;
+        formattedPrice = 0.01; // Use a minimal default value
       } else {
         formattedPrice = parseFloat(listingData.price);
       }
+      console.log("Computed price for duplicate (no variations):", formattedPrice);
     }
-    console.log("Computed price for duplicate:", formattedPrice);
 
     // Build payload for duplicating the listing including additional fields.
     const payload = {
       quantity: listingData.quantity || 1,
       title: listingData.title || "Duplicated Listing",
       description: listingData.description || "",
-      // Use computed price (0.00 if variations exist)
       price: formattedPrice,
       who_made: listingData.who_made || "i_did",
       when_made: listingData.when_made || "made_to_order",
@@ -77,7 +80,6 @@ exports.handler = async function(event, context) {
       has_variations: (typeof listingData.has_variations === "boolean") ? listingData.has_variations : false,
       is_customizable: (typeof listingData.is_customizable === "boolean") ? listingData.is_customizable : false,
       is_personalizable: (typeof listingData.is_personalizable === "boolean") ? listingData.is_personalizable : false,
-      // Additional fields you may want to include:
       processing_min: listingData.processing_min || null,
       processing_max: listingData.processing_max || null,
       // Note: Inventory/variations data will be updated in a separate call.
@@ -119,7 +121,6 @@ exports.handler = async function(event, context) {
 
     // Note: At this point, you would typically call a separate function to update
     // the inventory (variations, SKUs, etc.) for the new listing.
-    // For example, you could call a Netlify function to update the inventory once the listing is created.
 
     return {
       statusCode: 200,
