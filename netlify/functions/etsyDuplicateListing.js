@@ -33,7 +33,7 @@ exports.handler = async function(event, context) {
     if (!shopId) {
       return { statusCode: 500, body: JSON.stringify({ error: "SHOP_ID env variable not set" }) };
     }
-    console.log("Using CLIENT_ID:", clientId.slice(0,5) + "*****");
+    console.log("Using CLIENT_ID:", clientId.slice(0, 5) + "*****");
     console.log("Using SHOP_ID:", shopId);
 
     // Step 1: Fetch the original listing details.
@@ -57,8 +57,28 @@ exports.handler = async function(event, context) {
     const originalListing = await getResponse.json();
     console.log("Original listing data fetched:", originalListing);
 
-    // Step 2: Create the new listing.
-    // Use a static placeholder for price (1.00) since variations will determine the actual prices.
+    // If inventory data is not present in the listing, attempt to fetch it via a separate endpoint.
+    let inventoryData = originalListing.inventory;
+    if (!inventoryData || !inventoryData.products) {
+      console.log("No inventory data in listing response; fetching inventory via separate call...");
+      const inventoryUrl = `https://api.etsy.com/v3/application/listings/${listingId}/inventory`;
+      const inventoryResponse = await fetch(inventoryUrl, {
+        method: "GET",
+        headers: {
+          "Authorization": `Bearer ${token}`,
+          "x-api-key": clientId
+        }
+      });
+      console.log("Inventory GET response status:", inventoryResponse.status);
+      if (inventoryResponse.ok) {
+        inventoryData = await inventoryResponse.json();
+        console.log("Fetched inventory data:", inventoryData);
+      } else {
+        console.warn("Unable to fetch inventory data:", await inventoryResponse.text());
+      }
+    }
+
+    // Step 2: Create the new listing using a static placeholder price (1.00).
     const creationPayload = {
       quantity: originalListing.quantity || 1,
       title: originalListing.title || "Duplicated Listing",
@@ -67,11 +87,11 @@ exports.handler = async function(event, context) {
       who_made: originalListing.who_made || "i_did",
       when_made: originalListing.when_made || "made_to_order",
       taxonomy_id: originalListing.taxonomy_id || 0,
-      shipping_profile_id: originalListing.shipping_profile_id, // required for physical listings
-      return_policy_id: originalListing.return_policy_id,       // required for physical listings
+      shipping_profile_id: originalListing.shipping_profile_id, // required for physical listings.
+      return_policy_id: originalListing.return_policy_id,       // required.
       tags: originalListing.tags || [],
       materials: originalListing.materials || []
-      // Note: Inventory data (variations, SKUs, etc.) is not included here.
+      // Note: We do not include inventory here.
     };
 
     console.log("Creation payload for new listing:", creationPayload);
@@ -102,18 +122,15 @@ exports.handler = async function(event, context) {
       return { statusCode: 500, body: JSON.stringify({ error: "New listing ID not returned" }) };
     }
 
-    // Step 3: Update the inventory (variations, SKUs, etc.) for the new listing.
-    // The inventory update is done via a separate call.
-    // (If original listing inventory data is not included in the GET response,
-    // you may need to fetch it from the inventory endpoint of the original listing.)
-    if (!originalListing.inventory || !originalListing.inventory.products) {
-      console.log("No inventory data available in original listing.");
+    // Step 3: If inventory data is available, update the inventory for the new listing.
+    if (!inventoryData || !inventoryData.products) {
+      console.log("No inventory data available to update.");
       return { statusCode: 200, body: JSON.stringify(newListing) };
     }
 
-    // Transform the original inventory data to the format expected by Etsy.
+    // Transform the inventory data from the original listing.
     let transformedProducts = [];
-    for (let product of originalListing.inventory.products) {
+    for (let product of inventoryData.products) {
       let newProduct = {
         sku: product.sku || "",
         offerings: [],
@@ -121,11 +138,12 @@ exports.handler = async function(event, context) {
       };
       if (product.offerings && Array.isArray(product.offerings)) {
         for (let offering of product.offerings) {
-          // Compute a float price from offering.price
+          // Instead of computing the price, we assume variations determine the price.
+          // We extract the price as a float.
           let priceValue = computePrice(offering.price);
-          // Ensure that priceValue is a float and meets the minimum threshold (e.g., $0.20)
-          if (isNaN(priceValue) || priceValue < 0.20) {
-            priceValue = 1.00; // fallback static price if computed price is invalid
+          // If the computed price is not a valid float, use a fallback static value.
+          if (isNaN(priceValue)) {
+            priceValue = 1.00;
           }
           newProduct.offerings.push({
             price: priceValue,
@@ -149,10 +167,9 @@ exports.handler = async function(event, context) {
     const inventoryPayload = { products: transformedProducts };
     console.log("Transformed inventory payload:", inventoryPayload);
 
-    // Now, update the inventory for the new listing.
-    // The endpoint is: PUT https://api.etsy.com/v3/application/listings/{newListingId}/inventory
-    const inventoryUrl = `https://api.etsy.com/v3/application/listings/${newListingId}/inventory`;
-    const updateResponse = await fetch(inventoryUrl, {
+    // Step 4: Update the inventory for the new listing.
+    const newInventoryUrl = `https://api.etsy.com/v3/application/listings/${newListingId}/inventory`;
+    const updateResponse = await fetch(newInventoryUrl, {
       method: "PUT",
       headers: {
         "Content-Type": "application/json",
