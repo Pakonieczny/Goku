@@ -1,14 +1,19 @@
 const fetch = require("node-fetch");
 
-// Helper function to compute price as a float if price is provided as an object.
+// Helper function to compute price from an object, or default to placeholder if invalid.
 function computePrice(price) {
+  if (Array.isArray(price)) {
+    // If price is an array, we return the static placeholder.
+    return 1.00;
+  }
   if (price && typeof price === "object" && price.amount && price.divisor) {
     return parseFloat((price.amount / price.divisor).toFixed(2));
   }
   if (price) {
-    return parseFloat(price);
+    let parsed = parseFloat(price);
+    return isNaN(parsed) ? 1.00 : parsed;
   }
-  return 1.00; // fallback static placeholder
+  return 1.00; // fallback placeholder
 }
 
 exports.handler = async function(event, context) {
@@ -57,10 +62,10 @@ exports.handler = async function(event, context) {
     const originalListing = await getResponse.json();
     console.log("Original listing data fetched:", originalListing);
 
-    // If inventory data is not present in the listing, attempt to fetch it via a separate endpoint.
+    // Step 1b: If inventory is not part of the listing, try fetching it separately.
     let inventoryData = originalListing.inventory;
     if (!inventoryData || !inventoryData.products) {
-      console.log("No inventory data in listing response; fetching inventory via separate call...");
+      console.log("No inventory data in listing response; attempting separate fetch...");
       const inventoryUrl = `https://api.etsy.com/v3/application/listings/${listingId}/inventory`;
       const inventoryResponse = await fetch(inventoryUrl, {
         method: "GET",
@@ -78,20 +83,20 @@ exports.handler = async function(event, context) {
       }
     }
 
-    // Step 2: Create the new listing using a static placeholder price (1.00).
+    // Step 2: Create the new listing with a static price placeholder.
     const creationPayload = {
       quantity: originalListing.quantity || 1,
       title: originalListing.title || "Duplicated Listing",
       description: originalListing.description || "",
-      price: 1.00,  // static placeholder
+      price: 1.00,  // Static placeholder – variations will define actual prices.
       who_made: originalListing.who_made || "i_did",
       when_made: originalListing.when_made || "made_to_order",
       taxonomy_id: originalListing.taxonomy_id || 0,
-      shipping_profile_id: originalListing.shipping_profile_id, // required for physical listings.
-      return_policy_id: originalListing.return_policy_id,       // required.
+      shipping_profile_id: originalListing.shipping_profile_id,
+      return_policy_id: originalListing.return_policy_id,
       tags: originalListing.tags || [],
       materials: originalListing.materials || []
-      // Note: We do not include inventory here.
+      // Note: Inventory/variation details are not included in this payload.
     };
 
     console.log("Creation payload for new listing:", creationPayload);
@@ -122,29 +127,24 @@ exports.handler = async function(event, context) {
       return { statusCode: 500, body: JSON.stringify({ error: "New listing ID not returned" }) };
     }
 
-    // Step 3: If inventory data is available, update the inventory for the new listing.
+    // Step 3: If inventory data is available, transform and update inventory for the new listing.
     if (!inventoryData || !inventoryData.products) {
       console.log("No inventory data available to update.");
       return { statusCode: 200, body: JSON.stringify(newListing) };
     }
 
-    // Transform the inventory data from the original listing.
+    // Transform inventory data.
     let transformedProducts = [];
     for (let product of inventoryData.products) {
       let newProduct = {
         sku: product.sku || "",
-        offerings: [],
-        properties: []
+        offerings: []
       };
+
       if (product.offerings && Array.isArray(product.offerings)) {
         for (let offering of product.offerings) {
-          // Instead of computing the price, we assume variations determine the price.
-          // We extract the price as a float.
+          // Compute price: if offering.price is an array, default to static placeholder.
           let priceValue = computePrice(offering.price);
-          // If the computed price is not a valid float, use a fallback static value.
-          if (isNaN(priceValue)) {
-            priceValue = 1.00;
-          }
           newProduct.offerings.push({
             price: priceValue,
             quantity: offering.quantity || 0,
@@ -152,12 +152,17 @@ exports.handler = async function(event, context) {
           });
         }
       }
+
+      // Map property values from the original listing.
       if (product.property_values && Array.isArray(product.property_values)) {
+        newProduct.property_values = [];
         for (let prop of product.property_values) {
           if (prop.property_name && prop.values && prop.values.length > 0) {
-            newProduct.properties.push({
+            newProduct.property_values.push({
+              property_id: prop.property_id,
+              value_id: (prop.value_ids && prop.value_ids.length > 0) ? prop.value_ids[0] : null,
               name: prop.property_name,
-              value: prop.values[0] // take the first value
+              value: prop.values[0]
             });
           }
         }
@@ -165,7 +170,7 @@ exports.handler = async function(event, context) {
       transformedProducts.push(newProduct);
     }
     const inventoryPayload = { products: transformedProducts };
-    console.log("Transformed inventory payload:", inventoryPayload);
+    console.log("Transformed inventory payload:", JSON.stringify(inventoryPayload));
 
     // Step 4: Update the inventory for the new listing.
     const newInventoryUrl = `https://api.etsy.com/v3/application/listings/${newListingId}/inventory`;
