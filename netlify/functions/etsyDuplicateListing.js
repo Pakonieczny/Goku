@@ -1,3 +1,5 @@
+Use the below as base code, wait for further instructions:
+
 const fetch = require("node-fetch");
 
 exports.handler = async function (event, context) {
@@ -43,51 +45,23 @@ exports.handler = async function (event, context) {
     const listingData = await getResponse.json();
     console.log("Listing data fetched:", listingData);
 
-    // Use a static placeholder price for the overall listing (i.e. $1.00)
+    // Set a static placeholder price of $1.00 for the duplicated listing.
     const staticPrice = 1.00;
 
-    // Build the creation payload.
-    // We keep the basic fields and include inventory if available.
-    // For inventory, we transform each product's offerings to use a static placeholder price,
-    // and we set properties to an empty array (skipping invalid keys).
-    let inventoryPayload = null;
-    if (
-      listingData.inventory &&
-      listingData.inventory.products &&
-      Array.isArray(listingData.inventory.products) &&
-      listingData.inventory.products.length > 0
-    ) {
-      inventoryPayload = {
-        products: listingData.inventory.products.map((product) => {
-          return {
-            sku: product.sku || "",
-            // Map each offering, setting price to a placeholder value (you may adjust as needed)
-            offerings: (product.offerings || []).map((offering) => {
-              return {
-                // Use a static placeholder price (e.g., $1.00) for each offering.
-                // Alternatively, you could compute a float value from the original price object.
-                price: staticPrice,
-                quantity: offering.quantity || 0,
-                is_enabled: offering.is_enabled !== undefined ? offering.is_enabled : true,
-              };
-            }),
-            // Remove the invalid keys from properties – using an empty array as a placeholder.
-            properties: [],
-          };
-        }),
-      };
-    }
-
+    // Build the payload for duplicating the listing.
+    // We include the entire inventory object as-is (if it exists)
+    // so that variations (and SKU) are passed exactly as fetched.
     const payload = {
       quantity: listingData.quantity || 1,
       title: listingData.title || "Duplicated Listing",
       description: listingData.description || "",
-      price: staticPrice, // overall listing price placeholder
+      // Use static placeholder for price
+      price: staticPrice,
       who_made: listingData.who_made || "i_did",
       when_made: listingData.when_made || "made_to_order",
       taxonomy_id: listingData.taxonomy_id || 0,
-      shipping_profile_id: listingData.shipping_profile_id,
-      return_policy_id: listingData.return_policy_id,
+      shipping_profile_id: listingData.shipping_profile_id, // required for physical listings
+      return_policy_id: listingData.return_policy_id,       // required field
       tags: listingData.tags || [],
       materials: listingData.materials || [],
       skus: listingData.skus || [],
@@ -95,8 +69,8 @@ exports.handler = async function (event, context) {
       has_variations: listingData.has_variations || false,
       is_customizable: listingData.is_customizable || false,
       is_personalizable: listingData.is_personalizable || false,
-      // Attach transformed inventory payload if available.
-      inventory: inventoryPayload,
+      // Pass the inventory data exactly as fetched, if available.
+      inventory: listingData.inventory || null,
     };
 
     console.log("Creation payload for new listing:", payload);
@@ -133,9 +107,9 @@ exports.handler = async function (event, context) {
     const newListingData = await postResponse.json();
     console.log("New listing created:", newListingData);
 
-    // If you need to update the inventory separately (if the listing creation endpoint doesn't accept inventory),
-    // you would call a separate Netlify function here (e.g., updateInventory(newListingData.listing_id, inventoryPayload)).
-    // For now, we return the new listing data.
+    // Optional: Call a separate function to update inventory (variations) after the listing is created.
+    // await updateInventory(newListingData.listing_id, listingData.inventory);
+
     return {
       statusCode: 200,
       body: JSON.stringify(newListingData),
