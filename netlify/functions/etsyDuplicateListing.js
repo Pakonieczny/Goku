@@ -1,6 +1,6 @@
 const fetch = require("node-fetch");
 
-// Helper to remove invalid keys from an object (e.g., remove "scale_name", "product_id", and "is_deleted")
+// Helper to remove invalid keys from an object
 function removeInvalidKeys(obj) {
   if (Array.isArray(obj)) {
     return obj.map(removeInvalidKeys);
@@ -8,7 +8,7 @@ function removeInvalidKeys(obj) {
     const newObj = {};
     for (const key in obj) {
       // Remove keys that Etsy's API does not accept
-      if (["scale_name", "product_id", "is_deleted"].includes(key)) continue;
+      if (["scale_name", "product_id", "is_deleted", "offering_id"].includes(key)) continue;
       newObj[key] = removeInvalidKeys(obj[key]);
     }
     return newObj;
@@ -111,7 +111,7 @@ exports.handler = async function(event, context) {
     const listingData = await getResponse.json();
     console.log("Listing data fetched:", listingData);
 
-    // Calculate a base price (Etsy requires one even if variations dictate final pricing)
+    // Calculate a base price (Etsy requires a price value even if variations determine the final pricing)
     let basePrice = 0.00;
     if (listingData.price) {
       if (typeof listingData.price === "object" && listingData.price.amount && listingData.price.divisor) {
@@ -199,7 +199,7 @@ exports.handler = async function(event, context) {
       }
 
       if (inventoryPayload) {
-        // Use the inventory endpoint without shop id
+        // Use the inventory endpoint for the new listing
         const etsyInventoryUrl = `https://api.etsy.com/v3/application/listings/${newListingData.listing_id}/inventory`;
         try {
           const updatedInventory = await retryInventoryUpdate(etsyInventoryUrl, token, clientId, inventoryPayload);
