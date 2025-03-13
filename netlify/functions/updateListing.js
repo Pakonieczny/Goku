@@ -2,12 +2,12 @@ const fetch = require("node-fetch");
 
 exports.handler = async function (event, context) {
   try {
-    // Extract listingId and token from query parameters.
-    const { listingId, token } = event.queryStringParameters;
-    if (!listingId || !token) {
+    // Extract required parameters from query string
+    const { listingId, token, title, description, tags } = event.queryStringParameters;
+    if (!listingId || !token || !title || !description || !tags) {
       return {
         statusCode: 400,
-        body: JSON.stringify({ error: "Missing listingId or token" }),
+        body: JSON.stringify({ error: "Missing listingId, token, title, description, or tags" }),
       };
     }
     console.log("Received listingId:", listingId);
@@ -29,31 +29,24 @@ exports.handler = async function (event, context) {
       };
     }
 
-    // Define the updated fields. (Replace these placeholders with your actual generated data as needed.)
-    const updatedTitle = "Updated Title Placeholder";
-    const updatedDescription = "Updated description placeholder.";
-    const updatedTags = ["updated", "tag1", "tag2"];
-
-    // Build the update payload. Only title, description, and tags will be updated.
-    const payload = {
-      title: updatedTitle,
-      description: updatedDescription,
-      tags: updatedTags
+    // Build the update payload using the actual generated data.
+    const updatePayload = {
+      title: title,
+      description: description,
+      tags: tags.split(",").map(tag => tag.trim())
     };
 
     // Construct the Etsy API endpoint URL for updating the listing.
-    // For updating an existing listing, Etsy expects the endpoint to include the shop ID:
+    // Etsy expects a PUT request to the endpoint with shop ID included:
     // PUT https://api.etsy.com/v3/application/shops/{shopId}/listings/{listingId}
     const updateUrl = `https://api.etsy.com/v3/application/shops/${shopId}/listings/${listingId}`;
-
-    // Log the full endpoint URL, headers, and payload for troubleshooting.
     console.log("Update URL:", updateUrl);
     console.log("Request Headers:", {
       "Content-Type": "application/json",
       "Authorization": `Bearer ${token}`,
       "x-api-key": clientId,
     });
-    console.log("Update Payload:", JSON.stringify(payload, null, 2));
+    console.log("Update Payload:", JSON.stringify(updatePayload, null, 2));
 
     // Make the PUT request to update the listing.
     const response = await fetch(updateUrl, {
@@ -63,9 +56,8 @@ exports.handler = async function (event, context) {
         "Authorization": `Bearer ${token}`,
         "x-api-key": clientId,
       },
-      body: JSON.stringify(payload),
+      body: JSON.stringify(updatePayload),
     });
-
     console.log("PUT update response status:", response.status);
     if (!response.ok) {
       const errorText = await response.text();
