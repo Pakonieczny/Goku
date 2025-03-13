@@ -13,21 +13,28 @@ exports.handler = async function (event, context) {
     console.log("Received listingId:", listingId);
     console.log("Received token:", token);
 
-    // Retrieve CLIENT_ID from environment variables.
+    // Retrieve CLIENT_ID and SHOP_ID from environment variables.
     const clientId = process.env.CLIENT_ID;
+    const shopId = process.env.SHOP_ID;
     if (!clientId) {
       console.error("CLIENT_ID environment variable is not set.");
     } else {
       console.log("Using CLIENT_ID:", clientId.slice(0, 5) + "*****");
     }
+    if (!shopId) {
+      console.error("SHOP_ID environment variable is not set.");
+      return {
+        statusCode: 500,
+        body: JSON.stringify({ error: "SHOP_ID environment variable is not set." }),
+      };
+    }
 
-    // Define the updated fields: title, description, and tags.
-    // (Replace these placeholder values with your generated data as needed.)
+    // Define the updated fields. (Replace these placeholders with your actual generated data as needed.)
     const updatedTitle = "Updated Title Placeholder";
     const updatedDescription = "Updated description placeholder.";
     const updatedTags = ["updated", "tag1", "tag2"];
 
-    // Build the update payload. Only these fields will be updated.
+    // Build the update payload. Only title, description, and tags will be updated.
     const payload = {
       title: updatedTitle,
       description: updatedDescription,
@@ -35,7 +42,9 @@ exports.handler = async function (event, context) {
     };
 
     // Construct the Etsy API endpoint URL for updating the listing.
-    const updateUrl = `https://api.etsy.com/v3/application/listings/${listingId}`;
+    // For updating an existing listing, Etsy expects the endpoint to include the shop ID:
+    // PUT https://api.etsy.com/v3/application/shops/{shopId}/listings/{listingId}
+    const updateUrl = `https://api.etsy.com/v3/application/shops/${shopId}/listings/${listingId}`;
 
     // Log the full endpoint URL, headers, and payload for troubleshooting.
     console.log("Update URL:", updateUrl);
