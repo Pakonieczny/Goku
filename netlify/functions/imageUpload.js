@@ -14,8 +14,9 @@ exports.handler = async function (event, context) {
     console.log("File name:", fileName);
     console.log("Rank:", rank || 1);
 
-    // Retrieve SHOP_ID from environment variables.
+    // Retrieve SHOP_ID and CLIENT_ID from environment variables.
     const shopId = process.env.SHOP_ID;
+    const clientId = process.env.CLIENT_ID;
     if (!shopId) {
       console.error("SHOP_ID environment variable is not set.");
       return {
@@ -23,31 +24,38 @@ exports.handler = async function (event, context) {
         body: JSON.stringify({ error: "SHOP_ID environment variable is not set." }),
       };
     }
+    if (!clientId) {
+      console.error("CLIENT_ID environment variable is not set.");
+      return {
+        statusCode: 500,
+        body: JSON.stringify({ error: "CLIENT_ID environment variable is not set." }),
+      };
+    }
     console.log("Using SHOP_ID:", shopId);
+    console.log("Using CLIENT_ID:", clientId.slice(0, 5) + "*****");
 
-    // Construct the Etsy API endpoint URL for uploading an image.
-    // Note: The correct endpoint includes the shopId.
+    // Construct the Etsy API endpoint URL for uploading the image.
     const uploadUrl = `https://api.etsy.com/v3/application/shops/${shopId}/listings/${listingId}/images`;
     console.log("Uploading image to URL:", uploadUrl);
 
     // Prepare the payload.
     const payload = {
-      file: fileContent,  // Base64 string (without prefix)
+      file: fileContent, // Base64 string (without the data URL prefix)
       name: fileName,
       rank: rank || 1,
     };
     console.log("Upload payload:", JSON.stringify(payload, null, 2));
 
-    // Make the POST request to upload the image.
+    // Make the POST request to upload the image, including the x-api-key header.
     const response = await fetch(uploadUrl, {
       method: "POST",
       headers: {
         "Content-Type": "application/json",
         "Authorization": `Bearer ${token}`,
+        "x-api-key": clientId,
       },
       body: JSON.stringify(payload),
     });
-
     console.log("Image upload response status:", response.status);
     if (!response.ok) {
       const errorText = await response.text();
@@ -57,7 +65,6 @@ exports.handler = async function (event, context) {
         body: JSON.stringify({ error: errorText }),
       };
     }
-
     const data = await response.json();
     console.log("Image uploaded successfully:", data);
     return {
