@@ -192,18 +192,14 @@
     /* Additional widths for Etsy Link and Shop Listings */
     #etsyLink, #shopListings { width: 500px !important; }
     
-    /* Styles for the Upload and Update Inventory button container at the bottom center */
-    #uploadContainer {
+    /* Styles for the button containers at the bottom center */
+    #uploadContainer, #updateInventoryBtnContainer {
       position: fixed;
       bottom: 20px;
-      left: 50%;
-      transform: translateX(-50%);
       display: inline-block;
     }
-    /* New button for updating inventory */
-    #updateInventoryBtn {
-      margin-left: 10px;
-    }
+    #uploadContainer { left: 50%; transform: translateX(-120%); }
+    #updateInventoryBtnContainer { left: 50%; transform: translateX(20%); }
   </style>
 </head>
 <body>
@@ -232,9 +228,8 @@
   <button id="connectEtsyBtn" class="btn waves-effect waves-light configurable">Connect to Etsy</button>
   <div style="margin-top: -180px; margin-left: 10px;">
     <div class="section-heading configurable">My Etsy Shop Listings</div>
-    <!-- The shopListings textarea should contain the original listing URL -->
     <div class="textbox-container configurable">
-      <textarea id="shopListings" class="materialize-textarea" placeholder="Paste original Etsy listing URL here"></textarea>
+      <textarea id="shopListings" class="materialize-textarea" placeholder="Paste your Etsy listing URL here"></textarea>
     </div>
   </div>
   
@@ -250,7 +245,7 @@
   </div>
   <div id="container13" class="flex-container configurable">
     <div class="textbox-container configurable">
-      <textarea id="searchKeyPhrases" class="materialize-textarea" rows="14"></textarea>
+      <textarea id="searchKeyPhrases" class="materialize-textarea" rows="14" placeholder="Generated tags will appear here"></textarea>
     </div>
   </div>
   
@@ -261,7 +256,7 @@
       <div class="section-heading configurable">Etsy Listing TITLE</div>
       <div class="flex-container configurable">
         <div class="textbox-container configurable">
-          <textarea id="listingTitle" class="materialize-textarea" rows="2"></textarea>
+          <textarea id="listingTitle" class="materialize-textarea" rows="2" placeholder="Generated title"></textarea>
         </div>
         <div class="button-container configurable" style="margin-top: -60px;">
           <button id="regenTitleBtn" class="btn-small waves-effect waves-light configurable">Re-Generate</button>
@@ -277,7 +272,7 @@
       <div class="section-heading configurable">Etsy Listing DESCRIPTION</div>
       <div class="flex-container configurable">
         <div class="textbox-container configurable">
-          <textarea id="listingDescription" class="materialize-textarea"></textarea>
+          <textarea id="listingDescription" class="materialize-textarea" placeholder="Generated description"></textarea>
         </div>
         <div class="button-container configurable">
           <button id="regenDescriptionBtn" class="btn-small waves-effect waves-light configurable">Re-Generate</button>
@@ -295,10 +290,11 @@
     <div id="previewGrid"></div>
   </div>
   
-  <!-- Upload and Update Buttons Container -->
+  <!-- Button containers for updating listing and inventory -->
   <div id="uploadContainer">
-    <button id="uploadToEtsyBtn" class="btn waves-effect waves-light configurable">Upload to Etsy</button>
-    <!-- New button for manually triggering inventory update -->
+    <button id="uploadToEtsyBtn" class="btn waves-effect waves-light configurable">Update Listing</button>
+  </div>
+  <div id="updateInventoryBtnContainer">
     <button id="updateInventoryBtn" class="btn waves-effect waves-light configurable">Update Inventory</button>
   </div>
   
@@ -460,11 +456,10 @@ Using Sales Report and Product List Files:
     const ETSY_SHOP_URL = "https://www.etsy.com/shop/custombrites";
     const CLIENT_ID = "k75zdspz4r99txpqdji7i2em";
     const REDIRECT_URI = "https://delicate-tanuki-616ac0.netlify.app/";
-    const SHOP_ID = "YOUR_ASSISTANT_ID"; // Not used; kept for legacy reference.
-    const modelName = "chatgpt-4o-latest";
+    // For updates, we use the listing URL provided by the user in the "My Etsy Shop Listings" textarea.
     let accessToken;
     
-    // Global variables for file uploads and previews
+    // Global variables for file uploads and previews (unchanged)
     let soldOrdersCSV = [];
     let listingsCSV = [];
     let photoNames = [];
@@ -473,7 +468,7 @@ Using Sales Report and Product List Files:
     let photoMeta = [];
     let photoObjects = [];
     
-    // Proxy OpenAI calls through our Netlify function
+    // Proxy OpenAI calls through our Netlify function (unchanged)
     async function callOpenAI(payload) {
       const response = await fetch("/.netlify/functions/openaiProxy", {
         method: "POST",
@@ -487,7 +482,7 @@ Using Sales Report and Product List Files:
       return await response.json();
     }
     
-    // File upload functions using our Netlify function "uploadFile"
+    // File upload functions (unchanged)
     async function uploadCSVFile(file, progressCallback) {
       return new Promise((resolve, reject) => {
         const reader = new FileReader();
@@ -548,7 +543,7 @@ Using Sales Report and Product List Files:
       });
     }
     
-    // PKCE Utility Functions
+    // PKCE Utility Functions (unchanged)
     function generateRandomString(length) {
       const possible = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789-._~';
       let text = '';
@@ -619,94 +614,105 @@ Using Sales Report and Product List Files:
       }
     }
     
-    async function duplicateListing() {
-      let originalListingLink = document.getElementById("shopListings").value.trim();
-      if (!originalListingLink) {
-        M.toast({ html: "Please provide a listing link in 'My Etsy Shop Listings'" });
+    // New function to update an existing listing (Title, Description, Tags) using the updateListing.js Netlify function.
+    async function updateListingOnEtsy() {
+      const shopListingsField = document.getElementById("shopListings").value.trim();
+      if (!shopListingsField) {
+        M.toast({ html: "Please provide your Etsy listing URL in 'My Etsy Shop Listings'." });
         return;
       }
-      let originalListingMatch = originalListingLink.match(/\/listing\/(\d+)/);
-      if (!originalListingMatch) {
-        M.toast({ html: "Invalid listing link. Please provide a valid Etsy listing URL." });
+      // Extract the listingId from the URL
+      const listingIdMatch = shopListingsField.match(/\/listing\/(\d+)/);
+      if (!listingIdMatch) {
+        M.toast({ html: "Invalid listing URL. Please provide a valid Etsy listing URL." });
         return;
       }
-      let originalListingId = originalListingMatch[1];
+      const listingId = listingIdMatch[1];
       if (!accessToken) {
         M.toast({ html: "No access token. Please connect to Etsy first." });
         return;
       }
+      // Get updated values from the UI
+      const updatedTitle = document.getElementById("listingTitle").value.trim();
+      const updatedDescription = document.getElementById("listingDescription").value.trim();
+      const tagsRaw = document.getElementById("searchKeyPhrases").value.trim();
+      // Assume each line in tags is a separate tag; convert to array
+      const updatedTags = tagsRaw.split(/\n+/).map(tag => tag.trim()).filter(tag => tag.length > 0);
+      
+      const payload = {
+        listingId,
+        title: updatedTitle,
+        description: updatedDescription,
+        tags: updatedTags,
+        token: accessToken
+      };
+      console.log("Updating listing with payload:", payload);
+      
       try {
-        // Call the Netlify function etsyDuplicateListing to create the duplicate listing
-        const duplicateUrl = `/.netlify/functions/etsyDuplicateListing?listingId=${originalListingId}&token=${encodeURIComponent(accessToken)}`;
-        console.log("Calling duplicate listing URL:", duplicateUrl);
-        let response = await fetch(duplicateUrl);
-        console.log("Response status:", response.status, response.statusText);
+        const response = await fetch("/.netlify/functions/updateListing", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify(payload)
+        });
+        console.log("Update listing response status:", response.status);
         if (!response.ok) {
-          let errorText = await response.text();
-          console.error("Error duplicating listing. Status:", response.status, "Text:", errorText);
-          throw new Error(`Error duplicating listing: ${response.status} - ${response.statusText}`);
+          const errorText = await response.text();
+          console.error("Error updating listing. Status:", response.status, "Text:", errorText);
+          M.toast({ html: "Error updating listing: " + response.status });
+          return;
         }
-        let data = await response.json();
-        console.log("New listing created:", data);
-        M.toast({ html: "Listing duplicated as Draft successfully!" });
-      } catch (e) {
-        console.error("Error in duplicateListing function:", e);
-        M.toast({ html: "Error duplicating listing: " + e.message });
+        const updatedListingData = await response.json();
+        console.log("Listing updated successfully:", updatedListingData);
+        M.toast({ html: "Listing updated successfully!" });
+      } catch (error) {
+        console.error("Error in updateListingOnEtsy:", error);
+        M.toast({ html: "Error updating listing: " + error.message });
       }
     }
     
-    // New button event: manually trigger updateInventory.js function
+    // Attach the new updateListingOnEtsy function to the "Update Listing" button.
+    document.getElementById("uploadToEtsyBtn").addEventListener("click", updateListingOnEtsy);
+    
+    // New manual button for updating inventory (calls updateInventory.js)
     document.getElementById("updateInventoryBtn").addEventListener("click", async () => {
-      // Prompt for new listing ID (the duplicated listing)
-      let newListingInput = prompt("Enter the NEW listing ID (or URL) for inventory update:");
-      if (!newListingInput) {
-        M.toast({ html: "No new listing ID provided for inventory update." });
+      const shopListingsField = document.getElementById("shopListings").value.trim();
+      if (!shopListingsField) {
+        M.toast({ html: "Please provide your Etsy listing URL in 'My Etsy Shop Listings'." });
         return;
       }
-      // If the input is a URL, extract the numeric ID
-      let newListingMatch = newListingInput.match(/\/listing\/(\d+)/);
-      let newListingId = newListingMatch ? newListingMatch[1] : newListingInput.trim();
-      
-      // Extract original listing ID from the shopListings field
-      let originalListingLink = document.getElementById("shopListings").value.trim();
-      let originalListingMatch = originalListingLink.match(/\/listing\/(\d+)/);
-      if (!originalListingMatch) {
-        M.toast({ html: "Invalid original listing link. Cannot extract listing ID." });
+      const listingIdMatch = shopListingsField.match(/\/listing\/(\d+)/);
+      if (!listingIdMatch) {
+        M.toast({ html: "Invalid listing URL. Please provide a valid Etsy listing URL." });
         return;
       }
-      let originalListingId = originalListingMatch[1];
-      
+      const listingId = listingIdMatch[1];
       if (!accessToken) {
         M.toast({ html: "No access token. Please connect to Etsy first." });
         return;
       }
+      // Call updateInventory via its Netlify function (expects listingId, originalListingId, token)
+      // For inventory update, we assume the original listing is the same as the updated one.
+      const url = `/.netlify/functions/updateInventory?listingId=${listingId}&originalListingId=${listingId}&token=${encodeURIComponent(accessToken)}`;
+      console.log("Calling updateInventory URL:", url);
       try {
-        // Call the updateInventory.js Netlify function with listingId, originalListingId, and token as query parameters.
-        const updateUrl = `/.netlify/functions/updateInventory?listingId=${newListingId}&originalListingId=${originalListingId}&token=${encodeURIComponent(accessToken)}`;
-        console.log("Calling update inventory URL:", updateUrl);
-        let response = await fetch(updateUrl);
+        const response = await fetch(url);
         console.log("Update inventory response status:", response.status);
         if (!response.ok) {
-          let errorText = await response.text();
+          const errorText = await response.text();
           console.error("Error updating inventory. Status:", response.status, "Text:", errorText);
-          throw new Error(`Error updating inventory: ${response.status} - ${response.statusText}`);
+          M.toast({ html: "Error updating inventory: " + response.status });
+          return;
         }
-        let updateData = await response.json();
-        console.log("Inventory update result:", updateData);
+        const inventoryUpdateResult = await response.json();
+        console.log("Inventory update result:", inventoryUpdateResult);
         M.toast({ html: "Inventory updated successfully!" });
-      } catch (e) {
-        console.error("Error in update inventory function:", e);
-        M.toast({ html: "Error updating inventory: " + e.message });
+      } catch (error) {
+        console.error("Error in manual inventory update:", error);
+        M.toast({ html: "Error updating inventory: " + error.message });
       }
     });
     
-    document.getElementById("uploadToEtsyBtn").addEventListener("click", duplicateListing);
-    
-    document.getElementById("clearKeyPhrasesBtn").addEventListener("click", () => {
-      document.getElementById("searchKeyPhrases").value = "";
-    });
-    
-    // File Drop and Upload Handlers
+    // File Drop and Upload Handlers (unchanged)
     const dropZone = document.getElementById("dropZone");
     const previewGrid = document.getElementById("previewGrid");
     const primaryPreview = document.getElementById("primaryPreview");
@@ -801,6 +807,7 @@ Using Sales Report and Product List Files:
               progressBar.value = 0;
               soldOrdersCSV.push(fileData);
               updateUploadedFilesList();
+              await updateVectorStore();
             } catch(err) {
               console.error("Error uploading file:", err);
             }
@@ -841,6 +848,7 @@ Using Sales Report and Product List Files:
               progressBar.value = 0;
               listingsCSV.push(fileData);
               updateUploadedFilesList();
+              await updateVectorStore();
             } catch(err) {
               console.error("Error uploading file:", err);
             }
@@ -850,7 +858,31 @@ Using Sales Report and Product List Files:
       }
     });
     
-    async function updateUploadedFilesList() {
+    async function updateVectorStore() {
+      const allFileIds = [...soldOrdersCSV, ...listingsCSV].map(file => file.id);
+      if (allFileIds.length === 0) {
+        console.log("No supported files uploaded yet.");
+        return;
+      }
+      try {
+        const vectorStorePayload = { name: "CSV Vector Store", file_ids: allFileIds };
+        const vectorStoreResponse = await fetch("/.netlify/functions/vectorStore", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify(vectorStorePayload)
+        });
+        if (!vectorStoreResponse.ok) {
+          const errorData = await vectorStoreResponse.json();
+          throw new Error("Error creating vector store: " + JSON.stringify(errorData));
+        }
+        const vectorStoreData = await vectorStoreResponse.json();
+        console.log("Vector store created:", vectorStoreData);
+      } catch (err) {
+        console.error("Error in updateVectorStore:", err);
+      }
+    }
+    
+    function updateUploadedFilesList() {
       let fileList = [];
       soldOrdersCSV.forEach(file => fileList.push(file.name));
       listingsCSV.forEach(file => fileList.push(file.name));
@@ -1131,15 +1163,77 @@ Return your answer as plain text.`;
       navigator.clipboard.writeText(document.getElementById("listingDescription").value).catch(err => console.error("Error copying description: " + err));
     });
     
+    // ----- UI Position Persistence & Live Preview for Configure Buttons -----
+    document.getElementById("configureButtonsBtn").addEventListener("click", function() {
+      var configContainer = document.getElementById("buttonConfigContainer");
+      configContainer.innerHTML = "";
+      var selectors = "button:not(#configureButtonsBtn), #listingDescContainer, #ordersDropZone, #listingsDropZone, #dropZone, #csvProgressContainer, #previewGridContainer, #primaryPreview, #container13, #uploadedFilesList";
+      var elements = document.querySelectorAll(selectors);
+      var table = document.createElement("table");
+      table.className = "striped";
+      var thead = document.createElement("thead");
+      thead.innerHTML = "<tr><th>Element ID</th><th>Top (px)</th><th>Left (px)</th></tr>";
+      table.appendChild(thead);
+      var tbody = document.createElement("tbody");
+      elements.forEach(function(el) {
+        var id = el.id;
+        var computedStyle = window.getComputedStyle(el);
+        var currentTop = el.style.top || computedStyle.top || "0";
+        var currentLeft = el.style.left || computedStyle.left || "0";
+        var tr = document.createElement("tr");
+        tr.innerHTML = `<td>${id}</td>
+                        <td><input type="number" id="${id}_top" value="${parseInt(currentTop)||0}"></td>
+                        <td><input type="number" id="${id}_left" value="${parseInt(currentLeft)||0}"></td>`;
+        var topInput = tr.querySelector(`#${id}_top`);
+        var leftInput = tr.querySelector(`#${id}_left`);
+        topInput.addEventListener("input", function() { el.style.top = topInput.value + "px"; });
+        leftInput.addEventListener("input", function() { el.style.left = leftInput.value + "px"; });
+        tbody.appendChild(tr);
+      });
+      table.appendChild(tbody);
+      configContainer.appendChild(table);
+      var modalElem = document.getElementById("buttonConfigModal");
+      var modalInstance = M.Modal.getInstance(modalElem) || M.Modal.init(modalElem, { preventScrolling: false });
+      modalInstance.open();
+    });
+    
+    document.getElementById("saveButtonPositionsBtn").addEventListener("click", function() {
+      var selectors = "button:not(#configureButtonsBtn), #listingDescContainer, #ordersDropZone, #listingsDropZone, #dropZone, #csvProgressContainer, #previewGridContainer, #primaryPreview, #container13, #uploadedFilesList";
+      var elements = document.querySelectorAll(selectors);
+      var positions = {};
+      elements.forEach(function(el) {
+        positions[el.id] = { top: el.style.top || "0px", left: el.style.left || "0px" };
+      });
+      localStorage.setItem("buttonPositions", JSON.stringify(positions));
+      M.toast({ html: "Button positions saved." });
+    });
+    
+    function loadButtonPositions() {
+      var stored = localStorage.getItem("buttonPositions");
+      if (stored) {
+        var positions = JSON.parse(stored);
+        for (var id in positions) {
+          var el = document.getElementById(id);
+          if (el) {
+            el.style.top = positions[id].top;
+            el.style.left = positions[id].left;
+          }
+        }
+      }
+    }
+    // -------------------------------------------------------------------------
+    
+    window.addEventListener("load", function() {
+      var container13 = document.getElementById("container13");
+      container13.style.height = (container13.offsetHeight * 2.5) + "px";
+    });
+    
+    document.getElementById("listingDescInput").addEventListener("input", function() {
+      document.getElementById("searchKeyPhrases").value = "";
+    });
+    
     // Utility delay function
     function delay(ms) { return new Promise(resolve => setTimeout(resolve, ms)); }
-    
-    // Dummy render functions (implement as needed)
-    function renderPreviewGrid() {
-      console.log("Rendering preview grid...");
-    }
-    
-    // End of file
   </script>
 </body>
 </html>
