@@ -3,8 +3,8 @@ const fetch = require("node-fetch");
 exports.handler = async function (event, context) {
   try {
     // Parse the incoming JSON body.
-    const { listingId, token, fileName, fileContent, rank } = JSON.parse(event.body);
-    if (!listingId || !token || !fileName || !fileContent) {
+    const { listingId, token, fileName, dataURL, rank } = JSON.parse(event.body);
+    if (!listingId || !token || !fileName || !dataURL) {
       return {
         statusCode: 400,
         body: JSON.stringify({ error: "Missing required parameters." }),
@@ -39,8 +39,9 @@ exports.handler = async function (event, context) {
     console.log("Uploading image to URL:", uploadUrl);
 
     // Prepare the payload.
+    // Now, we send the full dataURL (including MIME type) instead of splitting it.
     const payload = {
-      file: fileContent, // Base64 string (without the data URL prefix)
+      file: dataURL, // dataURL includes "data:image/jpeg;base64," or similar
       name: fileName,
       rank: rank || 1,
     };
