@@ -192,7 +192,7 @@
     /* Additional widths for Etsy Link and Shop Listings */
     #etsyLink, #shopListings { width: 500px !important; }
     
-    /* Styles for the Update Listing button container at the bottom center */
+    /* Update Listing button container at the bottom center */
     #uploadContainer {
       position: fixed;
       bottom: 20px;
@@ -200,9 +200,8 @@
       transform: translateX(-50%);
       display: inline-block;
     }
-    
-    /* New lookUP button to show generated JSON payload (to the right of Update Listing) */
-    #lookUPBtn {
+    /* New Photo Upload button container (to the right of Update Listing) */
+    #photoUploadBtn {
       position: fixed;
       bottom: 20px;
       left: calc(50% + 120px);
@@ -252,13 +251,13 @@
     <button id="analyzeMetadataBtn" class="btn waves-effect waves-light configurable">Analyze Photos</button>
     <button id="showAnalyzeRulesBtn" class="btn waves-effect waves-light configurable" data-target="analyzeRulesModal" style="margin-top:25px;">Analyze Rules</button>
   </div>
+  
   <div id="container13" class="flex-container configurable">
     <div class="textbox-container configurable">
       <textarea id="searchKeyPhrases" class="materialize-textarea" rows="14"></textarea>
     </div>
   </div>
   
-  <!-- Components below Search Key Phrases -->
   <div id="belowSearch">
     <button id="generateBtn" class="btn waves-effect waves-light configurable">Generate</button>
     <div class="title-container" style="margin-top: -50px;">
@@ -294,34 +293,21 @@
     </div>
   </div>
   
-  <!-- Preview Grid Container -->
   <div id="previewGridContainer">
     <div id="previewGrid"></div>
   </div>
   
-  <!-- Update Listing button container (updates an existing listing) -->
+  <!-- Update Listing button container -->
   <div id="uploadContainer">
     <button id="uploadToEtsyBtn" class="btn waves-effect waves-light configurable">Update Listing</button>
   </div>
   
-  <!-- New lookUP button to show generated JSON payload -->
-  <div id="lookUPBtn">
-    <button id="lookUpPayloadBtn" class="btn waves-effect waves-light configurable">lookUP</button>
+  <!-- New Photo Upload button container -->
+  <div id="photoUploadBtn">
+    <button id="photoUploadTriggerBtn" class="btn waves-effect waves-light configurable">Photo Upload</button>
   </div>
   
-  <!-- Modal for lookUP (shows JSON payload) -->
-  <div id="payloadModal" class="modal">
-    <div class="modal-content">
-      <h4>Generated Update Payload</h4>
-      <pre id="payloadOutput"></pre>
-    </div>
-    <div class="modal-footer">
-      <a href="#!" class="modal-close waves-effect waves-green btn">Close</a>
-    </div>
-  </div>
-  
-  <!-- Modals for rules and other configuration -->
-  <!-- Title Rules Modal -->
+  <!-- Modals -->
   <div id="titleRulesModal" class="modal">
     <div class="modal-content">
       <h4>Title Rules</h4>
@@ -361,7 +347,6 @@ Prohibited Words:
     </div>
   </div>
   
-  <!-- Description Rules Modal -->
   <div id="descriptionRulesModal" class="modal">
     <div class="modal-content">
       <h4>Description Rules</h4>
@@ -386,7 +371,6 @@ Option 3:
     </div>
   </div>
   
-  <!-- Analyze Rules Modal -->
   <div id="analyzeRulesModal" class="modal">
     <div class="modal-content">
       <h4>Photo Analysis Rules</h4>
@@ -407,7 +391,6 @@ Default Photo Analysis Rules:
     </div>
   </div>
   
-  <!-- Keyword Rules Modal -->
   <div id="keywordRulesModal" class="modal">
     <div class="modal-content">
       <h4>Keyword Rules</h4>
@@ -428,7 +411,6 @@ Using Sales Report and Product List Files:
     </div>
   </div>
   
-  <!-- Button Config Modal -->
   <div id="buttonConfigModal" class="modal">
     <div class="modal-content">
       <h4>Configure Button Positions</h4>
@@ -440,7 +422,6 @@ Using Sales Report and Product List Files:
     </div>
   </div>
   
-  <!-- Metadata Modal -->
   <div id="metadataModal" class="modal">
     <div class="modal-content">
       <h4>Photo Metadata</h4>
@@ -451,7 +432,6 @@ Using Sales Report and Product List Files:
     </div>
   </div>
   
-  <!-- Crop Modal -->
   <div id="photoCropModal" class="modal">
     <div class="crop-container">
       <h4 style="text-align:center; margin: 0 0 10px 0;">Crop Photo</h4>
@@ -469,19 +449,16 @@ Using Sales Report and Product List Files:
     </div>
   </div>
   
-  <!-- Include jQuery and Materialize JS -->
   <script src="https://code.jquery.com/jquery-3.6.0.min.js"></script>
   <script src="https://cdnjs.cloudflare.com/ajax/libs/materialize/1.0.0/js/materialize.min.js"></script>
   
   <script>
-    // Global variable declarations
     const ETSY_SHOP_URL = "https://www.etsy.com/shop/custombrites";
     const CLIENT_ID = "k75zdspz4r99txpqdji7i2em";
     const REDIRECT_URI = "https://delicate-tanuki-616ac0.netlify.app/";
     const modelName = "chatgpt-4o-latest";
     let accessToken;
     
-    // Global variables for file uploads and previews (if needed)
     let soldOrdersCSV = [];
     let listingsCSV = [];
     let photoNames = [];
@@ -490,7 +467,6 @@ Using Sales Report and Product List Files:
     let photoMeta = [];
     let photoObjects = [];
     
-    // Proxy OpenAI calls through our Netlify function
     async function callOpenAI(payload) {
       const response = await fetch("/.netlify/functions/openaiProxy", {
         method: "POST",
@@ -504,7 +480,6 @@ Using Sales Report and Product List Files:
       return await response.json();
     }
     
-    // File upload functions using our Netlify function "uploadFile"
     async function uploadCSVFile(file, progressCallback) {
       return new Promise((resolve, reject) => {
         const reader = new FileReader();
@@ -565,7 +540,6 @@ Using Sales Report and Product List Files:
       });
     }
     
-    // PKCE Utility Functions
     function generateRandomString(length) {
       const possible = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789-._~';
       let text = '';
@@ -587,7 +561,6 @@ Using Sales Report and Product List Files:
       return base64urlEncode(digest);
     }
     
-    // OAuth Flow for Etsy
     document.getElementById("connectEtsyBtn").addEventListener("click", async () => {
       const state = "randomState123";
       const scope = "listings_w listings_r";
@@ -636,7 +609,6 @@ Using Sales Report and Product List Files:
       }
     }
     
-    // Function to update an existing listing via updateListing.js proxy
     async function updateExistingListing() {
       const listingInput = document.getElementById("shopListings").value.trim();
       if (!listingInput) {
@@ -655,25 +627,18 @@ Using Sales Report and Product List Files:
           return;
         }
       }
-      
-      // Build the update payload dynamically from textareas.
-      const updatePayload = {
+      const payload = {
         title: document.getElementById("listingTitle").value,
         description: document.getElementById("listingDescription").value,
-        tags: document.getElementById("searchKeyPhrases").value
-                .split("\n")
-                .map(s => s.trim())
-                .filter(s => s !== "")
+        tags: document.getElementById("searchKeyPhrases").value.split("\n").map(s => s.trim()).filter(s => s !== "")
       };
-      console.log("Update payload:", updatePayload);
-      
-      // Call the updateListing.js Netlify function.
+      console.log("Update payload:", payload);
       const updateUrl = `/.netlify/functions/updateListing?listingId=${listingId}&token=${encodeURIComponent(accessToken)}`;
       try {
         const response = await fetch(updateUrl, {
           method: "PUT",
           headers: { "Content-Type": "application/json" },
-          body: JSON.stringify(updatePayload)
+          body: JSON.stringify(payload)
         });
         console.log("Update Listing response status:", response.status);
         if (!response.ok) {
@@ -691,30 +656,63 @@ Using Sales Report and Product List Files:
       }
     }
     
-    // Bind the "Update Listing" button to updateExistingListing()
     document.getElementById("uploadToEtsyBtn").addEventListener("click", updateExistingListing);
     
-    // New button "lookUP" to show the generated JSON payload in a modal
-    document.getElementById("lookUpPayloadBtn").addEventListener("click", () => {
-      const generatedTitle = document.getElementById("listingTitle").value;
-      const generatedDescription = document.getElementById("listingDescription").value;
-      const generatedTags = document.getElementById("searchKeyPhrases").value
-                              .split("\n")
-                              .map(tag => tag.trim())
-                              .filter(tag => tag !== "");
+    // New Photo Upload button functionality
+    document.getElementById("photoUploadTriggerBtn").addEventListener("click", async () => {
+      const listingInput = document.getElementById("shopListings").value.trim();
+      if (!listingInput) {
+        M.toast({ html: "Please provide a listing URL or ID in 'My Etsy Shop Listings'." });
+        return;
+      }
+      let listingId;
+      if (/^\d+$/.test(listingInput)) {
+        listingId = listingInput;
+      } else {
+        const match = listingInput.match(/\/listing\/(\d+)/);
+        if (match) {
+          listingId = match[1];
+        } else {
+          M.toast({ html: "Invalid listing URL or ID." });
+          return;
+        }
+      }
+      if (previewImages.length === 0) {
+        M.toast({ html: "No image available. Please drop an image in the drop zone." });
+        return;
+      }
+      const imageDataUrl = previewImages[0];
+      const base64Content = imageDataUrl.split(',')[1];
       const payload = {
-        title: generatedTitle,
-        description: generatedDescription,
-        tags: generatedTags
+        listingId: listingId,
+        token: accessToken,
+        fileName: "uploaded_photo.jpg",
+        fileContent: base64Content,
+        rank: 1
       };
-      // Display payload in the modal
-      document.getElementById("payloadOutput").textContent = JSON.stringify(payload, null, 2);
-      // Open the modal
-      const payloadModalElem = document.getElementById("payloadModal");
-      M.Modal.init(payloadModalElem, { preventScrolling: false }).open();
+      try {
+        const response = await fetch("/.netlify/functions/imageUpload", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify(payload)
+        });
+        console.log("Photo Upload response status:", response.status);
+        if (!response.ok) {
+          const errorText = await response.text();
+          console.error("Error uploading photo:", errorText);
+          M.toast({ html: "Error uploading photo: " + response.status + " - " + errorText });
+        } else {
+          const data = await response.json();
+          console.log("Photo uploaded successfully:", data);
+          M.toast({ html: "Photo uploaded successfully!" });
+        }
+      } catch (e) {
+        console.error("Exception during photo upload:", e);
+        M.toast({ html: "Photo upload exception: " + e.message });
+      }
     });
     
-    // File Drop and Upload Handlers (unchanged)
+    // File drop and upload handlers
     const dropZone = document.getElementById("dropZone");
     const previewGrid = document.getElementById("previewGrid");
     const primaryPreview = document.getElementById("primaryPreview");
@@ -736,19 +734,19 @@ Using Sales Report and Product List Files:
       }
     });
     
-    dropZone.addEventListener("dragover", e => { 
-      e.preventDefault(); 
-      e.stopPropagation(); 
-      dropZone.style.borderColor = "#000"; 
+    dropZone.addEventListener("dragover", e => {
+      e.preventDefault();
+      e.stopPropagation();
+      dropZone.style.borderColor = "#000";
     });
-    dropZone.addEventListener("dragleave", e => { 
-      e.preventDefault(); 
-      e.stopPropagation(); 
-      dropZone.style.borderColor = "#ccc"; 
+    dropZone.addEventListener("dragleave", e => {
+      e.preventDefault();
+      e.stopPropagation();
+      dropZone.style.borderColor = "#ccc";
     });
     dropZone.addEventListener("drop", async e => {
-      e.preventDefault(); 
-      e.stopPropagation(); 
+      e.preventDefault();
+      e.stopPropagation();
       dropZone.style.borderColor = "#ccc";
       const files = e.dataTransfer.files;
       if (files.length > 10) alert("Maximum 10 images allowed.");
@@ -779,19 +777,19 @@ Using Sales Report and Product List Files:
     });
     
     const ordersDropZone = document.getElementById("ordersDropZone");
-    ordersDropZone.addEventListener("dragover", e => { 
-      e.preventDefault(); 
-      e.stopPropagation(); 
-      ordersDropZone.style.borderColor = "#000"; 
+    ordersDropZone.addEventListener("dragover", e => {
+      e.preventDefault();
+      e.stopPropagation();
+      ordersDropZone.style.borderColor = "#000";
     });
-    ordersDropZone.addEventListener("dragleave", e => { 
-      e.preventDefault(); 
-      e.stopPropagation(); 
-      ordersDropZone.style.borderColor = "#ccc"; 
+    ordersDropZone.addEventListener("dragleave", e => {
+      e.preventDefault();
+      e.stopPropagation();
+      ordersDropZone.style.borderColor = "#ccc";
     });
     ordersDropZone.addEventListener("drop", async e => {
-      e.preventDefault(); 
-      e.stopPropagation(); 
+      e.preventDefault();
+      e.stopPropagation();
       ordersDropZone.style.borderColor = "#ccc";
       const files = e.dataTransfer.files;
       const progressBar = document.getElementById("csvProgressBar");
@@ -820,19 +818,19 @@ Using Sales Report and Product List Files:
     });
     
     const listingsDropZone = document.getElementById("listingsDropZone");
-    listingsDropZone.addEventListener("dragover", e => { 
-      e.preventDefault(); 
-      e.stopPropagation(); 
-      listingsDropZone.style.borderColor = "#000"; 
+    listingsDropZone.addEventListener("dragover", e => {
+      e.preventDefault();
+      e.stopPropagation();
+      listingsDropZone.style.borderColor = "#000";
     });
-    listingsDropZone.addEventListener("dragleave", e => { 
-      e.preventDefault(); 
-      e.stopPropagation(); 
-      listingsDropZone.style.borderColor = "#ccc"; 
+    listingsDropZone.addEventListener("dragleave", e => {
+      e.preventDefault();
+      e.stopPropagation();
+      listingsDropZone.style.borderColor = "#ccc";
     });
     listingsDropZone.addEventListener("drop", async e => {
-      e.preventDefault(); 
-      e.stopPropagation(); 
+      e.preventDefault();
+      e.stopPropagation();
       listingsDropZone.style.borderColor = "#ccc";
       const files = e.dataTransfer.files;
       const progressBar = document.getElementById("csvProgressBar");
@@ -891,7 +889,20 @@ Using Sales Report and Product List Files:
       document.getElementById("uploadedFilesList").value = fileList.join("\n");
     }
     
-    // ----- UI Position Persistence & Live Preview for Configure Buttons -----
+    function loadButtonPositions() {
+      var stored = localStorage.getItem("buttonPositions");
+      if (stored) {
+        var positions = JSON.parse(stored);
+        for (var id in positions) {
+          var el = document.getElementById(id);
+          if (el) {
+            el.style.top = positions[id].top;
+            el.style.left = positions[id].left;
+          }
+        }
+      }
+    }
+    
     document.getElementById("configureButtonsBtn").addEventListener("click", function() {
       var configContainer = document.getElementById("buttonConfigContainer");
       configContainer.innerHTML = "";
@@ -936,21 +947,6 @@ Using Sales Report and Product List Files:
       M.toast({ html: "Button positions saved." });
     });
     
-    function loadButtonPositions() {
-      var stored = localStorage.getItem("buttonPositions");
-      if (stored) {
-        var positions = JSON.parse(stored);
-        for (var id in positions) {
-          var el = document.getElementById(id);
-          if (el) {
-            el.style.top = positions[id].top;
-            el.style.left = positions[id].left;
-          }
-        }
-      }
-    }
-    // -------------------------------------------------------------------------
-    
     window.addEventListener("load", function() {
       var container13 = document.getElementById("container13");
       container13.style.height = (container13.offsetHeight * 2.5) + "px";
@@ -960,7 +956,6 @@ Using Sales Report and Product List Files:
       document.getElementById("searchKeyPhrases").value = "";
     });
     
-    // Utility: Strip Markdown formatting from JSON responses.
     function stripMarkdownJSON(text) {
       return text.replace(/^```json\s*/, "").replace(/\s*```$/, "").trim();
     }
@@ -1165,7 +1160,6 @@ Return your answer as plain text.`;
       navigator.clipboard.writeText(document.getElementById("listingDescription").value).catch(err => console.error("Error copying description: " + err));
     });
     
-    // Utility delay function
     function delay(ms) { return new Promise(resolve => setTimeout(resolve, ms)); }
     
     // (Assume renderPreviewGrid and other utility functions exist as needed)
