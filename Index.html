@@ -6,20 +6,13 @@
     <!-- Favicon -->
     <link rel="icon" type="image/png" href="assets/favicon.png">
     <!-- Import Google Material Icons and Materialize CSS -->
-    <link
-      href="https://fonts.googleapis.com/icon?family=Material+Icons"
-      rel="stylesheet"
-    />
-    <link
-      rel="stylesheet"
-      href="https://cdnjs.cloudflare.com/ajax/libs/materialize/1.0.0/css/materialize.min.css"
-    />
+    <link href="https://fonts.googleapis.com/icon?family=Material+Icons" rel="stylesheet">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/materialize/1.0.0/css/materialize.min.css">
     <!-- Include piexifjs for EXIF manipulation -->
     <script src="https://cdn.jsdelivr.net/npm/piexifjs@1.0.4/piexif.min.js"></script>
     <style>
       /* Basic layout */
-      html,
-      body {
+      html, body {
         margin: 0;
         padding: 0;
         width: 100vw;
@@ -31,13 +24,10 @@
         box-sizing: border-box;
         text-align: left;
       }
-      h5,
-      label,
-      p {
+      h5, label, p {
         text-align: left;
       }
-      input,
-      textarea {
+      input, textarea {
         width: 100%;
         box-sizing: border-box;
       }
@@ -123,9 +113,7 @@
         margin-top: 5px;
       }
       /* Drag and Drop Boxes */
-      #dropZone,
-      #ordersDropZone,
-      #listingsDropZone {
+      #dropZone, #ordersDropZone, #listingsDropZone {
         width: 138px;
         height: 138px;
         border: 2px dashed #ccc;
@@ -358,26 +346,23 @@
         resize: none;
       }
       /* Additional widths for Etsy Link and Shop Listings */
-      #etsyLink,
-      #shopListings {
+      #etsyLink, #shopListings {
         width: 500px !important;
       }
-      /* Styles for the Upload to Etsy and Update Listing button container at the bottom center */
+      /* Styles for the Upload to Etsy button container at the bottom center */
       #uploadContainer {
         position: fixed;
         bottom: 20px;
         left: 50%;
         transform: translateX(-50%);
-        display: flex;
-        gap: 10px;
+        display: inline-block;
       }
     </style>
   </head>
   <body>
     <!-- Configure Buttons control -->
-    <button id="configureButtonsBtn" class="btn waves-effect waves-light configurable">
-      Configure Buttons
-    </button>
+    <button id="configureButtonsBtn" class="btn waves-effect waves-light configurable">Configure Buttons</button>
+    
     <!-- Wrap Listing Description and File Drop Zones -->
     <div id="descriptionAndFileUploadContainer">
       <div class="listing-desc-container" id="listingDescContainer">
@@ -392,52 +377,38 @@
           </div>
         </div>
         <div id="listingsDropZone">Etsy Listings</div>
-        <textarea
-          id="uploadedFilesList"
-          class="materialize-textarea"
-          rows="2"
-          placeholder="Uploaded .csv, .doc, .docx files will appear here"
-        ></textarea>
+        <textarea id="uploadedFilesList" class="materialize-textarea" rows="2" placeholder="Uploaded .csv, .doc, .docx files will appear here"></textarea>
       </div>
     </div>
+    
     <!-- Etsy OAuth and Shop Listings Section -->
-    <button id="connectEtsyBtn" class="btn waves-effect waves-light configurable">
-      Connect to Etsy
-    </button>
+    <button id="connectEtsyBtn" class="btn waves-effect waves-light configurable">Connect to Etsy</button>
     <div style="margin-top: -180px; margin-left: 10px;">
       <div class="section-heading configurable">My Etsy Shop Listings</div>
       <div class="textbox-container configurable">
         <textarea id="shopListings" class="materialize-textarea"></textarea>
       </div>
     </div>
+    
     <!-- Etsy Listing Generator UI -->
     <div class="phrases-header configurable" style="position: relative; top: 125px; left: 10px;">
       <span class="section-heading configurable">2. User Provided Search Key Phrases</span>
-      <button id="clearKeyPhrasesBtn" class="btn-small waves-effect waves-light configurable">
-        Clear
-      </button>
-      <button id="copyKeyPhrasesBtn" class="btn-small waves-effect waves-light configurable">
-        Copy
-      </button>
+      <button id="clearKeyPhrasesBtn" class="btn-small waves-effect waves-light configurable">Clear</button>
+      <button id="copyKeyPhrasesBtn" class="btn-small waves-effect waves-light configurable">Copy</button>
       <div id="dropZone" class="configurable">Drop Image Here</div>
       <div id="primaryPreview" class="configurable"></div>
-      <button id="analyzeMetadataBtn" class="btn waves-effect waves-light configurable">
-        Analyze Photos
-      </button>
-      <button id="showAnalyzeRulesBtn" class="btn waves-effect waves-light configurable" data-target="analyzeRulesModal" style="margin-top:25px;">
-        Analyze Rules
-      </button>
+      <button id="analyzeMetadataBtn" class="btn waves-effect waves-light configurable">Analyze Photos</button>
+      <button id="showAnalyzeRulesBtn" class="btn waves-effect waves-light configurable" data-target="analyzeRulesModal" style="margin-top:25px;">Analyze Rules</button>
     </div>
     <div id="container13" class="flex-container configurable">
       <div class="textbox-container configurable">
         <textarea id="searchKeyPhrases" class="materialize-textarea" rows="14"></textarea>
       </div>
     </div>
+    
     <!-- Components below Search Key Phrases -->
     <div id="belowSearch">
-      <button id="generateBtn" class="btn waves-effect waves-light configurable">
-        Generate
-      </button>
+      <button id="generateBtn" class="btn waves-effect waves-light configurable">Generate</button>
       <div class="title-container" style="margin-top: -50px;">
         <div class="section-heading configurable">Etsy Listing TITLE</div>
         <div class="flex-container configurable">
@@ -445,16 +416,12 @@
             <textarea id="listingTitle" class="materialize-textarea" rows="2"></textarea>
           </div>
           <div class="button-container configurable" style="margin-top: -60px;">
-            <button id="regenTitleBtn" class="btn-small waves-effect waves-light configurable">
-              Re-Generate
-            </button>
+            <button id="regenTitleBtn" class="btn-small waves-effect waves-light configurable">Re-Generate</button>
             <button id="copyTitleBtn" class="btn-small waves-effect waves-light configurable">
               <i class="material-icons">content_copy</i>
             </button>
           </div>
-          <button id="showTitleRulesBtn" class="btn waves-effect waves-light rules-button configurable" data-target="titleRulesModal">
-            Title Rules
-          </button>
+          <button id="showTitleRulesBtn" class="btn waves-effect waves-light rules-button configurable" data-target="titleRulesModal">Title Rules</button>
         </div>
         <p id="titleCount" class="count-text configurable">Count: 0</p>
       </div>
@@ -465,33 +432,26 @@
             <textarea id="listingDescription" class="materialize-textarea"></textarea>
           </div>
           <div class="button-container configurable">
-            <button id="regenDescriptionBtn" class="btn-small waves-effect waves-light configurable">
-              Re-Generate
-            </button>
+            <button id="regenDescriptionBtn" class="btn-small waves-effect waves-light configurable">Re-Generate</button>
             <button id="copyDescriptionBtn" class="btn-small waves-effect waves-light configurable">
               <i class="material-icons">content_copy</i>
             </button>
           </div>
-          <button id="showDescriptionRulesBtn" class="btn waves-effect waves-light rules-button configurable" data-target="descriptionRulesModal">
-            Description Rules
-          </button>
+          <button id="showDescriptionRulesBtn" class="btn waves-effect waves-light rules-button configurable" data-target="descriptionRulesModal">Description Rules</button>
         </div>
       </div>
     </div>
+    
     <!-- Preview Grid Container -->
     <div id="previewGridContainer">
       <div id="previewGrid"></div>
     </div>
-    <!-- Upload and Update Listing button container -->
+    
+    <!-- Upload to Etsy button container -->
     <div id="uploadContainer">
-      <button id="uploadToEtsyBtn" class="btn waves-effect waves-light configurable">
-        Upload to Etsy
-      </button>
-      <!-- New Update Listing Button -->
-      <button id="updateListingBtn" class="btn waves-effect waves-light configurable">
-        Update Listing
-      </button>
+      <button id="uploadToEtsyBtn" class="btn waves-effect waves-light configurable">Upload to Etsy</button>
     </div>
+    
     <!-- Modals -->
     <!-- Title Rules Modal -->
     <div id="titleRulesModal" class="modal">
@@ -529,9 +489,7 @@ Prohibited Words:
         </textarea>
       </div>
       <div class="modal-footer">
-        <a href="#!" id="updateTitleRulesBtn" class="modal-close waves-effect waves-green btn">
-          Update
-        </a>
+        <a href="#!" id="updateTitleRulesBtn" class="modal-close waves-effect waves-green btn">Update</a>
       </div>
     </div>
     <!-- Description Rules Modal -->
@@ -555,9 +513,7 @@ Option 3:
         </textarea>
       </div>
       <div class="modal-footer">
-        <a href="#!" id="updateDescriptionRulesBtn" class="modal-close waves-effect waves-green btn">
-          Update
-        </a>
+        <a href="#!" id="updateDescriptionRulesBtn" class="modal-close waves-effect waves-green btn">Update</a>
       </div>
     </div>
     <!-- Analyze Rules Modal -->
@@ -577,9 +533,7 @@ Default Photo Analysis Rules:
         </textarea>
       </div>
       <div class="modal-footer">
-        <a href="#!" id="updateAnalyzeRulesBtn" class="modal-close waves-effect waves-green btn">
-          Update
-        </a>
+        <a href="#!" id="updateAnalyzeRulesBtn" class="modal-close waves-effect waves-green btn">Update</a>
       </div>
     </div>
     <!-- Keyword Rules Modal -->
@@ -599,9 +553,7 @@ Using Sales Report and Product List Files:
         </textarea>
       </div>
       <div class="modal-footer">
-        <a href="#!" id="updateKeywordRulesBtn" class="modal-close waves-effect waves-green btn">
-          Update
-        </a>
+        <a href="#!" id="updateKeywordRulesBtn" class="modal-close waves-effect waves-green btn">Update</a>
       </div>
     </div>
     <!-- Button Config Modal -->
@@ -612,9 +564,7 @@ Using Sales Report and Product List Files:
         <textarea id="uploadedFilesListModal" class="materialize-textarea" rows="2" placeholder="Uploaded files will appear here"></textarea>
       </div>
       <div class="modal-footer">
-        <a href="#!" id="saveButtonPositionsBtn" class="modal-close waves-effect waves-green btn">
-          Save Positions
-        </a>
+        <a href="#!" id="saveButtonPositionsBtn" class="modal-close waves-effect waves-green btn">Save Positions</a>
       </div>
     </div>
     <!-- Metadata Modal -->
@@ -624,9 +574,7 @@ Using Sales Report and Product List Files:
         <textarea id="metadataTextarea" readonly></textarea>
       </div>
       <div class="modal-footer">
-        <a href="#!" id="closeMetadataBtn" class="modal-close waves-effect waves-green btn">
-          Close
-        </a>
+        <a href="#!" id="closeMetadataBtn" class="modal-close waves-effect waves-green btn">Close</a>
       </div>
     </div>
     <!-- Crop Modal -->
@@ -641,15 +589,12 @@ Using Sales Report and Product List Files:
           <input type="range" id="zoomSlider" min="0.1" max="3" step="0.01" value="1">
         </div>
         <div style="text-align:center; margin-top:10px;">
-          <button id="saveCropBtn" class="btn waves-effect waves-light">
-            Save
-          </button>
-          <button id="cancelCropBtn" class="btn waves-effect waves-light" style="background-color:#f44336; margin-left:10px;">
-            Cancel
-          </button>
+          <button id="saveCropBtn" class="btn waves-effect waves-light">Save</button>
+          <button id="cancelCropBtn" class="btn waves-effect waves-light" style="background-color:#f44336; margin-left:10px;">Cancel</button>
         </div>
       </div>
     </div>
+    
     <!-- Include jQuery and Materialize JS -->
     <script src="https://code.jquery.com/jquery-3.6.0.min.js"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/materialize/1.0.0/js/materialize.min.js"></script>
@@ -658,7 +603,6 @@ Using Sales Report and Product List Files:
       const ETSY_SHOP_URL = "https://www.etsy.com/shop/custombrites";
       const CLIENT_ID = "k75zdspz4r99txpqdji7i2em";
       const REDIRECT_URI = "https://delicate-tanuki-616ac0.netlify.app/";
-      // SHOP_ID is not used on the client; it's used only server side.
       const modelName = "chatgpt-4o-latest";
       let accessToken;
       
@@ -847,7 +791,6 @@ Using Sales Report and Product List Files:
           let data = await response.json();
           console.log("New listing created:", data);
           M.toast({ html: "Listing duplicated as Draft successfully!" });
-          // (Optional) You could call updateInventory here automatically if desired.
         } catch (e) {
           console.error("Error in duplicateListing function:", e);
           M.toast({ html: "Error duplicating listing: " + e.message });
@@ -856,51 +799,6 @@ Using Sales Report and Product List Files:
       
       // Attach duplicateListing to the Upload to Etsy button.
       document.getElementById("uploadToEtsyBtn").addEventListener("click", duplicateListing);
-      
-      // New function: Update Listing from client – extracts generated title, description, and tags
-      async function updateListingFromClient() {
-        // Extract the listing ID from the shopListings textarea.
-        const listingId = document.getElementById("shopListings").value.trim();
-        // Use the accessToken from the OAuth flow
-        const token = accessToken;
-        if (!listingId || !token) {
-          M.toast({ html: "Missing listing ID or token." });
-          return;
-        }
-        // Extract generated Title, Description, and Tags from their textareas.
-        const updatedTitle = document.getElementById("listingTitle").value;
-        const updatedDescription = document.getElementById("listingDescription").value;
-        // Assume tags are separated by newlines; convert them to an array.
-        const tagsArray = document.getElementById("searchKeyPhrases").value
-          .split("\n")
-          .map(tag => tag.trim())
-          .filter(tag => tag.length > 0);
-          
-        // Construct the URL for the updateListing Netlify function.
-        const updateUrl = `/.netlify/functions/updateListing?listingId=${encodeURIComponent(listingId)}&token=${encodeURIComponent(token)}&title=${encodeURIComponent(updatedTitle)}&description=${encodeURIComponent(updatedDescription)}&tags=${encodeURIComponent(JSON.stringify(tagsArray))}`;
-        
-        console.log("Calling updateListing function with URL:", updateUrl);
-        
-        try {
-          const response = await fetch(updateUrl);
-          console.log("Update Listing response status:", response.status);
-          if (!response.ok) {
-            const errorText = await response.text();
-            console.error("Error updating listing:", errorText);
-            M.toast({ html: "Error updating listing: " + errorText });
-          } else {
-            const data = await response.json();
-            console.log("Listing updated successfully:", data);
-            M.toast({ html: "Listing updated successfully!" });
-          }
-        } catch (error) {
-          console.error("Exception in updateListingFromClient:", error);
-          M.toast({ html: "Exception updating listing: " + error.message });
-        }
-      }
-      
-      // Attach the new Update Listing function to the Update Listing button.
-      document.getElementById("updateListingBtn").addEventListener("click", updateListingFromClient);
       
       // File Drop and Upload Handlers
       const dropZone = document.getElementById("dropZone");
@@ -919,9 +817,7 @@ Using Sales Report and Product List Files:
         if (previewImages.length > 0) {
           document.getElementById("cropImage").src = previewImages[0];
           let cropModalElem = document.getElementById("photoCropModal");
-          let cropModalInstance =
-            M.Modal.getInstance(cropModalElem) ||
-            M.Modal.init(cropModalElem, { preventScrolling: false });
+          let cropModalInstance = M.Modal.getInstance(cropModalElem) || M.Modal.init(cropModalElem, { preventScrolling: false });
           cropModalInstance.open();
         }
       });
@@ -1107,7 +1003,8 @@ Using Sales Report and Product List Files:
         var table = document.createElement("table");
         table.className = "striped";
         var thead = document.createElement("thead");
-        thead.innerHTML = "<tr><th>Element ID</th><th>Top (px)</th><th>Left (px)</th></tr>";
+        thead.innerHTML =
+          "<tr><th>Element ID</th><th>Top (px)</th><th>Left (px)</th></tr>";
         table.appendChild(thead);
         var tbody = document.createElement("tbody");
         elements.forEach(function (el) {
@@ -1366,10 +1263,7 @@ Return your answer as plain text.`;
       }
       
       document.getElementById("copyKeyPhrasesBtn").addEventListener("click", () => {
-        const lines = document.getElementById("searchKeyPhrases").value
-          .split(/\n+/)
-          .map(l => l.trim())
-          .filter(l => l !== "");
+        const lines = document.getElementById("searchKeyPhrases").value.split(/\n+/).map(l => l.trim()).filter(l => l !== "");
         navigator.clipboard.writeText(lines.join(", ")).catch(err =>
           console.error("Error copying key phrases: " + err)
         );
@@ -1393,14 +1287,12 @@ Return your answer as plain text.`;
       document.getElementById("configureButtonsBtn").addEventListener("click", function () {
         var configContainer = document.getElementById("buttonConfigContainer");
         configContainer.innerHTML = "";
-        var selectors =
-          "button:not(#configureButtonsBtn), #listingDescContainer, #ordersDropZone, #listingsDropZone, #dropZone, #csvProgressContainer, #previewGridContainer, #primaryPreview, #container13, #uploadedFilesList";
+        var selectors = "button:not(#configureButtonsBtn), #listingDescContainer, #ordersDropZone, #listingsDropZone, #dropZone, #csvProgressContainer, #previewGridContainer, #primaryPreview, #container13, #uploadedFilesList";
         var elements = document.querySelectorAll(selectors);
         var table = document.createElement("table");
         table.className = "striped";
         var thead = document.createElement("thead");
-        thead.innerHTML =
-          "<tr><th>Element ID</th><th>Top (px)</th><th>Left (px)</th></tr>";
+        thead.innerHTML = "<tr><th>Element ID</th><th>Top (px)</th><th>Left (px)</th></tr>";
         table.appendChild(thead);
         var tbody = document.createElement("tbody");
         elements.forEach(function (el) {
@@ -1409,10 +1301,9 @@ Return your answer as plain text.`;
           var currentTop = el.style.top || computedStyle.top || "0";
           var currentLeft = el.style.left || computedStyle.left || "0";
           var tr = document.createElement("tr");
-          tr.innerHTML =
-            `<td>${id}</td>
-            <td><input type="number" id="${id}_top" value="${parseInt(currentTop) || 0}"></td>
-            <td><input type="number" id="${id}_left" value="${parseInt(currentLeft) || 0}"></td>`;
+          tr.innerHTML = `<td>${id}</td>
+                        <td><input type="number" id="${id}_top" value="${parseInt(currentTop) || 0}"></td>
+                        <td><input type="number" id="${id}_left" value="${parseInt(currentLeft) || 0}"></td>`;
           var topInput = tr.querySelector(`#${id}_top`);
           var leftInput = tr.querySelector(`#${id}_left`);
           topInput.addEventListener("input", function () {
@@ -1426,15 +1317,12 @@ Return your answer as plain text.`;
         table.appendChild(tbody);
         configContainer.appendChild(table);
         var modalElem = document.getElementById("buttonConfigModal");
-        var modalInstance =
-          M.Modal.getInstance(modalElem) ||
-          M.Modal.init(modalElem, { preventScrolling: false });
+        var modalInstance = M.Modal.getInstance(modalElem) || M.Modal.init(modalElem, { preventScrolling: false });
         modalInstance.open();
       });
       
       document.getElementById("saveButtonPositionsBtn").addEventListener("click", function () {
-        var selectors =
-          "button:not(#configureButtonsBtn), #listingDescContainer, #ordersDropZone, #listingsDropZone, #dropZone, #csvProgressContainer, #previewGridContainer, #primaryPreview, #container13, #uploadedFilesList";
+        var selectors = "button:not(#configureButtonsBtn), #listingDescContainer, #ordersDropZone, #listingsDropZone, #dropZone, #csvProgressContainer, #previewGridContainer, #primaryPreview, #container13, #uploadedFilesList";
         var elements = document.querySelectorAll(selectors);
         var positions = {};
         elements.forEach(function (el) {
@@ -1468,7 +1356,6 @@ Return your answer as plain text.`;
         document.getElementById("searchKeyPhrases").value = "";
       });
       
-      // End of file
       // Utility delay function
       function delay(ms) {
         return new Promise((resolve) => setTimeout(resolve, ms));
