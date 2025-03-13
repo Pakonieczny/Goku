@@ -192,7 +192,7 @@
     /* Additional widths for Etsy Link and Shop Listings */
     #etsyLink, #shopListings { width: 500px !important; }
     
-    /* Styles for the Upload to Etsy and Update Inventory button container at the bottom center */
+    /* Styles for the Upload and Update Inventory button container at the bottom center */
     #uploadContainer {
       position: fixed;
       bottom: 20px;
@@ -232,8 +232,9 @@
   <button id="connectEtsyBtn" class="btn waves-effect waves-light configurable">Connect to Etsy</button>
   <div style="margin-top: -180px; margin-left: 10px;">
     <div class="section-heading configurable">My Etsy Shop Listings</div>
+    <!-- The shopListings textarea should contain the original listing URL -->
     <div class="textbox-container configurable">
-      <textarea id="shopListings" class="materialize-textarea"></textarea>
+      <textarea id="shopListings" class="materialize-textarea" placeholder="Paste original Etsy listing URL here"></textarea>
     </div>
   </div>
   
@@ -297,7 +298,7 @@
   <!-- Upload and Update Buttons Container -->
   <div id="uploadContainer">
     <button id="uploadToEtsyBtn" class="btn waves-effect waves-light configurable">Upload to Etsy</button>
-    <!-- New button to manually trigger inventory update -->
+    <!-- New button for manually triggering inventory update -->
     <button id="updateInventoryBtn" class="btn waves-effect waves-light configurable">Update Inventory</button>
   </div>
   
@@ -619,24 +620,24 @@ Using Sales Report and Product List Files:
     }
     
     async function duplicateListing() {
-      let listingLink = document.getElementById("shopListings").value.trim();
-      if (!listingLink) {
+      let originalListingLink = document.getElementById("shopListings").value.trim();
+      if (!originalListingLink) {
         M.toast({ html: "Please provide a listing link in 'My Etsy Shop Listings'" });
         return;
       }
-      let listingIdMatch = listingLink.match(/\/listing\/(\d+)/);
-      if (!listingIdMatch) {
+      let originalListingMatch = originalListingLink.match(/\/listing\/(\d+)/);
+      if (!originalListingMatch) {
         M.toast({ html: "Invalid listing link. Please provide a valid Etsy listing URL." });
         return;
       }
-      let listingId = listingIdMatch[1];
+      let originalListingId = originalListingMatch[1];
       if (!accessToken) {
         M.toast({ html: "No access token. Please connect to Etsy first." });
         return;
       }
       try {
         // Call the Netlify function etsyDuplicateListing to create the duplicate listing
-        const duplicateUrl = `/.netlify/functions/etsyDuplicateListing?listingId=${listingId}&token=${encodeURIComponent(accessToken)}`;
+        const duplicateUrl = `/.netlify/functions/etsyDuplicateListing?listingId=${originalListingId}&token=${encodeURIComponent(accessToken)}`;
         console.log("Calling duplicate listing URL:", duplicateUrl);
         let response = await fetch(duplicateUrl);
         console.log("Response status:", response.status, response.statusText);
@@ -656,20 +657,32 @@ Using Sales Report and Product List Files:
     
     // New button event: manually trigger updateInventory.js function
     document.getElementById("updateInventoryBtn").addEventListener("click", async () => {
-      // The new listing ID should be provided by the user in an input or we can prompt for it.
-      // For this example, we prompt the user.
-      let newListingId = prompt("Enter the new listing ID to update its inventory:");
-      if (!newListingId) {
+      // Prompt for new listing ID (the duplicated listing)
+      let newListingInput = prompt("Enter the NEW listing ID (or URL) for inventory update:");
+      if (!newListingInput) {
         M.toast({ html: "No new listing ID provided for inventory update." });
         return;
       }
+      // If the input is a URL, extract the numeric ID
+      let newListingMatch = newListingInput.match(/\/listing\/(\d+)/);
+      let newListingId = newListingMatch ? newListingMatch[1] : newListingInput.trim();
+      
+      // Extract original listing ID from the shopListings field
+      let originalListingLink = document.getElementById("shopListings").value.trim();
+      let originalListingMatch = originalListingLink.match(/\/listing\/(\d+)/);
+      if (!originalListingMatch) {
+        M.toast({ html: "Invalid original listing link. Cannot extract listing ID." });
+        return;
+      }
+      let originalListingId = originalListingMatch[1];
+      
       if (!accessToken) {
         M.toast({ html: "No access token. Please connect to Etsy first." });
         return;
       }
       try {
-        // Call the updateInventory.js Netlify function manually with listingId and token as query parameters.
-        const updateUrl = `/.netlify/functions/updateInventory?listingId=${newListingId}&token=${encodeURIComponent(accessToken)}`;
+        // Call the updateInventory.js Netlify function with listingId, originalListingId, and token as query parameters.
+        const updateUrl = `/.netlify/functions/updateInventory?listingId=${newListingId}&originalListingId=${originalListingId}&token=${encodeURIComponent(accessToken)}`;
         console.log("Calling update inventory URL:", updateUrl);
         let response = await fetch(updateUrl);
         console.log("Update inventory response status:", response.status);
@@ -788,7 +801,6 @@ Using Sales Report and Product List Files:
               progressBar.value = 0;
               soldOrdersCSV.push(fileData);
               updateUploadedFilesList();
-              // Optionally call updateInventory here automatically if desired.
             } catch(err) {
               console.error("Error uploading file:", err);
             }
@@ -829,7 +841,6 @@ Using Sales Report and Product List Files:
               progressBar.value = 0;
               listingsCSV.push(fileData);
               updateUploadedFilesList();
-              // Optionally call updateInventory here automatically if desired.
             } catch(err) {
               console.error("Error uploading file:", err);
             }
@@ -1125,16 +1136,10 @@ Return your answer as plain text.`;
     
     // Dummy render functions (implement as needed)
     function renderPreviewGrid() {
-      // Implementation for preview grid rendering (if any)
       console.log("Rendering preview grid...");
     }
     
-    function updateUploadedFilesList() {
-      let fileList = [];
-      soldOrdersCSV.forEach(file => fileList.push(file.name));
-      listingsCSV.forEach(file => fileList.push(file.name));
-      document.getElementById("uploadedFilesList").value = fileList.join("\n");
-    }
+    // End of file
   </script>
 </body>
 </html>
