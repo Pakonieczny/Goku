@@ -201,8 +201,8 @@
       display: inline-block;
     }
     
-    /* New Update Inventory button (to the right of Update Listing) */
-    #updateInventoryBtn {
+    /* New lookUP button container (to the right of Update Listing) */
+    #lookUpContainer {
       position: fixed;
       bottom: 20px;
       left: calc(50% + 120px);
@@ -304,12 +304,23 @@
     <button id="uploadToEtsyBtn" class="btn waves-effect waves-light configurable">Update Listing</button>
   </div>
   
-  <!-- New Update Inventory button (manual call) -->
-  <div id="updateInventoryBtn">
-    <button id="manualUpdateInventoryBtn" class="btn waves-effect waves-light configurable">Update Inventory</button>
+  <!-- New lookUP button container (manual call to view payload) -->
+  <div id="lookUpContainer">
+    <button id="lookUpBtn" class="btn waves-effect waves-light configurable">lookUP</button>
   </div>
   
   <!-- Modals -->
+  <!-- Lookup Modal: displays JSON payload for title, description, and tags -->
+  <div id="lookupModal" class="modal">
+    <div class="modal-content">
+      <h4>Payload Data</h4>
+      <textarea id="lookupModalText" readonly style="width: 100%; height: 300px;"></textarea>
+    </div>
+    <div class="modal-footer">
+      <a href="#!" id="closeLookupModal" class="modal-close waves-effect waves-green btn">Close</a>
+    </div>
+  </div>
+  
   <!-- Title Rules Modal -->
   <div id="titleRulesModal" class="modal">
     <div class="modal-content">
@@ -654,7 +665,7 @@ Using Sales Report and Product List Files:
           .filter(s => s !== "")
       };
       console.log("Update payload:", payload);
-      // Call our updateListing.js proxy function.
+      // Instead of calling Etsy directly, call our updateListing.js proxy
       const updateUrl = `/.netlify/functions/updateListing?listingId=${listingId}&token=${encodeURIComponent(accessToken)}`;
       try {
         const response = await fetch(updateUrl, {
@@ -681,43 +692,23 @@ Using Sales Report and Product List Files:
     // Bind the "Update Listing" button to updateExistingListing()
     document.getElementById("uploadToEtsyBtn").addEventListener("click", updateExistingListing);
     
-    // New button: "Update Inventory" to manually trigger inventory update via updateInventory.js
-    document.getElementById("manualUpdateInventoryBtn").addEventListener("click", async () => {
-      const listingInput = document.getElementById("shopListings").value.trim();
-      if (!listingInput) {
-        M.toast({ html: "Please provide a listing URL or ID in 'My Etsy Shop Listings'." });
-        return;
-      }
-      let listingId;
-      if (/^\d+$/.test(listingInput)) {
-        listingId = listingInput;
-      } else {
-        const match = listingInput.match(/\/listing\/(\d+)/);
-        if (match) {
-          listingId = match[1];
-        } else {
-          M.toast({ html: "Invalid listing URL or ID." });
-          return;
-        }
-      }
-      const updateInvUrl = `/.netlify/functions/updateInventory?listingId=${listingId}&token=${encodeURIComponent(accessToken)}`;
-      console.log("Calling updateInventory URL:", updateInvUrl);
-      try {
-        const response = await fetch(updateInvUrl);
-        console.log("Update Inventory response status:", response.status);
-        if (!response.ok) {
-          const errorText = await response.text();
-          console.error("Error updating inventory. Status:", response.status, "Text:", errorText);
-          M.toast({ html: "Error updating inventory: " + response.status + " - " + errorText });
-        } else {
-          const data = await response.json();
-          console.log("Inventory updated successfully:", data);
-          M.toast({ html: "Inventory updated successfully!" });
-        }
-      } catch (e) {
-        console.error("Exception in manual inventory update:", e);
-        M.toast({ html: "Inventory update exception: " + e.message });
-      }
+    // New button: "lookUP" to manually trigger a modal that shows the payload data
+    document.getElementById("lookUpBtn").addEventListener("click", () => {
+      // Build the payload object from the current values.
+      const payload = {
+        title: document.getElementById("listingTitle").value,
+        description: document.getElementById("listingDescription").value,
+        tags: document.getElementById("searchKeyPhrases").value
+          .split("\n")
+          .map(s => s.trim())
+          .filter(s => s !== "")
+      };
+      // Set the modal textarea with the formatted JSON string.
+      document.getElementById("lookupModalText").value = JSON.stringify(payload, null, 2);
+      // Open the lookup modal.
+      const modalElem = document.getElementById("lookupModal");
+      const modalInstance = M.Modal.getInstance(modalElem) || M.Modal.init(modalElem, { preventScrolling: false });
+      modalInstance.open();
     });
     
     // File Drop and Upload Handlers
