@@ -201,8 +201,8 @@
       display: inline-block;
     }
     
-    /* New lookUP button container (to the right of Update Listing) */
-    #lookUpContainer {
+    /* New lookUP button to show generated JSON payload (to the right of Update Listing) */
+    #lookUPBtn {
       position: fixed;
       bottom: 20px;
       left: calc(50% + 120px);
@@ -304,23 +304,23 @@
     <button id="uploadToEtsyBtn" class="btn waves-effect waves-light configurable">Update Listing</button>
   </div>
   
-  <!-- New lookUP button container (manual call to view payload) -->
-  <div id="lookUpContainer">
-    <button id="lookUpBtn" class="btn waves-effect waves-light configurable">lookUP</button>
+  <!-- New lookUP button to show generated JSON payload -->
+  <div id="lookUPBtn">
+    <button id="lookUpPayloadBtn" class="btn waves-effect waves-light configurable">lookUP</button>
   </div>
   
-  <!-- Modals -->
-  <!-- Lookup Modal: displays JSON payload for title, description, and tags -->
-  <div id="lookupModal" class="modal">
+  <!-- Modal for lookUP (shows JSON payload) -->
+  <div id="payloadModal" class="modal">
     <div class="modal-content">
-      <h4>Payload Data</h4>
-      <textarea id="lookupModalText" readonly style="width: 100%; height: 300px;"></textarea>
+      <h4>Generated Update Payload</h4>
+      <pre id="payloadOutput"></pre>
     </div>
     <div class="modal-footer">
-      <a href="#!" id="closeLookupModal" class="modal-close waves-effect waves-green btn">Close</a>
+      <a href="#!" class="modal-close waves-effect waves-green btn">Close</a>
     </div>
   </div>
   
+  <!-- Modals for rules and other configuration -->
   <!-- Title Rules Modal -->
   <div id="titleRulesModal" class="modal">
     <div class="modal-content">
@@ -481,7 +481,7 @@ Using Sales Report and Product List Files:
     const modelName = "chatgpt-4o-latest";
     let accessToken;
     
-    // Global variables for file uploads and previews
+    // Global variables for file uploads and previews (if needed)
     let soldOrdersCSV = [];
     let listingsCSV = [];
     let photoNames = [];
@@ -636,7 +636,7 @@ Using Sales Report and Product List Files:
       }
     }
     
-    // Function to update an existing listing via the Netlify proxy function updateListing.js
+    // Function to update an existing listing via updateListing.js proxy
     async function updateExistingListing() {
       const listingInput = document.getElementById("shopListings").value.trim();
       if (!listingInput) {
@@ -655,23 +655,25 @@ Using Sales Report and Product List Files:
           return;
         }
       }
-      // Dynamically extract generated values from the textareas.
-      const payload = {
+      
+      // Build the update payload dynamically from textareas.
+      const updatePayload = {
         title: document.getElementById("listingTitle").value,
         description: document.getElementById("listingDescription").value,
         tags: document.getElementById("searchKeyPhrases").value
-          .split("\n")
-          .map(s => s.trim())
-          .filter(s => s !== "")
+                .split("\n")
+                .map(s => s.trim())
+                .filter(s => s !== "")
       };
-      console.log("Update payload:", payload);
-      // Instead of calling Etsy directly, call our updateListing.js proxy
+      console.log("Update payload:", updatePayload);
+      
+      // Call the updateListing.js Netlify function.
       const updateUrl = `/.netlify/functions/updateListing?listingId=${listingId}&token=${encodeURIComponent(accessToken)}`;
       try {
         const response = await fetch(updateUrl, {
           method: "PUT",
           headers: { "Content-Type": "application/json" },
-          body: JSON.stringify(payload)
+          body: JSON.stringify(updatePayload)
         });
         console.log("Update Listing response status:", response.status);
         if (!response.ok) {
@@ -692,26 +694,27 @@ Using Sales Report and Product List Files:
     // Bind the "Update Listing" button to updateExistingListing()
     document.getElementById("uploadToEtsyBtn").addEventListener("click", updateExistingListing);
     
-    // New button: "lookUP" to manually trigger a modal that shows the payload data
-    document.getElementById("lookUpBtn").addEventListener("click", () => {
-      // Build the payload object from the current values.
+    // New button "lookUP" to show the generated JSON payload in a modal
+    document.getElementById("lookUpPayloadBtn").addEventListener("click", () => {
+      const generatedTitle = document.getElementById("listingTitle").value;
+      const generatedDescription = document.getElementById("listingDescription").value;
+      const generatedTags = document.getElementById("searchKeyPhrases").value
+                              .split("\n")
+                              .map(tag => tag.trim())
+                              .filter(tag => tag !== "");
       const payload = {
-        title: document.getElementById("listingTitle").value,
-        description: document.getElementById("listingDescription").value,
-        tags: document.getElementById("searchKeyPhrases").value
-          .split("\n")
-          .map(s => s.trim())
-          .filter(s => s !== "")
+        title: generatedTitle,
+        description: generatedDescription,
+        tags: generatedTags
       };
-      // Set the modal textarea with the formatted JSON string.
-      document.getElementById("lookupModalText").value = JSON.stringify(payload, null, 2);
-      // Open the lookup modal.
-      const modalElem = document.getElementById("lookupModal");
-      const modalInstance = M.Modal.getInstance(modalElem) || M.Modal.init(modalElem, { preventScrolling: false });
-      modalInstance.open();
+      // Display payload in the modal
+      document.getElementById("payloadOutput").textContent = JSON.stringify(payload, null, 2);
+      // Open the modal
+      const payloadModalElem = document.getElementById("payloadModal");
+      M.Modal.init(payloadModalElem, { preventScrolling: false }).open();
     });
     
-    // File Drop and Upload Handlers
+    // File Drop and Upload Handlers (unchanged)
     const dropZone = document.getElementById("dropZone");
     const previewGrid = document.getElementById("previewGrid");
     const primaryPreview = document.getElementById("primaryPreview");
