@@ -200,12 +200,6 @@
       transform: translateX(-50%);
       display: inline-block;
     }
-    
-    /* New button style for "Fetch SKU & Variations" */
-    #fetchInventoryBtn {
-      margin-left: 10px;
-      background-color: #4caf50;
-    }
   </style>
 </head>
 <body>
@@ -299,21 +293,9 @@
   <!-- Upload to Etsy button container -->
   <div id="uploadContainer">
     <button id="uploadToEtsyBtn" class="btn waves-effect waves-light configurable">Upload to Etsy</button>
-    <!-- New button to fetch SKU & Variations; for testing purposes it opens a modal with inventory details -->
-    <button id="fetchInventoryBtn" class="btn waves-effect waves-light configurable">Fetch SKU &amp; Variations</button>
   </div>
   
-  <!-- Modal for displaying fetched inventory details -->
-  <div id="inventoryModal" class="modal">
-    <div class="modal-content">
-      <h4>Fetched Inventory Data</h4>
-      <pre id="inventoryDataDisplay"></pre>
-    </div>
-    <div class="modal-footer">
-      <a href="#!" id="closeInventoryModalBtn" class="modal-close waves-effect waves-green btn">Close</a>
-    </div>
-  </div>
-  
+  <!-- Modals -->
   <!-- Title Rules Modal -->
   <div id="titleRulesModal" class="modal">
     <div class="modal-content">
@@ -630,7 +612,6 @@ Using Sales Report and Product List Files:
       }
     }
     
-    // Function to duplicate a listing (calls the new etsyDuplicateListing function)
     async function duplicateListing() {
       let listingLink = document.getElementById("shopListings").value.trim();
       if (!listingLink) {
@@ -648,11 +629,11 @@ Using Sales Report and Product List Files:
         return;
       }
       try {
-        // Call the etsyDuplicateListing Netlify function
+        // Proxy the duplicate listing call through our Netlify function
         const duplicateUrl = `/.netlify/functions/etsyDuplicateListing?listingId=${listingId}&token=${encodeURIComponent(accessToken)}`;
         console.log("Calling duplicate listing URL:", duplicateUrl);
         let response = await fetch(duplicateUrl);
-        console.log("Duplicate listing response status:", response.status, response.statusText);
+        console.log("Response status:", response.status, response.statusText);
         if (!response.ok) {
           let errorText = await response.text();
           console.error("Error duplicating listing. Status:", response.status, "Text:", errorText);
@@ -662,102 +643,64 @@ Using Sales Report and Product List Files:
         console.log("New listing created:", data);
         M.toast({ html: "Listing duplicated as Draft successfully!" });
         
-        // If inventory data exists in the original listing, then update inventory via separate function.
-        // Here we call the updateInventory Netlify function.
-        if (data.listing_id) {
-          // For inventory update, we assume that the original listing inventory was fetched earlier.
-          // For simplicity, we re-fetch it here.
-          const inventoryUrl = `https://api.etsy.com/v3/application/listings/${listingId}/inventory`;
-          const inventoryResponse = await fetch(inventoryUrl, {
-            method: "GET",
-            headers: {
-              "Authorization": `Bearer ${accessToken}`,
-              "x-api-key": CLIENT_ID,
-            },
-          });
-          let inventoryData = null;
-          if (inventoryResponse.ok) {
-            inventoryData = await inventoryResponse.json();
-            console.log("Fetched inventory data:", inventoryData);
-          } else {
-            console.warn("No inventory data available from inventory endpoint. Status:", inventoryResponse.status);
-          }
-          if (inventoryData) {
-            const updateInvUrl = `/.netlify/functions/updateInventory?listingId=${data.listing_id}&token=${encodeURIComponent(accessToken)}`;
-            console.log("Calling update inventory URL:", updateInvUrl);
-            let invResponse = await fetch(updateInvUrl, {
-              method: "POST",
-              headers: { "Content-Type": "application/json", "x-api-key": CLIENT_ID },
-              body: JSON.stringify(inventoryData)
-            });
-            console.log("Update inventory response status:", invResponse.status);
-            if (!invResponse.ok) {
-              let invErrorText = await invResponse.text();
-              console.error("Error updating inventory:", invErrorText);
-              M.toast({ html: "Inventory update error: " + invErrorText });
-            } else {
-              let invData = await invResponse.json();
-              console.log("Inventory updated successfully:", invData);
-            }
-          }
-        }
+        // After 5 seconds, call updateInventory.js to update inventory/variations.
+        setTimeout(() => {
+          updateInventoryForListing(data.listing_id);
+        }, 5000);
       } catch (e) {
         console.error("Error in duplicateListing function:", e);
         M.toast({ html: "Error duplicating listing: " + e.message });
       }
     }
     
-    // New button to fetch and show SKU & Variations
-    async function fetchInventoryData() {
-      let listingLink = document.getElementById("shopListings").value.trim();
-      if (!listingLink) {
-        M.toast({ html: "Please provide a listing link in 'My Etsy Shop Listings'" });
+    // Function to call updateInventory.js via Netlify functions.
+    async function updateInventoryForListing(newListingId) {
+      if (!newListingId) {
+        console.error("No new listing ID provided for inventory update.");
         return;
       }
-      let listingIdMatch = listingLink.match(/\/listing\/(\d+)/);
-      if (!listingIdMatch) {
-        M.toast({ html: "Invalid listing link. Please provide a valid Etsy listing URL." });
-        return;
-      }
-      let listingId = listingIdMatch[1];
       if (!accessToken) {
-        M.toast({ html: "No access token. Please connect to Etsy first." });
+        console.error("No access token available for inventory update.");
         return;
       }
+      const updateInventoryUrl = `/.netlify/functions/updateInventory`;
+      // Build a payload that includes the new listing ID and optionally the original inventory data.
+      // For demonstration, we pass the original listingId so that the backend can fetch original inventory.
+      const payload = {
+        newListingId,
+        originalListingId: document.getElementById("shopListings").value.match(/\/listing\/(\d+)/)[1],
+        token: accessToken
+      };
+      console.log("Calling updateInventory.js with payload:", payload);
       try {
-        const inventoryUrl = `https://api.etsy.com/v3/application/listings/${listingId}/inventory`;
-        const inventoryResponse = await fetch(inventoryUrl, {
-          method: "GET",
-          headers: {
-            "Authorization": `Bearer ${accessToken}`,
-            "x-api-key": CLIENT_ID,
-          },
+        let response = await fetch(updateInventoryUrl, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify(payload)
         });
-        if (!inventoryResponse.ok) {
-          let errorText = await inventoryResponse.text();
-          console.error("Error fetching inventory data:", errorText);
-          throw new Error(`Error fetching inventory data: ${inventoryResponse.status} - ${inventoryResponse.statusText}`);
+        console.log("Update inventory response status:", response.status);
+        if (!response.ok) {
+          let errorText = await response.text();
+          console.error("Error updating inventory:", errorText);
+          M.toast({ html: "Error updating inventory: " + errorText });
+          return;
         }
-        const inventoryData = await inventoryResponse.json();
-        console.log("Fetched inventory data for display:", inventoryData);
-        // Display the fetched inventory data in a modal
-        document.getElementById("inventoryDataDisplay").textContent = JSON.stringify(inventoryData, null, 2);
-        const modalElem = document.getElementById("inventoryModal");
-        const modalInstance = M.Modal.getInstance(modalElem) || M.Modal.init(modalElem, { preventScrolling: false });
-        modalInstance.open();
+        let result = await response.json();
+        console.log("Inventory update successful:", result);
+        M.toast({ html: "Inventory updated successfully!" });
       } catch (error) {
-        console.error("Error in fetchInventoryData function:", error);
-        M.toast({ html: "Error fetching inventory: " + error.message });
+        console.error("Exception while updating inventory:", error);
+        M.toast({ html: "Error updating inventory: " + error.message });
       }
     }
     
     document.getElementById("uploadToEtsyBtn").addEventListener("click", duplicateListing);
-    document.getElementById("fetchInventoryBtn").addEventListener("click", fetchInventoryData);
+    
     document.getElementById("clearKeyPhrasesBtn").addEventListener("click", () => {
       document.getElementById("searchKeyPhrases").value = "";
     });
     
-    // File Drop and Upload Handlers (unchanged from previous implementation)
+    // File Drop and Upload Handlers
     const dropZone = document.getElementById("dropZone");
     const previewGrid = document.getElementById("previewGrid");
     const primaryPreview = document.getElementById("primaryPreview");
@@ -1208,16 +1151,77 @@ Return your answer as plain text.`;
       navigator.clipboard.writeText(document.getElementById("listingDescription").value).catch(err => console.error("Error copying description: " + err));
     });
     
+    // ----- UI Position Persistence & Live Preview for Configure Buttons -----
+    document.getElementById("configureButtonsBtn").addEventListener("click", function() {
+      var configContainer = document.getElementById("buttonConfigContainer");
+      configContainer.innerHTML = "";
+      var selectors = "button:not(#configureButtonsBtn), #listingDescContainer, #ordersDropZone, #listingsDropZone, #dropZone, #csvProgressContainer, #previewGridContainer, #primaryPreview, #container13, #uploadedFilesList";
+      var elements = document.querySelectorAll(selectors);
+      var table = document.createElement("table");
+      table.className = "striped";
+      var thead = document.createElement("thead");
+      thead.innerHTML = "<tr><th>Element ID</th><th>Top (px)</th><th>Left (px)</th></tr>";
+      table.appendChild(thead);
+      var tbody = document.createElement("tbody");
+      elements.forEach(function(el) {
+        var id = el.id;
+        var computedStyle = window.getComputedStyle(el);
+        var currentTop = el.style.top || computedStyle.top || "0";
+        var currentLeft = el.style.left || computedStyle.left || "0";
+        var tr = document.createElement("tr");
+        tr.innerHTML = `<td>${id}</td>
+                        <td><input type="number" id="${id}_top" value="${parseInt(currentTop)||0}"></td>
+                        <td><input type="number" id="${id}_left" value="${parseInt(currentLeft)||0}"></td>`;
+        var topInput = tr.querySelector(`#${id}_top`);
+        var leftInput = tr.querySelector(`#${id}_left`);
+        topInput.addEventListener("input", function() { el.style.top = topInput.value + "px"; });
+        leftInput.addEventListener("input", function() { el.style.left = leftInput.value + "px"; });
+        tbody.appendChild(tr);
+      });
+      table.appendChild(tbody);
+      configContainer.appendChild(table);
+      var modalElem = document.getElementById("buttonConfigModal");
+      var modalInstance = M.Modal.getInstance(modalElem) || M.Modal.init(modalElem, { preventScrolling: false });
+      modalInstance.open();
+    });
+    
+    document.getElementById("saveButtonPositionsBtn").addEventListener("click", function() {
+      var selectors = "button:not(#configureButtonsBtn), #listingDescContainer, #ordersDropZone, #listingsDropZone, #dropZone, #csvProgressContainer, #previewGridContainer, #primaryPreview, #container13, #uploadedFilesList";
+      var elements = document.querySelectorAll(selectors);
+      var positions = {};
+      elements.forEach(function(el) {
+        positions[el.id] = { top: el.style.top || "0px", left: el.style.left || "0px" };
+      });
+      localStorage.setItem("buttonPositions", JSON.stringify(positions));
+      M.toast({ html: "Button positions saved." });
+    });
+    
+    function loadButtonPositions() {
+      var stored = localStorage.getItem("buttonPositions");
+      if (stored) {
+        var positions = JSON.parse(stored);
+        for (var id in positions) {
+          var el = document.getElementById(id);
+          if (el) {
+            el.style.top = positions[id].top;
+            el.style.left = positions[id].left;
+          }
+        }
+      }
+    }
+    // -------------------------------------------------------------------------
+    
+    window.addEventListener("load", function() {
+      var container13 = document.getElementById("container13");
+      container13.style.height = (container13.offsetHeight * 2.5) + "px";
+    });
+    
+    document.getElementById("listingDescInput").addEventListener("input", function() {
+      document.getElementById("searchKeyPhrases").value = "";
+    });
+    
     // Utility delay function
     function delay(ms) { return new Promise(resolve => setTimeout(resolve, ms)); }
-    
-    // (Optional) Placeholder function for rendering the preview grid.
-    function renderPreviewGrid() {
-      // Implement your preview grid rendering here if needed.
-      // For now, we simply log that this function was called.
-      console.log("Render preview grid called.");
-    }
-    
   </script>
 </body>
 </html>
