@@ -12,16 +12,13 @@ function transformPrice(priceField) {
 }
 
 // Transform the inventory data for updating the listing.
-// We remove disallowed keys (e.g. product_id, is_deleted, scale_name) and
-// keep only sku, offerings (with price, quantity, is_enabled) and properties (with property_id and value_ids).
+// This function removes disallowed keys (e.g. product_id, is_deleted, scale_name)
+// and converts the original property_values to a properties array with only property_id and value_ids.
 function transformInventoryData(inventoryData) {
   if (!inventoryData || !inventoryData.products) return null;
   const transformedProducts = inventoryData.products.map((product) => {
     const transformedProperties = (product.property_values || []).map(pv => ({
       property_id: pv.property_id,
-      // We omit value_id, name, and value because Etsy API does not accept these keys.
-      // Instead, you might need to map these to the correct structure per Etsy’s docs.
-      // For now, we assume that only property_id and an array of value_ids are required.
       value_ids: pv.value_ids || []
     }));
     
@@ -29,7 +26,6 @@ function transformInventoryData(inventoryData) {
       price: transformPrice(offering.price),
       quantity: offering.quantity,
       is_enabled: offering.is_enabled
-      // We omit offering_id and is_deleted from the payload.
     }));
     
     return {
@@ -48,19 +44,34 @@ function transformInventoryData(inventoryData) {
 }
 
 // Function to update inventory data with retries.
-// It first attempts a PUT update; if a 404 is returned, it waits and then tries a POST.
-async function updateInventory(newListingId, inventoryData, token, clientId) {
-  if (!inventoryData) {
-    console.log("No inventory data available to update.");
-    return;
+// First it tries a PUT update. If a 404 is returned (resource not found), it waits 5 seconds and then attempts a POST.
+async function updateInventory(newListingId, originalListingId, token, clientId) {
+  // Fetch original inventory data from the original listing.
+  const originalInventoryUrl = `https://api.etsy.com/v3/application/listings/${originalListingId}/inventory`;
+  console.log("Fetching original inventory data from:", originalInventoryUrl);
+  const originalInventoryResponse = await fetch(originalInventoryUrl, {
+    method: "GET",
+    headers: {
+      "Authorization": `Bearer ${token}`,
+      "x-api-key": clientId,
+    },
+  });
+  console.log("Original inventory GET response status:", originalInventoryResponse.status);
+  if (!originalInventoryResponse.ok) {
+    const errorText = await originalInventoryResponse.text();
+    throw new Error(`Failed to fetch original inventory: ${originalInventoryResponse.status} - ${errorText}`);
   }
+  const originalInventoryData = await originalInventoryResponse.json();
+  console.log("Original inventory data fetched:", JSON.stringify(originalInventoryData));
 
-  const transformedInventory = transformInventoryData(inventoryData);
+  // Transform the inventory data to the format expected by Etsy.
+  const transformedInventory = transformInventoryData(originalInventoryData);
   if (!transformedInventory) {
-    console.log("Transformed inventory is empty.");
-    return;
+    throw new Error("Transformed inventory data is empty.");
   }
+  console.log("Transformed inventory data:", JSON.stringify(transformedInventory));
 
+  // Build the URL for inventory update on the new listing.
   const inventoryUrl = `https://api.etsy.com/v3/application/listings/${newListingId}/inventory`;
   const headers = {
     "Content-Type": "application/json",
@@ -68,7 +79,7 @@ async function updateInventory(newListingId, inventoryData, token, clientId) {
     "x-api-key": clientId,
   };
 
-  // Attempt PUT update with up to 3 retries
+  // Attempt PUT update with up to 3 retries.
   const maxRetries = 3;
   let attempt = 0;
   let response;
@@ -87,7 +98,7 @@ async function updateInventory(newListingId, inventoryData, token, clientId) {
     } else if (response.status === 404) {
       console.warn("PUT returned 404. Inventory resource not found. Waiting 5 seconds before trying POST...");
       await new Promise(resolve => setTimeout(resolve, 5000));
-      break; // break out of retry loop to try POST
+      break; // Break out of the retry loop to try POST.
     } else {
       const errorText = await response.text();
       console.error("PUT inventory update attempt failed:", errorText);
@@ -96,7 +107,7 @@ async function updateInventory(newListingId, inventoryData, token, clientId) {
     }
   }
 
-  // Attempt POST creation if PUT did not succeed
+  // Attempt POST creation if PUT did not succeed.
   console.log("Attempting POST inventory creation...");
   response = await fetch(inventoryUrl, {
     method: "POST",
@@ -117,7 +128,7 @@ async function updateInventory(newListingId, inventoryData, token, clientId) {
 
 exports.handler = async function (event, context) {
   try {
-    // Expecting query parameters: listingId (new listing ID), originalListingId, token.
+    // Expect query parameters: listingId (new listing ID), originalListingId, and token.
     const { listingId, originalListingId, token } = event.queryStringParameters;
     if (!listingId || !originalListingId || !token) {
       return {
@@ -140,32 +151,8 @@ exports.handler = async function (event, context) {
     }
     console.log("Using CLIENT_ID:", clientId.slice(0, 5) + "*****");
 
-    // Fetch original inventory data from the original listing.
-    const etsyInventoryUrl = `https://api.etsy.com/v3/application/listings/${originalListingId}/inventory`;
-    console.log("Fetching inventory from original listing:", etsyInventoryUrl);
-    const inventoryResponse = await fetch(etsyInventoryUrl, {
-      method: "GET",
-      headers: {
-        "Authorization": `Bearer ${token}`,
-        "x-api-key": clientId,
-      },
-    });
-    console.log("GET inventory response status:", inventoryResponse.status);
-    let inventoryData;
-    if (inventoryResponse.ok) {
-      inventoryData = await inventoryResponse.json();
-      console.log("Fetched original inventory data:", JSON.stringify(inventoryData));
-    } else {
-      const errorText = await inventoryResponse.text();
-      console.error("Failed to fetch inventory data from original listing:", errorText);
-      return {
-        statusCode: inventoryResponse.status,
-        body: JSON.stringify({ error: "Failed to fetch original inventory data", details: errorText }),
-      };
-    }
-
-    // Attempt to update the inventory of the new listing using the transformed inventory data.
-    const result = await updateInventory(listingId, inventoryData, token, clientId);
+    // Update the new listing's inventory using the original listing's inventory data.
+    const result = await updateInventory(listingId, originalListingId, token, clientId);
     console.log("Final inventory update result:", result);
     return {
       statusCode: 200,

@@ -192,13 +192,17 @@
     /* Additional widths for Etsy Link and Shop Listings */
     #etsyLink, #shopListings { width: 500px !important; }
     
-    /* Styles for the Upload to Etsy button container at the bottom center */
+    /* Styles for the Upload to Etsy and Update Inventory button container at the bottom center */
     #uploadContainer {
       position: fixed;
       bottom: 20px;
       left: 50%;
       transform: translateX(-50%);
       display: inline-block;
+    }
+    /* New button for updating inventory */
+    #updateInventoryBtn {
+      margin-left: 10px;
     }
   </style>
 </head>
@@ -290,9 +294,11 @@
     <div id="previewGrid"></div>
   </div>
   
-  <!-- Upload to Etsy button container -->
+  <!-- Upload and Update Buttons Container -->
   <div id="uploadContainer">
     <button id="uploadToEtsyBtn" class="btn waves-effect waves-light configurable">Upload to Etsy</button>
+    <!-- New button to manually trigger inventory update -->
+    <button id="updateInventoryBtn" class="btn waves-effect waves-light configurable">Update Inventory</button>
   </div>
   
   <!-- Modals -->
@@ -629,50 +635,57 @@ Using Sales Report and Product List Files:
         return;
       }
       try {
-        // Call the etsyDuplicateListing Netlify function
+        // Call the Netlify function etsyDuplicateListing to create the duplicate listing
         const duplicateUrl = `/.netlify/functions/etsyDuplicateListing?listingId=${listingId}&token=${encodeURIComponent(accessToken)}`;
         console.log("Calling duplicate listing URL:", duplicateUrl);
         let response = await fetch(duplicateUrl);
-        console.log("Duplicate listing response status:", response.status, response.statusText);
+        console.log("Response status:", response.status, response.statusText);
         if (!response.ok) {
           let errorText = await response.text();
           console.error("Error duplicating listing. Status:", response.status, "Text:", errorText);
           throw new Error(`Error duplicating listing: ${response.status} - ${response.statusText}`);
         }
-        let newListingData = await response.json();
-        console.log("New listing created:", newListingData);
+        let data = await response.json();
+        console.log("New listing created:", data);
         M.toast({ html: "Listing duplicated as Draft successfully!" });
-        
-        // Extract new listing ID from response
-        let newListingId = newListingData.listing_id || newListingData.id;
-        if (newListingId) {
-          console.log("New listing ID:", newListingId);
-          // Explicitly call updateInventory.js after 5 seconds with the new listing ID
-          setTimeout(async () => {
-            console.log("Calling updateInventory function for listing ID:", newListingId);
-            try {
-              const updateUrl = `/.netlify/functions/updateInventory?listingId=${newListingId}&token=${encodeURIComponent(accessToken)}`;
-              const updateResponse = await fetch(updateUrl);
-              console.log("Update inventory response status:", updateResponse.status);
-              if (!updateResponse.ok) {
-                const errorText = await updateResponse.text();
-                console.error("Error updating inventory:", errorText);
-              } else {
-                const updateData = await updateResponse.json();
-                console.log("Inventory update successful:", updateData);
-              }
-            } catch (updateError) {
-              console.error("Exception calling updateInventory:", updateError);
-            }
-          }, 5000);
-        } else {
-          console.warn("No new listing ID provided for inventory update.");
-        }
       } catch (e) {
         console.error("Error in duplicateListing function:", e);
         M.toast({ html: "Error duplicating listing: " + e.message });
       }
     }
+    
+    // New button event: manually trigger updateInventory.js function
+    document.getElementById("updateInventoryBtn").addEventListener("click", async () => {
+      // The new listing ID should be provided by the user in an input or we can prompt for it.
+      // For this example, we prompt the user.
+      let newListingId = prompt("Enter the new listing ID to update its inventory:");
+      if (!newListingId) {
+        M.toast({ html: "No new listing ID provided for inventory update." });
+        return;
+      }
+      if (!accessToken) {
+        M.toast({ html: "No access token. Please connect to Etsy first." });
+        return;
+      }
+      try {
+        // Call the updateInventory.js Netlify function manually with listingId and token as query parameters.
+        const updateUrl = `/.netlify/functions/updateInventory?listingId=${newListingId}&token=${encodeURIComponent(accessToken)}`;
+        console.log("Calling update inventory URL:", updateUrl);
+        let response = await fetch(updateUrl);
+        console.log("Update inventory response status:", response.status);
+        if (!response.ok) {
+          let errorText = await response.text();
+          console.error("Error updating inventory. Status:", response.status, "Text:", errorText);
+          throw new Error(`Error updating inventory: ${response.status} - ${response.statusText}`);
+        }
+        let updateData = await response.json();
+        console.log("Inventory update result:", updateData);
+        M.toast({ html: "Inventory updated successfully!" });
+      } catch (e) {
+        console.error("Error in update inventory function:", e);
+        M.toast({ html: "Error updating inventory: " + e.message });
+      }
+    });
     
     document.getElementById("uploadToEtsyBtn").addEventListener("click", duplicateListing);
     
@@ -775,7 +788,7 @@ Using Sales Report and Product List Files:
               progressBar.value = 0;
               soldOrdersCSV.push(fileData);
               updateUploadedFilesList();
-              await updateVectorStore();
+              // Optionally call updateInventory here automatically if desired.
             } catch(err) {
               console.error("Error uploading file:", err);
             }
@@ -816,7 +829,7 @@ Using Sales Report and Product List Files:
               progressBar.value = 0;
               listingsCSV.push(fileData);
               updateUploadedFilesList();
-              await updateVectorStore();
+              // Optionally call updateInventory here automatically if desired.
             } catch(err) {
               console.error("Error uploading file:", err);
             }
@@ -826,31 +839,7 @@ Using Sales Report and Product List Files:
       }
     });
     
-    async function updateVectorStore() {
-      const allFileIds = [...soldOrdersCSV, ...listingsCSV].map(file => file.id);
-      if (allFileIds.length === 0) {
-        console.log("No supported files uploaded yet.");
-        return;
-      }
-      try {
-        const vectorStorePayload = { name: "CSV Vector Store", file_ids: allFileIds };
-        const vectorStoreResponse = await fetch("/.netlify/functions/vectorStore", {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify(vectorStorePayload)
-        });
-        if (!vectorStoreResponse.ok) {
-          const errorData = await vectorStoreResponse.json();
-          throw new Error("Error creating vector store: " + JSON.stringify(errorData));
-        }
-        const vectorStoreData = await vectorStoreResponse.json();
-        console.log("Vector store created:", vectorStoreData);
-      } catch (err) {
-        console.error("Error in updateVectorStore:", err);
-      }
-    }
-    
-    function updateUploadedFilesList() {
+    async function updateUploadedFilesList() {
       let fileList = [];
       soldOrdersCSV.forEach(file => fileList.push(file.name));
       listingsCSV.forEach(file => fileList.push(file.name));
@@ -1036,7 +1025,7 @@ ${keywordRules}
 
 Using Sales Report and Product List Files, generate exactly 13 tag phrases (each ≤ 20 characters).
 Include "Gift for Her", ensure "Charm" appears at least once in a multi-word phrase (max 4 times total),
-"Necklace" appears no more than 3 times, "Gift" no more than 3 times, "Lover" no more than 2 times,
+"Necklace" no more than 3 times, "Gift" no more than 3 times, "Lover" no more than 2 times,
 and exclude prohibited words.
 Return your answer as plain text.`;
       try {
@@ -1129,353 +1118,23 @@ Return your answer as plain text.`;
     });
     document.getElementById("copyDescriptionBtn").addEventListener("click", () => {
       navigator.clipboard.writeText(document.getElementById("listingDescription").value).catch(err => console.error("Error copying description: " + err));
-    });
-    
-    // ----- UI Position Persistence & Live Preview for Configure Buttons -----
-    document.getElementById("configureButtonsBtn").addEventListener("click", function() {
-      var configContainer = document.getElementById("buttonConfigContainer");
-      configContainer.innerHTML = "";
-      var selectors = "button:not(#configureButtonsBtn), #listingDescContainer, #ordersDropZone, #listingsDropZone, #dropZone, #csvProgressContainer, #previewGridContainer, #primaryPreview, #container13, #uploadedFilesList";
-      var elements = document.querySelectorAll(selectors);
-      var table = document.createElement("table");
-      table.className = "striped";
-      var thead = document.createElement("thead");
-      thead.innerHTML = "<tr><th>Element ID</th><th>Top (px)</th><th>Left (px)</th></tr>";
-      table.appendChild(thead);
-      var tbody = document.createElement("tbody");
-      elements.forEach(function(el) {
-        var id = el.id;
-        var computedStyle = window.getComputedStyle(el);
-        var currentTop = el.style.top || computedStyle.top || "0";
-        var currentLeft = el.style.left || computedStyle.left || "0";
-        var tr = document.createElement("tr");
-        tr.innerHTML = `<td>${id}</td>
-                        <td><input type="number" id="${id}_top" value="${parseInt(currentTop)||0}"></td>
-                        <td><input type="number" id="${id}_left" value="${parseInt(currentLeft)||0}"></td>`;
-        var topInput = tr.querySelector(`#${id}_top`);
-        var leftInput = tr.querySelector(`#${id}_left`);
-        topInput.addEventListener("input", function() { el.style.top = topInput.value + "px"; });
-        leftInput.addEventListener("input", function() { el.style.left = leftInput.value + "px"; });
-        tbody.appendChild(tr);
-      });
-      table.appendChild(tbody);
-      configContainer.appendChild(table);
-      var modalElem = document.getElementById("buttonConfigModal");
-      var modalInstance = M.Modal.getInstance(modalElem) || M.Modal.init(modalElem, { preventScrolling: false });
-      modalInstance.open();
-    });
-    
-    document.getElementById("saveButtonPositionsBtn").addEventListener("click", function() {
-      var selectors = "button:not(#configureButtonsBtn), #listingDescContainer, #ordersDropZone, #listingsDropZone, #dropZone, #csvProgressContainer, #previewGridContainer, #primaryPreview, #container13, #uploadedFilesList";
-      var elements = document.querySelectorAll(selectors);
-      var positions = {};
-      elements.forEach(function(el) {
-        positions[el.id] = { top: el.style.top || "0px", left: el.style.left || "0px" };
-      });
-      localStorage.setItem("buttonPositions", JSON.stringify(positions));
-      M.toast({ html: "Button positions saved." });
-    });
-    
-    function loadButtonPositions() {
-      var stored = localStorage.getItem("buttonPositions");
-      if (stored) {
-        var positions = JSON.parse(stored);
-        for (var id in positions) {
-          var el = document.getElementById(id);
-          if (el) {
-            el.style.top = positions[id].top;
-            el.style.left = positions[id].left;
-          }
-        }
-      }
-    }
-    // -------------------------------------------------------------------------
-    
-    window.addEventListener("load", function() {
-      var container13 = document.getElementById("container13");
-      container13.style.height = (container13.offsetHeight * 2.5) + "px";
-    });
-    
-    document.getElementById("listingDescInput").addEventListener("input", function() {
-      document.getElementById("searchKeyPhrases").value = "";
-    });
-    
-    // Utility: Strip Markdown formatting from JSON responses.
-    function stripMarkdownJSON(text) {
-      return text.replace(/^```json\s*/, "").replace(/\s*```$/, "").trim();
-    }
-    
-    function updateTitleCount(text) {
-      document.getElementById("titleCount").textContent = "Count: " + text.length;
-    }
-    
-    async function generateBoth() {
-      await Promise.all([generateTitleOnly(), generateDescriptionOnly()]);
-      const titleEl = document.getElementById("listingTitle");
-      const descEl = document.getElementById("listingDescription");
-      console.log("Generate Output:", { title: titleEl.value, description: descEl.value });
-    }
-    
-    async function generateTitleOnly() {
-      const etsyLink = ETSY_SHOP_URL;
-      const keyPhrases = document.getElementById("searchKeyPhrases").value.trim();
-      if (!keyPhrases) {
-        M.toast({ html: "Please provide the search key phrases." });
-        return;
-      }
-      const promptText = `
-You are ChatGPT using ${modelName}.
-Based on the inputs below, generate an Etsy Listing TITLE only.
-Input Context:
-Etsy Link: "${etsyLink}"
-Search Key Phrases: "${keyPhrases}"
---- Rules for TITLE ---
-${stripMarkdownJSON(document.getElementById("titleRulesTextarea").value)}
-Important: Return ONLY the title as plain text.`;
-      document.getElementById("listingTitle").value = "Generating title...";
-      const payload = {
-        model: modelName,
-        messages: [
-          { role: "system", content: "Return ONLY the title as plain text." },
-          { role: "user", content: promptText }
-        ],
-        temperature: 0.7
-      };
-      try {
-        const data = await callOpenAI(payload);
-        if (data.choices && data.choices.length > 0) {
-          let output = stripMarkdownJSON(data.choices[0].message.content);
-          document.getElementById("listingTitle").value = output || "No title generated.";
-          updateTitleCount(output);
-        } else {
-          document.getElementById("listingTitle").value = "No title generated.";
-        }
-      } catch (error) {
-        document.getElementById("listingTitle").value = "Error: " + error;
-      }
-    }
-    
-    async function generateDescriptionOnly() {
-      const etsyLink = ETSY_SHOP_URL;
-      const keyPhrases = document.getElementById("searchKeyPhrases").value.trim();
-      if (!keyPhrases) {
-        M.toast({ html: "Please provide the search key phrases." });
-        return;
-      }
-      const promptText = `
-You are ChatGPT using ${modelName}.
-Based on the inputs below, generate an Etsy Listing DESCRIPTION only.
-Input Context:
-Etsy Link: "${etsyLink}"
-Search Key Phrases: "${keyPhrases}"
---- Rules for DESCRIPTION ---
-${stripMarkdownJSON(document.getElementById("descriptionRulesTextarea").value)}
-Important: Return ONLY the description as plain text.`;
-      document.getElementById("listingDescription").value = "Generating description...";
-      const payload = {
-        model: modelName,
-        messages: [
-          { role: "system", content: "Return ONLY the description as plain text." },
-          { role: "user", content: promptText }
-        ],
-        temperature: 0.7
-      };
-      try {
-        const data = await callOpenAI(payload);
-        if (data.choices && data.choices.length > 0) {
-          let output = stripMarkdownJSON(data.choices[0].message.content);
-          document.getElementById("listingDescription").value = output || "No description generated.";
-        } else {
-          document.getElementById("listingDescription").value = "No description generated.";
-        }
-      } catch (error) {
-        document.getElementById("listingDescription").value = "Error: " + error;
-      }
-    }
-    
-    async function generateTagPhrases() {
-      let question = document.getElementById("listingDescInput").value;
-      if (!question.trim()) {
-        M.toast({ html: "Please enter a question in the Listing Description." });
-        return;
-      }
-      let extraText = "Emphasis on SEO friendliness with a focus on generating effective long tail tag phrases for Etsy.";
-      const keywordRules = stripMarkdownJSON(document.getElementById("keywordRulesTextarea").value);
-      let prompt = `
-Listing Description (for emphasis): "${question}"
-${extraText}
-
-Keyword Rules:
-${keywordRules}
-
-Using Sales Report and Product List Files, generate exactly 13 tag phrases (each ≤ 20 characters).
-Include "Gift for Her", ensure "Charm" appears at least once in a multi-word phrase (max 4 times total),
-"Necklace" appears no more than 3 times, "Gift" no more than 3 times, "Lover" no more than 2 times,
-and exclude prohibited words.
-Return your answer as plain text.`;
-      try {
-        const payload = {
-          model: modelName,
-          messages: [
-            { role: "system", content: "Generate tag phrases according to the provided rules." },
-            { role: "user", content: prompt }
-          ],
-          temperature: 0.7,
-          max_tokens: 500
-        };
-        const data = await callOpenAI(payload);
-        let answer = data.choices[0].message.content;
-        let phrases = answer.split(/[\n,]+/)
-          .map(s => s.replace(/^\d+\.\s*/, "").trim())
-          .join("\n");
-        document.getElementById("searchKeyPhrases").value = phrases;
-      } catch (err) {
-        console.error("Error generating tag phrases:", err);
-        M.toast({ html: "Error generating tag phrases: " + err.message });
-      }
-    }
-    
-    document.getElementById("listingDescInput").addEventListener("keydown", async function(e) {
-      if (e.key === "Enter" && !e.shiftKey) {
-        e.preventDefault();
-        await generateTagPhrases();
-        await delay(100);
-        await processKeyPhrases();
-      }
-    });
-    
-    async function processKeyPhrases() {
-      let keyText = document.getElementById("searchKeyPhrases").value;
-      let phrases = keyText.split(/\n+/).map(phrase => phrase.trim()).filter(phrase => phrase !== "");
-      let processedPhrases = [];
-      for (let phrase of phrases) {
-        while (phrase.length > 20) {
-          try {
-            const altPayload = {
-              model: modelName,
-              messages: [
-                { role: "system", content: "Generate an alternate key phrase that is ≤ 20 characters." },
-                { role: "user", content: phrase }
-              ],
-              temperature: 0.7,
-              max_tokens: 20
-            };
-            const altData = await callOpenAI(altPayload);
-            phrase = stripMarkdownJSON(altData.choices[0].message.content).trim();
-          } catch (error) {
-            break;
-          }
-          await delay(50);
-        }
-        while (processedPhrases.includes(phrase)) {
-          try {
-            const dupPayload = {
-              model: modelName,
-              messages: [
-                { role: "system", content: "Generate a unique key phrase that is ≤ 20 characters." },
-                { role: "user", content: phrase }
-              ],
-              temperature: 0.7,
-              max_tokens: 20
-            };
-            const dupData = await callOpenAI(dupPayload);
-            phrase = stripMarkdownJSON(dupData.choices[0].message.content).trim();
-          } catch (error) {
-            break;
-          }
-          await delay(50);
-        }
-        processedPhrases.push(phrase);
-      }
-      document.getElementById("searchKeyPhrases").value = processedPhrases.join("\n");
-    }
-    
-    document.getElementById("copyKeyPhrasesBtn").addEventListener("click", () => {
-      const lines = document.getElementById("searchKeyPhrases").value.split(/\n+/).map(l => l.trim()).filter(l => l !== "");
-      navigator.clipboard.writeText(lines.join(", ")).catch(err => console.error("Error copying key phrases: " + err));
-    });
-    
-    document.getElementById("generateBtn").addEventListener("click", generateBoth);
-    document.getElementById("regenTitleBtn").addEventListener("click", generateTitleOnly);
-    document.getElementById("regenDescriptionBtn").addEventListener("click", generateDescriptionOnly);
-    document.getElementById("copyTitleBtn").addEventListener("click", () => {
-      navigator.clipboard.writeText(document.getElementById("listingTitle").value).catch(err => console.error("Error copying title: " + err));
-    });
-    document.getElementById("copyDescriptionBtn").addEventListener("click", () => {
-      navigator.clipboard.writeText(document.getElementById("listingDescription").value).catch(err => console.error("Error copying description: " + err));
-    });
-    
-    // ----- UI Position Persistence & Live Preview for Configure Buttons -----
-    document.getElementById("configureButtonsBtn").addEventListener("click", function() {
-      var configContainer = document.getElementById("buttonConfigContainer");
-      configContainer.innerHTML = "";
-      var selectors = "button:not(#configureButtonsBtn), #listingDescContainer, #ordersDropZone, #listingsDropZone, #dropZone, #csvProgressContainer, #previewGridContainer, #primaryPreview, #container13, #uploadedFilesList";
-      var elements = document.querySelectorAll(selectors);
-      var table = document.createElement("table");
-      table.className = "striped";
-      var thead = document.createElement("thead");
-      thead.innerHTML = "<tr><th>Element ID</th><th>Top (px)</th><th>Left (px)</th></tr>";
-      table.appendChild(thead);
-      var tbody = document.createElement("tbody");
-      elements.forEach(function(el) {
-        var id = el.id;
-        var computedStyle = window.getComputedStyle(el);
-        var currentTop = el.style.top || computedStyle.top || "0";
-        var currentLeft = el.style.left || computedStyle.left || "0";
-        var tr = document.createElement("tr");
-        tr.innerHTML = `<td>${id}</td>
-                        <td><input type="number" id="${id}_top" value="${parseInt(currentTop)||0}"></td>
-                        <td><input type="number" id="${id}_left" value="${parseInt(currentLeft)||0}"></td>`;
-        var topInput = tr.querySelector(`#${id}_top`);
-        var leftInput = tr.querySelector(`#${id}_left`);
-        topInput.addEventListener("input", function() { el.style.top = topInput.value + "px"; });
-        leftInput.addEventListener("input", function() { el.style.left = leftInput.value + "px"; });
-        tbody.appendChild(tr);
-      });
-      table.appendChild(tbody);
-      configContainer.appendChild(table);
-      var modalElem = document.getElementById("buttonConfigModal");
-      var modalInstance = M.Modal.getInstance(modalElem) || M.Modal.init(modalElem, { preventScrolling: false });
-      modalInstance.open();
-    });
-    
-    document.getElementById("saveButtonPositionsBtn").addEventListener("click", function() {
-      var selectors = "button:not(#configureButtonsBtn), #listingDescContainer, #ordersDropZone, #listingsDropZone, #dropZone, #csvProgressContainer, #previewGridContainer, #primaryPreview, #container13, #uploadedFilesList";
-      var elements = document.querySelectorAll(selectors);
-      var positions = {};
-      elements.forEach(function(el) {
-        positions[el.id] = { top: el.style.top || "0px", left: el.style.left || "0px" };
-      });
-      localStorage.setItem("buttonPositions", JSON.stringify(positions));
-      M.toast({ html: "Button positions saved." });
-    });
-    
-    function loadButtonPositions() {
-      var stored = localStorage.getItem("buttonPositions");
-      if (stored) {
-        var positions = JSON.parse(stored);
-        for (var id in positions) {
-          var el = document.getElementById(id);
-          if (el) {
-            el.style.top = positions[id].top;
-            el.style.left = positions[id].left;
-          }
-        }
-      }
-    }
-    // -------------------------------------------------------------------------
-    
-    window.addEventListener("load", function() {
-      var container13 = document.getElementById("container13");
-      container13.style.height = (container13.offsetHeight * 2.5) + "px";
-    });
-    
-    document.getElementById("listingDescInput").addEventListener("input", function() {
-      document.getElementById("searchKeyPhrases").value = "";
     });
     
     // Utility delay function
     function delay(ms) { return new Promise(resolve => setTimeout(resolve, ms)); }
+    
+    // Dummy render functions (implement as needed)
+    function renderPreviewGrid() {
+      // Implementation for preview grid rendering (if any)
+      console.log("Rendering preview grid...");
+    }
+    
+    function updateUploadedFilesList() {
+      let fileList = [];
+      soldOrdersCSV.forEach(file => fileList.push(file.name));
+      listingsCSV.forEach(file => fileList.push(file.name));
+      document.getElementById("uploadedFilesList").value = fileList.join("\n");
+    }
   </script>
 </body>
 </html>
