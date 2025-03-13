@@ -629,7 +629,7 @@ Using Sales Report and Product List Files:
         return;
       }
       try {
-        // Proxy the duplicate listing call through our Netlify function
+        // Call the etsyDuplicateListing Netlify function.
         const duplicateUrl = `/.netlify/functions/etsyDuplicateListing?listingId=${listingId}&token=${encodeURIComponent(accessToken)}`;
         console.log("Calling duplicate listing URL:", duplicateUrl);
         let response = await fetch(duplicateUrl);
@@ -639,58 +639,36 @@ Using Sales Report and Product List Files:
           console.error("Error duplicating listing. Status:", response.status, "Text:", errorText);
           throw new Error(`Error duplicating listing: ${response.status} - ${response.statusText}`);
         }
-        let data = await response.json();
-        console.log("New listing created:", data);
+        let newListingData = await response.json();
+        console.log("New listing created:", newListingData);
+
+        // Check for new listing ID and then call updateInventory after 5 seconds.
+        if (newListingData.listing_id) {
+          console.log("New listing ID provided:", newListingData.listing_id);
+          setTimeout(async () => {
+            try {
+              const updateUrl = `/.netlify/functions/updateInventory?newListingId=${newListingData.listing_id}&originalListingId=${listingId}&token=${encodeURIComponent(accessToken)}`;
+              console.log("Calling updateInventory URL:", updateUrl);
+              let updateResponse = await fetch(updateUrl);
+              console.log("Update Inventory Response status:", updateResponse.status, updateResponse.statusText);
+              if (!updateResponse.ok) {
+                let updateErrorText = await updateResponse.text();
+                console.error("Error updating inventory:", updateErrorText);
+              } else {
+                let updateData = await updateResponse.json();
+                console.log("Inventory update successful:", updateData);
+              }
+            } catch (invError) {
+              console.error("Exception while updating inventory:", invError);
+            }
+          }, 5000);
+        } else {
+          console.error("No new listing ID provided for inventory update.");
+        }
         M.toast({ html: "Listing duplicated as Draft successfully!" });
-        
-        // After 5 seconds, call updateInventory.js to update inventory/variations.
-        setTimeout(() => {
-          updateInventoryForListing(data.listing_id);
-        }, 5000);
       } catch (e) {
         console.error("Error in duplicateListing function:", e);
         M.toast({ html: "Error duplicating listing: " + e.message });
-      }
-    }
-    
-    // Function to call updateInventory.js via Netlify functions.
-    async function updateInventoryForListing(newListingId) {
-      if (!newListingId) {
-        console.error("No new listing ID provided for inventory update.");
-        return;
-      }
-      if (!accessToken) {
-        console.error("No access token available for inventory update.");
-        return;
-      }
-      const updateInventoryUrl = `/.netlify/functions/updateInventory`;
-      // Build a payload that includes the new listing ID and optionally the original inventory data.
-      // For demonstration, we pass the original listingId so that the backend can fetch original inventory.
-      const payload = {
-        newListingId,
-        originalListingId: document.getElementById("shopListings").value.match(/\/listing\/(\d+)/)[1],
-        token: accessToken
-      };
-      console.log("Calling updateInventory.js with payload:", payload);
-      try {
-        let response = await fetch(updateInventoryUrl, {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify(payload)
-        });
-        console.log("Update inventory response status:", response.status);
-        if (!response.ok) {
-          let errorText = await response.text();
-          console.error("Error updating inventory:", errorText);
-          M.toast({ html: "Error updating inventory: " + errorText });
-          return;
-        }
-        let result = await response.json();
-        console.log("Inventory update successful:", result);
-        M.toast({ html: "Inventory updated successfully!" });
-      } catch (error) {
-        console.error("Exception while updating inventory:", error);
-        M.toast({ html: "Error updating inventory: " + error.message });
       }
     }
     
@@ -796,7 +774,7 @@ Using Sales Report and Product List Files:
               soldOrdersCSV.push(fileData);
               updateUploadedFilesList();
               await updateVectorStore();
-            } catch(err) {
+            } catch (err) {
               console.error("Error uploading file:", err);
             }
          } else {
@@ -837,7 +815,7 @@ Using Sales Report and Product List Files:
               listingsCSV.push(fileData);
               updateUploadedFilesList();
               await updateVectorStore();
-            } catch(err) {
+            } catch (err) {
               console.error("Error uploading file:", err);
             }
          } else {
@@ -1222,6 +1200,69 @@ Return your answer as plain text.`;
     
     // Utility delay function
     function delay(ms) { return new Promise(resolve => setTimeout(resolve, ms)); }
+    
+    // ----- Duplicate Listing and Inventory Update -----
+    async function duplicateListing() {
+      let listingLink = document.getElementById("shopListings").value.trim();
+      if (!listingLink) {
+        M.toast({ html: "Please provide a listing link in 'My Etsy Shop Listings'" });
+        return;
+      }
+      let listingIdMatch = listingLink.match(/\/listing\/(\d+)/);
+      if (!listingIdMatch) {
+        M.toast({ html: "Invalid listing link. Please provide a valid Etsy listing URL." });
+        return;
+      }
+      let listingId = listingIdMatch[1];
+      if (!accessToken) {
+        M.toast({ html: "No access token. Please connect to Etsy first." });
+        return;
+      }
+      try {
+        // Call the etsyDuplicateListing Netlify function.
+        const duplicateUrl = `/.netlify/functions/etsyDuplicateListing?listingId=${listingId}&token=${encodeURIComponent(accessToken)}`;
+        console.log("Calling duplicate listing URL:", duplicateUrl);
+        let response = await fetch(duplicateUrl);
+        console.log("Response status:", response.status, response.statusText);
+        if (!response.ok) {
+          let errorText = await response.text();
+          console.error("Error duplicating listing. Status:", response.status, "Text:", errorText);
+          throw new Error(`Error duplicating listing: ${response.status} - ${response.statusText}`);
+        }
+        let newListingData = await response.json();
+        console.log("New listing created:", newListingData);
+
+        // Check if new listing ID is provided; if yes, call updateInventory after 5 seconds.
+        if (newListingData.listing_id) {
+          console.log("New listing ID provided:", newListingData.listing_id);
+          setTimeout(async () => {
+            try {
+              const updateUrl = `/.netlify/functions/updateInventory?newListingId=${newListingData.listing_id}&originalListingId=${listingId}&token=${encodeURIComponent(accessToken)}`;
+              console.log("Calling updateInventory URL:", updateUrl);
+              let updateResponse = await fetch(updateUrl);
+              console.log("Update Inventory Response status:", updateResponse.status, updateResponse.statusText);
+              if (!updateResponse.ok) {
+                let updateErrorText = await updateResponse.text();
+                console.error("Error updating inventory:", updateErrorText);
+              } else {
+                let updateData = await updateResponse.json();
+                console.log("Inventory update successful:", updateData);
+              }
+            } catch (invError) {
+              console.error("Exception while updating inventory:", invError);
+            }
+          }, 5000);
+        } else {
+          console.error("No new listing ID provided for inventory update.");
+        }
+        M.toast({ html: "Listing duplicated as Draft successfully!" });
+      } catch (e) {
+        console.error("Error in duplicateListing function:", e);
+        M.toast({ html: "Error duplicating listing: " + e.message });
+      }
+    }
+    
+    document.getElementById("uploadToEtsyBtn").addEventListener("click", duplicateListing);
   </script>
 </body>
 </html>
