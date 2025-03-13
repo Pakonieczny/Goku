@@ -1,78 +1,81 @@
 const fetch = require("node-fetch");
+const FormData = require("form-data");
 
 exports.handler = async function (event, context) {
   try {
-    // Parse the incoming JSON body.
-    const { listingId, token, fileName, dataURL, rank } = JSON.parse(event.body);
+    // Parse the JSON body
+    const body = JSON.parse(event.body);
+    const { listingId, token, fileName, dataURL, rank } = body;
+
+    // Validate required parameters
     if (!listingId || !token || !fileName || !dataURL) {
       return {
         statusCode: 400,
-        body: JSON.stringify({ error: "Missing required parameters." }),
+        body: JSON.stringify({ error: "Missing required parameters: listingId, token, fileName, or dataURL" }),
       };
     }
-    console.log("Image upload initiated for listingId:", listingId);
-    console.log("File name:", fileName);
-    console.log("Rank:", rank || 1);
+    console.log("Received parameters:", { listingId, fileName, rank });
 
-    // Retrieve SHOP_ID and CLIENT_ID from environment variables.
-    const shopId = process.env.SHOP_ID;
-    const clientId = process.env.CLIENT_ID;
-    if (!shopId) {
-      console.error("SHOP_ID environment variable is not set.");
-      return {
-        statusCode: 500,
-        body: JSON.stringify({ error: "SHOP_ID environment variable is not set." }),
-      };
+    // Extract base64 content from the dataURL (assumes format "data:image/jpeg;base64,...")
+    const parts = dataURL.split(",");
+    if (parts.length < 2) {
+      throw new Error("Invalid dataURL format");
     }
+    const base64Data = parts[1];
+    const buffer = Buffer.from(base64Data, "base64");
+
+    // Create a FormData object to send the file
+    const form = new FormData();
+    // Append the file with a filename and content type (adjust contentType as needed)
+    form.append("file", buffer, {
+      filename: fileName,
+      contentType: "image/jpeg",
+    });
+    // Append rank if provided (optional)
+    if (rank !== undefined) {
+      form.append("rank", rank);
+    }
+
+    // Build the Etsy API endpoint for image upload
+    const endpoint = `https://api.etsy.com/v3/application/listings/${listingId}/images`;
+    console.log("Uploading image to endpoint:", endpoint);
+
+    // Retrieve CLIENT_ID from environment variables
+    const clientId = process.env.CLIENT_ID;
     if (!clientId) {
       console.error("CLIENT_ID environment variable is not set.");
-      return {
-        statusCode: 500,
-        body: JSON.stringify({ error: "CLIENT_ID environment variable is not set." }),
-      };
+    } else {
+      console.log("Using CLIENT_ID:", clientId.slice(0, 5) + "*****");
     }
-    console.log("Using SHOP_ID:", shopId);
-    console.log("Using CLIENT_ID:", clientId.slice(0, 5) + "*****");
 
-    // Construct the Etsy API endpoint URL for uploading the image.
-    const uploadUrl = `https://api.etsy.com/v3/application/shops/${shopId}/listings/${listingId}/images`;
-    console.log("Uploading image to URL:", uploadUrl);
-
-    // Prepare the payload.
-    // Now, we send the full dataURL (including MIME type) instead of splitting it.
-    const payload = {
-      file: dataURL, // dataURL includes "data:image/jpeg;base64," or similar
-      name: fileName,
-      rank: rank || 1,
+    // Build headers. Note: FormData sets its own Content-Type header.
+    const headers = {
+      "Authorization": `Bearer ${token}`,
+      "x-api-key": clientId,
     };
-    console.log("Upload payload:", JSON.stringify(payload, null, 2));
+    console.log("Request headers:", headers);
 
-    // Make the POST request to upload the image, including the x-api-key header.
-    const response = await fetch(uploadUrl, {
+    // Make the POST request to upload the image
+    const response = await fetch(endpoint, {
       method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-        "Authorization": `Bearer ${token}`,
-        "x-api-key": clientId,
-      },
-      body: JSON.stringify(payload),
+      headers: headers,
+      body: form,
     });
     console.log("Image upload response status:", response.status);
+
+    const respText = await response.text();
     if (!response.ok) {
-      const errorText = await response.text();
-      console.error("Error uploading image:", errorText);
+      console.error("Error uploading image:", respText);
       return {
         statusCode: response.status,
-        body: JSON.stringify({ error: errorText }),
+        body: JSON.stringify({ error: respText }),
       };
     }
-    const data = await response.json();
-    console.log("Image uploaded successfully:", data);
+    console.log("Image uploaded successfully:", respText);
     return {
       statusCode: 200,
-      body: JSON.stringify(data),
+      body: respText,
     };
-
   } catch (error) {
     console.error("Exception in imageUpload handler:", error);
     return {

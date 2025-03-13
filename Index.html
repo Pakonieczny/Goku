@@ -192,7 +192,7 @@
     /* Additional widths for Etsy Link and Shop Listings */
     #etsyLink, #shopListings { width: 500px !important; }
     
-    /* Update Listing button container at the bottom center */
+    /* Styles for the Update Listing button container at the bottom center */
     #uploadContainer {
       position: fixed;
       bottom: 20px;
@@ -200,8 +200,9 @@
       transform: translateX(-50%);
       display: inline-block;
     }
-    /* New Photo Upload button container (to the right of Update Listing) */
-    #photoUploadBtn {
+    
+    /* New Photo Upload button (to the right of Update Listing) */
+    #photoUploadContainer {
       position: fixed;
       bottom: 20px;
       left: calc(50% + 120px);
@@ -251,13 +252,13 @@
     <button id="analyzeMetadataBtn" class="btn waves-effect waves-light configurable">Analyze Photos</button>
     <button id="showAnalyzeRulesBtn" class="btn waves-effect waves-light configurable" data-target="analyzeRulesModal" style="margin-top:25px;">Analyze Rules</button>
   </div>
-  
   <div id="container13" class="flex-container configurable">
     <div class="textbox-container configurable">
       <textarea id="searchKeyPhrases" class="materialize-textarea" rows="14"></textarea>
     </div>
   </div>
   
+  <!-- Components below Search Key Phrases -->
   <div id="belowSearch">
     <button id="generateBtn" class="btn waves-effect waves-light configurable">Generate</button>
     <div class="title-container" style="margin-top: -50px;">
@@ -293,21 +294,28 @@
     </div>
   </div>
   
+  <!-- Preview Grid Container -->
   <div id="previewGridContainer">
     <div id="previewGrid"></div>
   </div>
   
-  <!-- Update Listing button container -->
+  <!-- Update Listing button container (updates an existing listing) -->
   <div id="uploadContainer">
     <button id="uploadToEtsyBtn" class="btn waves-effect waves-light configurable">Update Listing</button>
   </div>
   
-  <!-- New Photo Upload button container -->
-  <div id="photoUploadBtn">
-    <button id="photoUploadTriggerBtn" class="btn waves-effect waves-light configurable">Photo Upload</button>
+  <!-- New Photo Upload button container (to the right of Update Listing) -->
+  <div id="photoUploadContainer">
+    <button id="uploadPhotoBtn" class="btn waves-effect waves-light configurable">Photo Upload</button>
+  </div>
+  
+  <!-- LookUP button (shows JSON payload for Title, Description, Tags) -->
+  <div id="lookupContainer" style="position: fixed; bottom: 20px; left: calc(50% + 240px); display: inline-block;">
+    <button id="lookUPBtn" class="btn waves-effect waves-light configurable">LookUP</button>
   </div>
   
   <!-- Modals -->
+  <!-- Title Rules Modal -->
   <div id="titleRulesModal" class="modal">
     <div class="modal-content">
       <h4>Title Rules</h4>
@@ -347,6 +355,7 @@ Prohibited Words:
     </div>
   </div>
   
+  <!-- Description Rules Modal -->
   <div id="descriptionRulesModal" class="modal">
     <div class="modal-content">
       <h4>Description Rules</h4>
@@ -371,6 +380,7 @@ Option 3:
     </div>
   </div>
   
+  <!-- Analyze Rules Modal -->
   <div id="analyzeRulesModal" class="modal">
     <div class="modal-content">
       <h4>Photo Analysis Rules</h4>
@@ -391,6 +401,7 @@ Default Photo Analysis Rules:
     </div>
   </div>
   
+  <!-- Keyword Rules Modal -->
   <div id="keywordRulesModal" class="modal">
     <div class="modal-content">
       <h4>Keyword Rules</h4>
@@ -411,6 +422,7 @@ Using Sales Report and Product List Files:
     </div>
   </div>
   
+  <!-- Button Config Modal -->
   <div id="buttonConfigModal" class="modal">
     <div class="modal-content">
       <h4>Configure Button Positions</h4>
@@ -422,6 +434,7 @@ Using Sales Report and Product List Files:
     </div>
   </div>
   
+  <!-- Metadata Modal -->
   <div id="metadataModal" class="modal">
     <div class="modal-content">
       <h4>Photo Metadata</h4>
@@ -432,6 +445,7 @@ Using Sales Report and Product List Files:
     </div>
   </div>
   
+  <!-- Crop Modal -->
   <div id="photoCropModal" class="modal">
     <div class="crop-container">
       <h4 style="text-align:center; margin: 0 0 10px 0;">Crop Photo</h4>
@@ -449,16 +463,19 @@ Using Sales Report and Product List Files:
     </div>
   </div>
   
+  <!-- Include jQuery and Materialize JS -->
   <script src="https://code.jquery.com/jquery-3.6.0.min.js"></script>
   <script src="https://cdnjs.cloudflare.com/ajax/libs/materialize/1.0.0/js/materialize.min.js"></script>
   
   <script>
+    // Global variable declarations
     const ETSY_SHOP_URL = "https://www.etsy.com/shop/custombrites";
     const CLIENT_ID = "k75zdspz4r99txpqdji7i2em";
     const REDIRECT_URI = "https://delicate-tanuki-616ac0.netlify.app/";
     const modelName = "chatgpt-4o-latest";
     let accessToken;
     
+    // Global variables for file uploads and previews
     let soldOrdersCSV = [];
     let listingsCSV = [];
     let photoNames = [];
@@ -467,6 +484,7 @@ Using Sales Report and Product List Files:
     let photoMeta = [];
     let photoObjects = [];
     
+    // Proxy OpenAI calls through our Netlify function
     async function callOpenAI(payload) {
       const response = await fetch("/.netlify/functions/openaiProxy", {
         method: "POST",
@@ -480,6 +498,7 @@ Using Sales Report and Product List Files:
       return await response.json();
     }
     
+    // File upload functions using our Netlify function "uploadFile"
     async function uploadCSVFile(file, progressCallback) {
       return new Promise((resolve, reject) => {
         const reader = new FileReader();
@@ -540,6 +559,7 @@ Using Sales Report and Product List Files:
       });
     }
     
+    // PKCE Utility Functions
     function generateRandomString(length) {
       const possible = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789-._~';
       let text = '';
@@ -561,6 +581,7 @@ Using Sales Report and Product List Files:
       return base64urlEncode(digest);
     }
     
+    // OAuth Flow for Etsy
     document.getElementById("connectEtsyBtn").addEventListener("click", async () => {
       const state = "randomState123";
       const scope = "listings_w listings_r";
@@ -609,6 +630,7 @@ Using Sales Report and Product List Files:
       }
     }
     
+    // Function to update an existing listing via the Netlify proxy function updateListing.js
     async function updateExistingListing() {
       const listingInput = document.getElementById("shopListings").value.trim();
       if (!listingInput) {
@@ -627,12 +649,17 @@ Using Sales Report and Product List Files:
           return;
         }
       }
+      // Build payload from generated fields for title, description, and tags.
       const payload = {
         title: document.getElementById("listingTitle").value,
         description: document.getElementById("listingDescription").value,
-        tags: document.getElementById("searchKeyPhrases").value.split("\n").map(s => s.trim()).filter(s => s !== "")
+        tags: document.getElementById("searchKeyPhrases").value
+          .split("\n")
+          .map(s => s.trim())
+          .filter(s => s !== "")
       };
       console.log("Update payload:", payload);
+      // Instead of calling Etsy directly, call our updateListing.js proxy
       const updateUrl = `/.netlify/functions/updateListing?listingId=${listingId}&token=${encodeURIComponent(accessToken)}`;
       try {
         const response = await fetch(updateUrl, {
@@ -656,10 +683,15 @@ Using Sales Report and Product List Files:
       }
     }
     
+    // Bind the "Update Listing" button to updateExistingListing()
     document.getElementById("uploadToEtsyBtn").addEventListener("click", updateExistingListing);
     
-    // New Photo Upload button functionality
-    document.getElementById("photoUploadTriggerBtn").addEventListener("click", async () => {
+    // New Photo Upload button: on click, extract the first preview image and call the imageUpload Netlify function.
+    document.getElementById("uploadPhotoBtn").addEventListener("click", async () => {
+      if (!accessToken) {
+        M.toast({ html: "Please connect to Etsy first." });
+        return;
+      }
       const listingInput = document.getElementById("shopListings").value.trim();
       if (!listingInput) {
         M.toast({ html: "Please provide a listing URL or ID in 'My Etsy Shop Listings'." });
@@ -678,18 +710,21 @@ Using Sales Report and Product List Files:
         }
       }
       if (previewImages.length === 0) {
-        M.toast({ html: "No image available. Please drop an image in the drop zone." });
+        M.toast({ html: "No image available for upload." });
         return;
       }
-      const imageDataUrl = previewImages[0];
-      const base64Content = imageDataUrl.split(',')[1];
+      const fileDataURL = previewImages[0];
+      // Use the file name from photoNames if available; otherwise, use a default.
+      const fileName = (photoNames.length > 0 ? photoNames[0] : "uploaded_photo.jpg");
+      // Build the JSON payload to send to the imageUpload Netlify function.
       const payload = {
         listingId: listingId,
         token: accessToken,
-        fileName: "uploaded_photo.jpg",
-        fileContent: base64Content,
+        fileName: fileName,
+        dataURL: fileDataURL,
         rank: 1
       };
+      console.log("Uploading photo with payload:", payload);
       try {
         const response = await fetch("/.netlify/functions/imageUpload", {
           method: "POST",
@@ -697,212 +732,32 @@ Using Sales Report and Product List Files:
           body: JSON.stringify(payload)
         });
         console.log("Photo Upload response status:", response.status);
+        const respText = await response.text();
         if (!response.ok) {
-          const errorText = await response.text();
-          console.error("Error uploading photo:", errorText);
-          M.toast({ html: "Error uploading photo: " + response.status + " - " + errorText });
+          console.error("Error uploading photo:", respText);
+          M.toast({ html: "Error uploading photo: " + respText });
         } else {
-          const data = await response.json();
-          console.log("Photo uploaded successfully:", data);
+          console.log("Photo uploaded successfully:", respText);
           M.toast({ html: "Photo uploaded successfully!" });
         }
       } catch (e) {
-        console.error("Exception during photo upload:", e);
+        console.error("Exception in photo upload:", e);
         M.toast({ html: "Photo upload exception: " + e.message });
       }
     });
     
-    // File drop and upload handlers
-    const dropZone = document.getElementById("dropZone");
-    const previewGrid = document.getElementById("previewGrid");
-    const primaryPreview = document.getElementById("primaryPreview");
-    
-    function updatePrimaryPreview() {
-      if (previewImages.length > 0) {
-        primaryPreview.innerHTML = `<img src="${previewImages[0]}" alt="Primary Preview">`;
-      } else {
-        primaryPreview.innerHTML = "";
-      }
-    }
-    
-    primaryPreview.addEventListener("click", function() {
-      if (previewImages.length > 0) {
-        document.getElementById("cropImage").src = previewImages[0];
-        let cropModalElem = document.getElementById("photoCropModal");
-        let cropModalInstance = M.Modal.getInstance(cropModalElem) || M.Modal.init(cropModalElem, { preventScrolling: false });
-        cropModalInstance.open();
-      }
+    // New LookUP button: on click, show a modal with JSON payload for listingTitle, listingDescription, and searchKeyPhrases.
+    document.getElementById("lookUPBtn").addEventListener("click", () => {
+      const payload = {
+        listingTitle: document.getElementById("listingTitle").value,
+        listingDescription: document.getElementById("listingDescription").value,
+        searchKeyPhrases: document.getElementById("searchKeyPhrases").value.split("\n").map(s => s.trim()).filter(s => s !== "")
+      };
+      // Show modal with the JSON payload (here we use an alert; you can customize as needed)
+      alert("Generated Payload:\n" + JSON.stringify(payload, null, 2));
     });
     
-    dropZone.addEventListener("dragover", e => {
-      e.preventDefault();
-      e.stopPropagation();
-      dropZone.style.borderColor = "#000";
-    });
-    dropZone.addEventListener("dragleave", e => {
-      e.preventDefault();
-      e.stopPropagation();
-      dropZone.style.borderColor = "#ccc";
-    });
-    dropZone.addEventListener("drop", async e => {
-      e.preventDefault();
-      e.stopPropagation();
-      dropZone.style.borderColor = "#ccc";
-      const files = e.dataTransfer.files;
-      if (files.length > 10) alert("Maximum 10 images allowed.");
-      for (let i = 0; i < Math.min(files.length, 10); i++) {
-        const file = files[i];
-        if (file.type === "image/jpeg" || file.type === "image/png") {
-          try {
-            const dataURL = await new Promise((resolve, reject) => {
-              const reader = new FileReader();
-              reader.onload = event => resolve(event.target.result);
-              reader.onerror = reject;
-              reader.readAsDataURL(file);
-            });
-            previewImages.push(dataURL);
-            photoStatuses.push(null);
-            photoMeta.push(null);
-            photoNames.push(file.name);
-            updatePrimaryPreview();
-            renderPreviewGrid();
-            updateUploadedFilesList();
-          } catch (err) {
-            console.error("Error processing image:", err);
-          }
-        } else {
-          M.toast({ html: "Only JPEG images are supported for metadata embedding." });
-        }
-      }
-    });
-    
-    const ordersDropZone = document.getElementById("ordersDropZone");
-    ordersDropZone.addEventListener("dragover", e => {
-      e.preventDefault();
-      e.stopPropagation();
-      ordersDropZone.style.borderColor = "#000";
-    });
-    ordersDropZone.addEventListener("dragleave", e => {
-      e.preventDefault();
-      e.stopPropagation();
-      ordersDropZone.style.borderColor = "#ccc";
-    });
-    ordersDropZone.addEventListener("drop", async e => {
-      e.preventDefault();
-      e.stopPropagation();
-      ordersDropZone.style.borderColor = "#ccc";
-      const files = e.dataTransfer.files;
-      const progressBar = document.getElementById("csvProgressBar");
-      for (let i = 0; i < files.length; i++) {
-         let file = files[i];
-         const fileName = file.name.toLowerCase();
-         if (fileName.endsWith(".csv") || fileName.endsWith(".doc") || fileName.endsWith(".docx")) {
-            try {
-              let fileData;
-              if (fileName.endsWith(".csv")) {
-                 fileData = await uploadCSVFile(file, percent => { progressBar.value = percent; });
-              } else {
-                 fileData = await uploadDocFile(file, percent => { progressBar.value = percent; });
-              }
-              progressBar.value = 0;
-              soldOrdersCSV.push(fileData);
-              updateUploadedFilesList();
-              await updateVectorStore();
-            } catch(err) {
-              console.error("Error uploading file:", err);
-            }
-         } else {
-            alert("Only .csv, .doc, and .docx files are supported for Etsy Sold Orders.");
-         }
-      }
-    });
-    
-    const listingsDropZone = document.getElementById("listingsDropZone");
-    listingsDropZone.addEventListener("dragover", e => {
-      e.preventDefault();
-      e.stopPropagation();
-      listingsDropZone.style.borderColor = "#000";
-    });
-    listingsDropZone.addEventListener("dragleave", e => {
-      e.preventDefault();
-      e.stopPropagation();
-      listingsDropZone.style.borderColor = "#ccc";
-    });
-    listingsDropZone.addEventListener("drop", async e => {
-      e.preventDefault();
-      e.stopPropagation();
-      listingsDropZone.style.borderColor = "#ccc";
-      const files = e.dataTransfer.files;
-      const progressBar = document.getElementById("csvProgressBar");
-      for (let i = 0; i < files.length; i++) {
-         let file = files[i];
-         const fileName = file.name.toLowerCase();
-         if (fileName.endsWith(".csv") || fileName.endsWith(".doc") || fileName.endsWith(".docx")) {
-            try {
-              let fileData;
-              if (fileName.endsWith(".csv")) {
-                 fileData = await uploadCSVFile(file, percent => { progressBar.value = percent; });
-              } else {
-                 fileData = await uploadDocFile(file, percent => { progressBar.value = percent; });
-              }
-              progressBar.value = 0;
-              listingsCSV.push(fileData);
-              updateUploadedFilesList();
-              await updateVectorStore();
-            } catch(err) {
-              console.error("Error uploading file:", err);
-            }
-         } else {
-            alert("Only .csv, .doc, and .docx files are supported for Etsy Listings.");
-         }
-      }
-    });
-    
-    async function updateVectorStore() {
-      const allFileIds = [...soldOrdersCSV, ...listingsCSV].map(file => file.id);
-      if (allFileIds.length === 0) {
-        console.log("No supported files uploaded yet.");
-        return;
-      }
-      try {
-        const vectorStorePayload = { name: "CSV Vector Store", file_ids: allFileIds };
-        const vectorStoreResponse = await fetch("/.netlify/functions/vectorStore", {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify(vectorStorePayload)
-        });
-        if (!vectorStoreResponse.ok) {
-          const errorData = await vectorStoreResponse.json();
-          throw new Error("Error creating vector store: " + JSON.stringify(errorData));
-        }
-        const vectorStoreData = await vectorStoreResponse.json();
-        console.log("Vector store created:", vectorStoreData);
-      } catch (err) {
-        console.error("Error in updateVectorStore:", err);
-      }
-    }
-    
-    function updateUploadedFilesList() {
-      let fileList = [];
-      soldOrdersCSV.forEach(file => fileList.push(file.name));
-      listingsCSV.forEach(file => fileList.push(file.name));
-      document.getElementById("uploadedFilesList").value = fileList.join("\n");
-    }
-    
-    function loadButtonPositions() {
-      var stored = localStorage.getItem("buttonPositions");
-      if (stored) {
-        var positions = JSON.parse(stored);
-        for (var id in positions) {
-          var el = document.getElementById(id);
-          if (el) {
-            el.style.top = positions[id].top;
-            el.style.left = positions[id].left;
-          }
-        }
-      }
-    }
-    
+    // ----- UI Position Persistence & Live Preview for Configure Buttons -----
     document.getElementById("configureButtonsBtn").addEventListener("click", function() {
       var configContainer = document.getElementById("buttonConfigContainer");
       configContainer.innerHTML = "";
@@ -947,6 +802,21 @@ Using Sales Report and Product List Files:
       M.toast({ html: "Button positions saved." });
     });
     
+    function loadButtonPositions() {
+      var stored = localStorage.getItem("buttonPositions");
+      if (stored) {
+        var positions = JSON.parse(stored);
+        for (var id in positions) {
+          var el = document.getElementById(id);
+          if (el) {
+            el.style.top = positions[id].top;
+            el.style.left = positions[id].left;
+          }
+        }
+      }
+    }
+    // -------------------------------------------------------------------------
+    
     window.addEventListener("load", function() {
       var container13 = document.getElementById("container13");
       container13.style.height = (container13.offsetHeight * 2.5) + "px";
@@ -956,6 +826,7 @@ Using Sales Report and Product List Files:
       document.getElementById("searchKeyPhrases").value = "";
     });
     
+    // Utility: Strip Markdown formatting from JSON responses.
     function stripMarkdownJSON(text) {
       return text.replace(/^```json\s*/, "").replace(/\s*```$/, "").trim();
     }
@@ -1160,6 +1031,7 @@ Return your answer as plain text.`;
       navigator.clipboard.writeText(document.getElementById("listingDescription").value).catch(err => console.error("Error copying description: " + err));
     });
     
+    // Utility delay function
     function delay(ms) { return new Promise(resolve => setTimeout(resolve, ms)); }
     
     // (Assume renderPreviewGrid and other utility functions exist as needed)
