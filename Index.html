@@ -12,13 +12,31 @@
   <script src="https://cdn.jsdelivr.net/npm/piexifjs@1.0.4/piexif.min.js"></script>
   <style>
     /* Basic layout */
-    html, body { margin: 0; padding: 0; width: 100vw; font-family: Arial, sans-serif; }
-    .container { width: 100vw; padding: 10px; box-sizing: border-box; text-align: left; }
-    h5, label, p { text-align: left; }
-    input, textarea { width: 100%; box-sizing: border-box; }
+    html, body {
+      margin: 0;
+      padding: 0;
+      width: 100vw;
+      font-family: Arial, sans-serif;
+    }
+    .container {
+      width: 100vw;
+      padding: 10px;
+      box-sizing: border-box;
+      text-align: left;
+    }
+    h5, label, p {
+      text-align: left;
+    }
+    input, textarea {
+      width: 100%;
+      box-sizing: border-box;
+    }
     
     /* --- Wrap Listing Description and File Drop Zones --- */
-    #descriptionAndFileUploadContainer { display: flex; align-items: center; }
+    #descriptionAndFileUploadContainer {
+      display: flex;
+      align-items: center;
+    }
     .listing-desc-container {
       position: relative;
       display: inline-block;
@@ -29,9 +47,9 @@
       font-size: 1.2rem;
       font-weight: 500;
     }
-    .listing-desc-container label.section-heading { 
-      font-size: 1.2rem; 
-      font-weight: 500; 
+    .listing-desc-container label.section-heading {
+      font-size: 1.2rem;
+      font-weight: 500;
     }
     .listing-desc-container input {
       width: 500px;
@@ -45,41 +63,100 @@
       box-sizing: border-box;
       border: 1px solid grey;
     }
-    #searchKeyPhrases[rows="14"] { height: auto; }
-    .flex-container { display: flex; gap: 10px; align-items: stretch; }
-    .textbox-container { flex: 1; }
-    .textbox-container textarea { width: 100%; padding: 0.8rem; font-size: 1rem; line-height: 1.2; resize: none; overflow: visible; box-sizing: border-box; }
-    .button-container { width: 200px; display: flex; flex-direction: column; gap: 10px; align-self: flex-start; }
-    #listingTitle { min-height: 45px; }
-    #listingDescInput { width: 500px; height: 30px; border: 1px solid #000; padding: 5px; }
-    #listingDescription { min-height: 150px; }
-    .section-heading { font-size: 1.2rem; font-weight: 500; margin-bottom: 5px; display: inline-block; }
-    .count-text { font-style: italic; font-size: 0.9em; margin-top: 5px; }
+    #searchKeyPhrases[rows="14"] {
+      height: auto;
+    }
+    .flex-container {
+      display: flex;
+      gap: 10px;
+      align-items: stretch;
+    }
+    .textbox-container {
+      flex: 1;
+    }
+    .textbox-container textarea {
+      width: 100%;
+      padding: 0.8rem;
+      font-size: 1rem;
+      line-height: 1.2;
+      resize: none;
+      overflow: visible;
+      box-sizing: border-box;
+    }
+    .button-container {
+      width: 200px;
+      display: flex;
+      flex-direction: column;
+      gap: 10px;
+      align-self: flex-start;
+    }
+    #listingTitle {
+      min-height: 45px;
+    }
+    #listingDescInput {
+      width: 500px;
+      height: 30px;
+      border: 1px solid #000;
+      padding: 5px;
+    }
+    #listingDescription {
+      min-height: 150px;
+    }
+    .section-heading {
+      font-size: 1.2rem;
+      font-weight: 500;
+      margin-bottom: 5px;
+      display: inline-block;
+    }
+    .count-text {
+      font-style: italic;
+      font-size: 0.9em;
+      margin-top: 5px;
+    }
     
-    /* Drag and Drop Boxes */
+    /* Drag and Drop Boxes (using your original base styling) */
     #dropZone, #ordersDropZone, #listingsDropZone {
-      width: 138px; 
-      height: 138px; 
-      border: 2px dashed #ccc; 
-      border-radius: 3px; 
-      display: inline-block; 
-      vertical-align: middle; 
-      text-align: center; 
+      width: 138px;
+      height: 138px;
+      border: 2px dashed #ccc;
+      border-radius: 3px;
+      display: inline-block;
+      vertical-align: middle;
+      text-align: center;
       line-height: 138px;
       position: relative;
     }
     /* Orders container */
-    #ordersContainer { display: flex; flex-direction: column; }
+    #ordersContainer {
+      display: flex;
+      flex-direction: column;
+    }
     /* CSV Progress Bar */
     #csvProgressBar {
-      width: 100%; height: 20px; border: 1px solid blue; background-color: #e0f0ff; margin-top: 5px;
-      -webkit-appearance: none; appearance: none;
+      width: 100%;
+      height: 20px;
+      border: 1px solid blue;
+      background-color: #e0f0ff;
+      margin-top: 5px;
+      -webkit-appearance: none;
+      appearance: none;
     }
-    #csvProgressBar::-webkit-progress-bar { background-color: #e0f0ff; border: 1px solid blue; }
-    #csvProgressBar::-webkit-progress-value { background-color: blue; }
-    #csvProgressContainer { margin-left: 85px; }
+    #csvProgressBar::-webkit-progress-bar {
+      background-color: #e0f0ff;
+      border: 1px solid blue;
+    }
+    #csvProgressBar::-webkit-progress-value {
+      background-color: blue;
+    }
+    #csvProgressContainer {
+      margin-left: 85px;
+    }
     /* File Drop Zones container */
-    #fileDropZonesContainer { display: flex; gap: 10px; margin-left: 100px; }
+    #fileDropZonesContainer {
+      display: flex;
+      gap: 10px;
+      margin-left: 100px;
+    }
     #uploadedFilesList {
       width: 300px;
       height: 125px;
@@ -90,22 +167,29 @@
     }
     
     /* Primary Preview – clickable for cropping */
-    #primaryPreview { 
-      width: 138px; 
-      height: 138px; 
-      border: 1px solid #ccc; 
+    #primaryPreview {
+      width: 138px;
+      height: 138px;
+      border: 1px solid #ccc;
       border-radius: 3px;
-      display: inline-block; 
-      vertical-align: middle; 
+      display: inline-block;
+      vertical-align: middle;
       position: relative;
       top: -250px;
       left: 285px;
-      text-align: center; 
-      overflow: hidden; 
+      text-align: center;
+      overflow: hidden;
       cursor: pointer;
     }
-    #primaryPreview:empty { background: #fff; }
-    #primaryPreview img { width: 100%; height: 100%; object-fit: contain; border-radius: 3px; }
+    #primaryPreview:empty {
+      background: #fff;
+    }
+    #primaryPreview img {
+      width: 100%;
+      height: 100%;
+      object-fit: contain;
+      border-radius: 3px;
+    }
     
     /* Preview Grid */
     #previewGridContainer {
@@ -122,75 +206,157 @@
       grid-row-gap: 18px;
       margin: 0 auto;
     }
-    .preview-cell { position: relative; display: flex; flex-direction: column; align-items: center; }
-    .resolution-text { position: absolute; top: -12px; left: 0; right: 0; font-size: 8px; text-align: center; color: #333; pointer-events: none; }
+    .preview-cell {
+      position: relative;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+    }
+    .resolution-text {
+      position: absolute;
+      top: -12px;
+      left: 0;
+      right: 0;
+      font-size: 8px;
+      text-align: center;
+      color: #333;
+      pointer-events: none;
+    }
     .preview-box {
-      width: 100px; 
-      height: 132px; 
-      background-color: #fff; 
-      border: 2px solid #ccc; 
+      width: 100px;
+      height: 132px;
+      background-color: #fff;
+      border: 2px solid #ccc;
       border-radius: 3px;
-      box-sizing: border-box; 
-      position: relative; 
+      box-sizing: border-box;
+      position: relative;
       overflow: visible;
     }
-    .preview-box img { 
-      width: 100px; 
-      height: 100px; 
-      object-fit: cover; 
-      border-radius: 3px; 
-      display: block; 
+    .preview-box img {
+      width: 100px;
+      height: 100px;
+      object-fit: cover;
+      border-radius: 3px;
+      display: block;
     }
-    .overlay { 
-      position: absolute; 
-      top: 0; left: 0; 
-      width: 100px; height: 100px; 
+    .overlay {
+      position: absolute;
+      top: 0;
+      left: 0;
+      width: 100px;
+      height: 100px;
       background-color: rgba(0,0,255,0.3);
-      opacity: 0; transition: opacity 0.2s ease; 
-      pointer-events: none; 
-      z-index: 1; 
+      opacity: 0;
+      transition: opacity 0.2s ease;
+      pointer-events: none;
+      z-index: 1;
     }
-    .preview-box.dragover .overlay { opacity: 1; }
-    .preview-box progress { width: 100%; height: 13px; margin-top: 2px; }
-    .status-icon { position: absolute; bottom: 2px; left: 2px; font-size: 14px; font-weight: bold; z-index: 3; }
-    .status-icon.success { color: green; }
-    .status-icon.error { color: red; }
-    .remove-btn { 
-      position: absolute; top: -5px; left: -5px; 
-      width: 10px; height: 10px; 
+    .preview-box.dragover .overlay {
+      opacity: 1;
+    }
+    .preview-box progress {
+      width: 100%;
+      height: 13px;
+      margin-top: 2px;
+    }
+    .status-icon {
+      position: absolute;
+      bottom: 2px;
+      left: 2px;
+      font-size: 14px;
+      font-weight: bold;
+      z-index: 3;
+    }
+    .status-icon.success {
+      color: green;
+    }
+    .status-icon.error {
+      color: red;
+    }
+    .remove-btn {
+      position: absolute;
+      top: -5px;
+      left: -5px;
+      width: 10px;
+      height: 10px;
       background-color: black;
-      color: white; font-size: 8px; line-height: 10px; 
-      text-align: center; cursor: pointer; 
-      z-index: 999; border-radius: 3px; 
+      color: white;
+      font-size: 8px;
+      line-height: 10px;
+      text-align: center;
+      cursor: pointer;
+      z-index: 999;
+      border-radius: 3px;
     }
-    .number-overlay { 
-      position: absolute; top: 0; right: 0; 
-      width: 16px; height: 16px; 
+    .number-overlay {
+      position: absolute;
+      top: 0;
+      right: 0;
+      width: 16px;
+      height: 16px;
       background-color: rgba(0,0,0,0.7);
-      color: white; display: flex; align-items: center; 
-      justify-content: center; font-size: 10px; 
-      z-index: 999; border-radius: 3px; 
+      color: white;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 10px;
+      z-index: 999;
+      border-radius: 3px;
     }
-    .file-name { text-align: center; font-size: 12px; margin-top: 4px; white-space: pre-line; }
+    .file-name {
+      text-align: center;
+      font-size: 12px;
+      margin-top: 4px;
+      white-space: pre-line;
+    }
     
     /* Container #13 */
-    #container13 { position: relative; width: 250px; top: -150px; }
+    #container13 {
+      position: relative;
+      width: 250px;
+      top: -150px;
+    }
     
     /* Components below search key phrases */
-    #belowSearch { margin-top: -180px; margin-left: 10px; }
-    .title-container { margin-top: -50px; }
-    .description-container { margin-top: 0px; }
-    #analyzeMetadataBtn { margin-left: 50px; }
-    #showAnalyzeRulesBtn { margin-top: 25px; }
-    .phrases-header { position: relative; top: 125px; left: 10px; }
+    #belowSearch {
+      margin-top: -180px;
+      margin-left: 10px;
+    }
+    .title-container {
+      margin-top: -50px;
+    }
+    .description-container {
+      margin-top: 0px;
+    }
+    #analyzeMetadataBtn {
+      margin-left: 50px;
+    }
+    #showAnalyzeRulesBtn {
+      margin-top: 25px;
+    }
+    .phrases-header {
+      position: relative;
+      top: 125px;
+      left: 10px;
+    }
     
     /* Modal styles */
-    .modal { display: none; }
-    .modal-content { padding: 20px; }
-    .modal textarea { width: 100%; height: 300px; resize: none; }
+    .modal {
+      display: none;
+    }
+    .modal-content {
+      padding: 20px;
+    }
+    .modal textarea {
+      width: 100%;
+      height: 300px;
+      resize: none;
+    }
     
     /* Additional widths for Etsy Link and Shop Listings */
-    #etsyLink, #shopListings { width: 500px !important; }
+    #etsyLink, #shopListings {
+      width: 500px !important;
+    }
     
     /* Styles for the Update Listing button container at the bottom center */
     #uploadContainer {
@@ -201,12 +367,17 @@
       display: inline-block;
     }
     
-    /* New Photo Upload button (to the right of Update Listing) */
-    #photoUploadContainer {
+    /* New "lookUP" button for showing the JSON payload */
+    #lookupBtn {
       position: fixed;
       bottom: 20px;
       left: calc(50% + 120px);
       display: inline-block;
+    }
+    
+    /* Modal for showing JSON payload */
+    #lookupModal {
+      display: none;
     }
   </style>
 </head>
@@ -304,18 +475,23 @@
     <button id="uploadToEtsyBtn" class="btn waves-effect waves-light configurable">Update Listing</button>
   </div>
   
-  <!-- New Photo Upload button container (to the right of Update Listing) -->
-  <div id="photoUploadContainer">
-    <button id="uploadPhotoBtn" class="btn waves-effect waves-light configurable">Photo Upload</button>
+  <!-- New "lookUP" button: Opens a modal to show JSON payload for Title, Description, and Tags -->
+  <div id="lookupBtn">
+    <button id="lookupPayloadBtn" class="btn waves-effect waves-light configurable">lookUP</button>
   </div>
   
-  <!-- LookUP button (shows JSON payload for Title, Description, Tags) -->
-  <div id="lookupContainer" style="position: fixed; bottom: 20px; left: calc(50% + 240px); display: inline-block;">
-    <button id="lookUPBtn" class="btn waves-effect waves-light configurable">LookUP</button>
+  <!-- Modal for displaying JSON payload -->
+  <div id="lookupModal" class="modal">
+    <div class="modal-content">
+      <h4>Listing Update Payload</h4>
+      <pre id="lookupModalContent"></pre>
+    </div>
+    <div class="modal-footer">
+      <a href="#!" class="modal-close waves-effect waves-green btn">Close</a>
+    </div>
   </div>
   
-  <!-- Modals -->
-  <!-- Title Rules Modal -->
+  <!-- Modals for Rules (Title, Description, Analyze, Keyword, Button Config, Metadata, Crop) -->
   <div id="titleRulesModal" class="modal">
     <div class="modal-content">
       <h4>Title Rules</h4>
@@ -355,7 +531,6 @@ Prohibited Words:
     </div>
   </div>
   
-  <!-- Description Rules Modal -->
   <div id="descriptionRulesModal" class="modal">
     <div class="modal-content">
       <h4>Description Rules</h4>
@@ -380,7 +555,6 @@ Option 3:
     </div>
   </div>
   
-  <!-- Analyze Rules Modal -->
   <div id="analyzeRulesModal" class="modal">
     <div class="modal-content">
       <h4>Photo Analysis Rules</h4>
@@ -401,7 +575,6 @@ Default Photo Analysis Rules:
     </div>
   </div>
   
-  <!-- Keyword Rules Modal -->
   <div id="keywordRulesModal" class="modal">
     <div class="modal-content">
       <h4>Keyword Rules</h4>
@@ -422,7 +595,6 @@ Using Sales Report and Product List Files:
     </div>
   </div>
   
-  <!-- Button Config Modal -->
   <div id="buttonConfigModal" class="modal">
     <div class="modal-content">
       <h4>Configure Button Positions</h4>
@@ -434,7 +606,6 @@ Using Sales Report and Product List Files:
     </div>
   </div>
   
-  <!-- Metadata Modal -->
   <div id="metadataModal" class="modal">
     <div class="modal-content">
       <h4>Photo Metadata</h4>
@@ -445,7 +616,6 @@ Using Sales Report and Product List Files:
     </div>
   </div>
   
-  <!-- Crop Modal -->
   <div id="photoCropModal" class="modal">
     <div class="crop-container">
       <h4 style="text-align:center; margin: 0 0 10px 0;">Crop Photo</h4>
@@ -630,7 +800,7 @@ Using Sales Report and Product List Files:
       }
     }
     
-    // Function to update an existing listing via the Netlify proxy function updateListing.js
+    // Function to update an existing listing via updateListing.js proxy
     async function updateExistingListing() {
       const listingInput = document.getElementById("shopListings").value.trim();
       if (!listingInput) {
@@ -659,7 +829,6 @@ Using Sales Report and Product List Files:
           .filter(s => s !== "")
       };
       console.log("Update payload:", payload);
-      // Instead of calling Etsy directly, call our updateListing.js proxy
       const updateUrl = `/.netlify/functions/updateListing?listingId=${listingId}&token=${encodeURIComponent(accessToken)}`;
       try {
         const response = await fetch(updateUrl, {
@@ -686,15 +855,26 @@ Using Sales Report and Product List Files:
     // Bind the "Update Listing" button to updateExistingListing()
     document.getElementById("uploadToEtsyBtn").addEventListener("click", updateExistingListing);
     
-    // New Photo Upload button: on click, extract the first preview image and call the imageUpload Netlify function.
-    document.getElementById("uploadPhotoBtn").addEventListener("click", async () => {
-      if (!accessToken) {
-        M.toast({ html: "Please connect to Etsy first." });
-        return;
-      }
+    // New "lookUP" button to show JSON payload (for Title, Description, and Tags)
+    document.getElementById("lookupPayloadBtn").addEventListener("click", () => {
+      const payload = {
+        title: document.getElementById("listingTitle").value,
+        description: document.getElementById("listingDescription").value,
+        tags: document.getElementById("searchKeyPhrases").value
+          .split("\n")
+          .map(s => s.trim())
+          .filter(s => s !== "")
+      };
+      document.getElementById("lookupModalContent").textContent = JSON.stringify(payload, null, 2);
+      const lookupModalElem = document.getElementById("lookupModal");
+      M.Modal.init(lookupModalElem, { preventScrolling: false }).open();
+    });
+    
+    // Photo Upload functionality (latest update remains)
+    async function uploadPhoto() {
       const listingInput = document.getElementById("shopListings").value.trim();
       if (!listingInput) {
-        M.toast({ html: "Please provide a listing URL or ID in 'My Etsy Shop Listings'." });
+        M.toast({ html: "Please provide a listing URL or ID." });
         return;
       }
       let listingId;
@@ -709,22 +889,21 @@ Using Sales Report and Product List Files:
           return;
         }
       }
+      // Assume a file input or drag-and-drop already stored the dataURL
+      // For example, we use the first image from previewImages.
       if (previewImages.length === 0) {
         M.toast({ html: "No image available for upload." });
         return;
       }
-      const fileDataURL = previewImages[0];
-      // Use the file name from photoNames if available; otherwise, use a default.
-      const fileName = (photoNames.length > 0 ? photoNames[0] : "uploaded_photo.jpg");
-      // Build the JSON payload to send to the imageUpload Netlify function.
+      const dataURL = previewImages[0];
+      // Build payload for image upload.
       const payload = {
-        listingId: listingId,
+        listingId,
         token: accessToken,
-        fileName: fileName,
-        dataURL: fileDataURL,
+        fileName: "uploaded_photo.jpg",
+        dataURL,
         rank: 1
       };
-      console.log("Uploading photo with payload:", payload);
       try {
         const response = await fetch("/.netlify/functions/imageUpload", {
           method: "POST",
@@ -735,27 +914,196 @@ Using Sales Report and Product List Files:
         const respText = await response.text();
         if (!response.ok) {
           console.error("Error uploading photo:", respText);
-          M.toast({ html: "Error uploading photo: " + respText });
+          M.toast({ html: "Error uploading photo: " + response.status + " - " + respText });
         } else {
           console.log("Photo uploaded successfully:", respText);
           M.toast({ html: "Photo uploaded successfully!" });
         }
       } catch (e) {
-        console.error("Exception in photo upload:", e);
-        M.toast({ html: "Photo upload exception: " + e.message });
+        console.error("Exception in uploadPhoto:", e);
+        M.toast({ html: "Exception uploading photo: " + e.message });
+      }
+    }
+    
+    // Bind a new button for Photo Upload if desired (for example, you can add a button and bind this function)
+    // document.getElementById("photoUploadBtn").addEventListener("click", uploadPhoto);
+    
+    // File Drop and Upload Handlers (original base code remains)
+    const dropZone = document.getElementById("dropZone");
+    const previewGrid = document.getElementById("previewGrid");
+    const primaryPreview = document.getElementById("primaryPreview");
+    
+    function updatePrimaryPreview() {
+      if (previewImages.length > 0) {
+        primaryPreview.innerHTML = `<img src="${previewImages[0]}" alt="Primary Preview">`;
+      } else {
+        primaryPreview.innerHTML = "";
+      }
+    }
+    
+    primaryPreview.addEventListener("click", function() {
+      if (previewImages.length > 0) {
+        document.getElementById("cropImage").src = previewImages[0];
+        let cropModalElem = document.getElementById("photoCropModal");
+        let cropModalInstance = M.Modal.getInstance(cropModalElem) || M.Modal.init(cropModalElem, { preventScrolling: false });
+        cropModalInstance.open();
       }
     });
     
-    // New LookUP button: on click, show a modal with JSON payload for listingTitle, listingDescription, and searchKeyPhrases.
-    document.getElementById("lookUPBtn").addEventListener("click", () => {
-      const payload = {
-        listingTitle: document.getElementById("listingTitle").value,
-        listingDescription: document.getElementById("listingDescription").value,
-        searchKeyPhrases: document.getElementById("searchKeyPhrases").value.split("\n").map(s => s.trim()).filter(s => s !== "")
-      };
-      // Show modal with the JSON payload (here we use an alert; you can customize as needed)
-      alert("Generated Payload:\n" + JSON.stringify(payload, null, 2));
+    dropZone.addEventListener("dragover", e => { 
+      e.preventDefault(); 
+      e.stopPropagation(); 
+      dropZone.style.borderColor = "#000"; 
     });
+    dropZone.addEventListener("dragleave", e => { 
+      e.preventDefault(); 
+      e.stopPropagation(); 
+      dropZone.style.borderColor = "#ccc"; 
+    });
+    dropZone.addEventListener("drop", async e => {
+      e.preventDefault(); 
+      e.stopPropagation(); 
+      dropZone.style.borderColor = "#ccc";
+      const files = e.dataTransfer.files;
+      if (files.length > 10) alert("Maximum 10 images allowed.");
+      for (let i = 0; i < Math.min(files.length, 10); i++) {
+        const file = files[i];
+        if (file.type === "image/jpeg" || file.type === "image/png") {
+          try {
+            const dataURL = await new Promise((resolve, reject) => {
+              const reader = new FileReader();
+              reader.onload = event => resolve(event.target.result);
+              reader.onerror = reject;
+              reader.readAsDataURL(file);
+            });
+            previewImages.push(dataURL);
+            photoStatuses.push(null);
+            photoMeta.push(null);
+            photoNames.push(file.name);
+            updatePrimaryPreview();
+            renderPreviewGrid();
+            updateUploadedFilesList();
+          } catch (err) {
+            console.error("Error processing image:", err);
+          }
+        } else {
+          M.toast({ html: "Only JPEG images are supported for metadata embedding." });
+        }
+      }
+    });
+    
+    const ordersDropZone = document.getElementById("ordersDropZone");
+    ordersDropZone.addEventListener("dragover", e => { 
+      e.preventDefault(); 
+      e.stopPropagation(); 
+      ordersDropZone.style.borderColor = "#000"; 
+    });
+    ordersDropZone.addEventListener("dragleave", e => { 
+      e.preventDefault(); 
+      e.stopPropagation(); 
+      ordersDropZone.style.borderColor = "#ccc"; 
+    });
+    ordersDropZone.addEventListener("drop", async e => {
+      e.preventDefault(); 
+      e.stopPropagation(); 
+      ordersDropZone.style.borderColor = "#ccc";
+      const files = e.dataTransfer.files;
+      const progressBar = document.getElementById("csvProgressBar");
+      for (let i = 0; i < files.length; i++) {
+         let file = files[i];
+         const fileName = file.name.toLowerCase();
+         if (fileName.endsWith(".csv") || fileName.endsWith(".doc") || fileName.endsWith(".docx")) {
+            try {
+              let fileData;
+              if (fileName.endsWith(".csv")) {
+                 fileData = await uploadCSVFile(file, percent => { progressBar.value = percent; });
+              } else {
+                 fileData = await uploadDocFile(file, percent => { progressBar.value = percent; });
+              }
+              progressBar.value = 0;
+              soldOrdersCSV.push(fileData);
+              updateUploadedFilesList();
+              await updateVectorStore();
+            } catch(err) {
+              console.error("Error uploading file:", err);
+            }
+         } else {
+            alert("Only .csv, .doc, and .docx files are supported for Etsy Sold Orders.");
+         }
+      }
+    });
+    
+    const listingsDropZone = document.getElementById("listingsDropZone");
+    listingsDropZone.addEventListener("dragover", e => { 
+      e.preventDefault(); 
+      e.stopPropagation(); 
+      listingsDropZone.style.borderColor = "#000"; 
+    });
+    listingsDropZone.addEventListener("dragleave", e => { 
+      e.preventDefault(); 
+      e.stopPropagation(); 
+      listingsDropZone.style.borderColor = "#ccc"; 
+    });
+    listingsDropZone.addEventListener("drop", async e => {
+      e.preventDefault(); 
+      e.stopPropagation(); 
+      listingsDropZone.style.borderColor = "#ccc";
+      const files = e.dataTransfer.files;
+      const progressBar = document.getElementById("csvProgressBar");
+      for (let i = 0; i < files.length; i++) {
+         let file = files[i];
+         const fileName = file.name.toLowerCase();
+         if (fileName.endsWith(".csv") || fileName.endsWith(".doc") || fileName.endsWith(".docx")) {
+            try {
+              let fileData;
+              if (fileName.endsWith(".csv")) {
+                 fileData = await uploadCSVFile(file, percent => { progressBar.value = percent; });
+              } else {
+                 fileData = await uploadDocFile(file, percent => { progressBar.value = percent; });
+              }
+              progressBar.value = 0;
+              listingsCSV.push(fileData);
+              updateUploadedFilesList();
+              await updateVectorStore();
+            } catch(err) {
+              console.error("Error uploading file:", err);
+            }
+         } else {
+            alert("Only .csv, .doc, and .docx files are supported for Etsy Listings.");
+         }
+      }
+    });
+    
+    async function updateVectorStore() {
+      const allFileIds = [...soldOrdersCSV, ...listingsCSV].map(file => file.id);
+      if (allFileIds.length === 0) {
+        console.log("No supported files uploaded yet.");
+        return;
+      }
+      try {
+        const vectorStorePayload = { name: "CSV Vector Store", file_ids: allFileIds };
+        const vectorStoreResponse = await fetch("/.netlify/functions/vectorStore", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify(vectorStorePayload)
+        });
+        if (!vectorStoreResponse.ok) {
+          const errorData = await vectorStoreResponse.json();
+          throw new Error("Error creating vector store: " + JSON.stringify(errorData));
+        }
+        const vectorStoreData = await vectorStoreResponse.json();
+        console.log("Vector store created:", vectorStoreData);
+      } catch (err) {
+        console.error("Error in updateVectorStore:", err);
+      }
+    }
+    
+    function updateUploadedFilesList() {
+      let fileList = [];
+      soldOrdersCSV.forEach(file => fileList.push(file.name));
+      listingsCSV.forEach(file => fileList.push(file.name));
+      document.getElementById("uploadedFilesList").value = fileList.join("\n");
+    }
     
     // ----- UI Position Persistence & Live Preview for Configure Buttons -----
     document.getElementById("configureButtonsBtn").addEventListener("click", function() {
@@ -1032,7 +1380,9 @@ Return your answer as plain text.`;
     });
     
     // Utility delay function
-    function delay(ms) { return new Promise(resolve => setTimeout(resolve, ms)); }
+    function delay(ms) {
+      return new Promise(resolve => setTimeout(resolve, ms));
+    }
     
     // (Assume renderPreviewGrid and other utility functions exist as needed)
   </script>
