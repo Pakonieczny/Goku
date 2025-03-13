@@ -2,9 +2,13 @@ const fetch = require("node-fetch");
 
 exports.handler = async function (event, context) {
   try {
+    // Log the entire query string parameters for debugging
+    console.log("Received query parameters:", event.queryStringParameters);
+
     // Extract required parameters from query string
-    const { listingId, token, title, description, tags } = event.queryStringParameters;
+    const { listingId, token, title, description, tags } = event.queryStringParameters || {};
     if (!listingId || !token || !title || !description || !tags) {
+      console.error("One or more required parameters are missing.");
       return {
         statusCode: 400,
         body: JSON.stringify({ error: "Missing listingId, token, title, description, or tags" }),
@@ -13,23 +17,20 @@ exports.handler = async function (event, context) {
     console.log("Received listingId:", listingId);
     console.log("Received token:", token);
 
-    // Retrieve CLIENT_ID and SHOP_ID from environment variables.
+    // Retrieve CLIENT_ID and SHOP_ID from environment variables
     const clientId = process.env.CLIENT_ID;
     const shopId = process.env.SHOP_ID;
-    if (!clientId) {
-      console.error("CLIENT_ID environment variable is not set.");
-    } else {
-      console.log("Using CLIENT_ID:", clientId.slice(0, 5) + "*****");
-    }
-    if (!shopId) {
-      console.error("SHOP_ID environment variable is not set.");
+    if (!clientId || !shopId) {
+      console.error("Environment variables CLIENT_ID or SHOP_ID are not set.");
       return {
         statusCode: 500,
-        body: JSON.stringify({ error: "SHOP_ID environment variable is not set." }),
+        body: JSON.stringify({ error: "CLIENT_ID or SHOP_ID environment variable is not set." }),
       };
     }
+    console.log("Using CLIENT_ID:", clientId.slice(0, 5) + "*****");
+    console.log("Using SHOP_ID:", shopId);
 
-    // Build the update payload using the actual generated data.
+    // Build the update payload with the actual generated data
     const updatePayload = {
       title: title,
       description: description,
@@ -37,15 +38,9 @@ exports.handler = async function (event, context) {
     };
 
     // Construct the Etsy API endpoint URL for updating the listing.
-    // Etsy expects a PUT request to the endpoint with shop ID included:
-    // PUT https://api.etsy.com/v3/application/shops/{shopId}/listings/{listingId}
+    // Etsy expects a PUT request to: /v3/application/shops/{shopId}/listings/{listingId}
     const updateUrl = `https://api.etsy.com/v3/application/shops/${shopId}/listings/${listingId}`;
     console.log("Update URL:", updateUrl);
-    console.log("Request Headers:", {
-      "Content-Type": "application/json",
-      "Authorization": `Bearer ${token}`,
-      "x-api-key": clientId,
-    });
     console.log("Update Payload:", JSON.stringify(updatePayload, null, 2));
 
     // Make the PUT request to update the listing.
@@ -56,7 +51,7 @@ exports.handler = async function (event, context) {
         "Authorization": `Bearer ${token}`,
         "x-api-key": clientId,
       },
-      body: JSON.stringify(updatePayload),
+      body: JSON.stringify(updatePayload)
     });
     console.log("PUT update response status:", response.status);
     if (!response.ok) {
@@ -75,7 +70,6 @@ exports.handler = async function (event, context) {
       statusCode: 200,
       body: JSON.stringify(updatedListingData),
     };
-
   } catch (error) {
     console.error("Exception in updateListing handler:", error);
     return {
