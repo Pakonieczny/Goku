@@ -644,7 +644,7 @@ Using Sales Report and Product List Files:
           return;
         }
       }
-      // Build payload from generated fields for title, description, and tags.
+      // Dynamically extract generated values from the textareas.
       const payload = {
         title: document.getElementById("listingTitle").value,
         description: document.getElementById("listingDescription").value,
@@ -654,7 +654,7 @@ Using Sales Report and Product List Files:
           .filter(s => s !== "")
       };
       console.log("Update payload:", payload);
-      // Instead of calling Etsy directly, call our updateListing.js proxy
+      // Call our updateListing.js proxy function.
       const updateUrl = `/.netlify/functions/updateListing?listingId=${listingId}&token=${encodeURIComponent(accessToken)}`;
       try {
         const response = await fetch(updateUrl, {
