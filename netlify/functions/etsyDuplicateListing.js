@@ -11,13 +11,18 @@ function transformPrice(priceField) {
   }
 }
 
-// Transform the inventory data for updating the listing
+// Transform the inventory data for updating the listing.
+// For each product in the inventory, we keep only the allowed keys.
+// Here, we transform property_values into a "properties" array that only includes property_id and value_ids.
 function transformInventoryData(inventoryData) {
   if (!inventoryData || !inventoryData.products) return null;
   const transformedProducts = inventoryData.products.map((product) => {
     // Transform property_values: keep only property_id and value_ids.
     const transformedProperties = (product.property_values || []).map(pv => ({
       property_id: pv.property_id,
+      // Etsy expects structured variation data. If additional keys are invalid (value_id, name, value),
+      // we omit them. You may add placeholders if needed.
+      // For now, only property_id and value_ids are passed.
       value_ids: pv.value_ids || []
     }));
     
@@ -38,6 +43,7 @@ function transformInventoryData(inventoryData) {
 
   return {
     products: transformedProducts,
+    // These arrays can be used if needed, but here we leave them empty.
     price_on_property: [],
     quantity_on_property: [],
     sku_on_property: []
@@ -159,7 +165,7 @@ exports.handler = async function (event, context) {
     const staticPrice = 1.00;
 
     // Build the payload for duplicating the listing.
-    // Do not include inventory in this payload; it will be updated separately.
+    // Do not include inventory in this payload; inventory will be updated separately.
     const payload = {
       quantity: listingData.quantity || 1,
       title: listingData.title || "Duplicated Listing",
@@ -215,7 +221,7 @@ exports.handler = async function (event, context) {
     console.log("New listing created:", newListingData);
 
     // --- INVENTORY UPDATE STEP ---
-    // Retrieve inventory data from original listing (try from listing details first, then inventory endpoint)
+    // Retrieve inventory data from original listing.
     let inventoryData = listingData.inventory;
     if (!inventoryData) {
       console.warn("No inventory data available in original listing; attempting to fetch from inventory endpoint...");
