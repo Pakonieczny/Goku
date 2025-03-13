@@ -192,7 +192,7 @@
     /* Additional widths for Etsy Link and Shop Listings */
     #etsyLink, #shopListings { width: 500px !important; }
     
-    /* Styles for the Upload to Etsy button container at the bottom center */
+    /* Styles for the Update Listing button container at the bottom center */
     #uploadContainer {
       position: fixed;
       bottom: 20px;
@@ -201,7 +201,7 @@
       display: inline-block;
     }
     
-    /* New Update Inventory button (to the right of Upload to Etsy) */
+    /* New Update Inventory button (to the right of Update Listing) */
     #updateInventoryBtn {
       position: fixed;
       bottom: 20px;
@@ -299,7 +299,7 @@
     <div id="previewGrid"></div>
   </div>
   
-  <!-- Upload to Etsy button container (updates existing listing) -->
+  <!-- Update Listing button container (updates an existing listing) -->
   <div id="uploadContainer">
     <button id="uploadToEtsyBtn" class="btn waves-effect waves-light configurable">Update Listing</button>
   </div>
@@ -467,8 +467,6 @@ Using Sales Report and Product List Files:
     const ETSY_SHOP_URL = "https://www.etsy.com/shop/custombrites";
     const CLIENT_ID = "k75zdspz4r99txpqdji7i2em";
     const REDIRECT_URI = "https://delicate-tanuki-616ac0.netlify.app/";
-    // For updating an existing listing, the SHOP_ID is not needed in the endpoint URL,
-    // since we update by listing ID directly.
     const modelName = "chatgpt-4o-latest";
     let accessToken;
     
@@ -602,7 +600,6 @@ Using Sales Report and Product List Files:
         exchangeCodeForToken(code);
         window.history.replaceState({}, document.title, REDIRECT_URI);
       }
-      // (Assume functions like renderPreviewGrid and updateUploadedFilesList exist)
       renderPreviewGrid();
       updateUploadedFilesList();
     });
@@ -628,7 +625,7 @@ Using Sales Report and Product List Files:
       }
     }
     
-    // Function to update an existing listing (instead of duplicating it)
+    // Function to update an existing listing via the Netlify proxy function updateListing.js
     async function updateExistingListing() {
       const listingInput = document.getElementById("shopListings").value.trim();
       if (!listingInput) {
@@ -636,7 +633,6 @@ Using Sales Report and Product List Files:
         return;
       }
       let listingId;
-      // If the input is numeric, assume it is the listing ID.
       if (/^\d+$/.test(listingInput)) {
         listingId = listingInput;
       } else {
@@ -648,7 +644,7 @@ Using Sales Report and Product List Files:
           return;
         }
       }
-      // Build payload from generated fields
+      // Build payload from generated fields for title, description, and tags.
       const payload = {
         title: document.getElementById("listingTitle").value,
         description: document.getElementById("listingDescription").value,
@@ -658,18 +654,15 @@ Using Sales Report and Product List Files:
           .filter(s => s !== "")
       };
       console.log("Update payload:", payload);
-      const etsyPutUrl = `https://api.etsy.com/v3/application/listings/${listingId}`;
+      // Instead of calling Etsy directly, call our updateListing.js proxy
+      const updateUrl = `/.netlify/functions/updateListing?listingId=${listingId}&token=${encodeURIComponent(accessToken)}`;
       try {
-        const response = await fetch(etsyPutUrl, {
+        const response = await fetch(updateUrl, {
           method: "PUT",
-          headers: {
-            "Content-Type": "application/json",
-            "Authorization": `Bearer ${accessToken}`,
-            "x-api-key": CLIENT_ID
-          },
+          headers: { "Content-Type": "application/json" },
           body: JSON.stringify(payload)
         });
-        console.log("PUT update response status:", response.status);
+        console.log("Update Listing response status:", response.status);
         if (!response.ok) {
           const errorText = await response.text();
           console.error("Error updating listing. PUT failed:", errorText);
@@ -707,7 +700,6 @@ Using Sales Report and Product List Files:
           return;
         }
       }
-      // Call the updateInventory.js Netlify function
       const updateInvUrl = `/.netlify/functions/updateInventory?listingId=${listingId}&token=${encodeURIComponent(accessToken)}`;
       console.log("Calling updateInventory URL:", updateInvUrl);
       try {
@@ -728,7 +720,7 @@ Using Sales Report and Product List Files:
       }
     });
     
-    // File Drop and Upload Handlers (unchanged from previous code)
+    // File Drop and Upload Handlers
     const dropZone = document.getElementById("dropZone");
     const previewGrid = document.getElementById("previewGrid");
     const primaryPreview = document.getElementById("primaryPreview");
@@ -823,7 +815,6 @@ Using Sales Report and Product List Files:
               progressBar.value = 0;
               soldOrdersCSV.push(fileData);
               updateUploadedFilesList();
-              // Optionally call updateVectorStore if needed.
               await updateVectorStore();
             } catch(err) {
               console.error("Error uploading file:", err);
