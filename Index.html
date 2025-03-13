@@ -629,7 +629,7 @@ Using Sales Report and Product List Files:
         return;
       }
       try {
-        // Proxy the duplicate listing call through our Netlify function
+        // Call the etsyDuplicateListing Netlify function
         const duplicateUrl = `/.netlify/functions/etsyDuplicateListing?listingId=${listingId}&token=${encodeURIComponent(accessToken)}`;
         console.log("Calling duplicate listing URL:", duplicateUrl);
         let response = await fetch(duplicateUrl);
@@ -643,11 +643,11 @@ Using Sales Report and Product List Files:
         console.log("New listing created:", newListingData);
         M.toast({ html: "Listing duplicated as Draft successfully!" });
         
-        // Extract the new listing ID from either "listing_id" or fallback "id"
+        // Extract new listing ID from response
         let newListingId = newListingData.listing_id || newListingData.id;
         if (newListingId) {
           console.log("New listing ID:", newListingId);
-          // Call updateInventory.js function after 5 seconds with the new listing ID
+          // Explicitly call updateInventory.js after 5 seconds with the new listing ID
           setTimeout(async () => {
             console.log("Calling updateInventory function for listing ID:", newListingId);
             try {
