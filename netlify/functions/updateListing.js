@@ -3,25 +3,23 @@ const fetch = require("node-fetch");
 exports.handler = async function (event, context) {
   try {
     // Log the entire query string parameters for debugging
-    console.log("Received query parameters:", event.queryStringParameters);
+    console.log("Received query string parameters:", event.queryStringParameters);
 
-    // Extract required parameters from query string
+    // Extract required parameters from the query string
     const { listingId, token, title, description, tags } = event.queryStringParameters || {};
     if (!listingId || !token || !title || !description || !tags) {
-      console.error("One or more required parameters are missing.");
+      console.error("Missing one or more required parameters.");
       return {
         statusCode: 400,
         body: JSON.stringify({ error: "Missing listingId, token, title, description, or tags" }),
       };
     }
-    console.log("Received listingId:", listingId);
-    console.log("Received token:", token);
 
     // Retrieve CLIENT_ID and SHOP_ID from environment variables
     const clientId = process.env.CLIENT_ID;
     const shopId = process.env.SHOP_ID;
     if (!clientId || !shopId) {
-      console.error("Environment variables CLIENT_ID or SHOP_ID are not set.");
+      console.error("CLIENT_ID or SHOP_ID environment variable is not set.");
       return {
         statusCode: 500,
         body: JSON.stringify({ error: "CLIENT_ID or SHOP_ID environment variable is not set." }),
@@ -30,7 +28,8 @@ exports.handler = async function (event, context) {
     console.log("Using CLIENT_ID:", clientId.slice(0, 5) + "*****");
     console.log("Using SHOP_ID:", shopId);
 
-    // Build the update payload with the actual generated data
+    // Build the update payload using the generated data
+    // Note: We're updating only title, description, and tags. All other fields remain unchanged.
     const updatePayload = {
       title: title,
       description: description,
@@ -51,7 +50,7 @@ exports.handler = async function (event, context) {
         "Authorization": `Bearer ${token}`,
         "x-api-key": clientId,
       },
-      body: JSON.stringify(updatePayload)
+      body: JSON.stringify(updatePayload),
     });
     console.log("PUT update response status:", response.status);
     if (!response.ok) {
@@ -62,7 +61,6 @@ exports.handler = async function (event, context) {
         body: JSON.stringify({ error: "Error updating listing", details: errorText }),
       };
     }
-
     const updatedListingData = await response.json();
     console.log("Listing updated successfully:", updatedListingData);
 
