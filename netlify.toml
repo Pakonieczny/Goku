@@ -11,5 +11,5 @@
   ENABLE_RAW_BODY = "true"
 
 [[functions]]
-  path = "netlify/functions/imageUpload.js"
+  path = "netlify/functions/"
   included_files = ["node_modules/**"]
