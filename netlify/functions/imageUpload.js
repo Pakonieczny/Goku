@@ -1,12 +1,12 @@
 // imageUpload.js
-const { Busboy } = require("busboy");
+const Busboy = require("busboy");
 const FormData = require("form-data");
 const fetch = require("node-fetch");
 
 exports.handler = async function (event, context) {
   return new Promise((resolve, reject) => {
     try {
-      // Create a new Busboy instance, passing in the headers from the event.
+      // Create a new Busboy instance using the headers from the event.
       const busboy = new Busboy({ headers: event.headers });
       
       let listingId, token, fileName, rank;
@@ -27,7 +27,6 @@ exports.handler = async function (event, context) {
 
       // Accumulate file data.
       busboy.on("file", (fieldname, file, filename, encoding, mimetype) => {
-        // Optionally log file details for debugging.
         console.log(`Receiving file [${fieldname}]: filename: ${filename}, encoding: ${encoding}, mimetype: ${mimetype}`);
         file.on("data", (data) => {
           fileBuffer = Buffer.concat([fileBuffer, data]);
@@ -50,7 +49,7 @@ exports.handler = async function (event, context) {
             return;
           }
           
-          // Log the first 50 characters of the fileBuffer in base64 for verification
+          // Log a substring of the fileBuffer (base64) for verification.
           const fileDataBase64 = fileBuffer.toString("base64");
           console.log("File data (first 50 chars base64):", fileDataBase64.substring(0, 50));
           
@@ -78,7 +77,7 @@ exports.handler = async function (event, context) {
           const etsyImageUrl = `https://api.etsy.com/v3/application/shops/${shopId}/listings/${listingId}/images`;
           console.log("Image Upload URL:", etsyImageUrl);
 
-          // Prepare headers. Let FormData set the correct content-type including boundary.
+          // Prepare headers (FormData will set the correct content-type with boundary).
           const headers = {
             "Authorization": `Bearer ${token}`,
             "x-api-key": clientId,
