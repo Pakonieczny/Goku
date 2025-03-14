@@ -200,23 +200,6 @@
       transform: translateX(-50%);
       display: inline-block;
     }
-    
-    /* New "lookUP" button placed to the right of the "Update Listing" button */
-    #lookUPBtn {
-      position: fixed;
-      bottom: 20px;
-      left: calc(50% + 120px);
-      display: inline-block;
-    }
-    
-    /* Modal for displaying JSON payload from generated data */
-    #lookupModal {
-      display: none;
-    }
-    #lookupModal .modal-content {
-      white-space: pre-wrap;
-      word-wrap: break-word;
-    }
   </style>
 </head>
 <body>
@@ -313,23 +296,9 @@
     <button id="uploadToEtsyBtn" class="btn waves-effect waves-light configurable">Update Listing</button>
   </div>
   
-  <!-- New "lookUP" button to view JSON payload -->
-  <div id="lookUPBtn">
-    <button id="lookUpDataBtn" class="btn waves-effect waves-light configurable">lookUP</button>
-  </div>
+  <!-- (No "Update Inventory" button – that functionality has been removed as per your instructions) -->
   
-  <!-- Modal for lookUP data -->
-  <div id="lookupModal" class="modal">
-    <div class="modal-content">
-      <h4>Generated JSON Payload</h4>
-      <pre id="lookupModalContent"></pre>
-    </div>
-    <div class="modal-footer">
-      <a href="#!" class="modal-close waves-effect waves-green btn">Close</a>
-    </div>
-  </div>
-  
-  <!-- Modals for rules, etc. -->
+  <!-- Modals -->
   <!-- Title Rules Modal -->
   <div id="titleRulesModal" class="modal">
     <div class="modal-content">
@@ -520,8 +489,6 @@ Using Sales Report and Product List Files:
         reader.onload = async (event) => {
           try {
             const dataURL = event.target.result;
-            console.log("CSV File Data URL (first 100 chars):", dataURL.slice(0, 100));
-            console.log("CSV File Data URL length:", dataURL.length);
             const base64Content = dataURL.split(',')[1];
             if (!base64Content) throw new Error("File content is empty.");
             const payload = {
@@ -552,8 +519,6 @@ Using Sales Report and Product List Files:
         reader.onload = async (event) => {
           try {
             const dataURL = event.target.result;
-            console.log("Doc File Data URL (first 100 chars):", dataURL.slice(0, 100));
-            console.log("Doc File Data URL length:", dataURL.length);
             const base64Content = dataURL.split(',')[1];
             if (!base64Content) throw new Error("File content is empty.");
             const payload = {
@@ -649,7 +614,7 @@ Using Sales Report and Product List Files:
       }
     }
     
-    // Function to update an existing listing via the Netlify proxy function updateListing.js
+    // Function to update an existing listing via the updateListing.js proxy function
     async function updateExistingListing() {
       const listingInput = document.getElementById("shopListings").value.trim();
       if (!listingInput) {
@@ -705,22 +670,6 @@ Using Sales Report and Product List Files:
     // Bind the "Update Listing" button to updateExistingListing()
     document.getElementById("uploadToEtsyBtn").addEventListener("click", updateExistingListing);
     
-    // New button: "lookUP" to view JSON payload
-    document.getElementById("lookUpDataBtn").addEventListener("click", () => {
-      const payload = {
-        title: document.getElementById("listingTitle").value,
-        description: document.getElementById("listingDescription").value,
-        tags: document.getElementById("searchKeyPhrases").value
-          .split("\n")
-          .map(s => s.trim())
-          .filter(s => s !== "")
-      };
-      document.getElementById("lookupModalContent").textContent = JSON.stringify(payload, null, 2);
-      let lookupModalElem = document.getElementById("lookupModal");
-      let lookupModalInstance = M.Modal.getInstance(lookupModalElem) || M.Modal.init(lookupModalElem, { preventScrolling: false });
-      lookupModalInstance.open();
-    });
-    
     // File Drop and Upload Handlers
     const dropZone = document.getElementById("dropZone");
     const previewGrid = document.getElementById("previewGrid");
@@ -766,10 +715,10 @@ Using Sales Report and Product List Files:
             const dataURL = await new Promise((resolve, reject) => {
               const reader = new FileReader();
               reader.onload = event => {
-                const result = event.target.result;
-                console.log("Image Data URL (first 100 chars):", result.slice(0, 100));
-                console.log("Image Data URL length:", result.length);
-                resolve(result);
+                // Log a substring of the dataURL and its length
+                console.log("DataURL (first 50 chars):", event.target.result.substring(0, 50));
+                console.log("DataURL length:", event.target.result.length);
+                resolve(event.target.result);
               };
               reader.onerror = reject;
               reader.readAsDataURL(file);
@@ -1180,7 +1129,7 @@ Return your answer as plain text.`;
     // Utility delay function
     function delay(ms) { return new Promise(resolve => setTimeout(resolve, ms)); }
     
-    // (Assume renderPreviewGrid and other utility functions exist as needed)
+    // Assume renderPreviewGrid and other necessary utility functions exist elsewhere in your code.
   </script>
 </body>
 </html>
