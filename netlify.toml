@@ -4,4 +4,4 @@
 
 [functions]
   node_bundler = "esbuild"
-  external_node_modules = ["form-data", "lambda-multipart-parser", "node-fetch"]
+  external_node_modules = ["form-data", "node-fetch", "formidable"]
