@@ -107,19 +107,25 @@
     #primaryPreview:empty { background: #fff; }
     #primaryPreview img { width: 100%; height: 100%; object-fit: contain; border-radius: 3px; }
     
-    /* Preview Grid */
+    /* Preview Grid - forced to center bottom of the page */
     #previewGridContainer {
-      position: relative;
-      margin: 20px auto;
+      position: fixed;
+      bottom: 80px;
+      left: 50%;
+      transform: translateX(-50%);
       width: auto;
       max-width: 600px;
       text-align: center;
+      background: #f7f7f7;
+      padding: 10px;
+      border: 1px solid #ccc;
+      border-radius: 5px;
     }
     #previewGrid {
       display: grid;
       grid-template-columns: repeat(5, 100px);
-      grid-column-gap: 23px;
-      grid-row-gap: 18px;
+      grid-column-gap: 10px;
+      grid-row-gap: 10px;
       margin: 0 auto;
     }
     .preview-cell { 
@@ -157,7 +163,7 @@
     /* Additional widths for Etsy Link and Shop Listings */
     #etsyLink, #shopListings { width: 500px !important; }
     
-    /* Styles for the Update Listing button container at the bottom center */
+    /* Bottom Button Containers */
     #uploadContainer {
       position: fixed;
       bottom: 20px;
@@ -165,13 +171,18 @@
       transform: translateX(-50%);
       display: inline-block;
     }
-    
-    /* New Update Inventory button (removed as requested) */
-    /* New LookUP button for showing JSON payload for title, description, and tags */
+    /* New LookUP button */
     #lookUPBtn {
       position: fixed;
       bottom: 20px;
       left: calc(50% + 120px);
+      display: inline-block;
+    }
+    /* Re-add the Upload Photo button */
+    #uploadPhotoContainer {
+      position: fixed;
+      bottom: 20px;
+      left: calc(50% - 120px);
       display: inline-block;
     }
   </style>
@@ -260,17 +271,18 @@
     </div>
   </div>
   
-  <!-- Preview Grid Container -->
+  <!-- Preview Grid Container (forced at center bottom) -->
   <div id="previewGridContainer">
     <div id="previewGrid"></div>
   </div>
   
-  <!-- Update Listing button container (updates an existing listing) -->
+  <!-- Bottom Button Containers -->
   <div id="uploadContainer">
     <button id="uploadToEtsyBtn" class="btn waves-effect waves-light configurable">Update Listing</button>
   </div>
-  
-  <!-- New LookUP button to show JSON payload for title, description, and tags -->
+  <div id="uploadPhotoContainer">
+    <button id="uploadPhotoBtn" class="btn waves-effect waves-light configurable">Upload Photo</button>
+  </div>
   <div id="lookUPBtn">
     <button id="lookUPButton" class="btn waves-effect waves-light configurable">LookUP</button>
   </div>
@@ -673,18 +685,71 @@ Using Sales Report and Product List Files:
       M.Modal.getInstance(modalElem) || M.Modal.init(modalElem, { preventScrolling: false }).open();
     });
     
-    // Function to render the 10-image preview grid
+    // New Upload Photo button - bind to your image upload functionality (calls imageUpload.js)
+    document.getElementById("uploadPhotoBtn").addEventListener("click", async () => {
+      // For example, assume you have a function uploadPhoto() that handles the image upload
+      // Here we simply call it. (Ensure that uploadPhoto() is defined elsewhere in your code.)
+      if (previewImages.length === 0) {
+        M.toast({ html: "No photo available to upload." });
+        return;
+      }
+      // Use the first preview image for upload; adjust as needed
+      const fileData = previewImages[0];
+      // You should convert the dataURL to a Blob before sending, if not already done.
+      const res = await fetch(fileData);
+      const blob = await res.blob();
+      // Construct a FormData payload for the image upload.
+      const formData = new FormData();
+      // Append the binary image data (the field name must match Etsy's requirements, e.g., "image")
+      formData.append("image", blob, "upload.jpg");
+      // Append additional fields as needed
+      const listingId = document.getElementById("shopListings").value.trim().match(/(\d+)/)?.[0];
+      if (!listingId) {
+        M.toast({ html: "Please provide a valid listing ID for image upload." });
+        return;
+      }
+      formData.append("listingId", listingId);
+      formData.append("token", accessToken);
+      formData.append("fileName", "upload.jpg");
+      formData.append("rank", "1");
+      
+      console.log("Uploading photo with FormData:");
+      console.log("listingId:", listingId);
+      console.log("token:", accessToken);
+      console.log("fileName:", "upload.jpg");
+      console.log("rank:", "1");
+      
+      try {
+        const imageUploadUrl = `/.netlify/functions/imageUpload?`;
+        const response = await fetch(imageUploadUrl, {
+          method: "POST",
+          body: formData
+        });
+        console.log("Photo Upload response status:", response.status);
+        const responseText = await response.text();
+        console.log("Photo Upload response:", responseText);
+        if (!response.ok) {
+          M.toast({ html: "Error uploading photo: " + response.status });
+        } else {
+          M.toast({ html: "Photo uploaded successfully!" });
+        }
+      } catch (e) {
+        console.error("Error uploading photo:", e);
+        M.toast({ html: "Error uploading photo: " + e.message });
+      }
+    });
+    
+    // Function to render the 10-image preview grid at the center bottom of the page
     function renderPreviewGrid() {
       const grid = document.getElementById("previewGrid");
       grid.innerHTML = ""; // Clear existing content
-      // For each preview image, create a cell in the grid
       previewImages.forEach((src, index) => {
         const cell = document.createElement("div");
         cell.classList.add("preview-cell");
         const img = document.createElement("img");
         img.src = src;
         cell.appendChild(img);
-        // Optionally, add a label for the image index
+        // Add a label for the image index
         const label = document.createElement("span");
         label.textContent = `#${index + 1}`;
         cell.appendChild(label);
@@ -694,7 +759,6 @@ Using Sales Report and Product List Files:
     
     // File Drop and Upload Handlers
     const dropZone = document.getElementById("dropZone");
-    const previewGrid = document.getElementById("previewGrid");
     const primaryPreview = document.getElementById("primaryPreview");
     
     function updatePrimaryPreview() {
