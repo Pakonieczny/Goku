@@ -1,19 +1,18 @@
 {
   "name": "etsy-app",
   "version": "1.0.0",
-  "description": "Etsy listing duplicate and update application",
+  "description": "Etsy Listing Generator & Uploader",
   "main": "index.js",
   "scripts": {
-    "start": "netlify dev"
-  },
-  "engines": {
-    "node": "16.x"
+    "start": "netlify dev",
+    "build": "netlify build"
   },
   "dependencies": {
-    "formidable": "^2.0.1",
+    "node-fetch": "^2.6.7",
     "form-data": "^4.0.0",
-    "parse-multipart-data": "^2.0.0",
-    "node-fetch": "^2.6.7"
+    "parse-multipart-data": "^2.0.0"
   },
-  "devDependencies": {}
+  "devDependencies": {},
+  "author": "",
+  "license": "ISC"
 }
