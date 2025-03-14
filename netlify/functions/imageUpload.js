@@ -1,17 +1,16 @@
-const { Readable } = require("stream");
+const { PassThrough } = require("stream");
 const formidable = require("formidable");
 
-// Helper: convert a Buffer into a Readable stream
+// Helper: convert a Buffer into a PassThrough stream
 function bufferToStream(buffer) {
-  const stream = new Readable();
-  stream.push(buffer);
-  stream.push(null);
+  const stream = new PassThrough();
+  stream.end(buffer);
   return stream;
 }
 
 exports.handler = async function (event, context) {
   try {
-    // Ensure we have a content-type header.
+    // Ensure a content-type header exists.
     const contentType = event.headers["content-type"] || event.headers["Content-Type"];
     if (!contentType) {
       return {
@@ -20,7 +19,7 @@ exports.handler = async function (event, context) {
       };
     }
     
-    // Convert event.body to a Buffer, decoding from base64 if needed.
+    // Convert event.body to a Buffer, decoding from base64 if necessary.
     let bodyBuffer;
     if (event.isBase64Encoded) {
       bodyBuffer = Buffer.from(event.body, "base64");
@@ -28,15 +27,15 @@ exports.handler = async function (event, context) {
       bodyBuffer = Buffer.from(event.body, "utf8");
     }
     
-    // Create a Readable stream from the buffer.
+    // Create a PassThrough stream from the buffer.
     const req = bufferToStream(bodyBuffer);
-    // Attach a headers property to the stream so that formidable can read it.
     req.headers = { "content-type": contentType };
-
-    console.log("Starting form parsing...");
+    
+    console.log("Starting form parsing with content-type:", contentType);
+    
+    // Parse the form data using formidable.
     return new Promise((resolve, reject) => {
       const form = new formidable.IncomingForm();
-      
       form.parse(req, (err, fields, files) => {
         if (err) {
           console.error("Error parsing form data:", err);
@@ -45,13 +44,10 @@ exports.handler = async function (event, context) {
             body: JSON.stringify({ error: err.message }),
           });
         }
-        
         console.log("Parsed fields:", fields);
         console.log("Parsed files:", files);
         
-        // At this point you can process the fields and files as needed.
-        // For example, you might forward the file data (files.file.path, etc.) to Etsy.
-        
+        // Here you can process the fields and files as needed.
         resolve({
           statusCode: 200,
           body: JSON.stringify({ fields, files }),
