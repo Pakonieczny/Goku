@@ -122,56 +122,21 @@
       grid-row-gap: 18px;
       margin: 0 auto;
     }
-    .preview-cell { position: relative; display: flex; flex-direction: column; align-items: center; }
-    .resolution-text { position: absolute; top: -12px; left: 0; right: 0; font-size: 8px; text-align: center; color: #333; pointer-events: none; }
-    .preview-box {
-      width: 100px; 
-      height: 132px; 
-      background-color: #fff; 
-      border: 2px solid #ccc; 
-      border-radius: 3px;
-      box-sizing: border-box; 
+    .preview-cell { 
       position: relative; 
-      overflow: visible;
+      display: flex; 
+      flex-direction: column; 
+      align-items: center; 
+      border: 1px solid #ccc; 
+      border-radius: 3px; 
+      padding: 5px;
     }
-    .preview-box img { 
+    .preview-cell img { 
       width: 100px; 
       height: 100px; 
       object-fit: cover; 
-      border-radius: 3px; 
-      display: block; 
+      border-radius: 3px;
     }
-    .overlay { 
-      position: absolute; 
-      top: 0; left: 0; 
-      width: 100px; height: 100px; 
-      background-color: rgba(0,0,255,0.3);
-      opacity: 0; transition: opacity 0.2s ease; 
-      pointer-events: none; 
-      z-index: 1; 
-    }
-    .preview-box.dragover .overlay { opacity: 1; }
-    .preview-box progress { width: 100%; height: 13px; margin-top: 2px; }
-    .status-icon { position: absolute; bottom: 2px; left: 2px; font-size: 14px; font-weight: bold; z-index: 3; }
-    .status-icon.success { color: green; }
-    .status-icon.error { color: red; }
-    .remove-btn { 
-      position: absolute; top: -5px; left: -5px; 
-      width: 10px; height: 10px; 
-      background-color: black;
-      color: white; font-size: 8px; line-height: 10px; 
-      text-align: center; cursor: pointer; 
-      z-index: 999; border-radius: 3px; 
-    }
-    .number-overlay { 
-      position: absolute; top: 0; right: 0; 
-      width: 16px; height: 16px; 
-      background-color: rgba(0,0,0,0.7);
-      color: white; display: flex; align-items: center; 
-      justify-content: center; font-size: 10px; 
-      z-index: 999; border-radius: 3px; 
-    }
-    .file-name { text-align: center; font-size: 12px; margin-top: 4px; white-space: pre-line; }
     
     /* Container #13 */
     #container13 { position: relative; width: 250px; top: -150px; }
@@ -201,8 +166,9 @@
       display: inline-block;
     }
     
-    /* New Upload Photo button (placed to the right of Update Listing) */
-    #uploadPhotoContainer {
+    /* New Update Inventory button (removed as requested) */
+    /* New LookUP button for showing JSON payload for title, description, and tags */
+    #lookUPBtn {
       position: fixed;
       bottom: 20px;
       left: calc(50% + 120px);
@@ -304,12 +270,23 @@
     <button id="uploadToEtsyBtn" class="btn waves-effect waves-light configurable">Update Listing</button>
   </div>
   
-  <!-- New Upload Photo button container (to trigger photo upload to imageUpload.js) -->
-  <div id="uploadPhotoContainer">
-    <button id="uploadPhotoBtn" class="btn waves-effect waves-light configurable">Upload Photo</button>
+  <!-- New LookUP button to show JSON payload for title, description, and tags -->
+  <div id="lookUPBtn">
+    <button id="lookUPButton" class="btn waves-effect waves-light configurable">LookUP</button>
   </div>
   
   <!-- Modals -->
+  <!-- LookUP Modal for showing JSON payload -->
+  <div id="lookUPModal" class="modal">
+    <div class="modal-content">
+      <h4>Generated JSON Payload</h4>
+      <pre id="lookUPModalContent"></pre>
+    </div>
+    <div class="modal-footer">
+      <a href="#!" class="modal-close waves-effect waves-green btn">Close</a>
+    </div>
+  </div>
+  
   <!-- Title Rules Modal -->
   <div id="titleRulesModal" class="modal">
     <div class="modal-content">
@@ -625,7 +602,7 @@ Using Sales Report and Product List Files:
       }
     }
     
-    // Function to update an existing listing via the updateListing.js proxy function
+    // Function to update an existing listing via the Netlify proxy function updateListing.js
     async function updateExistingListing() {
       const listingInput = document.getElementById("shopListings").value.trim();
       if (!listingInput) {
@@ -681,72 +658,39 @@ Using Sales Report and Product List Files:
     // Bind the "Update Listing" button to updateExistingListing()
     document.getElementById("uploadToEtsyBtn").addEventListener("click", updateExistingListing);
     
-    // New button: "Upload Photo" – triggers photo upload to imageUpload.js.
-    async function uploadPhoto() {
-      const listingInput = document.getElementById("shopListings").value.trim();
-      if (!listingInput) {
-        M.toast({ html: "Please provide a listing URL or ID in 'My Etsy Shop Listings'." });
-        return;
-      }
-      let listingId;
-      if (/^\d+$/.test(listingInput)) {
-        listingId = listingInput;
-      } else {
-        const match = listingInput.match(/\/listing\/(\d+)/);
-        if (match) {
-          listingId = match[1];
-        } else {
-          M.toast({ html: "Invalid listing URL or ID." });
-          return;
-        }
-      }
-      // For simplicity, we take the first uploaded image from previewImages.
-      if (previewImages.length === 0) {
-        M.toast({ html: "No image available. Please drag and drop an image first." });
-        return;
-      }
-      const fileDataURL = previewImages[0];
-      // Create a FormData object.
-      const formData = new FormData();
-      formData.append("listingId", listingId);
-      formData.append("token", accessToken);
-      formData.append("fileName", photoNames[0] || "uploaded_photo.jpg");
-      formData.append("rank", 1); // assuming rank 1 for the first image
-      // Convert dataURL to Blob
-      const res = await fetch(fileDataURL);
-      const blob = await res.blob();
-      formData.append("file", blob, photoNames[0] || "uploaded_photo.jpg");
-      
-      console.log("Uploading photo with FormData:");
-      for (let pair of formData.entries()) {
-        console.log(pair[0]+ ': ' + (pair[1] instanceof Blob ? '[Blob]' : pair[1]));
-      }
-      
-      // Call the imageUpload.js Netlify function
-      const uploadUrl = `/.netlify/functions/imageUpload`;
-      try {
-        const response = await fetch(uploadUrl, {
-          method: "POST",
-          body: formData
-        });
-        console.log("Photo Upload response status:", response.status);
-        if (!response.ok) {
-          const errorText = await response.text();
-          console.error("Error uploading photo:", errorText);
-          M.toast({ html: "Error uploading photo: " + response.status + " - " + errorText });
-        } else {
-          const data = await response.json();
-          console.log("Photo uploaded successfully:", data);
-          M.toast({ html: "Photo uploaded successfully!" });
-        }
-      } catch (e) {
-        console.error("Exception in uploadPhoto:", e);
-        M.toast({ html: "Exception uploading photo: " + e.message });
-      }
-    }
+    // New LookUP button to show JSON payload for title, description, and tags
+    document.getElementById("lookUPButton").addEventListener("click", () => {
+      const payload = {
+        title: document.getElementById("listingTitle").value,
+        description: document.getElementById("listingDescription").value,
+        tags: document.getElementById("searchKeyPhrases").value
+          .split("\n")
+          .map(s => s.trim())
+          .filter(s => s !== "")
+      };
+      document.getElementById("lookUPModalContent").textContent = JSON.stringify(payload, null, 2);
+      const modalElem = document.getElementById("lookUPModal");
+      M.Modal.getInstance(modalElem) || M.Modal.init(modalElem, { preventScrolling: false }).open();
+    });
     
-    // Bind the "Upload Photo" button
-    document.getElementById("uploadPhotoBtn").addEventListener("click", uploadPhoto);
+    // Function to render the 10-image preview grid
+    function renderPreviewGrid() {
+      const grid = document.getElementById("previewGrid");
+      grid.innerHTML = ""; // Clear existing content
+      // For each preview image, create a cell in the grid
+      previewImages.forEach((src, index) => {
+        const cell = document.createElement("div");
+        cell.classList.add("preview-cell");
+        const img = document.createElement("img");
+        img.src = src;
+        cell.appendChild(img);
+        // Optionally, add a label for the image index
+        const label = document.createElement("span");
+        label.textContent = `#${index + 1}`;
+        cell.appendChild(label);
+        grid.appendChild(cell);
+      });
+    }
     
     // File Drop and Upload Handlers
     const dropZone = document.getElementById("dropZone");
@@ -793,8 +737,7 @@ Using Sales Report and Product List Files:
             const dataURL = await new Promise((resolve, reject) => {
               const reader = new FileReader();
               reader.onload = event => {
-                console.log("DataURL (first 50 chars):", event.target.result.substring(0, 50));
-                console.log("DataURL length:", event.target.result.length);
+                console.log("File dataURL preview (first 50 chars):", event.target.result.substring(0, 50));
                 resolve(event.target.result);
               };
               reader.onerror = reject;
@@ -1205,8 +1148,6 @@ Return your answer as plain text.`;
     
     // Utility delay function
     function delay(ms) { return new Promise(resolve => setTimeout(resolve, ms)); }
-    
-    // (Assume renderPreviewGrid and other necessary utility functions exist elsewhere in your code.)
   </script>
 </body>
 </html>
