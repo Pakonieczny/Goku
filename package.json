@@ -11,6 +11,7 @@
   "author": "",
   "license": "ISC",
   "dependencies": {
+    "bootstrap": "^5.3.0",
     "node-fetch": "^2.6.7",
     "formidable": "^2.0.1",
     "form-data": "^4.0.0"
