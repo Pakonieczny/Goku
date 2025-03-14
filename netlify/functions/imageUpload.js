@@ -5,23 +5,32 @@ const fs = require("fs");
 
 exports.handler = async function (event, context) {
   try {
+    // Ensure we have a content-type header in the event.
+    const incomingContentType =
+      (event.headers && (event.headers["content-type"] || event.headers["Content-Type"])) ||
+      "";
+    if (!incomingContentType) {
+      throw new Error("Missing content-type header in the request.");
+    }
+    console.log("Incoming Content-Type:", incomingContentType);
+
     // Convert the event body to a Buffer.
     const buffer = event.isBase64Encoded
       ? Buffer.from(event.body, "base64")
       : Buffer.from(event.body);
-      
+
     // Create a stream from the buffer.
     const reqStream = streamifier.createReadStream(buffer);
-    // Attach a headers property to the stream with content-length
+    // Attach headers to the stream (include both content-length and content-type).
     reqStream.headers = {
-      "content-length": buffer.length
+      "content-length": buffer.length,
+      "content-type": incomingContentType,
     };
 
-    // Create a new instance of Formidable.IncomingForm.
+    // Use Formidable to parse the incoming multipart/form-data.
     const form = new Formidable.IncomingForm();
     form.keepExtensions = true;
 
-    // Parse the stream using Formidable.
     const parsed = await new Promise((resolve, reject) => {
       form.parse(reqStream, (err, fields, files) => {
         if (err) {
@@ -34,19 +43,19 @@ exports.handler = async function (event, context) {
     console.log("Parsed fields:", parsed.fields);
     console.log("Parsed files:", parsed.files);
 
-    // Extract required fields.
+    // Extract required fields from parsed data.
     const { listingId, token, fileName, rank } = parsed.fields;
     if (!listingId || !token || !fileName) {
-      throw new Error("Missing one or more required parameters: listingId, token, fileName");
+      throw new Error("Missing required parameters: listingId, token, or fileName");
     }
 
-    // Assume that the uploaded file is in parsed.files.file (adjust if your field name differs)
+    // Assume that the uploaded file is available as parsed.files.file.
     const fileData = parsed.files.file;
     if (!fileData) {
       throw new Error("No valid image file provided.");
     }
 
-    // Determine MIME type – Formidable should provide the mimetype.
+    // Determine MIME type from the parsed file data.
     const mimeType = fileData.mimetype || "application/octet-stream";
     console.log("Determined MIME type:", mimeType);
 
@@ -57,18 +66,18 @@ exports.handler = async function (event, context) {
     formData.append("fileName", fileName);
     formData.append("rank", rank || "1");
 
-    // If Formidable saved the file to a temporary path, create a stream from it;
-    // otherwise, use the fileData directly.
+    // Append the file data.
     if (fileData.filepath) {
+      // If Formidable saved the file to a temporary path, use a stream.
       formData.append("file", fs.createReadStream(fileData.filepath), {
         contentType: mimeType,
-        filename: fileName
+        filename: fileName,
       });
     } else {
-      // If no filepath is available, pass the file data buffer.
+      // Otherwise, assume fileData is a Buffer.
       formData.append("file", fileData, {
         contentType: mimeType,
-        filename: fileName
+        filename: fileName,
       });
     }
 
@@ -93,9 +102,9 @@ exports.handler = async function (event, context) {
       headers: {
         "Authorization": `Bearer ${token}`,
         "x-api-key": clientId,
-        // Do not set Content-Type manually; formData sets it automatically.
+        // Do not set Content-Type manually; formData will handle it.
       },
-      body: formData
+      body: formData,
     });
 
     console.log("Image upload response status:", response.status);
@@ -104,7 +113,7 @@ exports.handler = async function (event, context) {
       console.error("Error uploading image. POST failed:", responseText);
       return {
         statusCode: response.status,
-        body: JSON.stringify({ error: responseText })
+        body: JSON.stringify({ error: responseText }),
       };
     }
 
@@ -118,14 +127,14 @@ exports.handler = async function (event, context) {
 
     return {
       statusCode: 200,
-      body: JSON.stringify(responseData)
+      body: JSON.stringify(responseData),
     };
 
   } catch (error) {
     console.error("Exception in imageUpload handler:", error);
     return {
       statusCode: 500,
-      body: JSON.stringify({ error: error.message })
+      body: JSON.stringify({ error: error.message }),
     };
   }
 };
