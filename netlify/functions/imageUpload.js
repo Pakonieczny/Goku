@@ -1,145 +1,130 @@
-const fetch = require("node-fetch");
-const Busboy = require("busboy");
+// imageUpload.js
+const { Busboy } = require("busboy");
 const FormData = require("form-data");
+const fetch = require("node-fetch");
 
 exports.handler = async function (event, context) {
-  // Wrap in a Promise because Busboy is event‐driven
   return new Promise((resolve, reject) => {
     try {
-      if (event.httpMethod !== "POST") {
-        resolve({
-          statusCode: 405,
-          body: JSON.stringify({ error: "Method Not Allowed" }),
-        });
-        return;
-      }
-
-      console.log("Incoming request headers:", event.headers);
-
+      // Create a new Busboy instance, passing in the headers from the event.
       const busboy = new Busboy({ headers: event.headers });
+      
       let listingId, token, fileName, rank;
       let fileBuffer = Buffer.alloc(0);
 
+      // Parse field data.
       busboy.on("field", (fieldname, val) => {
         if (fieldname === "listingId") {
           listingId = val;
-          console.log("Parsed field listingId:", listingId);
-        }
-        if (fieldname === "token") {
+        } else if (fieldname === "token") {
           token = val;
-          console.log("Parsed field token:", token.substring(0, 10) + "...");
-        }
-        if (fieldname === "fileName") {
+        } else if (fieldname === "fileName") {
           fileName = val;
-          console.log("Parsed field fileName:", fileName);
-        }
-        if (fieldname === "rank") {
+        } else if (fieldname === "rank") {
           rank = val;
-          console.log("Parsed field rank:", rank);
         }
       });
 
+      // Accumulate file data.
       busboy.on("file", (fieldname, file, filename, encoding, mimetype) => {
-        console.log(`Receiving file [${fieldname}]: ${filename} (${mimetype})`);
+        // Optionally log file details for debugging.
+        console.log(`Receiving file [${fieldname}]: filename: ${filename}, encoding: ${encoding}, mimetype: ${mimetype}`);
         file.on("data", (data) => {
           fileBuffer = Buffer.concat([fileBuffer, data]);
         });
         file.on("end", () => {
-          console.log(`Finished reading file ${filename}, size: ${fileBuffer.length} bytes`);
+          console.log(`Finished receiving file [${fieldname}]. Total size: ${fileBuffer.length} bytes`);
         });
       });
 
       busboy.on("finish", async () => {
-        console.log("Finished parsing form data.");
-        // Validate required fields
-        if (!listingId || !token || !fileName || fileBuffer.length === 0) {
-          resolve({
-            statusCode: 400,
-            body: JSON.stringify({ error: "Missing required parameters" }),
-          });
-          return;
-        }
-
-        // Retrieve CLIENT_ID and SHOP_ID from environment variables.
-        const clientId = process.env.CLIENT_ID;
-        const shopId = process.env.SHOP_ID;
-        if (!clientId || !shopId) {
-          resolve({
-            statusCode: 500,
-            body: JSON.stringify({ error: "Missing CLIENT_ID or SHOP_ID in environment" }),
-          });
-          return;
-        }
-
-        // Construct FormData for the outgoing request
-        let form = new FormData();
-        // Etsy expects a parameter 'listing_id' (string or number)
-        form.append("listing_id", listingId);
-        // Include file name and rank
-        form.append("file_name", fileName);
-        form.append("rank", rank || "1");
-        // Append the file (we assume image/jpeg; adjust if necessary)
-        form.append("file", fileBuffer, { filename: fileName, contentType: "image/jpeg" });
-
-        // Log FormData headers (includes boundary)
-        console.log("Outgoing FormData headers:", form.getHeaders());
-
-        // Construct the Etsy image upload URL
-        const imageUploadUrl = `https://api.etsy.com/v3/application/shops/${shopId}/listings/${listingId}/images`;
-        console.log("Image Upload URL:", imageUploadUrl);
-
         try {
-          const response = await fetch(imageUploadUrl, {
+          // Check that all required parameters are present.
+          if (!listingId || !token || !fileName || !fileBuffer.length) {
+            const errorMessage = "Missing required parameters: listingId, token, fileName, or file data";
+            console.error(errorMessage);
+            resolve({
+              statusCode: 400,
+              body: JSON.stringify({ error: errorMessage }),
+            });
+            return;
+          }
+          
+          // Log the first 50 characters of the fileBuffer in base64 for verification
+          const fileDataBase64 = fileBuffer.toString("base64");
+          console.log("File data (first 50 chars base64):", fileDataBase64.substring(0, 50));
+          
+          // Prepare FormData for the image upload.
+          const form = new FormData();
+          form.append("file", fileBuffer, { filename: fileName });
+          form.append("listingId", listingId);
+          form.append("token", token);
+          if (rank) form.append("rank", rank);
+
+          // Retrieve CLIENT_ID and SHOP_ID from environment variables.
+          const clientId = process.env.CLIENT_ID;
+          const shopId = process.env.SHOP_ID;
+          if (!clientId || !shopId) {
+            const errMsg = "CLIENT_ID and/or SHOP_ID environment variables are not set.";
+            console.error(errMsg);
+            resolve({
+              statusCode: 500,
+              body: JSON.stringify({ error: errMsg }),
+            });
+            return;
+          }
+          
+          // Construct the Etsy API endpoint URL for image upload.
+          const etsyImageUrl = `https://api.etsy.com/v3/application/shops/${shopId}/listings/${listingId}/images`;
+          console.log("Image Upload URL:", etsyImageUrl);
+
+          // Prepare headers. Let FormData set the correct content-type including boundary.
+          const headers = {
+            "Authorization": `Bearer ${token}`,
+            "x-api-key": clientId,
+            ...form.getHeaders()
+          };
+          console.log("Image upload request headers:", headers);
+
+          // Make the POST request to Etsy.
+          const response = await fetch(etsyImageUrl, {
             method: "POST",
-            headers: {
-              // The form-data package sets its own Content-Type (with boundary)
-              ...form.getHeaders(),
-              "Authorization": `Bearer ${token}`,
-              "x-api-key": clientId,
-            },
-            body: form,
+            headers,
+            body: form
           });
 
-          // Read the response as text (because sometimes non-JSON data might be returned)
-          const responseText = await response.text();
           console.log("Image upload response status:", response.status);
-          console.log("Image upload response text:", responseText);
-
           if (!response.ok) {
+            const errorText = await response.text();
+            console.error("Error uploading image. POST failed:", errorText);
             resolve({
               statusCode: response.status,
-              body: JSON.stringify({ error: responseText }),
+              body: JSON.stringify({ error: errorText })
             });
           } else {
-            let data;
-            try {
-              data = JSON.parse(responseText);
-            } catch (parseError) {
-              data = { message: responseText };
-            }
-            console.log("Image uploaded successfully:", data);
+            const responseData = await response.json();
+            console.log("Image uploaded successfully:", responseData);
             resolve({
               statusCode: 200,
-              body: JSON.stringify(data),
+              body: JSON.stringify(responseData)
             });
           }
-        } catch (uploadError) {
-          console.error("Exception during image upload:", uploadError);
+        } catch (err) {
+          console.error("Exception in Busboy finish handler:", err);
           resolve({
             statusCode: 500,
-            body: JSON.stringify({ error: uploadError.message }),
+            body: JSON.stringify({ error: err.message })
           });
         }
       });
 
-      // Write the body to Busboy. If the incoming event.body is base64-encoded, decode it.
-      busboy.write(event.body, event.isBase64Encoded ? "base64" : "binary");
-      busboy.end();
-    } catch (err) {
-      console.error("Exception in handler:", err);
+      // Write the body to busboy.
+      busboy.end(Buffer.from(event.body, event.isBase64Encoded ? "base64" : "utf8"));
+    } catch (error) {
+      console.error("Exception in handler:", error);
       resolve({
         statusCode: 500,
-        body: JSON.stringify({ error: err.message }),
+        body: JSON.stringify({ error: error.message })
       });
     }
   });
