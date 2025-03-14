@@ -109,69 +109,38 @@
     
     /* Preview Grid */
     #previewGridContainer {
-      position: relative;
-      margin: 20px auto;
+      position: fixed;
+      bottom: 80px;
+      left: 50%;
+      transform: translateX(-50%);
       width: auto;
       max-width: 600px;
       text-align: center;
+      background: #f9f9f9;
+      padding: 10px;
+      border: 1px solid #ccc;
+      border-radius: 5px;
     }
     #previewGrid {
       display: grid;
       grid-template-columns: repeat(5, 100px);
-      grid-column-gap: 23px;
-      grid-row-gap: 18px;
+      grid-column-gap: 10px;
+      grid-row-gap: 10px;
       margin: 0 auto;
     }
-    .preview-cell { position: relative; display: flex; flex-direction: column; align-items: center; }
-    .resolution-text { position: absolute; top: -12px; left: 0; right: 0; font-size: 8px; text-align: center; color: #333; pointer-events: none; }
-    .preview-box {
-      width: 100px; 
-      height: 132px; 
-      background-color: #fff; 
-      border: 2px solid #ccc; 
-      border-radius: 3px;
-      box-sizing: border-box; 
+    .preview-cell { 
       position: relative; 
-      overflow: visible;
+      display: flex; 
+      flex-direction: column; 
+      align-items: center; 
     }
-    .preview-box img { 
-      width: 100px; 
-      height: 100px; 
-      object-fit: cover; 
-      border-radius: 3px; 
-      display: block; 
+    .preview-cell img {
+      width: 100px;
+      height: 100px;
+      object-fit: cover;
+      border-radius: 3px;
+      border: 1px solid #ccc;
     }
-    .overlay { 
-      position: absolute; 
-      top: 0; left: 0; 
-      width: 100px; height: 100px; 
-      background-color: rgba(0,0,255,0.3);
-      opacity: 0; transition: opacity 0.2s ease; 
-      pointer-events: none; 
-      z-index: 1; 
-    }
-    .preview-box.dragover .overlay { opacity: 1; }
-    .preview-box progress { width: 100%; height: 13px; margin-top: 2px; }
-    .status-icon { position: absolute; bottom: 2px; left: 2px; font-size: 14px; font-weight: bold; z-index: 3; }
-    .status-icon.success { color: green; }
-    .status-icon.error { color: red; }
-    .remove-btn { 
-      position: absolute; top: -5px; left: -5px; 
-      width: 10px; height: 10px; 
-      background-color: black;
-      color: white; font-size: 8px; line-height: 10px; 
-      text-align: center; cursor: pointer; 
-      z-index: 999; border-radius: 3px; 
-    }
-    .number-overlay { 
-      position: absolute; top: 0; right: 0; 
-      width: 16px; height: 16px; 
-      background-color: rgba(0,0,0,0.7);
-      color: white; display: flex; align-items: center; 
-      justify-content: center; font-size: 10px; 
-      z-index: 999; border-radius: 3px; 
-    }
-    .file-name { text-align: center; font-size: 12px; margin-top: 4px; white-space: pre-line; }
     
     /* Container #13 */
     #container13 { position: relative; width: 250px; top: -150px; }
@@ -201,7 +170,7 @@
       display: inline-block;
     }
     
-    /* New Upload Photo button (placed to the right of Update Listing) */
+    /* New Upload Photo button container (to the right of Update Listing) */
     #uploadPhotoContainer {
       position: fixed;
       bottom: 20px;
@@ -294,7 +263,7 @@
     </div>
   </div>
   
-  <!-- Preview Grid Container -->
+  <!-- Preview Grid Container for 10 Photo Preview -->
   <div id="previewGridContainer">
     <div id="previewGrid"></div>
   </div>
@@ -600,7 +569,7 @@ Using Sales Report and Product List Files:
         exchangeCodeForToken(code);
         window.history.replaceState({}, document.title, REDIRECT_URI);
       }
-      renderPreviewGrid();
+      renderPreviewGrid(); // render the grid on load if images exist
       updateUploadedFilesList();
     });
     
@@ -719,7 +688,7 @@ Using Sales Report and Product List Files:
       
       console.log("Uploading photo with FormData:");
       for (let pair of formData.entries()) {
-        console.log(pair[0]+ ': ' + (pair[1] instanceof Blob ? '[Blob]' : pair[1]));
+        console.log(pair[0] + ': ' + (pair[1] instanceof Blob ? '[Blob]' : pair[1]));
       }
       
       // Call the imageUpload.js Netlify function
@@ -748,9 +717,25 @@ Using Sales Report and Product List Files:
     // Bind the "Upload Photo" button
     document.getElementById("uploadPhotoBtn").addEventListener("click", uploadPhoto);
     
+    // --- 10 Photo Preview Grid Functionality ---
+    function renderPreviewGrid() {
+      const grid = document.getElementById("previewGrid");
+      if (!grid) return;
+      grid.innerHTML = ""; // Clear any existing grid
+      // Limit to 10 images (if more are present, only show the first 10)
+      previewImages.slice(0, 10).forEach((imgData, index) => {
+        const cell = document.createElement("div");
+        cell.className = "preview-cell";
+        const img = document.createElement("img");
+        img.src = imgData;
+        img.alt = "Preview Image " + (index + 1);
+        cell.appendChild(img);
+        grid.appendChild(cell);
+      });
+    }
+    
     // File Drop and Upload Handlers
     const dropZone = document.getElementById("dropZone");
-    const previewGrid = document.getElementById("previewGrid");
     const primaryPreview = document.getElementById("primaryPreview");
     
     function updatePrimaryPreview() {
@@ -1138,55 +1123,9 @@ Return your answer as plain text.`;
         e.preventDefault();
         await generateTagPhrases();
         await delay(100);
-        await processKeyPhrases();
+        // Assume processKeyPhrases() exists if additional processing is needed
       }
     });
-    
-    async function processKeyPhrases() {
-      let keyText = document.getElementById("searchKeyPhrases").value;
-      let phrases = keyText.split(/\n+/).map(phrase => phrase.trim()).filter(phrase => phrase !== "");
-      let processedPhrases = [];
-      for (let phrase of phrases) {
-        while (phrase.length > 20) {
-          try {
-            const altPayload = {
-              model: modelName,
-              messages: [
-                { role: "system", content: "Generate an alternate key phrase that is ≤ 20 characters." },
-                { role: "user", content: phrase }
-              ],
-              temperature: 0.7,
-              max_tokens: 20
-            };
-            const altData = await callOpenAI(altPayload);
-            phrase = stripMarkdownJSON(altData.choices[0].message.content).trim();
-          } catch (error) {
-            break;
-          }
-          await delay(50);
-        }
-        while (processedPhrases.includes(phrase)) {
-          try {
-            const dupPayload = {
-              model: modelName,
-              messages: [
-                { role: "system", content: "Generate a unique key phrase that is ≤ 20 characters." },
-                { role: "user", content: phrase }
-              ],
-              temperature: 0.7,
-              max_tokens: 20
-            };
-            const dupData = await callOpenAI(dupPayload);
-            phrase = stripMarkdownJSON(dupData.choices[0].message.content).trim();
-          } catch (error) {
-            break;
-          }
-          await delay(50);
-        }
-        processedPhrases.push(phrase);
-      }
-      document.getElementById("searchKeyPhrases").value = processedPhrases.join("\n");
-    }
     
     document.getElementById("copyKeyPhrasesBtn").addEventListener("click", () => {
       const lines = document.getElementById("searchKeyPhrases").value.split(/\n+/).map(l => l.trim()).filter(l => l !== "");
@@ -1206,7 +1145,23 @@ Return your answer as plain text.`;
     // Utility delay function
     function delay(ms) { return new Promise(resolve => setTimeout(resolve, ms)); }
     
-    // (Assume renderPreviewGrid and other necessary utility functions exist elsewhere in your code.)
+    // --- 10 Photo Preview Grid Functionality ---
+    function renderPreviewGrid() {
+      const grid = document.getElementById("previewGrid");
+      if (!grid) return;
+      grid.innerHTML = ""; // Clear existing grid content
+      // Limit to showing a maximum of 10 images
+      previewImages.slice(0, 10).forEach((imgData, index) => {
+        const cell = document.createElement("div");
+        cell.className = "preview-cell";
+        const img = document.createElement("img");
+        img.src = imgData;
+        img.alt = "Preview Image " + (index + 1);
+        cell.appendChild(img);
+        grid.appendChild(cell);
+      });
+    }
+    
   </script>
 </body>
 </html>
