@@ -1,22 +1,27 @@
 const Formidable = require("formidable");
 const streamifier = require("streamifier");
 const fetch = require("node-fetch");
+const fs = require("fs");
 
 exports.handler = async function (event, context) {
   try {
-    // Check if the incoming request body is base64 encoded.
+    // Convert the event body to a Buffer.
     const buffer = event.isBase64Encoded
       ? Buffer.from(event.body, "base64")
       : Buffer.from(event.body);
       
     // Create a stream from the buffer.
     const reqStream = streamifier.createReadStream(buffer);
+    // Attach a headers property to the stream with content-length
+    reqStream.headers = {
+      "content-length": buffer.length
+    };
 
     // Create a new instance of Formidable.IncomingForm.
     const form = new Formidable.IncomingForm();
     form.keepExtensions = true;
 
-    // Parse the stream. Formidable expects a Node.js request-like object.
+    // Parse the stream using Formidable.
     const parsed = await new Promise((resolve, reject) => {
       form.parse(reqStream, (err, fields, files) => {
         if (err) {
@@ -26,17 +31,16 @@ exports.handler = async function (event, context) {
       });
     });
 
-    // Log parsed fields and files for troubleshooting.
     console.log("Parsed fields:", parsed.fields);
     console.log("Parsed files:", parsed.files);
 
-    // Ensure required fields are provided.
+    // Extract required fields.
     const { listingId, token, fileName, rank } = parsed.fields;
     if (!listingId || !token || !fileName) {
       throw new Error("Missing one or more required parameters: listingId, token, fileName");
     }
 
-    // Assume that the uploaded file is in parsed.files.file (or adjust based on your form field name)
+    // Assume that the uploaded file is in parsed.files.file (adjust if your field name differs)
     const fileData = parsed.files.file;
     if (!fileData) {
       throw new Error("No valid image file provided.");
@@ -46,19 +50,28 @@ exports.handler = async function (event, context) {
     const mimeType = fileData.mimetype || "application/octet-stream";
     console.log("Determined MIME type:", mimeType);
 
-    // Create a new FormData object to send to Etsy.
-    // (Using the "form-data" package)
+    // Create a FormData instance using the "form-data" package.
     const FormData = require("form-data");
     const formData = new FormData();
     formData.append("listingId", listingId);
     formData.append("fileName", fileName);
     formData.append("rank", rank || "1");
-    formData.append("file", fileData.filepath ? require("fs").createReadStream(fileData.filepath) : fileData, {
-      contentType: mimeType,
-      filename: fileName
-    });
 
-    // Log a portion of the FormData (note that FormData objects cannot be fully stringified).
+    // If Formidable saved the file to a temporary path, create a stream from it;
+    // otherwise, use the fileData directly.
+    if (fileData.filepath) {
+      formData.append("file", fs.createReadStream(fileData.filepath), {
+        contentType: mimeType,
+        filename: fileName
+      });
+    } else {
+      // If no filepath is available, pass the file data buffer.
+      formData.append("file", fileData, {
+        contentType: mimeType,
+        filename: fileName
+      });
+    }
+
     console.log("FormData prepared with keys:", Array.from(formData.keys()));
 
     // Retrieve CLIENT_ID and SHOP_ID from environment variables.
@@ -80,8 +93,7 @@ exports.handler = async function (event, context) {
       headers: {
         "Authorization": `Bearer ${token}`,
         "x-api-key": clientId,
-        // Note: Do not manually set the Content-Type header when using formData;
-        // let formData set it including the boundary.
+        // Do not set Content-Type manually; formData sets it automatically.
       },
       body: formData
     });
@@ -96,7 +108,6 @@ exports.handler = async function (event, context) {
       };
     }
 
-    // Try to parse response as JSON.
     let responseData;
     try {
       responseData = JSON.parse(responseText);
