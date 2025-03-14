@@ -41,7 +41,7 @@ exports.handler = async function (event, context) {
     const imageUploadUrl = `https://api.etsy.com/v3/application/shops/${shopId}/listings/${listingId}/images`;
     console.log("Image Upload URL:", imageUploadUrl);
 
-    // Extract MIME type from dataURL if available.
+    // Extract MIME type and base64 data from dataURL.
     let mimeType = "application/octet-stream"; // default fallback
     let base64Data = dataURL;
     if (dataURL.startsWith("data:")) {
@@ -53,13 +53,20 @@ exports.handler = async function (event, context) {
     }
     console.log("Determined MIME type:", mimeType);
 
+    // Convert base64 data to a Buffer and log its length.
+    const fileBuffer = Buffer.from(base64Data, "base64");
+    console.log("File Buffer length:", fileBuffer.length);
+    if (fileBuffer.length === 0) {
+      throw new Error("Decoded file buffer is empty.");
+    }
+
     // Build the multipart/form-data payload using FormData.
     const form = new FormData();
-    form.append("fileName", fileName);
-    form.append("file", Buffer.from(base64Data, "base64"), {
+    form.append("file", fileBuffer, {
       filename: fileName,
       contentType: mimeType,
     });
+    form.append("fileName", fileName); // sometimes Etsy expects this separately
     form.append("rank", rank || 1);
     console.log("FormData boundary:", form.getBoundary());
 
