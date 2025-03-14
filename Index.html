@@ -12,11 +12,21 @@
   <script src="https://cdn.jsdelivr.net/npm/piexifjs@1.0.4/piexif.min.js"></script>
   <style>
     /* Basic layout */
-    html, body { margin: 0; padding: 0; width: 100vw; font-family: Arial, sans-serif; }
-    .container { width: 100vw; padding: 10px; box-sizing: border-box; text-align: left; }
+    html, body {
+      margin: 0;
+      padding: 0;
+      width: 100vw;
+      font-family: Arial, sans-serif;
+    }
+    .container {
+      width: 100vw;
+      padding: 10px;
+      box-sizing: border-box;
+      text-align: left;
+    }
     h5, label, p { text-align: left; }
     input, textarea { width: 100%; box-sizing: border-box; }
-    
+
     /* --- Wrap Listing Description and File Drop Zones --- */
     #descriptionAndFileUploadContainer { display: flex; align-items: center; }
     .listing-desc-container {
@@ -30,8 +40,8 @@
       font-weight: 500;
     }
     .listing-desc-container label.section-heading { 
-      font-size: 1.2rem; 
-      font-weight: 500; 
+      font-size: 1.2rem;
+      font-weight: 500;
     }
     .listing-desc-container input {
       width: 500px;
@@ -55,16 +65,16 @@
     #listingDescription { min-height: 150px; }
     .section-heading { font-size: 1.2rem; font-weight: 500; margin-bottom: 5px; display: inline-block; }
     .count-text { font-style: italic; font-size: 0.9em; margin-top: 5px; }
-    
+
     /* Drag and Drop Boxes */
     #dropZone, #ordersDropZone, #listingsDropZone {
-      width: 138px; 
-      height: 138px; 
-      border: 2px dashed #ccc; 
-      border-radius: 3px; 
-      display: inline-block; 
-      vertical-align: middle; 
-      text-align: center; 
+      width: 138px;
+      height: 138px;
+      border: 2px dashed #ccc;
+      border-radius: 3px;
+      display: inline-block;
+      vertical-align: middle;
+      text-align: center;
       line-height: 138px;
       position: relative;
     }
@@ -72,8 +82,13 @@
     #ordersContainer { display: flex; flex-direction: column; }
     /* CSV Progress Bar */
     #csvProgressBar {
-      width: 100%; height: 20px; border: 1px solid blue; background-color: #e0f0ff; margin-top: 5px;
-      -webkit-appearance: none; appearance: none;
+      width: 100%;
+      height: 20px;
+      border: 1px solid blue;
+      background-color: #e0f0ff;
+      margin-top: 5px;
+      -webkit-appearance: none;
+      appearance: none;
     }
     #csvProgressBar::-webkit-progress-bar { background-color: #e0f0ff; border: 1px solid blue; }
     #csvProgressBar::-webkit-progress-value { background-color: blue; }
@@ -88,36 +103,165 @@
       border: 1px solid grey;
       margin-left: 85px;
     }
-    
+
     /* Primary Preview – clickable for cropping */
-    #primaryPreview { 
-      width: 138px; 
-      height: 138px; 
-      border: 1px solid #ccc; 
+    #primaryPreview {
+      width: 138px;
+      height: 138px;
+      border: 1px solid #ccc;
       border-radius: 3px;
-      display: inline-block; 
-      vertical-align: middle; 
+      display: inline-block;
+      vertical-align: middle;
       position: relative;
       top: -250px;
       left: 285px;
-      text-align: center; 
-      overflow: hidden; 
+      text-align: center;
+      overflow: hidden;
       cursor: pointer;
     }
     #primaryPreview:empty { background: #fff; }
     #primaryPreview img { width: 100%; height: 100%; object-fit: contain; border-radius: 3px; }
-    
-    /* 10 Photo Grid: 2 rows x 5 columns */
-    #tenPhotoGrid {
+
+    /* Preview Grid Container for other preview elements (if any) */
+    #previewGridContainer {
+      position: relative;
+      margin: 20px auto;
+      width: auto;
+      max-width: 600px;
+      text-align: center;
+    }
+    #previewGrid {
+      display: grid;
+      grid-template-columns: repeat(5, 100px);
+      grid-column-gap: 23px;
+      grid-row-gap: 18px;
+      margin: 0 auto;
+    }
+    .preview-cell { position: relative; display: flex; flex-direction: column; align-items: center; }
+    .resolution-text {
+      position: absolute;
+      top: -12px;
+      left: 0;
+      right: 0;
+      font-size: 8px;
+      text-align: center;
+      color: #333;
+      pointer-events: none;
+    }
+    .preview-box {
+      width: 100px;
+      height: 132px;
+      background-color: #fff;
+      border: 2px solid #ccc;
+      border-radius: 3px;
+      box-sizing: border-box;
+      position: relative;
+      overflow: visible;
+    }
+    .preview-box img {
+      width: 100px;
+      height: 100px;
+      object-fit: cover;
+      border-radius: 3px;
+      display: block;
+    }
+    .overlay {
+      position: absolute;
+      top: 0;
+      left: 0;
+      width: 100px;
+      height: 100px;
+      background-color: rgba(0, 0, 255, 0.3);
+      opacity: 0;
+      transition: opacity 0.2s ease;
+      pointer-events: none;
+      z-index: 1;
+    }
+    .preview-box.dragover .overlay { opacity: 1; }
+    .preview-box progress { width: 100%; height: 13px; margin-top: 2px; }
+    .status-icon { position: absolute; bottom: 2px; left: 2px; font-size: 14px; font-weight: bold; z-index: 3; }
+    .status-icon.success { color: green; }
+    .status-icon.error { color: red; }
+    .remove-btn {
+      position: absolute;
+      top: -5px;
+      left: -5px;
+      width: 10px;
+      height: 10px;
+      background-color: black;
+      color: white;
+      font-size: 8px;
+      line-height: 10px;
+      text-align: center;
+      cursor: pointer;
+      z-index: 999;
+      border-radius: 3px;
+    }
+    .number-overlay {
+      position: absolute;
+      top: 0;
+      right: 0;
+      width: 16px;
+      height: 16px;
+      background-color: rgba(0, 0, 0, 0.7);
+      color: white;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 10px;
+      z-index: 999;
+      border-radius: 3px;
+    }
+    .file-name { text-align: center; font-size: 12px; margin-top: 4px; white-space: pre-line; }
+
+    /* Container #13 (if used elsewhere) */
+    #container13 { position: relative; width: 250px; top: -150px; }
+
+    /* Components below search key phrases */
+    #belowSearch { margin-top: -180px; margin-left: 10px; }
+    .title-container { margin-top: -50px; }
+    .description-container { margin-top: 0px; }
+    #analyzeMetadataBtn { margin-left: 50px; }
+    #showAnalyzeRulesBtn { margin-top: 25px; }
+    .phrases-header { position: relative; top: 125px; left: 10px; }
+
+    /* Modal styles */
+    .modal { display: none; }
+    .modal-content { padding: 20px; }
+    .modal textarea { width: 100%; height: 300px; resize: none; }
+
+    /* Additional widths for Etsy Link and Shop Listings */
+    #etsyLink, #shopListings { width: 500px !important; }
+
+    /* Styles for the Update Listing button container at the bottom center */
+    #uploadContainer {
+      position: fixed;
+      bottom: 20px;
+      left: 50%;
+      transform: translateX(-50%);
+      display: inline-block;
+    }
+    /* New Upload Photo button container (to the right of Update Listing) */
+    #uploadPhotoContainer {
+      position: fixed;
+      bottom: 20px;
+      left: calc(50% + 120px);
+      display: inline-block;
+    }
+    /* New 10 Photo Preview Grid container */
+    #10_Photo_Array {
+      position: absolute;
+      bottom: 80px; /* adjust as needed */
+      left: 50%;
+      transform: translateX(-50%);
       display: grid;
       grid-template-columns: repeat(5, 100px);
       grid-template-rows: repeat(2, 132px);
-      gap: 5px;
-      margin: 20px auto;
-      width: calc(5 * 100px + 4 * 5px); /* total width based on 5 boxes and 4 gaps */
-      border: 1px solid transparent; /* optional border for visual reference */
+      grid-gap: 5px;
+      border: 1px solid transparent; /* for configuration */
     }
-    #tenPhotoGrid .preview-box {
+    /* Style for each photo box in the grid */
+    .photo-box {
       width: 100px;
       height: 132px;
       border: 2px dashed #ccc;
@@ -128,46 +272,10 @@
       background-color: #fff;
       overflow: hidden;
     }
-    #tenPhotoGrid .preview-box img {
+    .photo-box img {
       width: 100%;
       height: 100%;
       object-fit: cover;
-    }
-    
-    /* Container #13 (if used) */
-    #container13 { position: relative; width: 250px; top: -150px; }
-    
-    /* Components below search key phrases */
-    #belowSearch { margin-top: -180px; margin-left: 10px; }
-    .title-container { margin-top: -50px; }
-    .description-container { margin-top: 0px; }
-    #analyzeMetadataBtn { margin-left: 50px; }
-    #showAnalyzeRulesBtn { margin-top: 25px; }
-    .phrases-header { position: relative; top: 125px; left: 10px; }
-    
-    /* Modal styles */
-    .modal { display: none; }
-    .modal-content { padding: 20px; }
-    .modal textarea { width: 100%; height: 300px; resize: none; }
-    
-    /* Additional widths for Etsy Link and Shop Listings */
-    #etsyLink, #shopListings { width: 500px !important; }
-    
-    /* Styles for the Update Listing button container at the bottom center */
-    #uploadContainer {
-      position: fixed;
-      bottom: 20px;
-      left: 50%;
-      transform: translateX(-50%);
-      display: inline-block;
-    }
-    
-    /* New Upload Photo button container (placed to the right of Update Listing) */
-    #uploadPhotoContainer {
-      position: fixed;
-      bottom: 20px;
-      left: calc(50% + 120px);
-      display: inline-block;
     }
   </style>
 </head>
@@ -255,19 +363,19 @@
     </div>
   </div>
   
-  <!-- 10 Photo Preview Grid (always visible) -->
-  <div id="tenPhotoGrid">
-    <!-- Create 10 preview boxes. These will be empty (outlined) if no image is loaded -->
-    <div class="preview-box" id="previewBox1"></div>
-    <div class="preview-box" id="previewBox2"></div>
-    <div class="preview-box" id="previewBox3"></div>
-    <div class="preview-box" id="previewBox4"></div>
-    <div class="preview-box" id="previewBox5"></div>
-    <div class="preview-box" id="previewBox6"></div>
-    <div class="preview-box" id="previewBox7"></div>
-    <div class="preview-box" id="previewBox8"></div>
-    <div class="preview-box" id="previewBox9"></div>
-    <div class="preview-box" id="previewBox10"></div>
+  <!-- 10 Photo Preview Grid Container -->
+  <div id="10_Photo_Array">
+    <!-- Generate 10 empty preview boxes -->
+    <div class="photo-box" id="photoBox1"></div>
+    <div class="photo-box" id="photoBox2"></div>
+    <div class="photo-box" id="photoBox3"></div>
+    <div class="photo-box" id="photoBox4"></div>
+    <div class="photo-box" id="photoBox5"></div>
+    <div class="photo-box" id="photoBox6"></div>
+    <div class="photo-box" id="photoBox7"></div>
+    <div class="photo-box" id="photoBox8"></div>
+    <div class="photo-box" id="photoBox9"></div>
+    <div class="photo-box" id="photoBox10"></div>
   </div>
   
   <!-- Update Listing button container (updates an existing listing) -->
@@ -721,6 +829,7 @@ Using Sales Report and Product List Files:
     
     // File Drop and Upload Handlers
     const dropZone = document.getElementById("dropZone");
+    const previewGrid = document.getElementById("previewGrid");
     const primaryPreview = document.getElementById("primaryPreview");
     
     function updatePrimaryPreview() {
@@ -731,20 +840,28 @@ Using Sales Report and Product List Files:
       }
     }
     
-    // When user drops an image onto the dropZone
-    dropZone.addEventListener("dragover", e => { 
-      e.preventDefault(); 
-      e.stopPropagation(); 
-      dropZone.style.borderColor = "#000"; 
+    primaryPreview.addEventListener("click", function() {
+      if (previewImages.length > 0) {
+        document.getElementById("cropImage").src = previewImages[0];
+        let cropModalElem = document.getElementById("photoCropModal");
+        let cropModalInstance = M.Modal.getInstance(cropModalElem) || M.Modal.init(cropModalElem, { preventScrolling: false });
+        cropModalInstance.open();
+      }
     });
-    dropZone.addEventListener("dragleave", e => { 
-      e.preventDefault(); 
-      e.stopPropagation(); 
-      dropZone.style.borderColor = "#ccc"; 
+    
+    dropZone.addEventListener("dragover", e => {
+      e.preventDefault();
+      e.stopPropagation();
+      dropZone.style.borderColor = "#000";
+    });
+    dropZone.addEventListener("dragleave", e => {
+      e.preventDefault();
+      e.stopPropagation();
+      dropZone.style.borderColor = "#ccc";
     });
     dropZone.addEventListener("drop", async e => {
-      e.preventDefault(); 
-      e.stopPropagation(); 
+      e.preventDefault();
+      e.stopPropagation();
       dropZone.style.borderColor = "#ccc";
       const files = e.dataTransfer.files;
       if (files.length > 10) alert("Maximum 10 images allowed.");
@@ -762,11 +879,11 @@ Using Sales Report and Product List Files:
               reader.onerror = reject;
               reader.readAsDataURL(file);
             });
-            // Save the dataURL and file name in the arrays (index i corresponds to the preview box)
+            // Save the data URL and file name at the appropriate index in the preview arrays
             previewImages[i] = dataURL;
             photoNames[i] = file.name;
             updatePrimaryPreview();
-            renderTenPhotoGrid();  // update the 10-photo grid
+            renderPreviewGrid(); // Ensure this function exists to update the 10_Photo_Array grid
             updateUploadedFilesList();
           } catch (err) {
             console.error("Error processing image:", err);
@@ -777,23 +894,109 @@ Using Sales Report and Product List Files:
       }
     });
     
-    // Function to render the 10-photo grid based on previewImages array.
-    // Always show 10 boxes, using the corresponding image if available; otherwise, show an empty outlined box.
-    function renderTenPhotoGrid() {
-      const grid = document.getElementById("tenPhotoGrid");
-      grid.innerHTML = ""; // clear existing boxes
-      for (let i = 0; i < 10; i++) {
-        const box = document.createElement("div");
-        box.className = "preview-box";
-        box.id = "previewBox" + (i + 1);
-        if (previewImages[i]) {
-          const img = document.createElement("img");
-          img.src = previewImages[i];
-          box.appendChild(img);
+    const ordersDropZone = document.getElementById("ordersDropZone");
+    ordersDropZone.addEventListener("dragover", e => {
+      e.preventDefault();
+      e.stopPropagation();
+      ordersDropZone.style.borderColor = "#000";
+    });
+    ordersDropZone.addEventListener("dragleave", e => {
+      e.preventDefault();
+      e.stopPropagation();
+      ordersDropZone.style.borderColor = "#ccc";
+    });
+    ordersDropZone.addEventListener("drop", async e => {
+      e.preventDefault();
+      e.stopPropagation();
+      ordersDropZone.style.borderColor = "#ccc";
+      const files = e.dataTransfer.files;
+      const progressBar = document.getElementById("csvProgressBar");
+      for (let i = 0; i < files.length; i++) {
+        let file = files[i];
+        const fileName = file.name.toLowerCase();
+        if (fileName.endsWith(".csv") || fileName.endsWith(".doc") || fileName.endsWith(".docx")) {
+          try {
+            let fileData;
+            if (fileName.endsWith(".csv")) {
+              fileData = await uploadCSVFile(file, percent => { progressBar.value = percent; });
+            } else {
+              fileData = await uploadDocFile(file, percent => { progressBar.value = percent; });
+            }
+            progressBar.value = 0;
+            soldOrdersCSV.push(fileData);
+            updateUploadedFilesList();
+            await updateVectorStore();
+          } catch (err) {
+            console.error("Error uploading file:", err);
+          }
         } else {
-          box.innerHTML = "<span style='font-size:10px; color:#ccc;'>No Image</span>";
+          alert("Only .csv, .doc, and .docx files are supported for Etsy Sold Orders.");
         }
-        grid.appendChild(box);
+      }
+    });
+    
+    const listingsDropZone = document.getElementById("listingsDropZone");
+    listingsDropZone.addEventListener("dragover", e => {
+      e.preventDefault();
+      e.stopPropagation();
+      listingsDropZone.style.borderColor = "#000";
+    });
+    listingsDropZone.addEventListener("dragleave", e => {
+      e.preventDefault();
+      e.stopPropagation();
+      listingsDropZone.style.borderColor = "#ccc";
+    });
+    listingsDropZone.addEventListener("drop", async e => {
+      e.preventDefault();
+      e.stopPropagation();
+      listingsDropZone.style.borderColor = "#ccc";
+      const files = e.dataTransfer.files;
+      const progressBar = document.getElementById("csvProgressBar");
+      for (let i = 0; i < files.length; i++) {
+        let file = files[i];
+        const fileName = file.name.toLowerCase();
+        if (fileName.endsWith(".csv") || fileName.endsWith(".doc") || fileName.endsWith(".docx")) {
+          try {
+            let fileData;
+            if (fileName.endsWith(".csv")) {
+              fileData = await uploadCSVFile(file, percent => { progressBar.value = percent; });
+            } else {
+              fileData = await uploadDocFile(file, percent => { progressBar.value = percent; });
+            }
+            progressBar.value = 0;
+            listingsCSV.push(fileData);
+            updateUploadedFilesList();
+            await updateVectorStore();
+          } catch (err) {
+            console.error("Error uploading file:", err);
+          }
+        } else {
+          alert("Only .csv, .doc, and .docx files are supported for Etsy Listings.");
+        }
+      }
+    });
+    
+    async function updateVectorStore() {
+      const allFileIds = [...soldOrdersCSV, ...listingsCSV].map(file => file.id);
+      if (allFileIds.length === 0) {
+        console.log("No supported files uploaded yet.");
+        return;
+      }
+      try {
+        const vectorStorePayload = { name: "CSV Vector Store", file_ids: allFileIds };
+        const vectorStoreResponse = await fetch("/.netlify/functions/vectorStore", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify(vectorStorePayload)
+        });
+        if (!vectorStoreResponse.ok) {
+          const errorData = await vectorStoreResponse.json();
+          throw new Error("Error creating vector store: " + JSON.stringify(errorData));
+        }
+        const vectorStoreData = await vectorStoreResponse.json();
+        console.log("Vector store created:", vectorStoreData);
+      } catch (err) {
+        console.error("Error in updateVectorStore:", err);
       }
     }
     
@@ -808,28 +1011,26 @@ Using Sales Report and Product List Files:
     document.getElementById("configureButtonsBtn").addEventListener("click", function() {
       var configContainer = document.getElementById("buttonConfigContainer");
       configContainer.innerHTML = "";
-      // Include all the usual selectors plus our 10-photo grid.
-      // For the 10-photo grid, display the name "10_Photo_Array" in the configuration table.
-      var selectors = "button:not(#configureButtonsBtn), #listingDescContainer, #ordersDropZone, #listingsDropZone, #dropZone, #csvProgressContainer, #previewGridContainer, #primaryPreview, #container13, #uploadedFilesList, #tenPhotoGrid";
+      // Include the new 10_Photo_Array element in the selectors so it can be repositioned.
+      var selectors = "button:not(#configureButtonsBtn), #listingDescContainer, #ordersDropZone, #listingsDropZone, #dropZone, #csvProgressContainer, #previewGridContainer, #primaryPreview, #container13, #uploadedFilesList, #10_Photo_Array";
       var elements = document.querySelectorAll(selectors);
       var table = document.createElement("table");
       table.className = "striped";
       var thead = document.createElement("thead");
-      thead.innerHTML = "<tr><th>Element</th><th>Top (px)</th><th>Left (px)</th></tr>";
+      thead.innerHTML = "<tr><th>Element ID</th><th>Top (px)</th><th>Left (px)</th></tr>";
       table.appendChild(thead);
       var tbody = document.createElement("tbody");
       elements.forEach(function(el) {
-        // Use a display name mapping for the 10-photo grid.
-        var displayName = (el.id === "tenPhotoGrid") ? "10_Photo_Array" : el.id;
+        var id = el.id;
         var computedStyle = window.getComputedStyle(el);
         var currentTop = el.style.top || computedStyle.top || "0";
         var currentLeft = el.style.left || computedStyle.left || "0";
         var tr = document.createElement("tr");
-        tr.innerHTML = `<td>${displayName}</td>
-                        <td><input type="number" id="${el.id}_top" value="${parseInt(currentTop)||0}"></td>
-                        <td><input type="number" id="${el.id}_left" value="${parseInt(currentLeft)||0}"></td>`;
-        var topInput = tr.querySelector(`#${el.id}_top`);
-        var leftInput = tr.querySelector(`#${el.id}_left`);
+        tr.innerHTML = `<td>${id}</td>
+                        <td><input type="number" id="${id}_top" value="${parseInt(currentTop)||0}"></td>
+                        <td><input type="number" id="${id}_left" value="${parseInt(currentLeft)||0}"></td>`;
+        var topInput = tr.querySelector(`#${id}_top`);
+        var leftInput = tr.querySelector(`#${id}_left`);
         topInput.addEventListener("input", function() { el.style.top = topInput.value + "px"; });
         leftInput.addEventListener("input", function() { el.style.left = leftInput.value + "px"; });
         tbody.appendChild(tr);
@@ -842,7 +1043,7 @@ Using Sales Report and Product List Files:
     });
     
     document.getElementById("saveButtonPositionsBtn").addEventListener("click", function() {
-      var selectors = "button:not(#configureButtonsBtn), #listingDescContainer, #ordersDropZone, #listingsDropZone, #dropZone, #csvProgressContainer, #previewGridContainer, #primaryPreview, #container13, #uploadedFilesList, #tenPhotoGrid";
+      var selectors = "button:not(#configureButtonsBtn), #listingDescContainer, #ordersDropZone, #listingsDropZone, #dropZone, #csvProgressContainer, #previewGridContainer, #primaryPreview, #container13, #uploadedFilesList, #10_Photo_Array";
       var elements = document.querySelectorAll(selectors);
       var positions = {};
       elements.forEach(function(el) {
@@ -870,8 +1071,6 @@ Using Sales Report and Product List Files:
     window.addEventListener("load", function() {
       var container13 = document.getElementById("container13");
       container13.style.height = (container13.offsetHeight * 2.5) + "px";
-      // Initially render the 10-photo grid.
-      renderTenPhotoGrid();
     });
     
     document.getElementById("listingDescInput").addEventListener("input", function() {
@@ -1086,7 +1285,32 @@ Return your answer as plain text.`;
     // Utility delay function
     function delay(ms) { return new Promise(resolve => setTimeout(resolve, ms)); }
     
-    // (Assume any additional utility functions such as renderPreviewGrid exist as needed.)
+    // Assume renderPreviewGrid and other necessary utility functions exist.
+    // For example, renderPreviewGrid() updates the #10_Photo_Array grid based on previewImages.
+    function renderPreviewGrid() {
+      const grid = document.getElementById("10_Photo_Array");
+      // Clear current grid content
+      grid.innerHTML = "";
+      // Ensure 10 boxes are present; if previewImages has fewer than 10 items, leave some boxes empty
+      for (let i = 0; i < 10; i++) {
+        const box = document.createElement("div");
+        box.className = "photo-box";
+        box.id = "photoBox" + (i + 1);
+        if (previewImages[i]) {
+          const img = document.createElement("img");
+          img.src = previewImages[i];
+          box.appendChild(img);
+        }
+        grid.appendChild(box);
+      }
+    }
+    
+    function updateUploadedFilesList() {
+      let fileList = [];
+      soldOrdersCSV.forEach(file => fileList.push(file.name));
+      listingsCSV.forEach(file => fileList.push(file.name));
+      document.getElementById("uploadedFilesList").value = fileList.join("\n");
+    }
   </script>
 </body>
 </html>
