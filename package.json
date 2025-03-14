@@ -1,22 +1,18 @@
 {
-  "name": "etsy-listing-app",
+  "name": "etsy-app",
   "version": "1.0.0",
-  "description": "Etsy Listing Generator & Shop Listings App",
+  "description": "Etsy Listing Generator & Uploader",
   "main": "index.js",
   "scripts": {
     "start": "netlify dev",
-    "build": "echo \"No build step required\""
+    "build": "netlify build"
   },
-  "keywords": [],
-  "author": "",
-  "license": "ISC",
   "dependencies": {
-    "bootstrap": "^5.3.0",
     "node-fetch": "^2.6.7",
-    "formidable": "^2.0.1",
-    "form-data": "^4.0.0"
+    "form-data": "^4.0.0",
+    "parse-multipart-data": "^1.0.0"
   },
-  "devDependencies": {
-    "netlify-cli": "^9.15.1"
-  }
+  "devDependencies": {},
+  "author": "",
+  "license": "ISC"
 }
