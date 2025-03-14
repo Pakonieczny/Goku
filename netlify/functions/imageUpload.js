@@ -38,19 +38,29 @@ exports.handler = async function (event, context) {
     console.log("Using SHOP_ID:", shopId);
 
     // Construct the Etsy image upload endpoint URL.
-    // Updated to include the shop id as required by Etsy API v3.
     const imageUploadUrl = `https://api.etsy.com/v3/application/shops/${shopId}/listings/${listingId}/images`;
     console.log("Image Upload URL:", imageUploadUrl);
+
+    // Extract MIME type from dataURL if available.
+    let mimeType = "application/octet-stream"; // default fallback
+    let base64Data = dataURL;
+    if (dataURL.startsWith("data:")) {
+      const matches = dataURL.match(/^data:([^;]+);base64,(.*)$/);
+      if (matches && matches.length === 3) {
+        mimeType = matches[1];
+        base64Data = matches[2];
+      }
+    }
+    console.log("Determined MIME type:", mimeType);
 
     // Build the multipart/form-data payload using FormData.
     const form = new FormData();
     form.append("fileName", fileName);
-    // If dataURL includes a prefix (e.g., "data:image/jpeg;base64,"), remove it.
-    const base64Data = dataURL.includes(",") ? dataURL.split(",")[1] : dataURL;
-    form.append("file", Buffer.from(base64Data, "base64"), fileName);
+    form.append("file", Buffer.from(base64Data, "base64"), {
+      filename: fileName,
+      contentType: mimeType,
+    });
     form.append("rank", rank || 1);
-
-    // Log the FormData boundary as a debugging reference.
     console.log("FormData boundary:", form.getBoundary());
 
     // Build request headers. form.getHeaders() adds the proper Content-Type with boundary.
