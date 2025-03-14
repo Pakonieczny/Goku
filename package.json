@@ -4,8 +4,8 @@
   "description": "Etsy Listing Generator & Shop Listings App",
   "main": "index.js",
   "scripts": {
-    "build": "echo \"No build step required\"",
-    "start": "netlify dev"
+    "start": "netlify dev",
+    "build": "echo \"No build step required\""
   },
   "keywords": [],
   "author": "",
@@ -15,5 +15,8 @@
     "node-fetch": "^2.6.7",
     "formidable": "^2.0.1",
     "form-data": "^4.0.0"
+  },
+  "devDependencies": {
+    "netlify-cli": "^9.15.1"
   }
 }
