@@ -114,7 +114,7 @@
       margin-top: 5px;
     }
     
-    /* Drag and Drop Boxes (using your original base styling) */
+    /* Drag and Drop Boxes (original styling) */
     #dropZone, #ordersDropZone, #listingsDropZone {
       width: 138px;
       height: 138px;
@@ -367,7 +367,7 @@
       display: inline-block;
     }
     
-    /* New "lookUP" button for showing the JSON payload */
+    /* New "lookUP" button for showing JSON payload */
     #lookupBtn {
       position: fixed;
       bottom: 20px;
@@ -375,9 +375,12 @@
       display: inline-block;
     }
     
-    /* Modal for showing JSON payload */
-    #lookupModal {
-      display: none;
+    /* New "Photo Upload" button (placed to the right of "Update Listing") */
+    #photoUploadContainer {
+      position: fixed;
+      bottom: 20px;
+      left: calc(50% + 240px);
+      display: inline-block;
     }
   </style>
 </head>
@@ -475,9 +478,14 @@
     <button id="uploadToEtsyBtn" class="btn waves-effect waves-light configurable">Update Listing</button>
   </div>
   
-  <!-- New "lookUP" button: Opens a modal to show JSON payload for Title, Description, and Tags -->
+  <!-- New "lookUP" button to show JSON payload for Title, Description, and Tags -->
   <div id="lookupBtn">
     <button id="lookupPayloadBtn" class="btn waves-effect waves-light configurable">lookUP</button>
+  </div>
+  
+  <!-- New "Photo Upload" button to trigger photo upload -->
+  <div id="photoUploadContainer">
+    <button id="photoUploadBtn" class="btn waves-effect waves-light configurable">Photo Upload</button>
   </div>
   
   <!-- Modal for displaying JSON payload -->
@@ -491,7 +499,7 @@
     </div>
   </div>
   
-  <!-- Modals for Rules (Title, Description, Analyze, Keyword, Button Config, Metadata, Crop) -->
+  <!-- Modals for Rules -->
   <div id="titleRulesModal" class="modal">
     <div class="modal-content">
       <h4>Title Rules</h4>
@@ -855,7 +863,7 @@ Using Sales Report and Product List Files:
     // Bind the "Update Listing" button to updateExistingListing()
     document.getElementById("uploadToEtsyBtn").addEventListener("click", updateExistingListing);
     
-    // New "lookUP" button to show JSON payload (for Title, Description, and Tags)
+    // New "lookUP" button to show JSON payload for Title, Description, and Tags
     document.getElementById("lookupPayloadBtn").addEventListener("click", () => {
       const payload = {
         title: document.getElementById("listingTitle").value,
@@ -870,7 +878,10 @@ Using Sales Report and Product List Files:
       M.Modal.init(lookupModalElem, { preventScrolling: false }).open();
     });
     
-    // Photo Upload functionality (latest update remains)
+    // New "Photo Upload" button to trigger the photo update process
+    document.getElementById("photoUploadBtn").addEventListener("click", uploadPhoto);
+    
+    // Photo Upload functionality
     async function uploadPhoto() {
       const listingInput = document.getElementById("shopListings").value.trim();
       if (!listingInput) {
@@ -889,8 +900,7 @@ Using Sales Report and Product List Files:
           return;
         }
       }
-      // Assume a file input or drag-and-drop already stored the dataURL
-      // For example, we use the first image from previewImages.
+      // Use the first image from previewImages for upload.
       if (previewImages.length === 0) {
         M.toast({ html: "No image available for upload." });
         return;
@@ -925,9 +935,6 @@ Using Sales Report and Product List Files:
       }
     }
     
-    // Bind a new button for Photo Upload if desired (for example, you can add a button and bind this function)
-    // document.getElementById("photoUploadBtn").addEventListener("click", uploadPhoto);
-    
     // File Drop and Upload Handlers (original base code remains)
     const dropZone = document.getElementById("dropZone");
     const previewGrid = document.getElementById("previewGrid");
@@ -950,19 +957,19 @@ Using Sales Report and Product List Files:
       }
     });
     
-    dropZone.addEventListener("dragover", e => { 
-      e.preventDefault(); 
-      e.stopPropagation(); 
-      dropZone.style.borderColor = "#000"; 
+    dropZone.addEventListener("dragover", e => {
+      e.preventDefault();
+      e.stopPropagation();
+      dropZone.style.borderColor = "#000";
     });
-    dropZone.addEventListener("dragleave", e => { 
-      e.preventDefault(); 
-      e.stopPropagation(); 
-      dropZone.style.borderColor = "#ccc"; 
+    dropZone.addEventListener("dragleave", e => {
+      e.preventDefault();
+      e.stopPropagation();
+      dropZone.style.borderColor = "#ccc";
     });
     dropZone.addEventListener("drop", async e => {
-      e.preventDefault(); 
-      e.stopPropagation(); 
+      e.preventDefault();
+      e.stopPropagation();
       dropZone.style.borderColor = "#ccc";
       const files = e.dataTransfer.files;
       if (files.length > 10) alert("Maximum 10 images allowed.");
@@ -993,84 +1000,84 @@ Using Sales Report and Product List Files:
     });
     
     const ordersDropZone = document.getElementById("ordersDropZone");
-    ordersDropZone.addEventListener("dragover", e => { 
-      e.preventDefault(); 
-      e.stopPropagation(); 
-      ordersDropZone.style.borderColor = "#000"; 
+    ordersDropZone.addEventListener("dragover", e => {
+      e.preventDefault();
+      e.stopPropagation();
+      ordersDropZone.style.borderColor = "#000";
     });
-    ordersDropZone.addEventListener("dragleave", e => { 
-      e.preventDefault(); 
-      e.stopPropagation(); 
-      ordersDropZone.style.borderColor = "#ccc"; 
+    ordersDropZone.addEventListener("dragleave", e => {
+      e.preventDefault();
+      e.stopPropagation();
+      ordersDropZone.style.borderColor = "#ccc";
     });
     ordersDropZone.addEventListener("drop", async e => {
-      e.preventDefault(); 
-      e.stopPropagation(); 
+      e.preventDefault();
+      e.stopPropagation();
       ordersDropZone.style.borderColor = "#ccc";
       const files = e.dataTransfer.files;
       const progressBar = document.getElementById("csvProgressBar");
       for (let i = 0; i < files.length; i++) {
-         let file = files[i];
-         const fileName = file.name.toLowerCase();
-         if (fileName.endsWith(".csv") || fileName.endsWith(".doc") || fileName.endsWith(".docx")) {
-            try {
-              let fileData;
-              if (fileName.endsWith(".csv")) {
-                 fileData = await uploadCSVFile(file, percent => { progressBar.value = percent; });
-              } else {
-                 fileData = await uploadDocFile(file, percent => { progressBar.value = percent; });
-              }
-              progressBar.value = 0;
-              soldOrdersCSV.push(fileData);
-              updateUploadedFilesList();
-              await updateVectorStore();
-            } catch(err) {
-              console.error("Error uploading file:", err);
+        let file = files[i];
+        const fileName = file.name.toLowerCase();
+        if (fileName.endsWith(".csv") || fileName.endsWith(".doc") || fileName.endsWith(".docx")) {
+          try {
+            let fileData;
+            if (fileName.endsWith(".csv")) {
+              fileData = await uploadCSVFile(file, percent => { progressBar.value = percent; });
+            } else {
+              fileData = await uploadDocFile(file, percent => { progressBar.value = percent; });
             }
-         } else {
-            alert("Only .csv, .doc, and .docx files are supported for Etsy Sold Orders.");
-         }
+            progressBar.value = 0;
+            soldOrdersCSV.push(fileData);
+            updateUploadedFilesList();
+            await updateVectorStore();
+          } catch (err) {
+            console.error("Error uploading file:", err);
+          }
+        } else {
+          alert("Only .csv, .doc, and .docx files are supported for Etsy Sold Orders.");
+        }
       }
     });
     
     const listingsDropZone = document.getElementById("listingsDropZone");
-    listingsDropZone.addEventListener("dragover", e => { 
-      e.preventDefault(); 
-      e.stopPropagation(); 
-      listingsDropZone.style.borderColor = "#000"; 
+    listingsDropZone.addEventListener("dragover", e => {
+      e.preventDefault();
+      e.stopPropagation();
+      listingsDropZone.style.borderColor = "#000";
     });
-    listingsDropZone.addEventListener("dragleave", e => { 
-      e.preventDefault(); 
-      e.stopPropagation(); 
-      listingsDropZone.style.borderColor = "#ccc"; 
+    listingsDropZone.addEventListener("dragleave", e => {
+      e.preventDefault();
+      e.stopPropagation();
+      listingsDropZone.style.borderColor = "#ccc";
     });
     listingsDropZone.addEventListener("drop", async e => {
-      e.preventDefault(); 
-      e.stopPropagation(); 
+      e.preventDefault();
+      e.stopPropagation();
       listingsDropZone.style.borderColor = "#ccc";
       const files = e.dataTransfer.files;
       const progressBar = document.getElementById("csvProgressBar");
       for (let i = 0; i < files.length; i++) {
-         let file = files[i];
-         const fileName = file.name.toLowerCase();
-         if (fileName.endsWith(".csv") || fileName.endsWith(".doc") || fileName.endsWith(".docx")) {
-            try {
-              let fileData;
-              if (fileName.endsWith(".csv")) {
-                 fileData = await uploadCSVFile(file, percent => { progressBar.value = percent; });
-              } else {
-                 fileData = await uploadDocFile(file, percent => { progressBar.value = percent; });
-              }
-              progressBar.value = 0;
-              listingsCSV.push(fileData);
-              updateUploadedFilesList();
-              await updateVectorStore();
-            } catch(err) {
-              console.error("Error uploading file:", err);
+        let file = files[i];
+        const fileName = file.name.toLowerCase();
+        if (fileName.endsWith(".csv") || fileName.endsWith(".doc") || fileName.endsWith(".docx")) {
+          try {
+            let fileData;
+            if (fileName.endsWith(".csv")) {
+              fileData = await uploadCSVFile(file, percent => { progressBar.value = percent; });
+            } else {
+              fileData = await uploadDocFile(file, percent => { progressBar.value = percent; });
             }
-         } else {
-            alert("Only .csv, .doc, and .docx files are supported for Etsy Listings.");
-         }
+            progressBar.value = 0;
+            listingsCSV.push(fileData);
+            updateUploadedFilesList();
+            await updateVectorStore();
+          } catch (err) {
+            console.error("Error uploading file:", err);
+          }
+        } else {
+          alert("Only .csv, .doc, and .docx files are supported for Etsy Listings.");
+        }
       }
     });
     
