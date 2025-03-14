@@ -1,135 +1,110 @@
-const Formidable = require("formidable");
-const streamifier = require("streamifier");
-const fetch = require("node-fetch");
+const FormData = require("form-data");
 const fs = require("fs");
+const fetch = require("node-fetch");
+const { IncomingForm } = require("formidable");
 
 exports.handler = async function (event, context) {
   try {
-    // Ensure we have a content-type header in the event.
-    const incomingContentType =
-      (event.headers && (event.headers["content-type"] || event.headers["Content-Type"])) || "";
-    if (!incomingContentType) {
-      throw new Error("Missing content-type header in the request.");
-    }
-    console.log("Incoming Content-Type:", incomingContentType);
-
-    // Convert the event body to a Buffer.
-    const buffer = event.isBase64Encoded
-      ? Buffer.from(event.body, "base64")
-      : Buffer.from(event.body);
-
-    // Create a stream from the buffer.
-    const reqStream = streamifier.createReadStream(buffer);
-    // Attach headers to the stream (include both content-length and content-type).
-    reqStream.headers = {
-      "content-length": buffer.length,
-      "content-type": incomingContentType,
-    };
-
-    // Use Formidable to parse the incoming multipart/form-data.
-    const form = new Formidable.IncomingForm();
-    form.keepExtensions = true;
-
-    const parsed = await new Promise((resolve, reject) => {
-      form.parse(reqStream, (err, fields, files) => {
+    // Parse the incoming request using formidable
+    return new Promise((resolve, reject) => {
+      const form = new IncomingForm();
+      form.parse(event, async (err, fields, files) => {
         if (err) {
-          return reject(err);
+          console.error("Error parsing form:", err);
+          return resolve({
+            statusCode: 400,
+            body: JSON.stringify({ error: "Error parsing form" }),
+          });
         }
-        resolve({ fields, files });
+
+        console.log("Parsed fields:", fields);
+        console.log("Parsed files:", files);
+
+        const { listingId, token, fileName, rank } = fields;
+        if (!listingId || !token || !fileName || !rank) {
+          console.error("Missing required fields.");
+          return resolve({
+            statusCode: 400,
+            body: JSON.stringify({ error: "Missing required fields: listingId, token, fileName, or rank" }),
+          });
+        }
+
+        const clientId = process.env.CLIENT_ID;
+        const shopId = process.env.SHOP_ID;
+        if (!clientId || !shopId) {
+          console.error("Missing environment variables (CLIENT_ID or SHOP_ID).");
+          return resolve({
+            statusCode: 500,
+            body: JSON.stringify({ error: "Missing environment variables" }),
+          });
+        }
+
+        // Build the Etsy image upload URL
+        const imageUploadUrl = `https://api.etsy.com/v3/application/shops/${shopId}/listings/${listingId}/images`;
+        console.log("Image Upload URL:", imageUploadUrl);
+
+        // Ensure a file was provided
+        const file = files.file;
+        if (!file) {
+          console.error("File not provided in form data.");
+          return resolve({
+            statusCode: 400,
+            body: JSON.stringify({ error: "File not provided" }),
+          });
+        }
+
+        // Create a new FormData payload using the "form-data" package
+        const formData = new FormData();
+        // Append the file: use createReadStream from fs with the temporary file path
+        formData.append("file", fs.createReadStream(file.filepath), {
+          filename: file.originalFilename,
+          contentType: file.mimetype
+        });
+        // Append rank (Etsy expects rank as a field)
+        formData.append("rank", rank);
+
+        // Log the FormData keys (for debugging purposes)
+        console.log("FormData keys:", Array.from(formData.keys()));
+
+        // Make the POST request to the Etsy API for image upload
+        const response = await fetch(imageUploadUrl, {
+          method: "POST",
+          headers: {
+            "Authorization": `Bearer ${token}`,
+            "x-api-key": clientId,
+            ...formData.getHeaders()
+          },
+          body: formData
+        });
+
+        console.log("Image upload response status:", response.status);
+        const responseText = await response.text();
+        console.log("Response text:", responseText);
+
+        if (!response.ok) {
+          return resolve({
+            statusCode: response.status,
+            body: JSON.stringify({ error: responseText }),
+          });
+        }
+
+        let jsonResponse;
+        try {
+          jsonResponse = JSON.parse(responseText);
+        } catch (parseError) {
+          console.error("Error parsing response JSON:", parseError);
+          return resolve({
+            statusCode: 500,
+            body: JSON.stringify({ error: "Error parsing response JSON" }),
+          });
+        }
+
+        return resolve({
+          statusCode: 200,
+          body: JSON.stringify(jsonResponse),
+        });
       });
     });
-
-    console.log("Parsed fields:", parsed.fields);
-    console.log("Parsed files:", parsed.files);
-
-    // Extract required fields from parsed data.
-    const { listingId, token, fileName, rank } = parsed.fields;
-    if (!listingId || !token || !fileName) {
-      throw new Error("Missing required parameters: listingId, token, or fileName");
-    }
-
-    // Assume that the uploaded file is available as parsed.files.file.
-    const fileData = parsed.files.file;
-    if (!fileData) {
-      throw new Error("No valid image file provided.");
-    }
-
-    // Determine MIME type from the parsed file data.
-    const mimeType = fileData.mimetype || "application/octet-stream";
-    console.log("Determined MIME type:", mimeType);
-
-    // Create a FormData instance using the "form-data" package.
-    const FormData = require("form-data");
-    const formData = new FormData();
-    formData.append("listingId", listingId);
-    formData.append("fileName", fileName);
-    formData.append("rank", rank || "1");
-
-    // Append the file data.
-    if (fileData.filepath) {
-      // If Formidable saved the file to a temporary path, use a stream.
-      formData.append("file", fs.createReadStream(fileData.filepath), {
-        contentType: mimeType,
-        filename: fileName,
-      });
-    } else {
-      // Otherwise, assume fileData is a Buffer.
-      formData.append("file", fileData, {
-        contentType: mimeType,
-        filename: fileName,
-      });
-    }
-
-    // Instead of logging keys (which causes an error), just log that FormData is ready.
-    console.log("FormData prepared.");
-
-    // Retrieve CLIENT_ID and SHOP_ID from environment variables.
-    const clientId = process.env.CLIENT_ID;
-    const shopId = process.env.SHOP_ID;
-    if (!clientId || !shopId) {
-      throw new Error("Missing CLIENT_ID or SHOP_ID environment variable");
-    }
-    console.log("Using CLIENT_ID:", clientId.slice(0, 5) + "*****");
-    console.log("Using SHOP_ID:", shopId);
-
-    // Build the Etsy image upload endpoint URL.
-    const etsyImageUploadUrl = `https://api.etsy.com/v3/application/shops/${shopId}/listings/${listingId}/images`;
-    console.log("Image Upload URL:", etsyImageUploadUrl);
-
-    // Make the POST request to Etsy.
-    const response = await fetch(etsyImageUploadUrl, {
-      method: "POST",
-      headers: {
-        "Authorization": `Bearer ${token}`,
-        "x-api-key": clientId,
-        // Do not set Content-Type manually; formData will set it.
-      },
-      body: formData,
-    });
-
-    console.log("Image upload response status:", response.status);
-    const responseText = await response.text();
-    if (!response.ok) {
-      console.error("Error uploading image. POST failed:", responseText);
-      return {
-        statusCode: response.status,
-        body: JSON.stringify({ error: responseText }),
-      };
-    }
-
-    let responseData;
-    try {
-      responseData = JSON.parse(responseText);
-    } catch (jsonError) {
-      responseData = responseText;
-    }
-    console.log("Image uploaded successfully:", responseData);
-
-    return {
-      statusCode: 200,
-      body: JSON.stringify(responseData),
-    };
-
   } catch (error) {
     console.error("Exception in imageUpload handler:", error);
     return {
