@@ -1,16 +1,16 @@
 {
   "name": "etsy-app",
   "version": "1.0.0",
-  "description": "Etsy Listing Generator & Shop Listings Application",
+  "description": "Etsy Listing Generator & Shop Listings",
   "main": "index.js",
   "scripts": {
     "start": "netlify dev",
     "build": "netlify build"
   },
   "dependencies": {
-    "busboy": "^1.6.0",
-    "form-data": "^4.0.0",
-    "node-fetch": "^2.6.7"
+    "node-fetch": "^2.6.1",
+    "formidable": "^2.0.1",
+    "form-data": "^4.0.0"
   },
   "author": "",
   "license": "ISC"
