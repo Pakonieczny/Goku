@@ -1,11 +1,12 @@
 // imageUpload.js
-const Busboy = require("busboy");
+const Busboy = require('busboy').default || require('busboy');
 const FormData = require("form-data");
 const fetch = require("node-fetch");
 
 exports.handler = async function (event, context) {
   return new Promise((resolve, reject) => {
     try {
+      console.log("Received event headers:", event.headers);
       // Create a new Busboy instance using the headers from the event.
       const busboy = new Busboy({ headers: event.headers });
       
@@ -14,6 +15,7 @@ exports.handler = async function (event, context) {
 
       // Parse field data.
       busboy.on("field", (fieldname, val) => {
+        console.log(`Field [${fieldname}]: ${val}`);
         if (fieldname === "listingId") {
           listingId = val;
         } else if (fieldname === "token") {
