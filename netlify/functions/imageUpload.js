@@ -3,7 +3,7 @@ const FormData = require("form-data");
 
 exports.handler = async function (event, context) {
   try {
-    // Parse the request body (assuming JSON format)
+    // Parse the incoming JSON body.
     const body = JSON.parse(event.body);
     const { listingId, token, fileName, dataURL, rank } = body;
     if (!listingId || !token || !fileName || !dataURL) {
@@ -17,8 +17,9 @@ exports.handler = async function (event, context) {
     console.log("File Name:", fileName);
     console.log("Rank:", rank || 1);
 
-    // Retrieve CLIENT_ID from environment variables.
+    // Retrieve CLIENT_ID and SHOP_ID from environment variables.
     const clientId = process.env.CLIENT_ID;
+    const shopId = process.env.SHOP_ID;
     if (!clientId) {
       console.error("CLIENT_ID environment variable is not set.");
       return {
@@ -26,18 +27,25 @@ exports.handler = async function (event, context) {
         body: JSON.stringify({ error: "CLIENT_ID environment variable is not set." }),
       };
     }
+    if (!shopId) {
+      console.error("SHOP_ID environment variable is not set.");
+      return {
+        statusCode: 500,
+        body: JSON.stringify({ error: "SHOP_ID environment variable is not set." }),
+      };
+    }
     console.log("Using CLIENT_ID:", clientId.slice(0, 5) + "*****");
+    console.log("Using SHOP_ID:", shopId);
 
     // Construct the Etsy image upload endpoint URL.
-    // According to Etsy API v3 docs, the endpoint for listing images is:
-    // POST https://api.etsy.com/v3/application/listings/{listingId}/images
-    const imageUploadUrl = `https://api.etsy.com/v3/application/listings/${listingId}/images`;
+    // Updated to include the shop id as required by Etsy API v3.
+    const imageUploadUrl = `https://api.etsy.com/v3/application/shops/${shopId}/listings/${listingId}/images`;
     console.log("Image Upload URL:", imageUploadUrl);
 
     // Build the multipart/form-data payload using FormData.
     const form = new FormData();
     form.append("fileName", fileName);
-    // If dataURL includes a prefix like "data:image/jpeg;base64,", remove it:
+    // If dataURL includes a prefix (e.g., "data:image/jpeg;base64,"), remove it.
     const base64Data = dataURL.includes(",") ? dataURL.split(",")[1] : dataURL;
     form.append("file", Buffer.from(base64Data, "base64"), fileName);
     form.append("rank", rank || 1);
@@ -45,7 +53,7 @@ exports.handler = async function (event, context) {
     // Log the FormData boundary as a debugging reference.
     console.log("FormData boundary:", form.getBoundary());
 
-    // Build headers. Note that form.getHeaders() includes the proper Content-Type with boundary.
+    // Build request headers. form.getHeaders() adds the proper Content-Type with boundary.
     const headers = {
       "Authorization": `Bearer ${token}`,
       "x-api-key": clientId,
@@ -53,7 +61,7 @@ exports.handler = async function (event, context) {
     };
     console.log("Image upload request headers:", headers);
 
-    // Make the POST request to the image upload endpoint.
+    // Make the POST request to the Etsy image upload endpoint.
     const response = await fetch(imageUploadUrl, {
       method: "POST",
       headers,
