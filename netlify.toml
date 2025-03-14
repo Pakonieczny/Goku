@@ -5,11 +5,3 @@
 [functions]
   node_bundler = "esbuild"
   external_node_modules = ["form-data", "lambda-multipart-parser", "node-fetch"]
-
-# Optional: if you need to enable rawBody for multipart parsing across all functions:
-[functions.environment]
-  ENABLE_RAW_BODY = "true"
-
-[[functions]]
-  path = "netlify/functions/"
-  included_files = ["node_modules/**"]
