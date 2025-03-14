@@ -2,41 +2,38 @@ const formidable = require("formidable");
 const { Readable } = require("stream");
 const FormData = require("form-data");
 const fetch = require("node-fetch");
+const fs = require("fs");
 
 exports.handler = async function (event, context) {
   try {
     console.log("Received event headers:", event.headers);
-    // Ensure content-length is provided (compute if missing)
+
+    // Ensure content-length is set (compute if missing)
     if (!event.headers["content-length"]) {
-      if (event.isBase64Encoded && event.body) {
-        event.headers["content-length"] = Buffer.byteLength(event.body, "base64");
-        console.log("Computed content-length (base64):", event.headers["content-length"]);
-      } else if (event.body) {
-        event.headers["content-length"] = Buffer.byteLength(event.body, "utf8");
-        console.log("Computed content-length (utf8):", event.headers["content-length"]);
-      }
+      const len = Buffer.byteLength(event.body, event.isBase64Encoded ? "base64" : "utf8");
+      event.headers["content-length"] = len;
+      console.log("Computed content-length:", len);
     }
 
-    // Convert the event.body to a Buffer (using base64 if applicable)
-    let bodyBuffer;
-    if (event.isBase64Encoded) {
-      bodyBuffer = Buffer.from(event.body, "base64");
-    } else {
-      bodyBuffer = Buffer.from(event.body, "utf8");
-    }
-    // Create a readable stream from the buffer
-    const stream = Readable.from(bodyBuffer);
+    // Convert the event body to a Buffer and create a Readable stream to simulate a Node.js request
+    const bodyBuffer = event.isBase64Encoded
+      ? Buffer.from(event.body, "base64")
+      : Buffer.from(event.body, "utf8");
+    const req = new Readable();
+    req._read = () => {}; // no-op
+    req.push(bodyBuffer);
+    req.push(null);
+    // Attach headers to our fake request
+    req.headers = event.headers;
 
-    // Use Formidable to parse the multipart form-data.
-    // We simulate a request by passing a minimal object with headers and our stream.
+    console.log("Starting form parsing...");
+
+    // Use Formidable to parse the multipart/form-data from our fake request
     const form = formidable({ multiples: false });
-    // Promisify form parsing:
     const parseForm = () =>
       new Promise((resolve, reject) => {
-        form.parse({ headers: event.headers, pipe: stream }, (err, fields, files) => {
-          if (err) {
-            return reject(err);
-          }
+        form.parse(req, (err, fields, files) => {
+          if (err) return reject(err);
           resolve({ fields, files });
         });
       });
@@ -45,7 +42,6 @@ exports.handler = async function (event, context) {
     console.log("Parsed fields:", fields);
     console.log("Parsed files:", files);
 
-    // Ensure we have a file uploaded
     if (!files.file) {
       throw new Error("No file provided in the upload");
     }
@@ -53,25 +49,34 @@ exports.handler = async function (event, context) {
     console.log("File details:", {
       originalFilename: file.originalFilename,
       mimetype: file.mimetype,
-      size: file.size
+      size: file.size,
     });
 
-    // Now create a FormData instance (from the form-data module)
+    // Create a FormData instance using the form-data module
     const formData = new FormData();
-    // Append the file data as binary (using file.data which is a Buffer)
-    formData.append("image", file.data, {
-      filename: file.originalFilename,
-      contentType: file.mimetype
-    });
-    // Append the additional parameters required by Etsy:
+    // Use fs.createReadStream if a filepath is available (Formidable writes file to temp)
+    if (file.filepath) {
+      formData.append("image", fs.createReadStream(file.filepath), {
+        filename: file.originalFilename,
+        contentType: file.mimetype,
+      });
+    } else if (file.data) {
+      // Otherwise, use file.data (Buffer)
+      formData.append("image", file.data, {
+        filename: file.originalFilename,
+        contentType: file.mimetype,
+      });
+    } else {
+      throw new Error("No valid file data available.");
+    }
+    // Append additional required fields
     formData.append("listing_id", fields.listingId);
     formData.append("fileName", fields.fileName);
     formData.append("rank", fields.rank);
-    // (token is not sent in the FormData but used in the headers)
 
     console.log("FormData keys:", Array.from(formData.keys()));
 
-    // Prepare Etsy API parameters:
+    // Prepare Etsy API details
     const clientId = process.env.CLIENT_ID;
     const shopId = process.env.SHOP_ID;
     if (!clientId || !shopId) {
@@ -85,16 +90,16 @@ exports.handler = async function (event, context) {
     console.log("fileName:", fields.fileName);
     console.log("rank:", fields.rank);
 
-    // Make the POST request to Etsy API.
+    // Make the POST request to Etsy
     const response = await fetch(imageUploadUrl, {
       method: "POST",
       headers: {
         "Authorization": `Bearer ${fields.token}`,
         "x-api-key": clientId,
-        // Pass along the FormData headers (includes the proper content-type with boundary)
-        ...formData.getHeaders()
+        // Include the headers generated by formData (content-type with boundary)
+        ...formData.getHeaders(),
       },
-      body: formData
+      body: formData,
     });
 
     console.log("Image upload response status:", response.status);
@@ -107,13 +112,13 @@ exports.handler = async function (event, context) {
 
     return {
       statusCode: 200,
-      body: responseText
+      body: responseText,
     };
   } catch (error) {
     console.error("Exception in imageUpload handler:", error);
     return {
       statusCode: 500,
-      body: JSON.stringify({ error: error.message })
+      body: JSON.stringify({ error: error.message }),
     };
   }
 };
