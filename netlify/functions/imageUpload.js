@@ -7,8 +7,7 @@ exports.handler = async function (event, context) {
   try {
     // Ensure we have a content-type header in the event.
     const incomingContentType =
-      (event.headers && (event.headers["content-type"] || event.headers["Content-Type"])) ||
-      "";
+      (event.headers && (event.headers["content-type"] || event.headers["Content-Type"])) || "";
     if (!incomingContentType) {
       throw new Error("Missing content-type header in the request.");
     }
@@ -81,7 +80,8 @@ exports.handler = async function (event, context) {
       });
     }
 
-    console.log("FormData prepared with keys:", Array.from(formData.keys()));
+    // Instead of logging keys (which causes an error), just log that FormData is ready.
+    console.log("FormData prepared.");
 
     // Retrieve CLIENT_ID and SHOP_ID from environment variables.
     const clientId = process.env.CLIENT_ID;
@@ -102,7 +102,7 @@ exports.handler = async function (event, context) {
       headers: {
         "Authorization": `Bearer ${token}`,
         "x-api-key": clientId,
-        // Do not set Content-Type manually; formData will handle it.
+        // Do not set Content-Type manually; formData will set it.
       },
       body: formData,
     });
