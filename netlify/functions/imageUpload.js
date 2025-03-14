@@ -1,132 +1,123 @@
-const fetch = require("node-fetch");
-const multipart = require("parse-multipart-data");
+const fs = require("fs");
+const Formidable = require("formidable");
 const FormData = require("form-data");
+const fetch = require("node-fetch");
 
 exports.handler = async function (event, context) {
   try {
-    // Ensure the content-type header is present
-    const contentType = event.headers["content-type"] || event.headers["Content-Type"];
-    if (!contentType) {
-      console.error("Missing content-type header.");
-      return {
-        statusCode: 400,
-        body: JSON.stringify({ error: "Missing content-type header" }),
-      };
+    // Ensure that the raw body is available (Netlify functions must be configured to include it)
+    if (!event.body) {
+      throw new Error("No request body found");
     }
-    console.log("Content-Type:", contentType);
-
-    // Convert the event body to a Buffer (decode from base64 if necessary)
-    const bodyBuffer = event.isBase64Encoded
-      ? Buffer.from(event.body, "base64")
-      : Buffer.from(event.body, "utf8");
-
-    // Parse the multipart form data
-    const boundary = multipart.getBoundary(contentType);
-    if (!boundary) {
-      throw new Error("Unable to determine boundary from content-type header.");
-    }
-    const parts = multipart.parse(bodyBuffer, boundary);
-    console.log("Parsed parts:", parts);
-
-    // Separate fields and files from parsed parts
-    const fields = {};
-    const files = {};
-    parts.forEach(part => {
-      // If part.filename exists, it's a file; otherwise, it's a field
-      if (part.filename) {
-        files[part.name] = part;
-      } else {
-        fields[part.name] = part.data.toString();
-      }
+    
+    console.log("Starting form parsing...");
+    // Create a new instance of formidable.IncomingForm
+    const form = new Formidable.IncomingForm();
+    // Wrap parsing in a Promise so we can await it
+    const { fields, files } = await new Promise((resolve, reject) => {
+      form.parse(
+        { headers: event.headers, body: event.body },
+        (err, fields, files) => {
+          if (err) return reject(err);
+          resolve({ fields, files });
+        }
+      );
     });
 
     console.log("Parsed fields:", fields);
     console.log("Parsed files:", files);
 
-    // Extract expected fields
-    const { listingId, token, fileName, rank } = fields;
-    if (!listingId || !token || !fileName || !rank) {
-      console.error("Missing one or more required fields: listingId, token, fileName, rank.");
+    // Get required parameters from parsed fields
+    const listingId = fields.listingId;
+    const token = fields.token;
+    const fileName = fields.fileName;
+    const rank = fields.rank || "1";
+
+    if (!listingId || !token || !fileName) {
       return {
         statusCode: 400,
-        body: JSON.stringify({ error: "Missing required fields: listingId, token, fileName, or rank" }),
+        body: JSON.stringify({
+          error: "Missing required parameters: listingId, token, or fileName"
+        }),
       };
     }
 
-    // Ensure file part exists
-    const filePart = files["file"];
-    if (!filePart) {
-      console.error("Missing file part.");
+    // Ensure the file exists in the parsed files (assume the field is named "file")
+    const fileData = files.file;
+    if (!fileData) {
       return {
         statusCode: 400,
-        body: JSON.stringify({ error: "Missing file part" }),
+        body: JSON.stringify({ error: "No file provided" }),
       };
     }
+    
+    // Read the file as a Buffer (do not convert to base64)
+    const fileBuffer = fs.readFileSync(fileData.filepath);
+    console.log("File data length:", fileBuffer.length);
 
-    // Log a substring and length of the file data (for debugging)
-    const fileDataLength = filePart.data.length;
-    console.log(`File data length: ${fileDataLength} bytes`);
-    console.log(`File data preview: ${filePart.data.toString("base64").substring(0, 50)}...`);
-
-    // Build a FormData instance to send the file to Etsy
+    // Prepare the FormData to send to Etsy.
+    // The field name must be "image" as per Etsy’s API
     const formData = new FormData();
-    formData.append("file", filePart.data, { filename: fileName, contentType: filePart.type });
+    formData.append("image", fileBuffer, {
+      filename: fileName,
+      contentType: fileData.mimetype,
+    });
+    // Append the rank parameter as well
     formData.append("rank", rank);
 
-    // Retrieve CLIENT_ID and SHOP_ID from environment variables
+    // Retrieve CLIENT_ID and SHOP_ID from environment variables.
     const clientId = process.env.CLIENT_ID;
     const shopId = process.env.SHOP_ID;
     if (!clientId || !shopId) {
-      console.error("Missing CLIENT_ID or SHOP_ID environment variables.");
-      return {
-        statusCode: 500,
-        body: JSON.stringify({ error: "Missing CLIENT_ID or SHOP_ID environment variables" }),
-      };
+      throw new Error("Missing CLIENT_ID or SHOP_ID environment variables");
     }
     console.log("Using CLIENT_ID:", clientId.slice(0, 5) + "*****");
     console.log("Using SHOP_ID:", shopId);
 
-    // Construct the Etsy API endpoint URL for image upload.
-    const imageUploadUrl = `https://api.etsy.com/v3/application/shops/${shopId}/listings/${listingId}/images`;
-    console.log("Image Upload URL:", imageUploadUrl);
+    // Construct the Etsy API endpoint URL for uploading images.
+    const uploadUrl = `https://api.etsy.com/v3/application/shops/${shopId}/listings/${listingId}/images`;
+    console.log("Image Upload URL:", uploadUrl);
 
-    // Log the FormData headers (for troubleshooting)
-    const formHeaders = formData.getHeaders();
-    console.log("FormData headers:", formHeaders);
+    // Use formData.getHeaders() to get the correct Content-Type header with boundary
+    const headers = {
+      "Authorization": `Bearer ${token}`,
+      "x-api-key": clientId,
+      ...formData.getHeaders(),
+    };
 
-    // Make the POST request to upload the image
-    const response = await fetch(imageUploadUrl, {
+    console.log("Image upload request headers:", headers);
+
+    // Make the POST request to Etsy's API
+    const response = await fetch(uploadUrl, {
       method: "POST",
-      headers: {
-        "Authorization": `Bearer ${token}`,
-        "x-api-key": clientId,
-        ...formHeaders
-      },
+      headers: headers,
       body: formData,
     });
 
     console.log("Image upload response status:", response.status);
+    const responseText = await response.text();
     if (!response.ok) {
-      const errorText = await response.text();
-      console.error("Error uploading image. POST failed:", errorText);
+      console.error("Error uploading image. Response:", responseText);
       return {
         statusCode: response.status,
-        body: JSON.stringify({ error: "Error uploading image", details: errorText }),
+        body: JSON.stringify({
+          error: "Error uploading image",
+          details: responseText,
+        }),
       };
     }
 
-    const respData = await response.json();
-    console.log("Image uploaded successfully:", respData);
+    console.log("Image uploaded successfully. Response:", responseText);
     return {
       statusCode: 200,
-      body: JSON.stringify(respData),
+      body: responseText,
     };
 
-  } catch (error) {
-    console.error("Exception in imageUpload handler:", error);
+  } catch (err) {
+    console.error("Exception in imageUpload handler:", err);
     return {
       statusCode: 500,
-      body: JSON.stringify({ error: error.message }),
+      body: JSON.stringify({ error: err.message }),
     };
   }
 };
