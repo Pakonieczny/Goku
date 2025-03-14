@@ -1,18 +1,20 @@
 {
   "name": "etsy-app",
   "version": "1.0.0",
-  "description": "Etsy Listing Generator & Uploader",
+  "description": "Etsy listing and image upload application",
   "main": "index.js",
   "scripts": {
     "start": "netlify dev",
     "build": "netlify build"
   },
   "dependencies": {
-    "node-fetch": "^2.6.7",
+    "node-fetch": "^2.6.1",
+    "formidable": "^2.0.1",
     "form-data": "^4.0.0",
-    "parse-multipart-data": "^1.0.0"
+    "bootstrap": "^5.2.0"
   },
   "devDependencies": {},
+  "keywords": [],
   "author": "",
   "license": "ISC"
 }
