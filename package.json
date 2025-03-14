@@ -1,18 +1,17 @@
 {
   "name": "etsy-app",
   "version": "1.0.0",
-  "description": "Etsy Listing Generator & Shop Listings",
+  "description": "Etsy App using Netlify Functions",
   "main": "index.js",
   "scripts": {
-    "start": "netlify dev",
-    "build": "netlify build"
-  },
-  "dependencies": {
-    "node-fetch": "^2.6.1",
-    "formidable": "^2.0.1",
-    "form-data": "^4.0.0",
-    "streamifier": "^0.1.1"
+    "build": "netlify build",
+    "start": "netlify dev"
   },
   "author": "",
-  "license": "ISC"
+  "license": "MIT",
+  "dependencies": {
+    "form-data": "^4.0.0",
+    "lambda-multipart-parser": "^3.0.0",
+    "node-fetch": "^2.6.7"
+  }
 }

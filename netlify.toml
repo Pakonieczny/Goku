@@ -1,9 +1,15 @@
 [build]
-  publish = "."
+  publish = "public"
   functions = "netlify/functions"
 
-[dev]
-  functions = "netlify/functions"
+[functions]
+  node_bundler = "esbuild"
+  external_node_modules = ["form-data", "lambda-multipart-parser", "node-fetch"]
 
-[build.environment]
-  NODE_ENV = "production"
+# Optional: if you need to enable rawBody for multipart parsing across all functions:
+[functions.environment]
+  ENABLE_RAW_BODY = "true"
+
+[[functions]]
+  path = "netlify/functions/imageUpload.js"
+  included_files = ["node_modules/**"]
