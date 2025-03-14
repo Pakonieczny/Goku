@@ -10,7 +10,7 @@
   "dependencies": {
     "node-fetch": "^2.6.7",
     "form-data": "^4.0.0",
-    "parse-multipart-data": "^2.0.0"
+    "parse-multipart-data": "^1.0.0"
   },
   "devDependencies": {},
   "author": "",
