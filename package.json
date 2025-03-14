@@ -1,17 +1,16 @@
 {
   "name": "etsy-app",
   "version": "1.0.0",
-  "description": "Etsy App using Netlify Functions",
+  "description": "Etsy listing duplicate and update application",
   "main": "index.js",
   "scripts": {
-    "build": "netlify build",
     "start": "netlify dev"
   },
-  "author": "",
-  "license": "MIT",
   "dependencies": {
+    "formidable": "^2.0.1",
     "form-data": "^4.0.0",
-    "lambda-multipart-parser": "^3.0.0",
+    "lambda-multipart-parser": "^2.1.0",
     "node-fetch": "^2.6.7"
-  }
+  },
+  "devDependencies": {}
 }
