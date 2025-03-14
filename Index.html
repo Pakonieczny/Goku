@@ -12,16 +12,29 @@
   <script src="https://cdn.jsdelivr.net/npm/piexifjs@1.0.4/piexif.min.js"></script>
   <style>
     /* Basic layout */
-    html, body { margin: 0; padding: 0; width: 100vw; font-family: Arial, sans-serif; }
-    .container { width: 100vw; padding: 10px; box-sizing: border-box; text-align: left; }
+    html, body {
+      margin: 0;
+      padding: 0;
+      width: 100vw;
+      font-family: Arial, sans-serif;
+    }
+    .container {
+      width: 100vw;
+      padding: 10px;
+      box-sizing: border-box;
+      text-align: left;
+    }
     h5, label, p { text-align: left; }
     input, textarea { width: 100%; box-sizing: border-box; }
     
-    /* --- Wrap Listing Description and File Drop Zones --- */
-    #descriptionAndFileUploadContainer { display: flex; align-items: center; }
+    /* Section: Listing Description & File Drop */
+    #descriptionAndFileUploadContainer {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 20px;
+      align-items: flex-start;
+    }
     .listing-desc-container {
-      position: relative;
-      display: inline-block;
       width: 500px;
     }
     .listing-desc-container h5 {
@@ -29,91 +42,82 @@
       font-size: 1.2rem;
       font-weight: 500;
     }
-    .listing-desc-container label.section-heading { 
-      font-size: 1.2rem; 
-      font-weight: 500; 
-    }
     .listing-desc-container input {
       width: 500px;
       height: 30px;
       border: 1px solid #000;
       padding: 5px;
     }
-    /* "User Provided Search Key Phrases" textarea */
+    
+    /* Textarea for key phrases */
     #searchKeyPhrases {
       resize: none;
-      box-sizing: border-box;
       border: 1px solid grey;
     }
-    #searchKeyPhrases[rows="14"] { height: auto; }
+    
+    /* Flex container for textboxes */
     .flex-container { display: flex; gap: 10px; align-items: stretch; }
     .textbox-container { flex: 1; }
-    .textbox-container textarea { width: 100%; padding: 0.8rem; font-size: 1rem; line-height: 1.2; resize: none; overflow: visible; box-sizing: border-box; }
-    .button-container { width: 200px; display: flex; flex-direction: column; gap: 10px; align-self: flex-start; }
+    .textbox-container textarea {
+      width: 100%;
+      padding: 0.8rem;
+      font-size: 1rem;
+      line-height: 1.2;
+      resize: none;
+    }
+    .button-container {
+      width: 200px;
+      display: flex;
+      flex-direction: column;
+      gap: 10px;
+    }
     #listingTitle { min-height: 45px; }
     #listingDescInput { width: 500px; height: 30px; border: 1px solid #000; padding: 5px; }
     #listingDescription { min-height: 150px; }
-    .section-heading { font-size: 1.2rem; font-weight: 500; margin-bottom: 5px; display: inline-block; }
+    .section-heading { font-size: 1.2rem; font-weight: 500; margin-bottom: 5px; }
     .count-text { font-style: italic; font-size: 0.9em; margin-top: 5px; }
     
     /* Drag and Drop Boxes */
     #dropZone, #ordersDropZone, #listingsDropZone {
-      width: 138px; 
-      height: 138px; 
-      border: 2px dashed #ccc; 
-      border-radius: 3px; 
-      display: inline-block; 
-      vertical-align: middle; 
-      text-align: center; 
+      width: 138px;
+      height: 138px;
+      border: 2px dashed #ccc;
+      border-radius: 3px;
+      text-align: center;
       line-height: 138px;
-      position: relative;
+      margin-bottom: 10px;
     }
-    /* Orders container */
     #ordersContainer { display: flex; flex-direction: column; }
-    /* CSV Progress Bar */
     #csvProgressBar {
-      width: 100%; height: 20px; border: 1px solid blue; background-color: #e0f0ff; margin-top: 5px;
-      -webkit-appearance: none; appearance: none;
+      width: 100%;
+      height: 20px;
+      border: 1px solid blue;
+      background-color: #e0f0ff;
+      margin-top: 5px;
     }
-    #csvProgressBar::-webkit-progress-bar { background-color: #e0f0ff; border: 1px solid blue; }
-    #csvProgressBar::-webkit-progress-value { background-color: blue; }
     #csvProgressContainer { margin-left: 85px; }
-    /* File Drop Zones container */
     #fileDropZonesContainer { display: flex; gap: 10px; margin-left: 100px; }
     #uploadedFilesList {
       width: 300px;
       height: 125px;
-      resize: none;
-      box-sizing: border-box;
       border: 1px solid grey;
       margin-left: 85px;
     }
     
-    /* Primary Preview – clickable for cropping */
-    #primaryPreview { 
-      width: 138px; 
-      height: 138px; 
-      border: 1px solid #ccc; 
+    /* Primary Preview for image cropping */
+    #primaryPreview {
+      width: 138px;
+      height: 138px;
+      border: 1px solid #ccc;
       border-radius: 3px;
-      display: inline-block; 
-      vertical-align: middle; 
-      position: relative;
-      top: -250px;
-      left: 285px;
-      text-align: center; 
-      overflow: hidden; 
       cursor: pointer;
     }
     #primaryPreview:empty { background: #fff; }
     #primaryPreview img { width: 100%; height: 100%; object-fit: contain; border-radius: 3px; }
     
-    /* Preview Grid - forced to center bottom of the page */
+    /* 10-Image Preview Grid: centered and block-level */
     #previewGridContainer {
-      position: fixed;
-      bottom: 80px;
-      left: 50%;
-      transform: translateX(-50%);
-      width: auto;
+      margin: 20px auto;
       max-width: 600px;
       text-align: center;
       background: #f7f7f7;
@@ -124,167 +128,133 @@
     #previewGrid {
       display: grid;
       grid-template-columns: repeat(5, 100px);
-      grid-column-gap: 10px;
-      grid-row-gap: 10px;
+      grid-gap: 10px;
       margin: 0 auto;
     }
-    .preview-cell { 
-      position: relative; 
-      display: flex; 
-      flex-direction: column; 
-      align-items: center; 
-      border: 1px solid #ccc; 
-      border-radius: 3px; 
+    .preview-cell {
+      border: 1px solid #ccc;
+      border-radius: 3px;
       padding: 5px;
+      text-align: center;
     }
-    .preview-cell img { 
-      width: 100px; 
-      height: 100px; 
-      object-fit: cover; 
+    .preview-cell img {
+      width: 100px;
+      height: 100px;
+      object-fit: cover;
       border-radius: 3px;
     }
     
-    /* Container #13 */
-    #container13 { position: relative; width: 250px; top: -150px; }
-    
-    /* Components below search key phrases */
-    #belowSearch { margin-top: -180px; margin-left: 10px; }
-    .title-container { margin-top: -50px; }
-    .description-container { margin-top: 0px; }
-    #analyzeMetadataBtn { margin-left: 50px; }
-    #showAnalyzeRulesBtn { margin-top: 25px; }
-    .phrases-header { position: relative; top: 125px; left: 10px; }
+    /* Bottom Button Containers */
+    .bottom-buttons {
+      text-align: center;
+      margin-top: 20px;
+    }
+    .bottom-buttons button {
+      margin: 0 10px;
+    }
     
     /* Modal styles */
     .modal { display: none; }
     .modal-content { padding: 20px; }
     .modal textarea { width: 100%; height: 300px; resize: none; }
-    
-    /* Additional widths for Etsy Link and Shop Listings */
-    #etsyLink, #shopListings { width: 500px !important; }
-    
-    /* Bottom Button Containers */
-    #uploadContainer {
-      position: fixed;
-      bottom: 20px;
-      left: 50%;
-      transform: translateX(-50%);
-      display: inline-block;
-    }
-    /* New LookUP button */
-    #lookUPBtn {
-      position: fixed;
-      bottom: 20px;
-      left: calc(50% + 120px);
-      display: inline-block;
-    }
-    /* Re-add the Upload Photo button */
-    #uploadPhotoContainer {
-      position: fixed;
-      bottom: 20px;
-      left: calc(50% - 120px);
-      display: inline-block;
-    }
   </style>
 </head>
 <body>
-  <!-- Configure Buttons control -->
-  <button id="configureButtonsBtn" class="btn waves-effect waves-light configurable">Configure Buttons</button>
-  
-  <!-- Wrap Listing Description and File Drop Zones -->
-  <div id="descriptionAndFileUploadContainer">
-    <div class="listing-desc-container" id="listingDescContainer">
-      <h5>Listing Description</h5>
-      <input id="listingDescInput" type="text" placeholder="Enter your question here">
-    </div>
-    <div id="fileDropZonesContainer">
-      <div id="ordersContainer">
-        <div id="ordersDropZone">Etsy Sold Orders</div>
-        <div id="csvProgressContainer">
-          <progress id="csvProgressBar" max="100" value="0"></progress>
-        </div>
+  <div class="container">
+    <!-- Configure Buttons control -->
+    <button id="configureButtonsBtn" class="btn waves-effect waves-light configurable">Configure Buttons</button>
+    
+    <!-- Wrap Listing Description and File Drop Zones -->
+    <div id="descriptionAndFileUploadContainer">
+      <div class="listing-desc-container" id="listingDescContainer">
+        <h5>Listing Description</h5>
+        <input id="listingDescInput" type="text" placeholder="Enter your question here">
       </div>
-      <div id="listingsDropZone">Etsy Listings</div>
-      <textarea id="uploadedFilesList" class="materialize-textarea" rows="2" placeholder="Uploaded .csv, .doc, .docx files will appear here"></textarea>
-    </div>
-  </div>
-  
-  <!-- Etsy OAuth and Shop Listings Section -->
-  <button id="connectEtsyBtn" class="btn waves-effect waves-light configurable">Connect to Etsy</button>
-  <div style="margin-top: -180px; margin-left: 10px;">
-    <div class="section-heading configurable">My Etsy Shop Listings</div>
-    <div class="textbox-container configurable">
-      <!-- Enter the listing URL or ID here -->
-      <textarea id="shopListings" class="materialize-textarea" placeholder="Enter your listing URL or ID"></textarea>
-    </div>
-  </div>
-  
-  <!-- Etsy Listing Generator UI -->
-  <div class="phrases-header configurable" style="position: relative; top: 125px; left: 10px;">
-    <span class="section-heading configurable">2. User Provided Search Key Phrases</span>
-    <button id="clearKeyPhrasesBtn" class="btn-small waves-effect waves-light configurable">Clear</button>
-    <button id="copyKeyPhrasesBtn" class="btn-small waves-effect waves-light configurable">Copy</button>
-    <div id="dropZone" class="configurable">Drop Image Here</div>
-    <div id="primaryPreview" class="configurable"></div>
-    <button id="analyzeMetadataBtn" class="btn waves-effect waves-light configurable">Analyze Photos</button>
-    <button id="showAnalyzeRulesBtn" class="btn waves-effect waves-light configurable" data-target="analyzeRulesModal" style="margin-top:25px;">Analyze Rules</button>
-  </div>
-  <div id="container13" class="flex-container configurable">
-    <div class="textbox-container configurable">
-      <textarea id="searchKeyPhrases" class="materialize-textarea" rows="14"></textarea>
-    </div>
-  </div>
-  
-  <!-- Components below Search Key Phrases -->
-  <div id="belowSearch">
-    <button id="generateBtn" class="btn waves-effect waves-light configurable">Generate</button>
-    <div class="title-container" style="margin-top: -50px;">
-      <div class="section-heading configurable">Etsy Listing TITLE</div>
-      <div class="flex-container configurable">
-        <div class="textbox-container configurable">
-          <textarea id="listingTitle" class="materialize-textarea" rows="2"></textarea>
+      <div id="fileDropZonesContainer">
+        <div id="ordersContainer">
+          <div id="ordersDropZone">Etsy Sold Orders</div>
+          <div id="csvProgressContainer">
+            <progress id="csvProgressBar" max="100" value="0"></progress>
+          </div>
         </div>
-        <div class="button-container configurable" style="margin-top: -60px;">
-          <button id="regenTitleBtn" class="btn-small waves-effect waves-light configurable">Re-Generate</button>
-          <button id="copyTitleBtn" class="btn-small waves-effect waves-light configurable">
-            <i class="material-icons">content_copy</i>
-          </button>
-        </div>
-        <button id="showTitleRulesBtn" class="btn waves-effect waves-light rules-button configurable" data-target="titleRulesModal">Title Rules</button>
-      </div>
-      <p id="titleCount" class="count-text configurable">Count: 0</p>
-    </div>
-    <div class="description-container" style="margin-top: 0px;">
-      <div class="section-heading configurable">Etsy Listing DESCRIPTION</div>
-      <div class="flex-container configurable">
-        <div class="textbox-container configurable">
-          <textarea id="listingDescription" class="materialize-textarea"></textarea>
-        </div>
-        <div class="button-container configurable">
-          <button id="regenDescriptionBtn" class="btn-small waves-effect waves-light configurable">Re-Generate</button>
-          <button id="copyDescriptionBtn" class="btn-small waves-effect waves-light configurable">
-            <i class="material-icons">content_copy</i>
-          </button>
-        </div>
-        <button id="showDescriptionRulesBtn" class="btn waves-effect waves-light rules-button configurable" data-target="descriptionRulesModal">Description Rules</button>
+        <div id="listingsDropZone">Etsy Listings</div>
+        <textarea id="uploadedFilesList" class="materialize-textarea" rows="2" placeholder="Uploaded .csv, .doc, .docx files will appear here"></textarea>
       </div>
     </div>
-  </div>
-  
-  <!-- Preview Grid Container (forced at center bottom) -->
-  <div id="previewGridContainer">
-    <div id="previewGrid"></div>
-  </div>
-  
-  <!-- Bottom Button Containers -->
-  <div id="uploadContainer">
-    <button id="uploadToEtsyBtn" class="btn waves-effect waves-light configurable">Update Listing</button>
-  </div>
-  <div id="uploadPhotoContainer">
-    <button id="uploadPhotoBtn" class="btn waves-effect waves-light configurable">Upload Photo</button>
-  </div>
-  <div id="lookUPBtn">
-    <button id="lookUPButton" class="btn waves-effect waves-light configurable">LookUP</button>
+    
+    <!-- Etsy OAuth and Shop Listings Section -->
+    <button id="connectEtsyBtn" class="btn waves-effect waves-light configurable">Connect to Etsy</button>
+    <div style="margin-top: 20px;">
+      <div class="section-heading configurable">My Etsy Shop Listings</div>
+      <div class="textbox-container configurable">
+        <!-- Enter the listing URL or ID here -->
+        <textarea id="shopListings" class="materialize-textarea" placeholder="Enter your listing URL or ID"></textarea>
+      </div>
+    </div>
+    
+    <!-- Etsy Listing Generator UI -->
+    <div class="phrases-header configurable" style="margin-top: 20px;">
+      <span class="section-heading configurable">2. User Provided Search Key Phrases</span>
+      <button id="clearKeyPhrasesBtn" class="btn-small waves-effect waves-light configurable">Clear</button>
+      <button id="copyKeyPhrasesBtn" class="btn-small waves-effect waves-light configurable">Copy</button>
+      <div id="dropZone" class="configurable" style="margin-top:10px;">Drop Image Here</div>
+      <div id="primaryPreview" class="configurable" style="margin-top:10px;"></div>
+      <button id="analyzeMetadataBtn" class="btn waves-effect waves-light configurable" style="margin-top:10px;">Analyze Photos</button>
+      <button id="showAnalyzeRulesBtn" class="btn waves-effect waves-light configurable" data-target="analyzeRulesModal" style="margin-top:10px;">Analyze Rules</button>
+    </div>
+    <div id="container13" class="flex-container configurable" style="margin-top:20px;">
+      <div class="textbox-container configurable">
+        <textarea id="searchKeyPhrases" class="materialize-textarea" rows="14" placeholder="Enter search key phrases"></textarea>
+      </div>
+    </div>
+    
+    <!-- Components below Search Key Phrases -->
+    <div id="belowSearch" style="margin-top:20px;">
+      <button id="generateBtn" class="btn waves-effect waves-light configurable">Generate</button>
+      <div class="title-container" style="margin-top:20px;">
+        <div class="section-heading configurable">Etsy Listing TITLE</div>
+        <div class="flex-container configurable">
+          <div class="textbox-container configurable">
+            <textarea id="listingTitle" class="materialize-textarea" rows="2" placeholder="Generated title will appear here"></textarea>
+          </div>
+          <div class="button-container configurable" style="margin-top:0;">
+            <button id="regenTitleBtn" class="btn-small waves-effect waves-light configurable">Re-Generate</button>
+            <button id="copyTitleBtn" class="btn-small waves-effect waves-light configurable">
+              <i class="material-icons">content_copy</i>
+            </button>
+          </div>
+          <button id="showTitleRulesBtn" class="btn waves-effect waves-light rules-button configurable" data-target="titleRulesModal">Title Rules</button>
+        </div>
+        <p id="titleCount" class="count-text configurable">Count: 0</p>
+      </div>
+      <div class="description-container" style="margin-top:20px;">
+        <div class="section-heading configurable">Etsy Listing DESCRIPTION</div>
+        <div class="flex-container configurable">
+          <div class="textbox-container configurable">
+            <textarea id="listingDescription" class="materialize-textarea" placeholder="Generated description will appear here"></textarea>
+          </div>
+          <div class="button-container configurable">
+            <button id="regenDescriptionBtn" class="btn-small waves-effect waves-light configurable">Re-Generate</button>
+            <button id="copyDescriptionBtn" class="btn-small waves-effect waves-light configurable">
+              <i class="material-icons">content_copy</i>
+            </button>
+          </div>
+          <button id="showDescriptionRulesBtn" class="btn waves-effect waves-light rules-button configurable" data-target="descriptionRulesModal">Description Rules</button>
+        </div>
+      </div>
+    </div>
+    
+    <!-- 10-Image Preview Grid Container -->
+    <div id="previewGridContainer">
+      <div id="previewGrid"></div>
+    </div>
+    
+    <!-- Bottom Button Containers -->
+    <div class="bottom-buttons">
+      <button id="uploadToEtsyBtn" class="btn waves-effect waves-light configurable">Update Listing</button>
+      <button id="uploadPhotoBtn" class="btn waves-effect waves-light configurable">Upload Photo</button>
+      <button id="lookUPButton" class="btn waves-effect waves-light configurable">LookUP</button>
+    </div>
   </div>
   
   <!-- Modals -->
@@ -614,7 +584,7 @@ Using Sales Report and Product List Files:
       }
     }
     
-    // Function to update an existing listing via the Netlify proxy function updateListing.js
+    // Function to update an existing listing via our updateListing.js proxy function
     async function updateExistingListing() {
       const listingInput = document.getElementById("shopListings").value.trim();
       if (!listingInput) {
@@ -643,7 +613,6 @@ Using Sales Report and Product List Files:
           .filter(s => s !== "")
       };
       console.log("Update payload:", payload);
-      // Instead of calling Etsy directly, call our updateListing.js proxy
       const updateUrl = `/.netlify/functions/updateListing?listingId=${listingId}&token=${encodeURIComponent(accessToken)}`;
       try {
         const response = await fetch(updateUrl, {
@@ -667,7 +636,7 @@ Using Sales Report and Product List Files:
       }
     }
     
-    // Bind the "Update Listing" button to updateExistingListing()
+    // Bind the "Update Listing" button
     document.getElementById("uploadToEtsyBtn").addEventListener("click", updateExistingListing);
     
     // New LookUP button to show JSON payload for title, description, and tags
@@ -682,27 +651,22 @@ Using Sales Report and Product List Files:
       };
       document.getElementById("lookUPModalContent").textContent = JSON.stringify(payload, null, 2);
       const modalElem = document.getElementById("lookUPModal");
-      M.Modal.getInstance(modalElem) || M.Modal.init(modalElem, { preventScrolling: false }).open();
+      (M.Modal.getInstance(modalElem) || M.Modal.init(modalElem, { preventScrolling: false })).open();
     });
     
-    // New Upload Photo button - bind to your image upload functionality (calls imageUpload.js)
+    // New Upload Photo button – calls imageUpload.js proxy function
     document.getElementById("uploadPhotoBtn").addEventListener("click", async () => {
-      // For example, assume you have a function uploadPhoto() that handles the image upload
-      // Here we simply call it. (Ensure that uploadPhoto() is defined elsewhere in your code.)
       if (previewImages.length === 0) {
         M.toast({ html: "No photo available to upload." });
         return;
       }
-      // Use the first preview image for upload; adjust as needed
+      // Use the first preview image for upload (adjust as needed)
       const fileData = previewImages[0];
-      // You should convert the dataURL to a Blob before sending, if not already done.
+      // Convert the dataURL to a Blob
       const res = await fetch(fileData);
       const blob = await res.blob();
-      // Construct a FormData payload for the image upload.
       const formData = new FormData();
-      // Append the binary image data (the field name must match Etsy's requirements, e.g., "image")
       formData.append("image", blob, "upload.jpg");
-      // Append additional fields as needed
       const listingId = document.getElementById("shopListings").value.trim().match(/(\d+)/)?.[0];
       if (!listingId) {
         M.toast({ html: "Please provide a valid listing ID for image upload." });
@@ -739,17 +703,16 @@ Using Sales Report and Product List Files:
       }
     });
     
-    // Function to render the 10-image preview grid at the center bottom of the page
+    // Function to render the 10-image preview grid
     function renderPreviewGrid() {
       const grid = document.getElementById("previewGrid");
-      grid.innerHTML = ""; // Clear existing content
+      grid.innerHTML = "";
       previewImages.forEach((src, index) => {
         const cell = document.createElement("div");
         cell.classList.add("preview-cell");
         const img = document.createElement("img");
         img.src = src;
         cell.appendChild(img);
-        // Add a label for the image index
         const label = document.createElement("span");
         label.textContent = `#${index + 1}`;
         cell.appendChild(label);
@@ -757,7 +720,7 @@ Using Sales Report and Product List Files:
       });
     }
     
-    // File Drop and Upload Handlers
+    // File Drop and Upload Handlers for images
     const dropZone = document.getElementById("dropZone");
     const primaryPreview = document.getElementById("primaryPreview");
     
@@ -772,28 +735,31 @@ Using Sales Report and Product List Files:
     primaryPreview.addEventListener("click", function() {
       if (previewImages.length > 0) {
         document.getElementById("cropImage").src = previewImages[0];
-        let cropModalElem = document.getElementById("photoCropModal");
-        let cropModalInstance = M.Modal.getInstance(cropModalElem) || M.Modal.init(cropModalElem, { preventScrolling: false });
+        const cropModalElem = document.getElementById("photoCropModal");
+        const cropModalInstance = M.Modal.getInstance(cropModalElem) || M.Modal.init(cropModalElem, { preventScrolling: false });
         cropModalInstance.open();
       }
     });
     
-    dropZone.addEventListener("dragover", e => { 
-      e.preventDefault(); 
-      e.stopPropagation(); 
-      dropZone.style.borderColor = "#000"; 
+    dropZone.addEventListener("dragover", e => {
+      e.preventDefault();
+      e.stopPropagation();
+      dropZone.style.borderColor = "#000";
     });
-    dropZone.addEventListener("dragleave", e => { 
-      e.preventDefault(); 
-      e.stopPropagation(); 
-      dropZone.style.borderColor = "#ccc"; 
+    dropZone.addEventListener("dragleave", e => {
+      e.preventDefault();
+      e.stopPropagation();
+      dropZone.style.borderColor = "#ccc";
     });
     dropZone.addEventListener("drop", async e => {
-      e.preventDefault(); 
-      e.stopPropagation(); 
+      e.preventDefault();
+      e.stopPropagation();
       dropZone.style.borderColor = "#ccc";
       const files = e.dataTransfer.files;
-      if (files.length > 10) alert("Maximum 10 images allowed.");
+      if (files.length > 10) {
+        alert("Maximum 10 images allowed.");
+        return;
+      }
       for (let i = 0; i < Math.min(files.length, 10); i++) {
         const file = files[i];
         if (file.type === "image/jpeg" || file.type === "image/png") {
@@ -824,19 +790,19 @@ Using Sales Report and Product List Files:
     });
     
     const ordersDropZone = document.getElementById("ordersDropZone");
-    ordersDropZone.addEventListener("dragover", e => { 
-      e.preventDefault(); 
-      e.stopPropagation(); 
-      ordersDropZone.style.borderColor = "#000"; 
+    ordersDropZone.addEventListener("dragover", e => {
+      e.preventDefault();
+      e.stopPropagation();
+      ordersDropZone.style.borderColor = "#000";
     });
-    ordersDropZone.addEventListener("dragleave", e => { 
-      e.preventDefault(); 
-      e.stopPropagation(); 
-      ordersDropZone.style.borderColor = "#ccc"; 
+    ordersDropZone.addEventListener("dragleave", e => {
+      e.preventDefault();
+      e.stopPropagation();
+      ordersDropZone.style.borderColor = "#ccc";
     });
     ordersDropZone.addEventListener("drop", async e => {
-      e.preventDefault(); 
-      e.stopPropagation(); 
+      e.preventDefault();
+      e.stopPropagation();
       ordersDropZone.style.borderColor = "#ccc";
       const files = e.dataTransfer.files;
       const progressBar = document.getElementById("csvProgressBar");
@@ -865,19 +831,19 @@ Using Sales Report and Product List Files:
     });
     
     const listingsDropZone = document.getElementById("listingsDropZone");
-    listingsDropZone.addEventListener("dragover", e => { 
-      e.preventDefault(); 
-      e.stopPropagation(); 
-      listingsDropZone.style.borderColor = "#000"; 
+    listingsDropZone.addEventListener("dragover", e => {
+      e.preventDefault();
+      e.stopPropagation();
+      listingsDropZone.style.borderColor = "#000";
     });
-    listingsDropZone.addEventListener("dragleave", e => { 
-      e.preventDefault(); 
-      e.stopPropagation(); 
-      listingsDropZone.style.borderColor = "#ccc"; 
+    listingsDropZone.addEventListener("dragleave", e => {
+      e.preventDefault();
+      e.stopPropagation();
+      listingsDropZone.style.borderColor = "#ccc";
     });
     listingsDropZone.addEventListener("drop", async e => {
-      e.preventDefault(); 
-      e.stopPropagation(); 
+      e.preventDefault();
+      e.stopPropagation();
       listingsDropZone.style.borderColor = "#ccc";
       const files = e.dataTransfer.files;
       const progressBar = document.getElementById("csvProgressBar");
