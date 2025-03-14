@@ -12,67 +12,61 @@
   <script src="https://cdn.jsdelivr.net/npm/piexifjs@1.0.4/piexif.min.js"></script>
   <style>
     /* Basic layout */
-    html, body { margin: 0; padding: 0; width: 100vw; font-family: Arial, sans-serif; }
-    .container { width: 100vw; padding: 10px; box-sizing: border-box; text-align: left; }
+    html, body {
+      margin: 0; padding: 0; width: 100vw; font-family: Arial, sans-serif;
+    }
+    .container {
+      width: 100vw; padding: 10px; box-sizing: border-box; text-align: left;
+    }
     h5, label, p { text-align: left; }
     input, textarea { width: 100%; box-sizing: border-box; }
-    
+
     /* --- Wrap Listing Description and File Drop Zones --- */
-    #descriptionAndFileUploadContainer { display: flex; align-items: center; }
+    #descriptionAndFileUploadContainer {
+      display: flex; align-items: center;
+    }
     .listing-desc-container {
-      position: relative;
-      display: inline-block;
-      width: 500px;
+      position: relative; display: inline-block; width: 500px;
     }
     .listing-desc-container h5 {
-      margin: 0 0 10px 0;
-      font-size: 1.2rem;
-      font-weight: 500;
+      margin: 0 0 10px 0; font-size: 1.2rem; font-weight: 500;
     }
-    .listing-desc-container label.section-heading { 
-      font-size: 1.2rem; 
-      font-weight: 500; 
+    .listing-desc-container label.section-heading {
+      font-size: 1.2rem; font-weight: 500;
     }
     .listing-desc-container input {
-      width: 500px;
-      height: 30px;
-      border: 1px solid #000;
-      padding: 5px;
+      width: 500px; height: 30px; border: 1px solid #000; padding: 5px;
     }
     /* "User Provided Search Key Phrases" textarea */
     #searchKeyPhrases {
-      resize: none;
-      box-sizing: border-box;
-      border: 1px solid grey;
+      resize: none; box-sizing: border-box; border: 1px solid grey;
     }
     #searchKeyPhrases[rows="14"] { height: auto; }
     .flex-container { display: flex; gap: 10px; align-items: stretch; }
     .textbox-container { flex: 1; }
-    .textbox-container textarea { width: 100%; padding: 0.8rem; font-size: 1rem; line-height: 1.2; resize: none; overflow: visible; box-sizing: border-box; }
+    .textbox-container textarea {
+      width: 100%; padding: 0.8rem; font-size: 1rem; line-height: 1.2;
+      resize: none; overflow: visible; box-sizing: border-box;
+    }
     .button-container { width: 200px; display: flex; flex-direction: column; gap: 10px; align-self: flex-start; }
     #listingTitle { min-height: 45px; }
     #listingDescInput { width: 500px; height: 30px; border: 1px solid #000; padding: 5px; }
     #listingDescription { min-height: 150px; }
     .section-heading { font-size: 1.2rem; font-weight: 500; margin-bottom: 5px; display: inline-block; }
     .count-text { font-style: italic; font-size: 0.9em; margin-top: 5px; }
-    
+
     /* Drag and Drop Boxes */
     #dropZone, #ordersDropZone, #listingsDropZone {
-      width: 138px; 
-      height: 138px; 
-      border: 2px dashed #ccc; 
-      border-radius: 3px; 
-      display: inline-block; 
-      vertical-align: middle; 
-      text-align: center; 
-      line-height: 138px;
-      position: relative;
+      width: 138px; height: 138px; border: 2px dashed #ccc;
+      border-radius: 3px; display: inline-block; vertical-align: middle;
+      text-align: center; line-height: 138px; position: relative;
     }
     /* Orders container */
     #ordersContainer { display: flex; flex-direction: column; }
     /* CSV Progress Bar */
     #csvProgressBar {
-      width: 100%; height: 20px; border: 1px solid blue; background-color: #e0f0ff; margin-top: 5px;
+      width: 100%; height: 20px; border: 1px solid blue;
+      background-color: #e0f0ff; margin-top: 5px;
       -webkit-appearance: none; appearance: none;
     }
     #csvProgressBar::-webkit-progress-bar { background-color: #e0f0ff; border: 1px solid blue; }
@@ -81,71 +75,49 @@
     /* File Drop Zones container */
     #fileDropZonesContainer { display: flex; gap: 10px; margin-left: 100px; }
     #uploadedFilesList {
-      width: 300px;
-      height: 125px;
-      resize: none;
-      box-sizing: border-box;
-      border: 1px solid grey;
-      margin-left: 85px;
+      width: 300px; height: 125px; resize: none; box-sizing: border-box;
+      border: 1px solid grey; margin-left: 85px;
     }
-    
+
     /* Primary Preview – clickable for cropping */
-    #primaryPreview { 
-      width: 138px; 
-      height: 138px; 
-      border: 1px solid #ccc; 
-      border-radius: 3px;
-      display: inline-block; 
-      vertical-align: middle; 
-      position: relative;
-      top: -250px;
-      left: 285px;
-      text-align: center; 
-      overflow: hidden; 
-      cursor: pointer;
+    #primaryPreview {
+      width: 138px; height: 138px; border: 1px solid #ccc; border-radius: 3px;
+      display: inline-block; vertical-align: middle; position: relative;
+      top: -250px; left: 285px; text-align: center; overflow: hidden; cursor: pointer;
     }
     #primaryPreview:empty { background: #fff; }
-    #primaryPreview img { width: 100%; height: 100%; object-fit: contain; border-radius: 3px; }
-    
-    /* 10 Photo Preview Grid */
-    #photoGridContainer {
+    #primaryPreview img {
+      width: 100%; height: 100%; object-fit: contain; border-radius: 3px;
+    }
+
+    /* 10 Photo Preview Grid (embedded, always visible) */
+    #10_Photo_Array {
       margin: 20px auto;
-      width: 100%;
-      max-width: 600px;
+      width: 550px; /* 5 boxes * (100px width + 5px gap) - 5px extra gap */
       display: grid;
-      grid-template-columns: repeat(5, 1fr);
-      grid-gap: 10px;
+      grid-template-columns: repeat(5, 100px);
+      grid-template-rows: repeat(2, 132px);
+      gap: 5px;
+      border: 1px solid #ccc; /* Optional border for the overall grid */
+      padding: 5px;
+      background-color: #f9f9f9;
     }
-    .photo-preview-box {
-      width: 100%;
-      padding-top: 100%; /* Square aspect ratio */
+    .photoBox {
+      width: 100px;
+      height: 132px;
+      border: 1px dashed #aaa; /* outline to show position even if empty */
       position: relative;
-      border: 2px dashed #ccc;
-      border-radius: 3px;
-      background-color: #fafafa;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      overflow: hidden;
     }
-    .photo-preview-box img {
-      position: absolute;
-      top: 0;
-      left: 0;
+    .photoBox img {
       width: 100%;
       height: 100%;
       object-fit: cover;
-      border-radius: 3px;
     }
-    .photo-preview-box.empty::after {
-      content: "Empty";
-      position: absolute;
-      top: 50%;
-      left: 50%;
-      transform: translate(-50%, -50%);
-      color: #999;
-      font-size: 14px;
-    }
-    
-    /* Container #13 (for key phrases textarea) */
-    #container13 { position: relative; width: 250px; top: -150px; }
-    
+
     /* Components below search key phrases */
     #belowSearch { margin-top: -180px; margin-left: 10px; }
     .title-container { margin-top: -50px; }
@@ -153,16 +125,16 @@
     #analyzeMetadataBtn { margin-left: 50px; }
     #showAnalyzeRulesBtn { margin-top: 25px; }
     .phrases-header { position: relative; top: 125px; left: 10px; }
-    
+
     /* Modal styles */
     .modal { display: none; }
     .modal-content { padding: 20px; }
     .modal textarea { width: 100%; height: 300px; resize: none; }
-    
+
     /* Additional widths for Etsy Link and Shop Listings */
     #etsyLink, #shopListings { width: 500px !important; }
-    
-    /* Buttons at bottom */
+
+    /* Styles for the Update Listing and Upload Photo button containers at the bottom center */
     #uploadContainer {
       position: fixed;
       bottom: 20px;
@@ -181,7 +153,7 @@
 <body>
   <!-- Configure Buttons control -->
   <button id="configureButtonsBtn" class="btn waves-effect waves-light configurable">Configure Buttons</button>
-  
+
   <!-- Wrap Listing Description and File Drop Zones -->
   <div id="descriptionAndFileUploadContainer">
     <div class="listing-desc-container" id="listingDescContainer">
@@ -199,7 +171,7 @@
       <textarea id="uploadedFilesList" class="materialize-textarea" rows="2" placeholder="Uploaded .csv, .doc, .docx files will appear here"></textarea>
     </div>
   </div>
-  
+
   <!-- Etsy OAuth and Shop Listings Section -->
   <button id="connectEtsyBtn" class="btn waves-effect waves-light configurable">Connect to Etsy</button>
   <div style="margin-top: -180px; margin-left: 10px;">
@@ -209,7 +181,7 @@
       <textarea id="shopListings" class="materialize-textarea" placeholder="Enter your listing URL or ID"></textarea>
     </div>
   </div>
-  
+
   <!-- Etsy Listing Generator UI -->
   <div class="phrases-header configurable" style="position: relative; top: 125px; left: 10px;">
     <span class="section-heading configurable">2. User Provided Search Key Phrases</span>
@@ -225,7 +197,7 @@
       <textarea id="searchKeyPhrases" class="materialize-textarea" rows="14"></textarea>
     </div>
   </div>
-  
+
   <!-- Components below Search Key Phrases -->
   <div id="belowSearch">
     <button id="generateBtn" class="btn waves-effect waves-light configurable">Generate</button>
@@ -261,12 +233,22 @@
       </div>
     </div>
   </div>
-  
-  <!-- 10 Photo Preview Grid -->
-  <div id="photoGridContainer">
-    <div id="previewGrid"></div>
+
+  <!-- 10 Photo Preview Grid: always visible, arranged in 2 rows x 5 columns -->
+  <div id="10_Photo_Array">
+    <!-- Create 10 boxes; these will display the uploaded images (or remain empty with an outline) -->
+    <div class="photoBox" id="photoBox0"></div>
+    <div class="photoBox" id="photoBox1"></div>
+    <div class="photoBox" id="photoBox2"></div>
+    <div class="photoBox" id="photoBox3"></div>
+    <div class="photoBox" id="photoBox4"></div>
+    <div class="photoBox" id="photoBox5"></div>
+    <div class="photoBox" id="photoBox6"></div>
+    <div class="photoBox" id="photoBox7"></div>
+    <div class="photoBox" id="photoBox8"></div>
+    <div class="photoBox" id="photoBox9"></div>
   </div>
-  
+
   <!-- Update Listing button container (updates an existing listing) -->
   <div id="uploadContainer">
     <button id="uploadToEtsyBtn" class="btn waves-effect waves-light configurable">Update Listing</button>
@@ -441,10 +423,11 @@ Using Sales Report and Product List Files:
     // Global variables for file uploads and previews
     let soldOrdersCSV = [];
     let listingsCSV = [];
-    // previewImages now is an array of 10 slots (initially null)
-    let previewImages = Array(10).fill(null);
-    let photoNames = Array(10).fill("");
-    // (Other arrays if needed)
+    let photoNames = [];
+    let previewImages = []; // This will hold dataURLs for each uploaded image
+    let photoStatuses = [];
+    let photoMeta = [];
+    let photoObjects = [];
     
     // Proxy OpenAI calls through our Netlify function
     async function callOpenAI(payload) {
@@ -567,7 +550,8 @@ Using Sales Report and Product List Files:
         exchangeCodeForToken(code);
         window.history.replaceState({}, document.title, REDIRECT_URI);
       }
-      renderPreviewGrid();
+      // Render the 10 photo preview boxes (if any images are present)
+      renderPhotoGrid();
       updateUploadedFilesList();
     });
     
@@ -667,127 +651,75 @@ Using Sales Report and Product List Files:
           return;
         }
       }
-      // Iterate over all 10 preview images and upload any that are not null
-      for (let i = 0; i < previewImages.length; i++) {
-        if (previewImages[i]) {
-          // Get the image from the previewImages array
-          const fileDataURL = previewImages[i];
-          // Create a FormData object.
-          const formData = new FormData();
-          formData.append("listingId", listingId);
-          formData.append("token", accessToken);
-          formData.append("fileName", photoNames[i] || `uploaded_photo_${i+1}.jpg`);
-          formData.append("rank", i + 1); // rank is 1-indexed
-          // Convert dataURL to Blob
-          const res = await fetch(fileDataURL);
-          const blob = await res.blob();
-          formData.append("file", blob, photoNames[i] || `uploaded_photo_${i+1}.jpg`);
-          
-          console.log("Uploading photo", i + 1, "with FormData:");
-          for (let pair of formData.entries()) {
-            console.log(pair[0] + ': ' + (pair[1] instanceof Blob ? '[Blob]' : pair[1]));
-          }
-          
-          // Call the imageUpload.js Netlify function
-          const uploadUrl = `/.netlify/functions/imageUpload`;
-          try {
-            const response = await fetch(uploadUrl, {
-              method: "POST",
-              body: formData
-            });
-            console.log("Photo Upload response status for image", i + 1, ":", response.status);
-            if (!response.ok) {
-              const errorText = await response.text();
-              console.error("Error uploading photo", i + 1, ":", errorText);
-              M.toast({ html: "Error uploading photo " + (i+1) + ": " + response.status + " - " + errorText });
-            } else {
-              const data = await response.json();
-              console.log("Photo", i + 1, "uploaded successfully:", data);
-              M.toast({ html: "Photo " + (i+1) + " uploaded successfully!" });
-            }
-          } catch (e) {
-            console.error("Exception in uploadPhoto for image", i + 1, ":", e);
-            M.toast({ html: "Exception uploading photo " + (i+1) + ": " + e.message });
-          }
+      // For simplicity, we take the first uploaded image from previewImages.
+      if (previewImages.length === 0) {
+        M.toast({ html: "No image available. Please drag and drop an image first." });
+        return;
+      }
+      const fileDataURL = previewImages[0];
+      // Create a FormData object.
+      const formData = new FormData();
+      formData.append("listingId", listingId);
+      formData.append("token", accessToken);
+      formData.append("fileName", photoNames[0] || "uploaded_photo.jpg");
+      formData.append("rank", 1); // assuming rank 1 for the first image
+      // Convert dataURL to Blob
+      const res = await fetch(fileDataURL);
+      const blob = await res.blob();
+      formData.append("file", blob, photoNames[0] || "uploaded_photo.jpg");
+      
+      console.log("Uploading photo with FormData:");
+      for (let pair of formData.entries()) {
+        console.log(pair[0] + ': ' + (pair[1] instanceof Blob ? '[Blob]' : pair[1]));
+      }
+      
+      // Call the imageUpload.js Netlify function
+      const uploadUrl = `/.netlify/functions/imageUpload`;
+      try {
+        const response = await fetch(uploadUrl, {
+          method: "POST",
+          body: formData
+        });
+        console.log("Photo Upload response status:", response.status);
+        if (!response.ok) {
+          const errorText = await response.text();
+          console.error("Error uploading photo:", errorText);
+          M.toast({ html: "Error uploading photo: " + response.status + " - " + errorText });
+        } else {
+          const data = await response.json();
+          console.log("Photo uploaded successfully:", data);
+          M.toast({ html: "Photo uploaded successfully!" });
         }
+      } catch (e) {
+        console.error("Exception in uploadPhoto:", e);
+        M.toast({ html: "Exception uploading photo: " + e.message });
       }
     }
     
     // Bind the "Upload Photo" button
     document.getElementById("uploadPhotoBtn").addEventListener("click", uploadPhoto);
     
-    // Render the 10-photo preview grid.
-    function renderPreviewGrid() {
-      const gridContainer = document.getElementById("previewGrid");
-      gridContainer.innerHTML = ""; // Clear previous content
+    // Function to render the 10-photo preview grid
+    function renderPhotoGrid() {
+      // Clear existing boxes
+      const gridContainer = document.getElementById("10_Photo_Array");
+      gridContainer.innerHTML = "";
+      // Create 10 boxes (preserve order)
       for (let i = 0; i < 10; i++) {
         const box = document.createElement("div");
-        box.className = "photo-preview-box";
-        box.id = "previewBox" + i;
+        box.className = "photoBox";
+        box.id = "photoBox" + i;
+        // If an image exists in previewImages at this index, display it
         if (previewImages[i]) {
           const img = document.createElement("img");
           img.src = previewImages[i];
           box.appendChild(img);
-        } else {
-          box.classList.add("empty");
         }
         gridContainer.appendChild(box);
       }
     }
     
-    // File Drop and Upload Handlers for images (update previewImages array)
-    const dropZone = document.getElementById("dropZone");
-    dropZone.addEventListener("dragover", e => { 
-      e.preventDefault(); 
-      e.stopPropagation(); 
-      dropZone.style.borderColor = "#000"; 
-    });
-    dropZone.addEventListener("dragleave", e => { 
-      e.preventDefault(); 
-      e.stopPropagation(); 
-      dropZone.style.borderColor = "#ccc"; 
-    });
-    dropZone.addEventListener("drop", async e => {
-      e.preventDefault(); 
-      e.stopPropagation(); 
-      dropZone.style.borderColor = "#ccc";
-      const files = e.dataTransfer.files;
-      // Allow maximum 10 images
-      for (let i = 0; i < files.length && i < 10; i++) {
-        const file = files[i];
-        if (file.type === "image/jpeg" || file.type === "image/png") {
-          try {
-            const dataURL = await new Promise((resolve, reject) => {
-              const reader = new FileReader();
-              reader.onload = event => {
-                console.log("DataURL (first 50 chars) for image", i+1, ":", event.target.result.substring(0, 50));
-                console.log("DataURL length for image", i+1, ":", event.target.result.length);
-                resolve(event.target.result);
-              };
-              reader.onerror = reject;
-              reader.readAsDataURL(file);
-            });
-            // Place image in the first available slot in previewImages array
-            const index = previewImages.findIndex(img => img === null);
-            if (index !== -1) {
-              previewImages[index] = dataURL;
-              photoNames[index] = file.name;
-            } else {
-              // If all slots are filled, replace the first one (or handle as needed)
-              previewImages[0] = dataURL;
-              photoNames[0] = file.name;
-            }
-            renderPreviewGrid();
-          } catch (err) {
-            console.error("Error processing image:", err);
-          }
-        } else {
-          M.toast({ html: "Only JPEG and PNG images are supported." });
-        }
-      }
-    });
-    
-    // Function to update the list of uploaded file names (if needed)
+    // Update the list of uploaded file names (for CSV upload, etc.)
     function updateUploadedFilesList() {
       let fileList = [];
       soldOrdersCSV.forEach(file => fileList.push(file.name));
@@ -799,7 +731,8 @@ Using Sales Report and Product List Files:
     document.getElementById("configureButtonsBtn").addEventListener("click", function() {
       var configContainer = document.getElementById("buttonConfigContainer");
       configContainer.innerHTML = "";
-      var selectors = "button:not(#configureButtonsBtn), #listingDescContainer, #ordersDropZone, #listingsDropZone, #dropZone, #csvProgressContainer, #previewGridContainer, #primaryPreview, #container13, #uploadedFilesList";
+      // Include all elements plus the new 10-photo grid container ("10_Photo_Array")
+      var selectors = "button:not(#configureButtonsBtn), #listingDescContainer, #ordersDropZone, #listingsDropZone, #dropZone, #csvProgressContainer, #10_Photo_Array, #primaryPreview, #container13, #uploadedFilesList";
       var elements = document.querySelectorAll(selectors);
       var table = document.createElement("table");
       table.className = "striped";
@@ -830,7 +763,7 @@ Using Sales Report and Product List Files:
     });
     
     document.getElementById("saveButtonPositionsBtn").addEventListener("click", function() {
-      var selectors = "button:not(#configureButtonsBtn), #listingDescContainer, #ordersDropZone, #listingsDropZone, #dropZone, #csvProgressContainer, #previewGridContainer, #primaryPreview, #container13, #uploadedFilesList";
+      var selectors = "button:not(#configureButtonsBtn), #listingDescContainer, #ordersDropZone, #listingsDropZone, #dropZone, #csvProgressContainer, #10_Photo_Array, #primaryPreview, #container13, #uploadedFilesList";
       var elements = document.querySelectorAll(selectors);
       var positions = {};
       elements.forEach(function(el) {
@@ -856,6 +789,7 @@ Using Sales Report and Product List Files:
     // -------------------------------------------------------------------------
     
     window.addEventListener("load", function() {
+      // Adjust container13 height as needed
       var container13 = document.getElementById("container13");
       container13.style.height = (container13.offsetHeight * 2.5) + "px";
     });
