@@ -557,9 +557,9 @@ Using Sales Report and Product List Files:
   </script>
 
   <script>
-    // ----------------------
-    // GLOBALS & MAIN LOGIC
-    // ----------------------
+    // ------------------------------------------------
+    // GLOBALS
+    // ------------------------------------------------
     const ETSY_SHOP_URL = "https://www.etsy.com/shop/custombrites";
     const CLIENT_ID = "k75zdspz4r99txpqdji7i2em";
     const REDIRECT_URI = "https://delicate-tanuki-616ac0.netlify.app/";
@@ -568,14 +568,13 @@ Using Sales Report and Product List Files:
 
     let soldOrdersCSV = [];
     let listingsCSV = [];
-
     let photoNames = [];
-    let previewImages = [];
+    let previewImages = []; // data URLs (3000×3000 resizing)
     let photoMeta = [];
 
-    // ----------------------
-    // IMAGE RESIZE UTILITY
-    // ----------------------
+    // ------------------------------------------------
+    // IMAGE RESIZE UTILITY (3000×3000)
+    // ------------------------------------------------
     async function resizeImage(dataURL, width, height) {
       return new Promise((resolve, reject) => {
         const img = new Image();
@@ -594,24 +593,9 @@ Using Sales Report and Product List Files:
       });
     }
 
-    // Just an example function for calling the OpenAI text completions endpoint:
-    async function callOpenAI(payload) {
-      const response = await fetch("/.netlify/functions/openaiProxy", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(payload)
-      });
-      if (!response.ok) {
-        const errorData = await response.json();
-        throw new Error("API Error: " +
-          (errorData.error ? errorData.error.message : response.statusText));
-      }
-      return await response.json();
-    }
-
-    // --------------------------------------------------
-    // DRAG & DROP: CSV / DOCS (Etsy Orders, Listings)
-    // --------------------------------------------------
+    // ------------------------------------------------
+    // DRAG & DROP for CSV / DOC
+    // ------------------------------------------------
     async function uploadCSVFile(file) {
       return new Promise((resolve, reject) => {
         const reader = new FileReader();
@@ -696,7 +680,7 @@ Using Sales Report and Product List Files:
       }
     }
 
-    // CSV: Sold Orders
+    // Sold Orders
     const ordersDropZone = document.getElementById("ordersDropZone");
     ordersDropZone.addEventListener("dragover", e => {
       e.preventDefault(); e.stopPropagation();
@@ -710,7 +694,6 @@ Using Sales Report and Product List Files:
       e.preventDefault(); e.stopPropagation();
       ordersDropZone.style.borderColor = "#ccc";
       const files = e.dataTransfer.files;
-      const progressBar = document.getElementById("csvProgressBar");
       for (let i = 0; i < files.length; i++) {
         const file = files[i];
         const fileName = file.name.toLowerCase();
@@ -722,11 +705,10 @@ Using Sales Report and Product List Files:
             } else {
               fileData = await uploadDocFile(file);
             }
-            progressBar.value = 0;
             soldOrdersCSV.push(fileData);
             updateUploadedFilesList();
             await updateVectorStore();
-          } catch(err) {
+          } catch (err) {
             console.error("Error uploading file:", err);
           }
         } else {
@@ -735,7 +717,7 @@ Using Sales Report and Product List Files:
       }
     });
 
-    // CSV: Listings
+    // Listings
     const listingsDropZone = document.getElementById("listingsDropZone");
     listingsDropZone.addEventListener("dragover", e => {
       e.preventDefault(); e.stopPropagation();
@@ -749,7 +731,6 @@ Using Sales Report and Product List Files:
       e.preventDefault(); e.stopPropagation();
       listingsDropZone.style.borderColor = "#ccc";
       const files = e.dataTransfer.files;
-      const progressBar = document.getElementById("csvProgressBar");
       for (let i = 0; i < files.length; i++) {
         const file = files[i];
         const fileName = file.name.toLowerCase();
@@ -761,11 +742,10 @@ Using Sales Report and Product List Files:
             } else {
               fileData = await uploadDocFile(file);
             }
-            progressBar.value = 0;
             listingsCSV.push(fileData);
             updateUploadedFilesList();
             await updateVectorStore();
-          } catch(err) {
+          } catch (err) {
             console.error("Error uploading file:", err);
           }
         } else {
@@ -781,9 +761,9 @@ Using Sales Report and Product List Files:
       document.getElementById("uploadedFilesList").value = fileList.join("\n");
     }
 
-    // --------------------------------------------------
-    // DRAG & DROP: IMAGES (Now includes 3000×3000 resize)
-    // --------------------------------------------------
+    // ------------------------------------------------
+    // DRAG & DROP: IMAGES (Resized to 3000×3000)
+    // ------------------------------------------------
     const dropZone = document.getElementById("dropZone");
     dropZone.addEventListener("dragover", e => {
       e.preventDefault(); e.stopPropagation();
@@ -804,7 +784,6 @@ Using Sales Report and Product List Files:
         const file = files[i];
         if (file.type === "image/jpeg" || file.type === "image/png") {
           try {
-            // Read file as data URL
             const dataURL = await new Promise((resolve, reject) => {
               const reader = new FileReader();
               reader.onload = event => resolve(event.target.result);
@@ -814,7 +793,6 @@ Using Sales Report and Product List Files:
             // Resize to 3000 × 3000
             const resizedDataURL = await resizeImage(dataURL, 3000, 3000);
 
-            // Push the resized version
             previewImages.push(resizedDataURL);
             photoNames.push(file.name);
 
@@ -830,7 +808,6 @@ Using Sales Report and Product List Files:
       }
     });
 
-    // Update the primary (first) preview box
     function updatePrimaryPreview() {
       const primaryPreview = document.getElementById("primaryPreview");
       if (previewImages.length > 0) {
@@ -840,7 +817,6 @@ Using Sales Report and Product List Files:
       }
     }
 
-    // Update the static 10-cell preview grid
     function updateStaticPreviewGrid() {
       for (let i = 0; i < 10; i++) {
         const cell = document.getElementById("previewCell" + i);
@@ -853,6 +829,7 @@ Using Sales Report and Product List Files:
           img.src = previewImages[i];
           previewBox.appendChild(img);
 
+          // "Remove" button for each image
           const removeBtn = document.createElement("div");
           removeBtn.className = "remove-btn";
           removeBtn.textContent = "X";
@@ -866,30 +843,30 @@ Using Sales Report and Product List Files:
           });
           previewBox.appendChild(removeBtn);
 
+          // # overlay
           const numOverlay = document.createElement("div");
           numOverlay.className = "number-overlay";
           numOverlay.textContent = (i + 1).toString();
           previewBox.appendChild(numOverlay);
 
-          // Clicking the preview box could open metadata, etc.
+          // On click, show metadata
           previewBox.addEventListener("click", () => {
             showMetadata(i);
           });
 
           cell.appendChild(previewBox);
 
+          // A small status area for "Analyze" progress
           const metadataStatus = document.createElement("div");
           metadataStatus.className = "metadata-status";
           metadataStatus.id = "metadataStatus" + i;
           cell.appendChild(metadataStatus);
-
         } else {
           cell.textContent = "Empty";
         }
       }
     }
 
-    // Show metadata in a modal
     function showMetadata(index) {
       const metadata = photoMeta[index] || "No metadata available for this photo.";
       document.getElementById("metadataTextarea").value = metadata;
@@ -901,9 +878,72 @@ Using Sales Report and Product List Files:
       instance.open();
     }
 
-    // -----------------------------
+    // ------------------------------------------------
+    // ANALYZE PHOTOS (calls /analyzeImage)
+    // ------------------------------------------------
+    document.getElementById("analyzeMetadataBtn").addEventListener("click", analyzePhotos);
+
+    async function analyzePhotos() {
+      for (let i = 0; i < previewImages.length; i++) {
+        await analyzePhoto(i);
+      }
+    }
+
+    async function analyzePhoto(index) {
+      const statusElem = document.getElementById("metadataStatus" + index);
+      if (!statusElem) return;
+      statusElem.innerHTML = "";
+
+      const progressBar = document.createElement("progress");
+      progressBar.className = "metadata-progress";
+      progressBar.max = 100;
+      progressBar.value = 0;
+      statusElem.appendChild(progressBar);
+
+      let progress = 0;
+      const interval = setInterval(() => {
+        progress = Math.min(progress + 10, 80);
+        progressBar.value = progress;
+      }, 200);
+
+      try {
+        // Gather "rules" text from the UI
+        const rulesText = document.getElementById("analyzeRulesTextarea").value || "";
+
+        // Convert dataURL -> Blob
+        const dataURL = previewImages[index];
+        const blob = await (await fetch(dataURL)).blob();
+
+        // Create FormData to send to /analyzeImage
+        const formData = new FormData();
+        formData.append("rules", rulesText);
+        formData.append("imageFile", blob, photoNames[index] || `image_${index}.jpg`);
+
+        const resp = await fetch("/.netlify/functions/analyzeImage", {
+          method: "POST",
+          body: formData
+        });
+        clearInterval(interval);
+        progressBar.value = 90;
+
+        if (!resp.ok) {
+          const errData = await resp.text();
+          throw new Error(`analyzeImage error: ${resp.status} - ${errData}`);
+        }
+        const json = await resp.json();
+        photoMeta[index] = json.metadata || "No metadata returned.";
+        progressBar.value = 100;
+
+        statusElem.innerHTML = '<span style="color:green; font-size:16px;"><i class="material-icons">check_circle</i></span>';
+      } catch (err) {
+        clearInterval(interval);
+        statusElem.innerHTML = `<span style="color:red;">Error: ${err.message}</span>`;
+      }
+    }
+
+    // ------------------------------------------------
     // BASIC OAUTH CONNECT (Etsy)
-    // -----------------------------
+    // ------------------------------------------------
     function generateRandomString(length) {
       const possible = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789';
       let text = '';
@@ -943,17 +983,14 @@ Using Sales Report and Product List Files:
       window.location.href = etsyAuthUrl;
     });
 
-    // On load, parse the code if returning from OAuth
     document.addEventListener("DOMContentLoaded", () => {
       loadButtonPositions();
-
       const urlParams = new URLSearchParams(window.location.search);
       const code = urlParams.get("code");
       if (code) {
         exchangeCodeForToken(code);
         window.history.replaceState({}, document.title, REDIRECT_URI);
       }
-
       updateStaticPreviewGrid();
       updateUploadedFilesList();
     });
@@ -965,9 +1002,7 @@ Using Sales Report and Product List Files:
         return;
       }
       try {
-        const response = await fetch(
-          `/.netlify/functions/exchangeToken?code=${encodeURIComponent(code)}&code_verifier=${encodeURIComponent(codeVerifier)}`
-        );
+        const response = await fetch(`/.netlify/functions/exchangeToken?code=${encodeURIComponent(code)}&code_verifier=${encodeURIComponent(codeVerifier)}`);
         const tokenData = await response.json();
         if (tokenData.access_token) {
           accessToken = tokenData.access_token;
@@ -981,9 +1016,9 @@ Using Sales Report and Product List Files:
       }
     }
 
-    // -----------------------------
+    // ------------------------------------------------
     // UPDATE LISTING
-    // -----------------------------
+    // ------------------------------------------------
     document.getElementById("uploadToEtsyBtn").addEventListener("click", async () => {
       const listingInput = document.getElementById("shopListings").value.trim();
       if (!listingInput) {
@@ -1007,7 +1042,7 @@ Using Sales Report and Product List Files:
         title: document.getElementById("listingTitle").value,
         description: document.getElementById("listingDescription").value,
         tags: document.getElementById("searchKeyPhrases").value
-                 .split("\n").map(s => s.trim()).filter(s => s !== "")
+          .split("\n").map(s => s.trim()).filter(s => s !== "")
       };
       const updateUrl =
         `/.netlify/functions/updateListing?listingId=${listingId}&token=${encodeURIComponent(accessToken)}`;
@@ -1029,9 +1064,9 @@ Using Sales Report and Product List Files:
       }
     });
 
-    // -----------------------------
+    // ------------------------------------------------
     // UPLOAD PHOTOS
-    // -----------------------------
+    // ------------------------------------------------
     document.getElementById("uploadPhotoBtn").addEventListener("click", async () => {
       const listingInput = document.getElementById("shopListings").value.trim();
       if (!listingInput) {
@@ -1088,79 +1123,9 @@ Using Sales Report and Product List Files:
       }
     });
 
-    // -----------------------------
-    // ANALYZE PHOTOS
-    // -----------------------------
-    document.getElementById("analyzeMetadataBtn").addEventListener("click", async () => {
-      for (let i = 0; i < previewImages.length; i++) {
-        await analyzePhoto(i);
-      }
-    });
-
-    async function analyzePhoto(index) {
-      const statusElem = document.getElementById("metadataStatus" + index);
-      if (!statusElem) return;
-      statusElem.innerHTML = "";
-
-      const progressBar = document.createElement("progress");
-      progressBar.className = "metadata-progress";
-      progressBar.max = 100;
-      progressBar.value = 0;
-      statusElem.appendChild(progressBar);
-
-      let progress = 0;
-      const phase1Interval = setInterval(() => {
-        progress = Math.min(progress + 3, 50);
-        progressBar.value = progress;
-      }, 100);
-
-      try {
-        const imageInfo = "File name: " + photoNames[index];
-        const rules = document.getElementById("analyzeRulesTextarea").value;
-
-        const payload = {
-          model: modelName,
-          messages: [
-            { role: "system", content: "Generate a short descriptive metadata based on these rules:\n" + rules },
-            { role: "user", content: "Here is the photo name: " + imageInfo }
-          ],
-          temperature: 0.7,
-          max_tokens: 100
-        };
-        const aiResponse = await callOpenAI(payload);
-
-        clearInterval(phase1Interval);
-        progress = 50;
-        progressBar.value = progress;
-
-        let metadata = (aiResponse.choices && aiResponse.choices.length > 0)
-          ? stripMarkdownJSON(aiResponse.choices[0].message.content)
-          : "No metadata generated.";
-
-        // Simulate second phase
-        const phase2Interval = setInterval(() => {
-          progress = Math.min(progress + 5, 100);
-          progressBar.value = progress;
-        }, 100);
-        await new Promise(r => setTimeout(r, 1000));
-        clearInterval(phase2Interval);
-        progress = 100;
-        progressBar.value = progress;
-
-        photoMeta[index] = metadata;
-        statusElem.innerHTML =
-          '<span style="color:green; font-size:16px;">' +
-          '<i class="material-icons">check_circle</i>' +
-          '</span>';
-      } catch (error) {
-        clearInterval(phase1Interval);
-        statusElem.innerHTML = `<span style="color:red;">Error: ${error.message}</span>`;
-      }
-    }
-
-    // -----------------------------
-    // RULES & TITLE / DESC
-    // -----------------------------
+    // ------------------------------------------------
+    // RULES & TITLE / DESCRIPTION GENERATION
+    // ------------------------------------------------
     function stripMarkdownJSON(text) {
       return text.replace(/^```json\s*/, "").replace(/\s*```$/, "").trim();
     }
@@ -1248,11 +1213,29 @@ Important: Return ONLY the description as plain text.`;
       }
     }
 
+    async function callOpenAI(payload) {
+      const response = await fetch("/.netlify/functions/openaiProxy", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(payload)
+      });
+      if (!response.ok) {
+        const errorData = await response.json();
+        throw new Error("API Error: " +
+          (errorData.error ? errorData.error.message : response.statusText));
+      }
+      return await response.json();
+    }
+
     document.getElementById("generateBtn").addEventListener("click", async () => {
       await Promise.all([generateTitleOnly(), generateDescriptionOnly()]);
     });
     document.getElementById("regenTitleBtn").addEventListener("click", generateTitleOnly);
     document.getElementById("regenDescriptionBtn").addEventListener("click", generateDescriptionOnly);
+
+    function updateTitleCount(text) {
+      document.getElementById("titleCount").textContent = "Count: " + text.length;
+    }
 
     // Copy to clipboard
     document.getElementById("copyTitleBtn").addEventListener("click", () => {
@@ -1263,11 +1246,9 @@ Important: Return ONLY the description as plain text.`;
       const text = document.getElementById("listingDescription").value;
       navigator.clipboard.writeText(text).catch(err => console.error("Copy error:", err));
     });
-
     document.getElementById("clearKeyPhrasesBtn").addEventListener("click", () => {
       document.getElementById("searchKeyPhrases").value = "";
     });
-
     document.getElementById("copyKeyPhrasesBtn").addEventListener("click", () => {
       const lines = document.getElementById("searchKeyPhrases").value
         .split(/\n+/).map(l => l.trim()).filter(l => l !== "");
@@ -1275,14 +1256,13 @@ Important: Return ONLY the description as plain text.`;
         .catch(err => console.error("Error copying key phrases:", err));
     });
 
-    // Extra Key Phrase generation steps (if needed)
+    // Optional generation of tag phrases
     document.getElementById("listingDescInput").addEventListener("keydown", async (e) => {
       if (e.key === "Enter" && !e.shiftKey) {
         e.preventDefault();
         await generateTagPhrases();
       }
     });
-
     async function generateTagPhrases() {
       const question = document.getElementById("listingDescInput").value.trim();
       if (!question) {
@@ -1300,7 +1280,6 @@ ${keywordRules}
 
 Generate exactly 13 tag phrases (each ≤ 20 characters). Return as plain text.
 `;
-
       try {
         const payload = {
           model: modelName,
@@ -1324,14 +1303,9 @@ Generate exactly 13 tag phrases (each ≤ 20 characters). Return as plain text.
       }
     }
 
-    // Title character count
-    function updateTitleCount(text) {
-      document.getElementById("titleCount").textContent = "Count: " + text.length;
-    }
-
-    // -----------------------------
-    // POSITION CONFIG
-    // -----------------------------
+    // ------------------------------------------------
+    // BUTTON CONFIG
+    // ------------------------------------------------
     document.getElementById("configureButtonsBtn").addEventListener("click", () => {
       const configContainer = document.getElementById("buttonConfigContainer");
       configContainer.innerHTML = "";
