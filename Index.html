@@ -310,7 +310,18 @@
     <button id="uploadPhotoBtn" class="btn waves-effect waves-light configurable">Upload Photo</button>
   </div>
   
-  <!-- Modals -->
+  <!-- Metadata Modal (for viewing metadata on click) -->
+  <div id="metadataModal" class="modal">
+    <div class="modal-content">
+      <h4>Photo Metadata</h4>
+      <textarea id="metadataTextarea" readonly style="width:100%; height:300px;"></textarea>
+    </div>
+    <div class="modal-footer">
+      <a href="#!" id="closeMetadataBtn" class="modal-close waves-effect waves-green btn">Close</a>
+    </div>
+  </div>
+  
+  <!-- Other Modals (Title Rules, Description Rules, Analyze Rules, Keyword Rules, Button Config) remain unchanged -->
   <!-- Title Rules Modal -->
   <div id="titleRulesModal" class="modal">
     <div class="modal-content">
@@ -430,17 +441,6 @@ Using Sales Report and Product List Files:
     </div>
   </div>
   
-  <!-- Metadata Modal -->
-  <div id="metadataModal" class="modal">
-    <div class="modal-content">
-      <h4>Photo Metadata</h4>
-      <textarea id="metadataTextarea" readonly style="width:100%; height:300px;"></textarea>
-    </div>
-    <div class="modal-footer">
-      <a href="#!" id="closeMetadataBtn" class="modal-close waves-effect waves-green btn">Close</a>
-    </div>
-  </div>
-  
   <!-- Crop Modal -->
   <div id="photoCropModal" class="modal">
     <div class="crop-container">
@@ -475,8 +475,8 @@ Using Sales Report and Product List Files:
     let listingsCSV = [];
     let photoNames = [];
     let previewImages = [];
+    let photoMeta = []; // Array to hold metadata for each photo
     let photoStatuses = [];
-    let photoMeta = [];
     let photoObjects = [];
     
     async function callOpenAI(payload) {
@@ -758,7 +758,7 @@ Using Sales Report and Product List Files:
     }
     document.getElementById("uploadPhotoBtn").addEventListener("click", uploadPhoto);
     
-    // Analyze Photos: loop through each photo and simulate metadata analysis/upload progress.
+    // Analyze Photos: loop through each photo and simulate metadata analysis/upload
     function analyzePhotos() {
       for (let i = 0; i < previewImages.length; i++) {
         analyzePhoto(i);
@@ -766,34 +766,48 @@ Using Sales Report and Product List Files:
     }
     
     function analyzePhoto(index) {
+      // Get the metadata status container by ID (created in updateStaticPreviewGrid)
       const statusElem = document.getElementById("metadataStatus" + index);
       if (!statusElem) return;
-      // Clear any previous content
       statusElem.innerHTML = "";
-      // Create a progress bar element
+      
+      // Create a blue progress bar
       const progressBar = document.createElement("progress");
       progressBar.className = "metadata-progress";
       progressBar.max = 100;
       progressBar.value = 0;
       statusElem.appendChild(progressBar);
       
-      // Simulate progress update (e.g., metadata generation/upload)
       let progress = 0;
       const interval = setInterval(() => {
         progress += 5;
         progressBar.value = progress;
         if (progress >= 100) {
           clearInterval(interval);
-          // Replace progress bar with a green checkmark icon
+          // Simulate metadata received and store it
+          photoMeta[index] = "Metadata for photo " + (index+1) + ": [Simulated metadata details here]";
+          // Replace the progress bar with a green checkmark
           statusElem.innerHTML = '<span style="color:green; font-size:16px;"><i class="material-icons">check_circle</i></span>';
         }
-      }, 100); // Update every 100ms
+      }, 100);
     }
     
-    // Attach analyzePhotos function to Analyze button
+    // When "Analyze Photos" is clicked, run analysis for each photo
     document.getElementById("analyzeMetadataBtn").addEventListener("click", analyzePhotos);
     
-    // Update static preview grid (now also adds a metadata status div)
+    // Function to show metadata in a modal when clicking on a photo
+    function showMetadata(index) {
+      const metadata = photoMeta[index] || "No metadata available for this photo.";
+      document.getElementById("metadataTextarea").value = metadata;
+      const modalElem = document.getElementById("metadataModal");
+      let instance = M.Modal.getInstance(modalElem);
+      if (!instance) {
+        instance = M.Modal.init(modalElem, {});
+      }
+      instance.open();
+    }
+    
+    // Update static preview grid (now also adds a metadata status div and click listener)
     function updateStaticPreviewGrid() {
       for (let i = 0; i < 10; i++) {
         const cell = document.getElementById("previewCell" + i);
@@ -805,13 +819,18 @@ Using Sales Report and Product List Files:
           const img = document.createElement("img");
           img.src = previewImages[i];
           previewBox.appendChild(img);
+          
+          // Attach click event on the preview box to show metadata
+          previewBox.addEventListener("click", () => { showMetadata(i); });
   
           const removeBtn = document.createElement("div");
           removeBtn.className = "remove-btn";
           removeBtn.textContent = "X";
-          removeBtn.addEventListener("click", () => {
+          removeBtn.addEventListener("click", (e) => {
+            e.stopPropagation();
             previewImages.splice(i, 1);
             photoNames.splice(i, 1);
+            photoMeta.splice(i, 1);
             updateStaticPreviewGrid();
             updatePrimaryPreview();
           });
