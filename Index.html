@@ -385,7 +385,7 @@ Using Sales Report and Product List Files:
       return await response.json();
     }
     
-    // File upload functions for CSV and DOC files remain unchanged
+    // File upload functions for CSV and DOC files (unchanged)
     async function uploadCSVFile(file, progressCallback) {
       return new Promise((resolve, reject) => {
         const reader = new FileReader();
@@ -564,7 +564,7 @@ Using Sales Report and Product List Files:
     
     document.getElementById("uploadToEtsyBtn").addEventListener("click", updateExistingListing);
     
-    // Upload Photo: loop through previewImages and upload each photo
+    // Upload Photo: loop through previewImages and use the File objects from photoFiles
     async function uploadPhoto() {
       const listingInput = document.getElementById("shopListings").value.trim();
       if (!listingInput) { M.toast({ html: "Please provide a listing URL or ID in 'My Etsy Shop Listings'." }); return; }
@@ -577,11 +577,8 @@ Using Sales Report and Product List Files:
       }
       if (previewImages.length === 0) { M.toast({ html: "No images to upload. Please drag and drop images first." }); return; }
       for (let i = 0; i < previewImages.length; i++) {
-        const dataURL = previewImages[i];
         const rankNumber = i + 1;
         try {
-          // Here we still use the object URL for display,
-          // but for uploading we rely on the File stored in photoFiles.
           const file = photoFiles[i];
           const formData = new FormData();
           formData.append("listingId", listingId);
@@ -607,13 +604,11 @@ Using Sales Report and Product List Files:
     }
     document.getElementById("uploadPhotoBtn").addEventListener("click", uploadPhoto);
     
-    // New function: Analyze image using binary File and send to OpenAI API via our backend
+    // New function: Analyze image by sending its binary File via FormData to our analyzeImage endpoint.
     async function analyzeImage(file) {
       const formData = new FormData();
       formData.append("image", file);
-      // Pass along the analysis rules to help guide metadata generation.
       formData.append("rules", document.getElementById("analyzeRulesTextarea").value);
-      // Send the binary file via FormData to our backend endpoint
       const response = await fetch("/.netlify/functions/analyzeImage", {
         method: "POST",
         body: formData
@@ -627,13 +622,13 @@ Using Sales Report and Product List Files:
     
     // Upload metadata for a photo (simulate API call)
     function uploadMetadata(index, metadata) {
-      // In production, replace this simulation with a real API call.
+      // Replace with real API call as needed.
       return new Promise((resolve) => {
         setTimeout(() => { resolve(true); }, 1000);
       });
     }
     
-    // Analyze Photos: for each photo, send the binary file to OpenAI API for metadata generation, then upload it.
+    // Analyze Photos: for each photo in the grid, send its File to the backend for analysis and upload the metadata.
     async function analyzePhoto(index) {
       const statusElem = document.getElementById("metadataStatus" + index);
       if (!statusElem) return;
@@ -652,13 +647,13 @@ Using Sales Report and Product List Files:
       }, 100);
       
       try {
-        // Use the actual File (from photoFiles) and send it to our analyzeImage endpoint.
+        // Analyze using the actual File stored in photoFiles
         const metadata = await analyzeImage(photoFiles[index]);
         clearInterval(progressInterval);
         progress = 50;
         progressBar.value = progress;
         
-        // Phase 2: Upload metadata (simulate with progress 50-100)
+        // Phase 2: Simulate uploading metadata (progress 50-100)
         const uploadInterval = setInterval(() => {
            progress = Math.min(progress + 5, 100);
            progressBar.value = progress;
@@ -667,7 +662,7 @@ Using Sales Report and Product List Files:
         clearInterval(uploadInterval);
         progress = 100;
         progressBar.value = progress;
-        // On successful upload, store metadata and show green checkmark.
+        // Store metadata and show green checkmark on success.
         photoMeta[index] = metadata;
         statusElem.innerHTML = '<span style="color:green; font-size:16px;"><i class="material-icons">check_circle</i></span>';
       } catch (error) {
@@ -677,7 +672,7 @@ Using Sales Report and Product List Files:
     }
     
     async function analyzePhotos() {
-      // Only process the images currently in the grid.
+      // Process only the images currently in the grid.
       for (let i = 0; i < previewImages.length; i++) {
         await analyzePhoto(i);
       }
@@ -685,7 +680,7 @@ Using Sales Report and Product List Files:
     
     document.getElementById("analyzeMetadataBtn").addEventListener("click", analyzePhotos);
     
-    // Show metadata in modal when clicking on a photo
+    // Show metadata in modal when clicking on a photo.
     function showMetadata(index) {
       const metadata = photoMeta[index] || "No metadata available for this photo.";
       document.getElementById("metadataTextarea").value = metadata;
@@ -695,7 +690,7 @@ Using Sales Report and Product List Files:
       instance.open();
     }
     
-    // Update static preview grid: now adds a metadata status div and click listener on each photo.
+    // Update static preview grid: adds metadata status divs and click listeners on each photo.
     function updateStaticPreviewGrid() {
       for (let i = 0; i < 10; i++) {
         const cell = document.getElementById("previewCell" + i);
@@ -708,7 +703,7 @@ Using Sales Report and Product List Files:
           img.src = previewImages[i];
           previewBox.appendChild(img);
           
-          // Clicking the photo shows its metadata.
+          // Clicking the preview box shows its metadata.
           previewBox.addEventListener("click", () => { showMetadata(i); });
   
           const removeBtn = document.createElement("div");
@@ -751,7 +746,7 @@ Using Sales Report and Product List Files:
       }
     }
     
-    // File drop handling for images (limit 10, without base64 encoding)
+    // File drop handling for images (limit 10) using object URLs and storing File objects.
     const dropZone = document.getElementById("dropZone");
     dropZone.addEventListener("dragover", e => { e.preventDefault(); e.stopPropagation(); dropZone.style.borderColor = "#000"; });
     dropZone.addEventListener("dragleave", e => { e.preventDefault(); e.stopPropagation(); dropZone.style.borderColor = "#ccc"; });
@@ -762,7 +757,6 @@ Using Sales Report and Product List Files:
       for (let i = 0; i < Math.min(files.length, maxRemaining); i++) {
         const file = files[i];
         if (file.type === "image/jpeg" || file.type === "image/png") {
-          // Use object URL for display and store the File object
           const objectURL = URL.createObjectURL(file);
           previewImages.push(objectURL);
           photoNames.push(file.name);
@@ -799,9 +793,7 @@ Using Sales Report and Product List Files:
               soldOrdersCSV.push(fileData);
               updateUploadedFilesList();
               await updateVectorStore();
-            } catch(err) {
-              console.error("Error uploading file:", err);
-            }
+            } catch(err) { console.error("Error uploading file:", err); }
          } else {
             alert("Only .csv, .doc, and .docx files are supported for Etsy Sold Orders.");
          }
@@ -831,9 +823,7 @@ Using Sales Report and Product List Files:
               listingsCSV.push(fileData);
               updateUploadedFilesList();
               await updateVectorStore();
-            } catch(err) {
-              console.error("Error uploading file:", err);
-            }
+            } catch(err) { console.error("Error uploading file:", err); }
          } else {
             alert("Only .csv, .doc, and .docx files are supported for Etsy Listings.");
          }
@@ -970,7 +960,7 @@ You are ChatGPT using ${modelName}.
 Based on the inputs below, generate an Etsy Listing DESCRIPTION only.
 Input Context:
 Etsy Link: "${etsyLink}"
-Search Key Phrases: "${keyPhrases}"
+Search KeyPhrases: "${keyPhrases}"
 --- Rules for DESCRIPTION ---
 ${stripMarkdownJSON(document.getElementById("descriptionRulesTextarea").value)}
 Important: Return ONLY the description as plain text.`;
@@ -1099,12 +1089,11 @@ Return your answer as plain text.`;
     
     function delay(ms) { return new Promise(resolve => setTimeout(resolve, ms)); }
     
-    // New function: Analyze image by sending binary file via FormData to our analyzeImage endpoint.
+    // Analyze image by sending the binary File via FormData to our analyzeImage endpoint.
     async function analyzeImage(file) {
       const formData = new FormData();
       formData.append("image", file);
       formData.append("rules", document.getElementById("analyzeRulesTextarea").value);
-      // Call our backend endpoint that uses the OpenAI API to analyze the image.
       const response = await fetch("/.netlify/functions/analyzeImage", {
         method: "POST",
         body: formData
@@ -1113,18 +1102,17 @@ Return your answer as plain text.`;
         throw new Error("Image analysis failed with status " + response.status);
       }
       const data = await response.json();
-      return data.metadata; // Expecting a JSON response { metadata: "description here" }
+      return data.metadata; // Expecting { metadata: "description here" }
     }
     
-    // Upload metadata for a photo (simulate API call)
+    // Upload metadata for a photo (simulate API call; replace with your actual implementation)
     function uploadMetadata(index, metadata) {
-      // Replace with real API call as needed.
       return new Promise((resolve) => {
         setTimeout(() => { resolve(true); }, 1000);
       });
     }
     
-    // Analyze Photos: for each photo in the grid, analyze using its binary file and upload metadata.
+    // Analyze Photos: for each photo in the grid, send its binary File for analysis and then upload metadata.
     async function analyzePhoto(index) {
       const statusElem = document.getElementById("metadataStatus" + index);
       if (!statusElem) return;
@@ -1143,7 +1131,6 @@ Return your answer as plain text.`;
       }, 100);
       
       try {
-        // Use the File from photoFiles (which was stored on drop)
         const metadata = await analyzeImage(photoFiles[index]);
         clearInterval(progressInterval);
         progress = 50;
@@ -1158,7 +1145,6 @@ Return your answer as plain text.`;
         clearInterval(uploadInterval);
         progress = 100;
         progressBar.value = progress;
-        // On successful upload, store metadata and show green checkmark.
         photoMeta[index] = metadata;
         statusElem.innerHTML = '<span style="color:green; font-size:16px;"><i class="material-icons">check_circle</i></span>';
       } catch (error) {
@@ -1168,7 +1154,6 @@ Return your answer as plain text.`;
     }
     
     async function analyzePhotos() {
-      // Process only the images currently visible in the grid.
       for (let i = 0; i < previewImages.length; i++) {
         await analyzePhoto(i);
       }
@@ -1186,7 +1171,7 @@ Return your answer as plain text.`;
       instance.open();
     }
     
-    // Update static preview grid: now adds a metadata status div and click listener on each photo.
+    // Update static preview grid: add metadata status divs and click listener.
     function updateStaticPreviewGrid() {
       for (let i = 0; i < 10; i++) {
         const cell = document.getElementById("previewCell" + i);
@@ -1199,7 +1184,7 @@ Return your answer as plain text.`;
           img.src = previewImages[i];
           previewBox.appendChild(img);
           
-          // Clicking the photo shows its metadata.
+          // Clicking the preview box shows metadata.
           previewBox.addEventListener("click", () => { showMetadata(i); });
   
           const removeBtn = document.createElement("div");
@@ -1222,7 +1207,6 @@ Return your answer as plain text.`;
           previewBox.appendChild(numOverlay);
   
           cell.appendChild(previewBox);
-          // Append a metadata status div for progress or checkmark.
           const metadataStatus = document.createElement("div");
           metadataStatus.className = "metadata-status";
           metadataStatus.id = "metadataStatus" + i;
@@ -1242,7 +1226,7 @@ Return your answer as plain text.`;
       }
     }
     
-    // File drop handling for images (limit 10, using object URLs and storing File objects)
+    // File drop handling for images (limit 10) using object URLs and storing File objects.
     const dropZone = document.getElementById("dropZone");
     dropZone.addEventListener("dragover", e => { e.preventDefault(); e.stopPropagation(); dropZone.style.borderColor = "#000"; });
     dropZone.addEventListener("dragleave", e => { e.preventDefault(); e.stopPropagation(); dropZone.style.borderColor = "#ccc"; });
@@ -1266,7 +1250,7 @@ Return your answer as plain text.`;
       }
     });
     
-    // Restore drag and drop for "Etsy Sold Orders" CSV/DOC files
+    // Restore drag and drop for "Etsy Sold Orders" CSV/DOC files.
     const ordersDropZone = document.getElementById("ordersDropZone");
     ordersDropZone.addEventListener("dragover", e => { e.preventDefault(); e.stopPropagation(); ordersDropZone.style.borderColor = "#000"; });
     ordersDropZone.addEventListener("dragleave", e => { e.preventDefault(); e.stopPropagation(); ordersDropZone.style.borderColor = "#ccc"; });
@@ -1296,7 +1280,7 @@ Return your answer as plain text.`;
       }
     });
     
-    // Restore drag and drop for "Etsy Listings" CSV/DOC files
+    // Restore drag and drop for "Etsy Listings" CSV/DOC files.
     const listingsDropZone = document.getElementById("listingsDropZone");
     listingsDropZone.addEventListener("dragover", e => { e.preventDefault(); e.stopPropagation(); listingsDropZone.style.borderColor = "#000"; });
     listingsDropZone.addEventListener("dragleave", e => { e.preventDefault(); e.stopPropagation(); listingsDropZone.style.borderColor = "#ccc"; });
@@ -1333,7 +1317,7 @@ Return your answer as plain text.`;
       document.getElementById("uploadedFilesList").value = fileList.join("\n");
     }
     
-    // Button configuration for positioning
+    // Button configuration for positioning.
     document.getElementById("configureButtonsBtn").addEventListener("click", function() {
       var configContainer = document.getElementById("buttonConfigContainer");
       configContainer.innerHTML = "";
@@ -1456,7 +1440,7 @@ You are ChatGPT using ${modelName}.
 Based on the inputs below, generate an Etsy Listing DESCRIPTION only.
 Input Context:
 Etsy Link: "${etsyLink}"
-Search Key Phrases: "${keyPhrases}"
+Search KeyPhrases: "${keyPhrases}"
 --- Rules for DESCRIPTION ---
 ${stripMarkdownJSON(document.getElementById("descriptionRulesTextarea").value)}
 Important: Return ONLY the description as plain text.`;
