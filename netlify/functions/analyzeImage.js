@@ -97,7 +97,7 @@ exports.handler = async function(event, context) {
 
     // Use a GPT-4 vision-enabled model. Example: "gpt-4-lens", "gpt-4o-latest" if it supports images
     const openAiPayload = {
-      model: "gpt-4-lens", 
+      model: "gpt-4-mini", 
       messages: messages,
       temperature: 0.6,
       max_tokens: 200
