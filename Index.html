@@ -163,6 +163,16 @@
       justify-content: center; font-size: 10px; 
       z-index: 999; border-radius: 3px; 
     }
+    /* Metadata status styles */
+    .metadata-status {
+      margin-top: 5px;
+      text-align: center;
+      font-size: 14px;
+      min-height: 20px;
+    }
+    .metadata-progress {
+      width: 90%;
+    }
     
     /* Container #13 */
     #container13 { position: relative; width: 250px; top: -150px; }
@@ -300,7 +310,7 @@
     <button id="uploadPhotoBtn" class="btn waves-effect waves-light configurable">Upload Photo</button>
   </div>
   
-  <!-- Modals (Title Rules, Description Rules, etc.) -->
+  <!-- Modals -->
   <!-- Title Rules Modal -->
   <div id="titleRulesModal" class="modal">
     <div class="modal-content">
@@ -543,7 +553,6 @@ Using Sales Report and Product List Files:
       });
     }
     
-    // Function to update the vector store (used after uploading CSV or DOC files)
     async function updateVectorStore() {
       const allFileIds = [...soldOrdersCSV, ...listingsCSV].map(file => file.id);
       if (allFileIds.length === 0) {
@@ -749,7 +758,42 @@ Using Sales Report and Product List Files:
     }
     document.getElementById("uploadPhotoBtn").addEventListener("click", uploadPhoto);
     
-    // Update static preview grid
+    // Analyze Photos: loop through each photo and simulate metadata analysis/upload progress.
+    function analyzePhotos() {
+      for (let i = 0; i < previewImages.length; i++) {
+        analyzePhoto(i);
+      }
+    }
+    
+    function analyzePhoto(index) {
+      const statusElem = document.getElementById("metadataStatus" + index);
+      if (!statusElem) return;
+      // Clear any previous content
+      statusElem.innerHTML = "";
+      // Create a progress bar element
+      const progressBar = document.createElement("progress");
+      progressBar.className = "metadata-progress";
+      progressBar.max = 100;
+      progressBar.value = 0;
+      statusElem.appendChild(progressBar);
+      
+      // Simulate progress update (e.g., metadata generation/upload)
+      let progress = 0;
+      const interval = setInterval(() => {
+        progress += 5;
+        progressBar.value = progress;
+        if (progress >= 100) {
+          clearInterval(interval);
+          // Replace progress bar with a green checkmark icon
+          statusElem.innerHTML = '<span style="color:green; font-size:16px;"><i class="material-icons">check_circle</i></span>';
+        }
+      }, 100); // Update every 100ms
+    }
+    
+    // Attach analyzePhotos function to Analyze button
+    document.getElementById("analyzeMetadataBtn").addEventListener("click", analyzePhotos);
+    
+    // Update static preview grid (now also adds a metadata status div)
     function updateStaticPreviewGrid() {
       for (let i = 0; i < 10; i++) {
         const cell = document.getElementById("previewCell" + i);
@@ -779,6 +823,11 @@ Using Sales Report and Product List Files:
           previewBox.appendChild(numOverlay);
   
           cell.appendChild(previewBox);
+          // Append a metadata status div for progress or checkmark
+          const metadataStatus = document.createElement("div");
+          metadataStatus.className = "metadata-status";
+          metadataStatus.id = "metadataStatus" + i;
+          cell.appendChild(metadataStatus);
         } else {
           cell.textContent = "Empty";
         }
@@ -928,7 +977,7 @@ Using Sales Report and Product List Files:
       document.getElementById("uploadedFilesList").value = fileList.join("\n");
     }
     
-    // Button configuration for positioning (unchanged)
+    // Button configuration for positioning
     document.getElementById("configureButtonsBtn").addEventListener("click", function() {
       var configContainer = document.getElementById("buttonConfigContainer");
       configContainer.innerHTML = "";
