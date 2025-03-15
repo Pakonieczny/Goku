@@ -290,17 +290,17 @@
     </div>
   </div>
   
-  <!-- Update Listing button container (updates an existing listing) -->
+  <!-- Update Listing button container -->
   <div id="uploadContainer">
     <button id="uploadToEtsyBtn" class="btn waves-effect waves-light configurable">Update Listing</button>
   </div>
   
-  <!-- New Upload Photo button container (to trigger photo upload to imageUpload.js) -->
+  <!-- New Upload Photo button container -->
   <div id="uploadPhotoContainer">
     <button id="uploadPhotoBtn" class="btn waves-effect waves-light configurable">Upload Photo</button>
   </div>
   
-  <!-- Modals -->
+  <!-- Modals (Title Rules, Description Rules, etc.) -->
   <!-- Title Rules Modal -->
   <div id="titleRulesModal" class="modal">
     <div class="modal-content">
@@ -482,13 +482,33 @@ Using Sales Report and Product List Files:
       return await response.json();
     }
     
-    // File upload functions for CSV and DOC files remain unchanged
+    // File upload functions for CSV and DOC remain unchanged
     async function uploadCSVFile(file, progressCallback) { /*...*/ }
     async function uploadDocFile(file, progressCallback) { /*...*/ }
     
-    function generateRandomString(length) { /* implementation omitted for brevity */ }
-    function base64urlEncode(buffer) { /* implementation omitted for brevity */ }
-    async function generateCodeChallenge(codeVerifier) { /* implementation omitted for brevity */ }
+    // Implementations for the OAuth helper functions
+    function generateRandomString(length) {
+      const possible = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789';
+      let text = '';
+      for (let i = 0; i < length; i++) {
+        text += possible.charAt(Math.floor(Math.random() * possible.length));
+      }
+      return text;
+    }
+    
+    function base64urlEncode(buffer) {
+      return btoa(String.fromCharCode(...new Uint8Array(buffer)))
+        .replace(/\+/g, '-')
+        .replace(/\//g, '_')
+        .replace(/=+$/, '');
+    }
+    
+    async function generateCodeChallenge(codeVerifier) {
+      const encoder = new TextEncoder();
+      const data = encoder.encode(codeVerifier);
+      const digest = await crypto.subtle.digest("SHA-256", data);
+      return base64urlEncode(digest);
+    }
     
     document.getElementById("connectEtsyBtn").addEventListener("click", async () => {
       const state = "randomState123";
@@ -649,11 +669,11 @@ Using Sales Report and Product List Files:
     }
     document.getElementById("uploadPhotoBtn").addEventListener("click", uploadPhoto);
     
-    // Update the static preview grid (does not recreate DOM nodes; simply updates each cell)
+    // Update the static preview grid
     function updateStaticPreviewGrid() {
       for (let i = 0; i < 10; i++) {
         const cell = document.getElementById("previewCell" + i);
-        cell.innerHTML = ""; // clear the cell
+        cell.innerHTML = "";
         if (i < previewImages.length) {
           const previewBox = document.createElement("div");
           previewBox.className = "preview-box";
@@ -662,7 +682,6 @@ Using Sales Report and Product List Files:
           img.src = previewImages[i];
           previewBox.appendChild(img);
   
-          // Remove button for the image
           const removeBtn = document.createElement("div");
           removeBtn.className = "remove-btn";
           removeBtn.textContent = "X";
@@ -674,7 +693,6 @@ Using Sales Report and Product List Files:
           });
           previewBox.appendChild(removeBtn);
   
-          // Number overlay
           const numOverlay = document.createElement("div");
           numOverlay.className = "number-overlay";
           numOverlay.textContent = (i + 1).toString();
@@ -696,7 +714,7 @@ Using Sales Report and Product List Files:
       }
     }
     
-    // File Drop Handling for images (limit to max 10 images)
+    // File Drop Handling for images (limit to 10)
     const dropZone = document.getElementById("dropZone");
     dropZone.addEventListener("dragover", e => {
       e.preventDefault();
@@ -739,7 +757,6 @@ Using Sales Report and Product List Files:
       }
     });
   
-    // (Other file drop handlers for orders and listings remain unchanged)
     function updateUploadedFilesList() {
       let fileList = [];
       soldOrdersCSV.forEach(file => fileList.push(file.name));
@@ -747,7 +764,6 @@ Using Sales Report and Product List Files:
       document.getElementById("uploadedFilesList").value = fileList.join("\n");
     }
   
-    // Button position configuration (functions omitted for brevity)
     document.getElementById("configureButtonsBtn").addEventListener("click", function() {
       var configContainer = document.getElementById("buttonConfigContainer");
       configContainer.innerHTML = "";
