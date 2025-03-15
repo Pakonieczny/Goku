@@ -5,16 +5,13 @@
   <title>Etsy Listing Generator & Shop Listings</title>
   <!-- Favicon -->
   <link rel="icon" type="image/png" href="assets/favicon.png">
-  <!-- Google Material Icons + Materialize CSS -->
-  <link
-    href="https://fonts.googleapis.com/icon?family=Material+Icons"
-    rel="stylesheet"
-  >
+  <!-- Import Google Material Icons and Materialize CSS -->
+  <link href="https://fonts.googleapis.com/icon?family=Material+Icons" rel="stylesheet">
   <link
     rel="stylesheet"
     href="https://cdnjs.cloudflare.com/ajax/libs/materialize/1.0.0/css/materialize.min.css"
   >
-  <!-- Optional: piexifjs (EXIF) -->
+  <!-- Include piexifjs for EXIF manipulation (optional, if needed) -->
   <script src="https://cdn.jsdelivr.net/npm/piexifjs@1.0.4/piexif.min.js"></script>
 
   <style>
@@ -43,6 +40,9 @@
     }
     .listing-desc-container h5 {
       margin: 0 0 10px 0; font-size: 1.2rem; font-weight: 500;
+    }
+    .listing-desc-container label.section-heading {
+      font-size: 1.2rem; font-weight: 500;
     }
     .listing-desc-container input {
       width: 500px; height: 30px; border: 1px solid #000; padding: 5px;
@@ -86,7 +86,7 @@
       font-style: italic; font-size: 0.9em; margin-top: 5px;
     }
 
-    /* CSV / Doc Drag & Drop Boxes */
+    /* Drag and Drop Boxes */
     #dropZone, #ordersDropZone, #listingsDropZone {
       width: 138px; height: 138px; border: 2px dashed #ccc;
       border-radius: 3px; display: inline-block; vertical-align: middle;
@@ -117,8 +117,7 @@
     }
     #uploadedFilesList {
       width: 300px; height: 125px; resize: none;
-      box-sizing: border-box; border: 1px solid grey;
-      margin-left: 85px;
+      box-sizing: border-box; border: 1px solid grey; margin-left: 85px;
     }
 
     /* Primary Preview – clickable for cropping */
@@ -143,15 +142,12 @@
     }
     #previewGridStatic {
       display: grid; grid-template-columns: repeat(5, 100px);
-      grid-column-gap: 23px; grid-row-gap: 18px;
-      margin: 0 auto;
+      grid-column-gap: 23px; grid-row-gap: 18px; margin: 0 auto;
     }
     .preview-cell {
-      position: relative; width: 100px; height: 132px;
-      border: 2px solid #ccc; border-radius: 3px;
-      display: flex; flex-direction: column; align-items: center;
-      justify-content: center; font-size: 12px; color: #666;
-      /* We'll set up drag events below. */
+      position: relative; width: 100px; height: 132px; border: 2px solid #ccc;
+      border-radius: 3px; display: flex; flex-direction: column;
+      align-items: center; justify-content: center; font-size: 12px; color: #666;
     }
     .preview-box {
       position: relative; width: 100%; height: 100%;
@@ -161,10 +157,9 @@
       border-radius: 3px; display: block;
     }
     .remove-btn {
-      position: absolute; top: -5px; left: -5px;
-      width: 15px; height: 15px; background-color: black; color: white;
-      font-size: 10px; text-align: center; cursor: pointer;
-      z-index: 999; border-radius: 50%;
+      position: absolute; top: -5px; left: -5px; width: 15px; height: 15px;
+      background-color: black; color: white; font-size: 10px;
+      text-align: center; cursor: pointer; z-index: 999; border-radius: 50%;
     }
     .number-overlay {
       position: absolute; top: 0; right: 0; width: 16px; height: 16px;
@@ -172,7 +167,7 @@
       align-items: center; justify-content: center; font-size: 10px;
       z-index: 999; border-radius: 3px;
     }
-    /* Metadata status */
+    /* Additional styles for metadata */
     .metadata-status {
       margin-top: 5px; text-align: center; font-size: 14px; min-height: 20px;
     }
@@ -245,13 +240,14 @@
       </div>
       <div id="listingsDropZone">Etsy Listings</div>
       <textarea id="uploadedFilesList"
-                class="materialize-textarea" rows="2"
+                class="materialize-textarea"
+                rows="2"
                 placeholder="Uploaded .csv, .doc, .docx files will appear here">
       </textarea>
     </div>
   </div>
 
-  <!-- OAuth and Shop Listings -->
+  <!-- OAuth + Shop Listings Section -->
   <button id="connectEtsyBtn"
           class="btn waves-effect waves-light configurable">
     Connect to Etsy
@@ -285,8 +281,7 @@
     </button>
     <button id="showAnalyzeRulesBtn"
             class="btn waves-effect waves-light configurable"
-            data-target="analyzeRulesModal"
-            style="margin-top:25px;">
+            data-target="analyzeRulesModal" style="margin-top:25px;">
       Analyze Rules
     </button>
   </div>
@@ -357,7 +352,7 @@
     </div>
   </div>
 
-  <!-- Static 10-Photo Preview Grid -->
+  <!-- Static 10-Photo Preview Grid Container -->
   <div id="previewGridContainer">
     <div id="previewGridStatic">
       <div class="preview-cell" id="previewCell0">Empty</div>
@@ -373,13 +368,15 @@
     </div>
   </div>
 
-  <!-- Update / Upload Photo button containers -->
+  <!-- Update Listing button container -->
   <div id="uploadContainer">
     <button id="uploadToEtsyBtn"
             class="btn waves-effect waves-light configurable">
       Update Listing
     </button>
   </div>
+
+  <!-- New Upload Photo button container -->
   <div id="uploadPhotoContainer">
     <button id="uploadPhotoBtn"
             class="btn waves-effect waves-light configurable">
@@ -387,13 +384,12 @@
     </button>
   </div>
 
-  <!-- Metadata Modal -->
+  <!-- Metadata Modal (for viewing metadata on click) -->
   <div id="metadataModal" class="modal">
     <div class="modal-content">
       <h4>Photo Metadata</h4>
       <textarea id="metadataTextarea"
-                readonly
-                style="width:100%; height:300px;">
+                readonly style="width:100%; height:300px;">
       </textarea>
     </div>
     <div class="modal-footer">
@@ -408,8 +404,7 @@
   <div id="analyzeRulesModal" class="modal">
     <div class="modal-content">
       <h4>Photo Analysis Rules</h4>
-      <textarea id="analyzeRulesTextarea"
-                style="width:100%; height:300px;">
+      <textarea id="analyzeRulesTextarea" style="width:100%; height:300px;">
 Default Photo Analysis Rules:
 1. Use SEO-friendly descriptive long-tail key phrases without special characters, focus on describing the jewelry and charm pendant, also focus and tailor Key Phrases and description to appropriate client based based on the type of jewelry.
 2. Emphasize charm details, focus image description on the type of jewelry and pendant description(what it is, occasion, metal, size, style).
@@ -433,8 +428,7 @@ Default Photo Analysis Rules:
   <div id="titleRulesModal" class="modal">
     <div class="modal-content">
       <h4>Title Rules</h4>
-      <textarea id="titleRulesTextarea"
-                style="width:100%; height:300px;">
+      <textarea id="titleRulesTextarea" style="width:100%; height:300px;">
 Title Structure & Formatting:
 - Create 5-7 SEO optimized long-tail key phrases (3-5 words each).
 - The title must begin with the product type (e.g., "Angel Earrings", "Daisy Necklace").
@@ -477,8 +471,7 @@ Prohibited Words:
   <div id="descriptionRulesModal" class="modal">
     <div class="modal-content">
       <h4>Description Rules</h4>
-      <textarea id="descriptionRulesTextarea"
-                style="width:100%; height:300px;">
+      <textarea id="descriptionRulesTextarea" style="width:100%; height:300px;">
 Rules for Description:
 - Merge the key phrases with your output.
 - Modify the description to match the jewelry type.
@@ -506,8 +499,7 @@ Option 3:
   <div id="keywordRulesModal" class="modal">
     <div class="modal-content">
       <h4>Keyword Rules</h4>
-      <textarea id="keywordRulesTextarea"
-                style="width:100%; height:300px;">
+      <textarea id="keywordRulesTextarea" style="width:100%; height:300px;">
 Using Sales Report and Product List Files:
 - Extrapolate the best tag phrases based on performance.
 - Focus on key terms like "Necklace", "Earrings", "Studs", "Hoops".
@@ -557,10 +549,7 @@ Using Sales Report and Product List Files:
         <input type="range" id="zoomSlider" min="0.1" max="3" step="0.01" value="1">
       </div>
       <div style="text-align:center; margin-top:10px;">
-        <button id="saveCropBtn"
-                class="btn waves-effect waves-light">
-          Save
-        </button>
+        <button id="saveCropBtn" class="btn waves-effect waves-light">Save</button>
         <button id="cancelCropBtn"
                 class="btn waves-effect waves-light"
                 style="background-color:#f44336; margin-left:10px;">
@@ -570,95 +559,47 @@ Using Sales Report and Product List Files:
     </div>
   </div>
 
-  <!-- jQuery & Materialize JS -->
+  <!-- jQuery and Materialize JS -->
   <script src="https://code.jquery.com/jquery-3.6.0.min.js"></script>
   <script
     src="https://cdnjs.cloudflare.com/ajax/libs/materialize/1.0.0/js/materialize.min.js">
   </script>
 
   <script>
-    // ----------------------------------------------------------------------
-    //  GLOBALS & MAIN CODE (Your stable logic) + minimal reorder approach
-    // ----------------------------------------------------------------------
+    // ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+    // GLOBALS (from your stable version)
+    // ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
     const ETSY_SHOP_URL = "https://www.etsy.com/shop/custombrites";
     const CLIENT_ID = "k75zdspz4r99txpqdji7i2em";
     const REDIRECT_URI = "https://delicate-tanuki-616ac0.netlify.app/";
     const modelName = "chatgpt-4o-latest";
-
     let accessToken;
+
     let soldOrdersCSV = [];
     let listingsCSV = [];
-
     let photoNames = [];
-    let previewImages = []; // data URLs for each image (3000x3000 resized)
-    let photoMeta = [];     // AI-generated metadata for alt_text
+    let previewImages = []; // data URLs (3000×3000 resized)
+    let photoMeta = [];
 
-    // ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
-    // Minimal approach to reordering in updateStaticPreviewGrid()
-    // with a data-dragInit guard so we don't attach multiple times
-    // ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
-
-    // 1) We'll define the function to render the grid
+    // ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+    // Add minimal reorder logic in updateStaticPreviewGrid()
+    // ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
     function updateStaticPreviewGrid() {
       for (let i = 0; i < 10; i++) {
         const cell = document.getElementById("previewCell" + i);
-
-        // Clear old content
         cell.innerHTML = "";
-        
-        // Attach dragover, drop, etc. once
-        if (!cell.dataset.dragInit) {
-          cell.dataset.dragInit = "true"; // mark we set them
-          
-          cell.addEventListener("dragenter", e => {
-            e.preventDefault();
-            cell.classList.add("cell-drag-hover");
-          });
-          cell.addEventListener("dragleave", e => {
-            cell.classList.remove("cell-drag-hover");
-          });
-          cell.addEventListener("dragover", e => {
-            e.preventDefault(); // needed to allow drop
-          });
-          cell.addEventListener("drop", e => {
-            e.preventDefault();
-            cell.classList.remove("cell-drag-hover");
-            const sourceIndex = parseInt(e.dataTransfer.getData("text/plain"), 10);
-            const targetIndex = i;
-            if (
-              !isNaN(sourceIndex) &&
-              sourceIndex !== targetIndex &&
-              sourceIndex >= 0 &&
-              sourceIndex < previewImages.length
-            ) {
-              // reorder
-              const [movedImg] = previewImages.splice(sourceIndex, 1);
-              previewImages.splice(targetIndex, 0, movedImg);
 
-              const [movedName] = photoNames.splice(sourceIndex, 1);
-              photoNames.splice(targetIndex, 0, movedName);
-
-              const [movedMeta] = photoMeta.splice(sourceIndex, 1);
-              photoMeta.splice(targetIndex, 0, movedMeta);
-
-              updateStaticPreviewGrid();
-              updatePrimaryPreview();
-            }
-          });
-        }
-
-        // If there's an image for index i, populate it
+        // If there's an image for index i, display it
         if (i < previewImages.length) {
           const previewBox = document.createElement("div");
           previewBox.className = "preview-box";
-
-          // Make the entire box draggable
+          // Make the entire preview box draggable
           previewBox.draggable = true;
+          // On dragstart, store the source index
           previewBox.addEventListener("dragstart", e => {
             e.dataTransfer.setData("text/plain", i.toString());
           });
 
-          // The actual image
           const img = document.createElement("img");
           img.src = previewImages[i];
           previewBox.appendChild(img);
@@ -677,19 +618,27 @@ Using Sales Report and Product List Files:
           });
           previewBox.appendChild(removeBtn);
 
-          // Index overlay
+          // Number overlay
           const numOverlay = document.createElement("div");
           numOverlay.className = "number-overlay";
           numOverlay.textContent = (i + 1).toString();
           previewBox.appendChild(numOverlay);
 
-          // If user clicks the previewBox, show metadata
+          // On click, show metadata
           previewBox.addEventListener("click", () => {
-            showMetadata(i);
+            const metadata = photoMeta[i] || "No metadata available for this photo.";
+            document.getElementById("metadataTextarea").value = metadata;
+            const modalElem = document.getElementById("metadataModal");
+            let instance = M.Modal.getInstance(modalElem);
+            if (!instance) {
+              instance = M.Modal.init(modalElem, {});
+            }
+            instance.open();
           });
 
           cell.appendChild(previewBox);
 
+          // Optionally: add a "metadataStatus"
           const metadataStatus = document.createElement("div");
           metadataStatus.className = "metadata-status";
           metadataStatus.id = "metadataStatus" + i;
@@ -697,6 +646,47 @@ Using Sales Report and Product List Files:
 
         } else {
           cell.textContent = "Empty";
+        }
+
+        // Attach reorder events if not already done
+        if (!cell.dataset.dragInit) {
+          cell.dataset.dragInit = "true"; // mark to avoid re-binding
+
+          cell.addEventListener("dragenter", e => {
+            e.preventDefault();
+            cell.classList.add("cell-drag-hover");
+          });
+          cell.addEventListener("dragleave", e => {
+            cell.classList.remove("cell-drag-hover");
+          });
+          cell.addEventListener("dragover", e => {
+            e.preventDefault(); // must do this to allow a drop
+          });
+          cell.addEventListener("drop", e => {
+            e.preventDefault();
+            cell.classList.remove("cell-drag-hover");
+            const sourceIndex = parseInt(e.dataTransfer.getData("text/plain"), 10);
+            const targetIndex = i;
+            if (
+              !isNaN(sourceIndex) &&
+              sourceIndex !== targetIndex &&
+              sourceIndex >= 0 &&
+              sourceIndex < previewImages.length
+            ) {
+              // reorder arrays
+              const [movedImg] = previewImages.splice(sourceIndex, 1);
+              previewImages.splice(targetIndex, 0, movedImg);
+
+              const [movedName] = photoNames.splice(sourceIndex, 1);
+              photoNames.splice(targetIndex, 0, movedName);
+
+              const [movedMeta] = photoMeta.splice(sourceIndex, 1);
+              photoMeta.splice(targetIndex, 0, movedMeta);
+
+              updateStaticPreviewGrid();
+              updatePrimaryPreview();
+            }
+          });
         }
       }
     }
@@ -710,23 +700,16 @@ Using Sales Report and Product List Files:
       }
     }
 
-    function showMetadata(index) {
-      const metadata = photoMeta[index] || "No metadata available for this photo.";
-      document.getElementById("metadataTextarea").value = metadata;
-      const modalElem = document.getElementById("metadataModal");
-      let instance = M.Modal.getInstance(modalElem);
-      if (!instance) {
-        instance = M.Modal.init(modalElem, {});
-      }
-      instance.open();
-    }
+    // ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+    // The rest of your stable code for:
+    // - Resizing images to 3000x3000 on drop
+    // - Analyzing metadata
+    // - Title & description generation
+    // - alt_text in Etsy
+    // - CSV uploads
+    // remains the same...
+    // ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
-    // ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
-    // All your other stable code: CSV doc upload, analyzing images,
-    // alt_text for Etsy, generating Title/Desc, etc. 
-    // ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
-
-    // For instance, let's show the part that handles resizing images to 3000x3000
     async function resizeImage(dataURL, width, height) {
       return new Promise((resolve, reject) => {
         const img = new Image();
@@ -744,25 +727,18 @@ Using Sales Report and Product List Files:
       });
     }
 
-    // ... The rest of your code for soldOrdersCSV, listingsCSV, 
-    //     the dropZone event for images (resizing to 3000x3000), 
-    //     alt_text logic, analyzeMetadata, etc. is placed here ...
-    // (Copied from your previously working version – 
-    //  the only difference is the minimal reorder logic above.)
+    // [Drag & drop for CSV, doc, etc. your stable logic...]
+    // [Vector store logic...]
+    // [Analyze Photos logic with alt_text, etc...]
+    // [Etsy OAuth / exchangeCodeForToken...]
+    // [Title/Description generation with callOpenAI...]
+    // [Everything else from your stable code, unchanged...]
 
-    // On DOMContentLoaded, we'll do the usual init
     document.addEventListener("DOMContentLoaded", () => {
-      // e.g. load button positions, check OAuth code, etc.
-      updateStaticPreviewGrid(); // so it starts with "Empty" in each cell
+      // load button positions, handle OAuth code if present, etc.
+      // ...
+      updateStaticPreviewGrid(); // sets "Empty" placeholders initially
     });
-    
-    // The rest: 
-    // - connectEtsyBtn click
-    // - uploading photos with alt_text
-    // - generating listing titles/descriptions
-    // - "tag phrases" from listingDescInput
-    // remain the same from your stable code
-
   </script>
 </body>
 </html>
