@@ -7,11 +7,11 @@ const fetch = require("node-fetch");
 
 /**
  * This serverless function:
- *  - Receives a multipart/form-data POST with:
- *     "imageFile" => the actual binary file
- *     "rules" => optional text instructions from the user
+ *  - Receives a multipart/form-data POST:
+ *      "imageFile" => the actual binary file
+ *      "rules" => optional text instructions from the user
  *  - Converts the uploaded file to base64
- *  - Passes it to the GPT-4 vision endpoint in the recommended "image_url" format
+ *  - Passes it to a GPT-4 vision endpoint in "image_url" format.
  * 
  * Requirements:
  *  - OPENAI_API_KEY in your environment
@@ -38,14 +38,13 @@ exports.handler = async function(event, context) {
       ? Buffer.from(event.body, "base64")
       : Buffer.from(event.body, "utf8");
 
-    // Create a fake request stream for formidable
+    // Create a fake request stream
     const req = new Readable();
     req._read = () => {};
     req.push(bodyBuffer);
     req.push(null);
     req.headers = event.headers;
 
-    // Parse multipart form data
     const form = formidable({ multiples: false });
     const parseForm = () =>
       new Promise((resolve, reject) => {
@@ -60,17 +59,16 @@ exports.handler = async function(event, context) {
       throw new Error("No 'imageFile' found in form data.");
     }
 
-    // Optional text instructions from user
     const rules = fields.rules || "No special instructions provided.";
 
-    // Read file, convert to base64
+    // Read file from disk, convert to base64
     const fileBuffer = fs.readFileSync(files.imageFile.filepath);
     const base64Image = fileBuffer.toString("base64");
 
-    // Determine MIME type from file
-    const mimeType = files.imageFile.mimetype || "image/jpeg";  // fallback
+    // Determine MIME type from the upload
+    const mimeType = files.imageFile.mimetype || "image/jpeg";
 
-    // Construct messages array: the official Chat Completions format for images
+    // Construct the Chat Completions messages array
     const messages = [
       {
         role: "user",
@@ -82,7 +80,7 @@ exports.handler = async function(event, context) {
           {
             type: "image_url",
             image_url: {
-              // If desired: detail: "high" or "low" or "auto"
+              // "detail": "high", // optionally set "low"/"high"/"auto"
               url: `data:${mimeType};base64,${base64Image}`
             }
           }
@@ -95,9 +93,9 @@ exports.handler = async function(event, context) {
       throw new Error("Missing OPENAI_API_KEY in environment.");
     }
 
-    // Use a GPT-4 vision-enabled model. Example: "gpt-4-lens", "gpt-4o-latest" if it supports images
+    // Must be a GPT-4 model with vision
     const openAiPayload = {
-      model: "gpt-4o-mini", 
+      model: "gpt-4o-mini", // replace with the correct model you have access to
       messages: messages,
       temperature: 0.6,
       max_tokens: 200

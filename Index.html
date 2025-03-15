@@ -397,9 +397,9 @@
       <h4>Photo Analysis Rules</h4>
       <textarea id="analyzeRulesTextarea" style="width:100%; height:300px;">
 Default Photo Analysis Rules:
-1. Use SEO-friendly descriptive long-tail key phrases without special characters.
-2. Emphasize charm details (what it is, occasion, metal, size, style).
-3. Focus solely on the jewelry details in the image.
+1. Use SEO-friendly descriptive long-tail key phrases without special characters, focus on describing the jewelry and charm pendant, also focus and tailor Key Phrases and description to appropriate client based based on the type of jewelry.
+2. Emphasize charm details, focus image description on the type of jewelry and pendant description(what it is, occasion, metal, size, style).
+3. Focus solely on the jewelry details especially the charm description
 4. Ignore environment, model, and clothing.
 5. Organize into a short paragraph.
 6. Limit the description to 300 characters.
@@ -557,9 +557,9 @@ Using Sales Report and Product List Files:
   </script>
 
   <script>
-    // ------------------------------------------------
+    // ----------------------------------------------------------------------
     // GLOBALS
-    // ------------------------------------------------
+    // ----------------------------------------------------------------------
     const ETSY_SHOP_URL = "https://www.etsy.com/shop/custombrites";
     const CLIENT_ID = "k75zdspz4r99txpqdji7i2em";
     const REDIRECT_URI = "https://delicate-tanuki-616ac0.netlify.app/";
@@ -569,12 +569,12 @@ Using Sales Report and Product List Files:
     let soldOrdersCSV = [];
     let listingsCSV = [];
     let photoNames = [];
-    let previewImages = []; // data URLs (3000×3000 resizing)
-    let photoMeta = [];
+    let previewImages = []; // data URLs (resized 3000×3000)
+    let photoMeta = [];     // AI-generated metadata from "Analyze"
 
-    // ------------------------------------------------
+    // ----------------------------------------------------------------------
     // IMAGE RESIZE UTILITY (3000×3000)
-    // ------------------------------------------------
+    // ----------------------------------------------------------------------
     async function resizeImage(dataURL, width, height) {
       return new Promise((resolve, reject) => {
         const img = new Image();
@@ -593,9 +593,9 @@ Using Sales Report and Product List Files:
       });
     }
 
-    // ------------------------------------------------
-    // DRAG & DROP for CSV / DOC
-    // ------------------------------------------------
+    // ----------------------------------------------------------------------
+    // DRAG & DROP FOR CSV / DOC
+    // ----------------------------------------------------------------------
     async function uploadCSVFile(file) {
       return new Promise((resolve, reject) => {
         const reader = new FileReader();
@@ -761,9 +761,9 @@ Using Sales Report and Product List Files:
       document.getElementById("uploadedFilesList").value = fileList.join("\n");
     }
 
-    // ------------------------------------------------
-    // DRAG & DROP: IMAGES (Resized to 3000×3000)
-    // ------------------------------------------------
+    // ----------------------------------------------------------------------
+    // DRAG & DROP IMAGES (RESIZED to 3000×3000)
+    // ----------------------------------------------------------------------
     const dropZone = document.getElementById("dropZone");
     dropZone.addEventListener("dragover", e => {
       e.preventDefault(); e.stopPropagation();
@@ -790,7 +790,7 @@ Using Sales Report and Product List Files:
               reader.onerror = reject;
               reader.readAsDataURL(file);
             });
-            // Resize to 3000 × 3000
+            // Resize to 3000×3000
             const resizedDataURL = await resizeImage(dataURL, 3000, 3000);
 
             previewImages.push(resizedDataURL);
@@ -829,7 +829,7 @@ Using Sales Report and Product List Files:
           img.src = previewImages[i];
           previewBox.appendChild(img);
 
-          // "Remove" button for each image
+          // "Remove" button
           const removeBtn = document.createElement("div");
           removeBtn.className = "remove-btn";
           removeBtn.textContent = "X";
@@ -843,7 +843,7 @@ Using Sales Report and Product List Files:
           });
           previewBox.appendChild(removeBtn);
 
-          // # overlay
+          // numeric overlay
           const numOverlay = document.createElement("div");
           numOverlay.className = "number-overlay";
           numOverlay.textContent = (i + 1).toString();
@@ -856,7 +856,7 @@ Using Sales Report and Product List Files:
 
           cell.appendChild(previewBox);
 
-          // A small status area for "Analyze" progress
+          // "Analyze" status
           const metadataStatus = document.createElement("div");
           metadataStatus.className = "metadata-status";
           metadataStatus.id = "metadataStatus" + i;
@@ -878,9 +878,9 @@ Using Sales Report and Product List Files:
       instance.open();
     }
 
-    // ------------------------------------------------
-    // ANALYZE PHOTOS (calls /analyzeImage)
-    // ------------------------------------------------
+    // ----------------------------------------------------------------------
+    // ANALYZE PHOTOS => /analyzeImage
+    // ----------------------------------------------------------------------
     document.getElementById("analyzeMetadataBtn").addEventListener("click", analyzePhotos);
 
     async function analyzePhotos() {
@@ -907,14 +907,11 @@ Using Sales Report and Product List Files:
       }, 200);
 
       try {
-        // Gather "rules" text from the UI
         const rulesText = document.getElementById("analyzeRulesTextarea").value || "";
 
-        // Convert dataURL -> Blob
         const dataURL = previewImages[index];
         const blob = await (await fetch(dataURL)).blob();
 
-        // Create FormData to send to /analyzeImage
         const formData = new FormData();
         formData.append("rules", rulesText);
         formData.append("imageFile", blob, photoNames[index] || `image_${index}.jpg`);
@@ -941,9 +938,9 @@ Using Sales Report and Product List Files:
       }
     }
 
-    // ------------------------------------------------
+    // ----------------------------------------------------------------------
     // BASIC OAUTH CONNECT (Etsy)
-    // ------------------------------------------------
+    // ----------------------------------------------------------------------
     function generateRandomString(length) {
       const possible = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789';
       let text = '';
@@ -1016,9 +1013,9 @@ Using Sales Report and Product List Files:
       }
     }
 
-    // ------------------------------------------------
+    // ----------------------------------------------------------------------
     // UPDATE LISTING
-    // ------------------------------------------------
+    // ----------------------------------------------------------------------
     document.getElementById("uploadToEtsyBtn").addEventListener("click", async () => {
       const listingInput = document.getElementById("shopListings").value.trim();
       if (!listingInput) {
@@ -1064,9 +1061,9 @@ Using Sales Report and Product List Files:
       }
     });
 
-    // ------------------------------------------------
-    // UPLOAD PHOTOS
-    // ------------------------------------------------
+    // ----------------------------------------------------------------------
+    // UPLOAD PHOTOS (include alt_text from photoMeta)
+    // ----------------------------------------------------------------------
     document.getElementById("uploadPhotoBtn").addEventListener("click", async () => {
       const listingInput = document.getElementById("shopListings").value.trim();
       if (!listingInput) {
@@ -1092,17 +1089,20 @@ Using Sales Report and Product List Files:
 
       for (let i = 0; i < previewImages.length; i++) {
         const dataURL = previewImages[i];
-        const altText = photoMeta[i] || "";
+        const altText = photoMeta[i] || "";  // <-- The AI-generated metadata
         const rankNumber = i + 1;
+
         try {
-          // Convert dataURL to blob
+          // Convert dataURL -> blob
           const res = await fetch(dataURL);
           const blob = await res.blob();
+
           const formData = new FormData();
           formData.append("listingId", listingId);
           formData.append("token", accessToken);
           formData.append("fileName", photoNames[i] || `uploaded_photo_${i}.jpg`);
           formData.append("rank", rankNumber);
+          // Pass the alt_text from AI metadata
           formData.append("alt_text", altText);
           formData.append("file", blob, photoNames[i] || `uploaded_photo_${i}.jpg`);
 
@@ -1114,7 +1114,7 @@ Using Sales Report and Product List Files:
           if (!response.ok) {
             M.toast({ html: `Error uploading photo #${rankNumber}: ` + response.status });
           } else {
-            M.toast({ html: `Photo #${rankNumber} uploaded!` });
+            M.toast({ html: `Photo #${rankNumber} uploaded with alt_text!` });
           }
         } catch (e) {
           console.error(`Exception uploading photo #${rankNumber}:`, e);
@@ -1123,9 +1123,9 @@ Using Sales Report and Product List Files:
       }
     });
 
-    // ------------------------------------------------
+    // ----------------------------------------------------------------------
     // RULES & TITLE / DESCRIPTION GENERATION
-    // ------------------------------------------------
+    // ----------------------------------------------------------------------
     function stripMarkdownJSON(text) {
       return text.replace(/^```json\s*/, "").replace(/\s*```$/, "").trim();
     }
@@ -1263,6 +1263,7 @@ Important: Return ONLY the description as plain text.`;
         await generateTagPhrases();
       }
     });
+
     async function generateTagPhrases() {
       const question = document.getElementById("listingDescInput").value.trim();
       if (!question) {
@@ -1303,9 +1304,9 @@ Generate exactly 13 tag phrases (each ≤ 20 characters). Return as plain text.
       }
     }
 
-    // ------------------------------------------------
+    // ----------------------------------------------------------------------
     // BUTTON CONFIG
-    // ------------------------------------------------
+    // ----------------------------------------------------------------------
     document.getElementById("configureButtonsBtn").addEventListener("click", () => {
       const configContainer = document.getElementById("buttonConfigContainer");
       configContainer.innerHTML = "";
