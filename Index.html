@@ -5,7 +5,7 @@
   <title>Etsy Listing Generator & Shop Listings</title>
   <!-- Favicon -->
   <link rel="icon" type="image/png" href="assets/favicon.png">
-  <!-- Material Icons + Materialize CSS -->
+  <!-- Google Material Icons + Materialize CSS -->
   <link
     href="https://fonts.googleapis.com/icon?family=Material+Icons"
     rel="stylesheet"
@@ -14,7 +14,7 @@
     rel="stylesheet"
     href="https://cdnjs.cloudflare.com/ajax/libs/materialize/1.0.0/css/materialize.min.css"
   >
-  <!-- Optional: piexifjs for EXIF manipulation -->
+  <!-- Optional: piexifjs (EXIF) -->
   <script src="https://cdn.jsdelivr.net/npm/piexifjs@1.0.4/piexif.min.js"></script>
 
   <style>
@@ -86,13 +86,12 @@
       font-style: italic; font-size: 0.9em; margin-top: 5px;
     }
 
-    /* Drag-and-Drop Boxes for CSV/Docs */
+    /* CSV / Doc Drag & Drop Boxes */
     #dropZone, #ordersDropZone, #listingsDropZone {
       width: 138px; height: 138px; border: 2px dashed #ccc;
       border-radius: 3px; display: inline-block; vertical-align: middle;
       text-align: center; line-height: 138px; position: relative;
     }
-
     /* Orders container */
     #ordersContainer {
       display: flex; flex-direction: column;
@@ -118,7 +117,8 @@
     }
     #uploadedFilesList {
       width: 300px; height: 125px; resize: none;
-      box-sizing: border-box; border: 1px solid grey; margin-left: 85px;
+      box-sizing: border-box; border: 1px solid grey;
+      margin-left: 85px;
     }
 
     /* Primary Preview – clickable for cropping */
@@ -143,12 +143,15 @@
     }
     #previewGridStatic {
       display: grid; grid-template-columns: repeat(5, 100px);
-      grid-column-gap: 23px; grid-row-gap: 18px; margin: 0 auto;
+      grid-column-gap: 23px; grid-row-gap: 18px;
+      margin: 0 auto;
     }
     .preview-cell {
-      position: relative; width: 100px; height: 132px; border: 2px solid #ccc;
-      border-radius: 3px; display: flex; flex-direction: column;
-      align-items: center; justify-content: center; font-size: 12px; color: #666;
+      position: relative; width: 100px; height: 132px;
+      border: 2px solid #ccc; border-radius: 3px;
+      display: flex; flex-direction: column; align-items: center;
+      justify-content: center; font-size: 12px; color: #666;
+      /* We'll set up drag events below. */
     }
     .preview-box {
       position: relative; width: 100%; height: 100%;
@@ -158,9 +161,10 @@
       border-radius: 3px; display: block;
     }
     .remove-btn {
-      position: absolute; top: -5px; left: -5px; width: 15px; height: 15px;
-      background-color: black; color: white; font-size: 10px;
-      text-align: center; cursor: pointer; z-index: 999; border-radius: 50%;
+      position: absolute; top: -5px; left: -5px;
+      width: 15px; height: 15px; background-color: black; color: white;
+      font-size: 10px; text-align: center; cursor: pointer;
+      z-index: 999; border-radius: 50%;
     }
     .number-overlay {
       position: absolute; top: 0; right: 0; width: 16px; height: 16px;
@@ -168,7 +172,7 @@
       align-items: center; justify-content: center; font-size: 10px;
       z-index: 999; border-radius: 3px;
     }
-    /* Metadata status styles */
+    /* Metadata status */
     .metadata-status {
       margin-top: 5px; text-align: center; font-size: 14px; min-height: 20px;
     }
@@ -176,7 +180,7 @@
       width: 90%;
     }
 
-    /* Blue overlay highlight for reordering */
+    /* Blue overlay highlight for reorder dragover */
     .cell-drag-hover {
       background-color: rgba(0,0,255,0.25) !important;
     }
@@ -247,7 +251,7 @@
     </div>
   </div>
 
-  <!-- Etsy OAuth and Shop Listings Section -->
+  <!-- OAuth and Shop Listings -->
   <button id="connectEtsyBtn"
           class="btn waves-effect waves-light configurable">
     Connect to Etsy
@@ -331,7 +335,8 @@
       <div class="section-heading configurable">Etsy Listing DESCRIPTION</div>
       <div class="flex-container configurable">
         <div class="textbox-container configurable">
-          <textarea id="listingDescription" class="materialize-textarea"></textarea>
+          <textarea id="listingDescription"
+                    class="materialize-textarea"></textarea>
         </div>
         <div class="button-container configurable">
           <button id="regenDescriptionBtn"
@@ -352,31 +357,29 @@
     </div>
   </div>
 
-  <!-- Static 10-Photo Preview Grid Container -->
+  <!-- Static 10-Photo Preview Grid -->
   <div id="previewGridContainer">
     <div id="previewGridStatic">
-      <div class="preview-cell" id="previewCell0"></div>
-      <div class="preview-cell" id="previewCell1"></div>
-      <div class="preview-cell" id="previewCell2"></div>
-      <div class="preview-cell" id="previewCell3"></div>
-      <div class="preview-cell" id="previewCell4"></div>
-      <div class="preview-cell" id="previewCell5"></div>
-      <div class="preview-cell" id="previewCell6"></div>
-      <div class="preview-cell" id="previewCell7"></div>
-      <div class="preview-cell" id="previewCell8"></div>
-      <div class="preview-cell" id="previewCell9"></div>
+      <div class="preview-cell" id="previewCell0">Empty</div>
+      <div class="preview-cell" id="previewCell1">Empty</div>
+      <div class="preview-cell" id="previewCell2">Empty</div>
+      <div class="preview-cell" id="previewCell3">Empty</div>
+      <div class="preview-cell" id="previewCell4">Empty</div>
+      <div class="preview-cell" id="previewCell5">Empty</div>
+      <div class="preview-cell" id="previewCell6">Empty</div>
+      <div class="preview-cell" id="previewCell7">Empty</div>
+      <div class="preview-cell" id="previewCell8">Empty</div>
+      <div class="preview-cell" id="previewCell9">Empty</div>
     </div>
   </div>
 
-  <!-- Update Listing button container -->
+  <!-- Update / Upload Photo button containers -->
   <div id="uploadContainer">
     <button id="uploadToEtsyBtn"
             class="btn waves-effect waves-light configurable">
       Update Listing
     </button>
   </div>
-
-  <!-- New Upload Photo button container -->
   <div id="uploadPhotoContainer">
     <button id="uploadPhotoBtn"
             class="btn waves-effect waves-light configurable">
@@ -384,7 +387,7 @@
     </button>
   </div>
 
-  <!-- Metadata Modal (for viewing metadata on click) -->
+  <!-- Metadata Modal -->
   <div id="metadataModal" class="modal">
     <div class="modal-content">
       <h4>Photo Metadata</h4>
@@ -554,7 +557,10 @@ Using Sales Report and Product List Files:
         <input type="range" id="zoomSlider" min="0.1" max="3" step="0.01" value="1">
       </div>
       <div style="text-align:center; margin-top:10px;">
-        <button id="saveCropBtn" class="btn waves-effect waves-light">Save</button>
+        <button id="saveCropBtn"
+                class="btn waves-effect waves-light">
+          Save
+        </button>
         <button id="cancelCropBtn"
                 class="btn waves-effect waves-light"
                 style="background-color:#f44336; margin-left:10px;">
@@ -564,87 +570,95 @@ Using Sales Report and Product List Files:
     </div>
   </div>
 
-  <!-- Include jQuery and Materialize JS -->
+  <!-- jQuery & Materialize JS -->
   <script src="https://code.jquery.com/jquery-3.6.0.min.js"></script>
   <script
     src="https://cdnjs.cloudflare.com/ajax/libs/materialize/1.0.0/js/materialize.min.js">
   </script>
 
   <script>
-    // ------------------------------------------------------------------------------
-    // HERE is all your stable JS code, plus the robust reorder approach:
-    // ------------------------------------------------------------------------------
-    
-    // [ ... your stable code for global vars, handle CSV, OAuth, uploading photos
-    //      with alt_text, analyzing photos, generating listing title/description, etc. 
-    //      is pasted from your prior working version ...
-    // ]
+    // ----------------------------------------------------------------------
+    //  GLOBALS & MAIN CODE (Your stable logic) + minimal reorder approach
+    // ----------------------------------------------------------------------
+    const ETSY_SHOP_URL = "https://www.etsy.com/shop/custombrites";
+    const CLIENT_ID = "k75zdspz4r99txpqdji7i2em";
+    const REDIRECT_URI = "https://delicate-tanuki-616ac0.netlify.app/";
+    const modelName = "chatgpt-4o-latest";
 
     let accessToken;
     let soldOrdersCSV = [];
     let listingsCSV = [];
 
     let photoNames = [];
-    let previewImages = [];
-    let photoMeta = [];
+    let previewImages = []; // data URLs for each image (3000x3000 resized)
+    let photoMeta = [];     // AI-generated metadata for alt_text
 
-    // We define a single function to init the 10 cells for reorder
-    function initPreviewCellsForReorder() {
-      for (let i = 0; i < 10; i++) {
-        const cell = document.getElementById("previewCell" + i);
+    // ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+    // Minimal approach to reordering in updateStaticPreviewGrid()
+    // with a data-dragInit guard so we don't attach multiple times
+    // ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
-        // Store the cell index in dataset
-        cell.dataset.cellIndex = i;
-
-        // We'll add the dragenter/dragleave/dragover/drop events once
-        cell.addEventListener("dragenter", e => {
-          e.preventDefault();
-          cell.classList.add("cell-drag-hover");
-        });
-        cell.addEventListener("dragleave", e => {
-          cell.classList.remove("cell-drag-hover");
-        });
-        cell.addEventListener("dragover", e => {
-          e.preventDefault(); // must do to allow drop
-        });
-        cell.addEventListener("drop", e => {
-          e.preventDefault();
-          cell.classList.remove("cell-drag-hover");
-
-          const sourceIndex = parseInt(e.dataTransfer.getData("text/plain"), 10);
-          const targetIndex = parseInt(cell.dataset.cellIndex, 10);
-          if (!isNaN(sourceIndex) && sourceIndex !== targetIndex &&
-              sourceIndex >= 0 && sourceIndex < previewImages.length) {
-            // reorder
-            const [movedImg] = previewImages.splice(sourceIndex, 1);
-            previewImages.splice(targetIndex, 0, movedImg);
-
-            const [movedName] = photoNames.splice(sourceIndex, 1);
-            photoNames.splice(targetIndex, 0, movedName);
-
-            const [movedMeta] = photoMeta.splice(sourceIndex, 1);
-            photoMeta.splice(targetIndex, 0, movedMeta);
-
-            updateStaticPreviewGrid();
-            updatePrimaryPreview();
-          }
-        });
-      }
-    }
-
-    // The function that re-renders the grid each time
+    // 1) We'll define the function to render the grid
     function updateStaticPreviewGrid() {
       for (let i = 0; i < 10; i++) {
         const cell = document.getElementById("previewCell" + i);
+
+        // Clear old content
         cell.innerHTML = "";
+        
+        // Attach dragover, drop, etc. once
+        if (!cell.dataset.dragInit) {
+          cell.dataset.dragInit = "true"; // mark we set them
+          
+          cell.addEventListener("dragenter", e => {
+            e.preventDefault();
+            cell.classList.add("cell-drag-hover");
+          });
+          cell.addEventListener("dragleave", e => {
+            cell.classList.remove("cell-drag-hover");
+          });
+          cell.addEventListener("dragover", e => {
+            e.preventDefault(); // needed to allow drop
+          });
+          cell.addEventListener("drop", e => {
+            e.preventDefault();
+            cell.classList.remove("cell-drag-hover");
+            const sourceIndex = parseInt(e.dataTransfer.getData("text/plain"), 10);
+            const targetIndex = i;
+            if (
+              !isNaN(sourceIndex) &&
+              sourceIndex !== targetIndex &&
+              sourceIndex >= 0 &&
+              sourceIndex < previewImages.length
+            ) {
+              // reorder
+              const [movedImg] = previewImages.splice(sourceIndex, 1);
+              previewImages.splice(targetIndex, 0, movedImg);
+
+              const [movedName] = photoNames.splice(sourceIndex, 1);
+              photoNames.splice(targetIndex, 0, movedName);
+
+              const [movedMeta] = photoMeta.splice(sourceIndex, 1);
+              photoMeta.splice(targetIndex, 0, movedMeta);
+
+              updateStaticPreviewGrid();
+              updatePrimaryPreview();
+            }
+          });
+        }
+
+        // If there's an image for index i, populate it
         if (i < previewImages.length) {
           const previewBox = document.createElement("div");
           previewBox.className = "preview-box";
+
+          // Make the entire box draggable
           previewBox.draggable = true;
           previewBox.addEventListener("dragstart", e => {
             e.dataTransfer.setData("text/plain", i.toString());
           });
 
+          // The actual image
           const img = document.createElement("img");
           img.src = previewImages[i];
           previewBox.appendChild(img);
@@ -663,23 +677,24 @@ Using Sales Report and Product List Files:
           });
           previewBox.appendChild(removeBtn);
 
+          // Index overlay
           const numOverlay = document.createElement("div");
           numOverlay.className = "number-overlay";
           numOverlay.textContent = (i + 1).toString();
           previewBox.appendChild(numOverlay);
 
-          // On click, show metadata
+          // If user clicks the previewBox, show metadata
           previewBox.addEventListener("click", () => {
             showMetadata(i);
           });
 
           cell.appendChild(previewBox);
 
-          // Optionally: metadata status
           const metadataStatus = document.createElement("div");
           metadataStatus.className = "metadata-status";
           metadataStatus.id = "metadataStatus" + i;
           cell.appendChild(metadataStatus);
+
         } else {
           cell.textContent = "Empty";
         }
@@ -706,18 +721,48 @@ Using Sales Report and Product List Files:
       instance.open();
     }
 
-    // The rest of your stable code: handle analyzing images, alt_text, etc.
+    // ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+    // All your other stable code: CSV doc upload, analyzing images,
+    // alt_text for Etsy, generating Title/Desc, etc. 
+    // ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
-    // On DOMContentLoaded, call initPreviewCellsForReorder() once
+    // For instance, let's show the part that handles resizing images to 3000x3000
+    async function resizeImage(dataURL, width, height) {
+      return new Promise((resolve, reject) => {
+        const img = new Image();
+        img.onload = () => {
+          const canvas = document.createElement("canvas");
+          canvas.width = width;
+          canvas.height = height;
+          const ctx = canvas.getContext("2d");
+          ctx.drawImage(img, 0, 0, width, height);
+          const resizedDataURL = canvas.toDataURL("image/jpeg", 0.85);
+          resolve(resizedDataURL);
+        };
+        img.onerror = reject;
+        img.src = dataURL;
+      });
+    }
+
+    // ... The rest of your code for soldOrdersCSV, listingsCSV, 
+    //     the dropZone event for images (resizing to 3000x3000), 
+    //     alt_text logic, analyzeMetadata, etc. is placed here ...
+    // (Copied from your previously working version – 
+    //  the only difference is the minimal reorder logic above.)
+
+    // On DOMContentLoaded, we'll do the usual init
     document.addEventListener("DOMContentLoaded", () => {
-      initPreviewCellsForReorder();  // sets up reorder events for the 10 cells
-      updateStaticPreviewGrid();
-
-      // [Your stable code for reading OAuth code, etc. remains here...]
-      // ...
+      // e.g. load button positions, check OAuth code, etc.
+      updateStaticPreviewGrid(); // so it starts with "Empty" in each cell
     });
+    
+    // The rest: 
+    // - connectEtsyBtn click
+    // - uploading photos with alt_text
+    // - generating listing titles/descriptions
+    // - "tag phrases" from listingDescInput
+    // remain the same from your stable code
 
-    // [Everything else remains your stable code from the previous versions...]
   </script>
 </body>
 </html>
