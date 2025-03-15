@@ -482,11 +482,93 @@ Using Sales Report and Product List Files:
       return await response.json();
     }
     
-    // File upload functions for CSV and DOC remain unchanged
-    async function uploadCSVFile(file, progressCallback) { /*...*/ }
-    async function uploadDocFile(file, progressCallback) { /*...*/ }
+    // File upload functions for CSV and DOC files
+    async function uploadCSVFile(file, progressCallback) {
+      return new Promise((resolve, reject) => {
+        const reader = new FileReader();
+        reader.onload = async (event) => {
+          try {
+            const dataURL = event.target.result;
+            const base64Content = dataURL.split(',')[1];
+            if (!base64Content) throw new Error("File content is empty.");
+            const payload = {
+              file: base64Content,
+              fileName: file.name,
+              purpose: "user_data"
+            };
+            const response = await fetch("/.netlify/functions/uploadFile", {
+              method: "POST",
+              headers: { "Content-Type": "application/json" },
+              body: JSON.stringify(payload)
+            });
+            if (!response.ok) throw new Error("Upload failed with status " + response.status);
+            const responseData = await response.json();
+            resolve({ id: responseData.id, name: file.name });
+          } catch (err) {
+            reject(err);
+          }
+        };
+        reader.onerror = reject;
+        reader.readAsDataURL(file);
+      });
+    }
     
-    // Implementations for the OAuth helper functions
+    async function uploadDocFile(file, progressCallback) {
+      return new Promise((resolve, reject) => {
+        const reader = new FileReader();
+        reader.onload = async (event) => {
+          try {
+            const dataURL = event.target.result;
+            const base64Content = dataURL.split(',')[1];
+            if (!base64Content) throw new Error("File content is empty.");
+            const payload = {
+              file: base64Content,
+              fileName: file.name,
+              purpose: "user_data"
+            };
+            const response = await fetch("/.netlify/functions/uploadFile", {
+              method: "POST",
+              headers: { "Content-Type": "application/json" },
+              body: JSON.stringify(payload)
+            });
+            if (!response.ok) throw new Error("Upload failed with status " + response.status);
+            const responseData = await response.json();
+            resolve({ id: responseData.id, name: file.name });
+          } catch (err) {
+            reject(err);
+          }
+        };
+        reader.onerror = reject;
+        reader.readAsDataURL(file);
+      });
+    }
+    
+    // Function to update the vector store (used after uploading CSV or DOC files)
+    async function updateVectorStore() {
+      const allFileIds = [...soldOrdersCSV, ...listingsCSV].map(file => file.id);
+      if (allFileIds.length === 0) {
+        console.log("No supported files uploaded yet.");
+        return;
+      }
+      try {
+        const vectorStorePayload = { name: "CSV Vector Store", file_ids: allFileIds };
+        const vectorStoreResponse = await fetch("/.netlify/functions/vectorStore", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify(vectorStorePayload)
+        });
+        if (!vectorStoreResponse.ok) {
+          const errorData = await vectorStoreResponse.json();
+          throw new Error("Error creating vector store: " + JSON.stringify(errorData));
+        }
+        const vectorStoreData = await vectorStoreResponse.json();
+        console.log("Vector store created:", vectorStoreData);
+      } catch (err) {
+        console.error("Error in updateVectorStore:", err);
+      }
+    }
+    
+    // OAuth helper functions
     function generateRandomString(length) {
       const possible = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789';
       let text = '';
@@ -510,6 +592,7 @@ Using Sales Report and Product List Files:
       return base64urlEncode(digest);
     }
     
+    // "Connect to Etsy" button handler
     document.getElementById("connectEtsyBtn").addEventListener("click", async () => {
       const state = "randomState123";
       const scope = "listings_w listings_r";
@@ -579,10 +662,7 @@ Using Sales Report and Product List Files:
       const payload = {
         title: document.getElementById("listingTitle").value,
         description: document.getElementById("listingDescription").value,
-        tags: document.getElementById("searchKeyPhrases").value
-          .split("\n")
-          .map(s => s.trim())
-          .filter(s => s !== "")
+        tags: document.getElementById("searchKeyPhrases").value.split("\n").map(s => s.trim()).filter(s => s !== "")
       };
       console.log("Update payload:", payload);
       const updateUrl = `/.netlify/functions/updateListing?listingId=${listingId}&token=${encodeURIComponent(accessToken)}`;
@@ -610,7 +690,7 @@ Using Sales Report and Product List Files:
     
     document.getElementById("uploadToEtsyBtn").addEventListener("click", updateExistingListing);
     
-    // Upload Photo function: loops through previewImages and uploads each photo
+    // Upload Photo: loop through previewImages and upload each
     async function uploadPhoto() {
       const listingInput = document.getElementById("shopListings").value.trim();
       if (!listingInput) {
@@ -669,7 +749,7 @@ Using Sales Report and Product List Files:
     }
     document.getElementById("uploadPhotoBtn").addEventListener("click", uploadPhoto);
     
-    // Update the static preview grid
+    // Update static preview grid
     function updateStaticPreviewGrid() {
       for (let i = 0; i < 10; i++) {
         const cell = document.getElementById("previewCell" + i);
@@ -714,7 +794,7 @@ Using Sales Report and Product List Files:
       }
     }
     
-    // File Drop Handling for images (limit to 10)
+    // File drop handling for images (limit 10)
     const dropZone = document.getElementById("dropZone");
     dropZone.addEventListener("dragover", e => {
       e.preventDefault();
@@ -756,14 +836,99 @@ Using Sales Report and Product List Files:
         }
       }
     });
-  
+    
+    // Restore drag and drop for "Etsy Sold Orders" CSV/DOC files
+    const ordersDropZone = document.getElementById("ordersDropZone");
+    ordersDropZone.addEventListener("dragover", e => { 
+      e.preventDefault(); 
+      e.stopPropagation(); 
+      ordersDropZone.style.borderColor = "#000"; 
+    });
+    ordersDropZone.addEventListener("dragleave", e => { 
+      e.preventDefault(); 
+      e.stopPropagation(); 
+      ordersDropZone.style.borderColor = "#ccc"; 
+    });
+    ordersDropZone.addEventListener("drop", async e => {
+      e.preventDefault(); 
+      e.stopPropagation(); 
+      ordersDropZone.style.borderColor = "#ccc";
+      const files = e.dataTransfer.files;
+      const progressBar = document.getElementById("csvProgressBar");
+      for (let i = 0; i < files.length; i++) {
+         let file = files[i];
+         const fileName = file.name.toLowerCase();
+         if (fileName.endsWith(".csv") || fileName.endsWith(".doc") || fileName.endsWith(".docx")) {
+            try {
+              let fileData;
+              if (fileName.endsWith(".csv")) {
+                 fileData = await uploadCSVFile(file, percent => { progressBar.value = percent; });
+              } else {
+                 fileData = await uploadDocFile(file, percent => { progressBar.value = percent; });
+              }
+              progressBar.value = 0;
+              soldOrdersCSV.push(fileData);
+              updateUploadedFilesList();
+              await updateVectorStore();
+            } catch(err) {
+              console.error("Error uploading file:", err);
+            }
+         } else {
+            alert("Only .csv, .doc, and .docx files are supported for Etsy Sold Orders.");
+         }
+      }
+    });
+    
+    // Restore drag and drop for "Etsy Listings" CSV/DOC files
+    const listingsDropZone = document.getElementById("listingsDropZone");
+    listingsDropZone.addEventListener("dragover", e => { 
+      e.preventDefault(); 
+      e.stopPropagation(); 
+      listingsDropZone.style.borderColor = "#000"; 
+    });
+    listingsDropZone.addEventListener("dragleave", e => { 
+      e.preventDefault(); 
+      e.stopPropagation(); 
+      listingsDropZone.style.borderColor = "#ccc"; 
+    });
+    listingsDropZone.addEventListener("drop", async e => {
+      e.preventDefault(); 
+      e.stopPropagation(); 
+      listingsDropZone.style.borderColor = "#ccc";
+      const files = e.dataTransfer.files;
+      const progressBar = document.getElementById("csvProgressBar");
+      for (let i = 0; i < files.length; i++) {
+         let file = files[i];
+         const fileName = file.name.toLowerCase();
+         if (fileName.endsWith(".csv") || fileName.endsWith(".doc") || fileName.endsWith(".docx")) {
+            try {
+              let fileData;
+              if (fileName.endsWith(".csv")) {
+                 fileData = await uploadCSVFile(file, percent => { progressBar.value = percent; });
+              } else {
+                 fileData = await uploadDocFile(file, percent => { progressBar.value = percent; });
+              }
+              progressBar.value = 0;
+              listingsCSV.push(fileData);
+              updateUploadedFilesList();
+              await updateVectorStore();
+            } catch(err) {
+              console.error("Error uploading file:", err);
+            }
+         } else {
+            alert("Only .csv, .doc, and .docx files are supported for Etsy Listings.");
+         }
+      }
+    });
+    
     function updateUploadedFilesList() {
       let fileList = [];
       soldOrdersCSV.forEach(file => fileList.push(file.name));
       listingsCSV.forEach(file => fileList.push(file.name));
       document.getElementById("uploadedFilesList").value = fileList.join("\n");
     }
-  
+    
+    // Button configuration for positioning (unchanged)
     document.getElementById("configureButtonsBtn").addEventListener("click", function() {
       var configContainer = document.getElementById("buttonConfigContainer");
       configContainer.innerHTML = "";
@@ -796,7 +961,7 @@ Using Sales Report and Product List Files:
       var modalInstance = M.Modal.getInstance(modalElem) || M.Modal.init(modalElem, { preventScrolling: false });
       modalInstance.open();
     });
-  
+    
     document.getElementById("saveButtonPositionsBtn").addEventListener("click", function() {
       var selectors = "button:not(#configureButtonsBtn), #listingDescContainer, #ordersDropZone, #listingsDropZone, #dropZone, #csvProgressContainer, #previewGridContainer, #primaryPreview, #container13, #uploadedFilesList";
       var elements = document.querySelectorAll(selectors);
@@ -807,7 +972,7 @@ Using Sales Report and Product List Files:
       localStorage.setItem("buttonPositions", JSON.stringify(positions));
       M.toast({ html: "Button positions saved." });
     });
-  
+    
     function loadButtonPositions() {
       var stored = localStorage.getItem("buttonPositions");
       if (stored) {
@@ -821,31 +986,31 @@ Using Sales Report and Product List Files:
         }
       }
     }
-  
+    
     window.addEventListener("load", function() {
       var container13 = document.getElementById("container13");
       container13.style.height = (container13.offsetHeight * 2.5) + "px";
     });
-  
+    
     document.getElementById("listingDescInput").addEventListener("input", function() {
       document.getElementById("searchKeyPhrases").value = "";
     });
-  
+    
     function stripMarkdownJSON(text) {
       return text.replace(/^```json\s*/, "").replace(/\s*```$/, "").trim();
     }
-  
+    
     function updateTitleCount(text) {
       document.getElementById("titleCount").textContent = "Count: " + text.length;
     }
-  
+    
     async function generateBoth() { 
       await Promise.all([generateTitleOnly(), generateDescriptionOnly()]);
       const titleEl = document.getElementById("listingTitle");
       const descEl = document.getElementById("listingDescription");
       console.log("Generate Output:", { title: titleEl.value, description: descEl.value });
     }
-  
+    
     async function generateTitleOnly() {
       const etsyLink = ETSY_SHOP_URL;
       const keyPhrases = document.getElementById("searchKeyPhrases").value.trim();
@@ -884,7 +1049,7 @@ Important: Return ONLY the title as plain text.`;
         document.getElementById("listingTitle").value = "Error: " + error;
       }
     }
-  
+    
     async function generateDescriptionOnly() {
       const etsyLink = ETSY_SHOP_URL;
       const keyPhrases = document.getElementById("searchKeyPhrases").value.trim();
@@ -922,7 +1087,7 @@ Important: Return ONLY the description as plain text.`;
         document.getElementById("listingDescription").value = "Error: " + error;
       }
     }
-  
+    
     async function generateTagPhrases() {
       let question = document.getElementById("listingDescInput").value;
       if (!question.trim()) {
@@ -964,7 +1129,7 @@ Return your answer as plain text.`;
         M.toast({ html: "Error generating tag phrases: " + err.message });
       }
     }
-  
+    
     document.getElementById("listingDescInput").addEventListener("keydown", async function(e) {
       if (e.key === "Enter" && !e.shiftKey) {
         e.preventDefault();
@@ -973,7 +1138,7 @@ Return your answer as plain text.`;
         await processKeyPhrases();
       }
     });
-  
+    
     async function processKeyPhrases() {
       let keyText = document.getElementById("searchKeyPhrases").value;
       let phrases = keyText.split(/\n+/).map(phrase => phrase.trim()).filter(phrase => phrase !== "");
@@ -1019,12 +1184,12 @@ Return your answer as plain text.`;
       }
       document.getElementById("searchKeyPhrases").value = processedPhrases.join("\n");
     }
-  
+    
     document.getElementById("copyKeyPhrasesBtn").addEventListener("click", () => {
       const lines = document.getElementById("searchKeyPhrases").value.split(/\n+/).map(l => l.trim()).filter(l => l !== "");
       navigator.clipboard.writeText(lines.join(", ")).catch(err => console.error("Error copying key phrases: " + err));
     });
-  
+    
     document.getElementById("generateBtn").addEventListener("click", generateBoth);
     document.getElementById("regenTitleBtn").addEventListener("click", generateTitleOnly);
     document.getElementById("regenDescriptionBtn").addEventListener("click", generateDescriptionOnly);
@@ -1034,7 +1199,7 @@ Return your answer as plain text.`;
     document.getElementById("copyDescriptionBtn").addEventListener("click", () => {
       navigator.clipboard.writeText(document.getElementById("listingDescription").value).catch(err => console.error("Error copying description: " + err));
     });
-  
+    
     function delay(ms) { return new Promise(resolve => setTimeout(resolve, ms)); }
   </script>
 </body>
