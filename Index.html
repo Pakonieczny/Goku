@@ -22,22 +22,18 @@
   <style>
     /* Basic layout */
     html, body {
-      margin: 0; padding: 0;
-      width: 100vw;
+      margin: 0; padding: 0; width: 100vw;
       font-family: Arial, sans-serif;
     }
     .container {
-      width: 100vw;
-      padding: 10px;
-      box-sizing: border-box;
+      width: 100vw; padding: 10px; box-sizing: border-box;
       text-align: left;
     }
     h5, label, p {
       text-align: left;
     }
     input, textarea {
-      width: 100%;
-      box-sizing: border-box;
+      width: 100%; box-sizing: border-box;
     }
 
     /* Wrap Listing Description and File Drop Zones */
@@ -45,108 +41,73 @@
       display: flex; align-items: center;
     }
     .listing-desc-container {
-      position: relative;
-      display: inline-block;
-      width: 500px;
+      position: relative; display: inline-block; width: 500px;
     }
     .listing-desc-container h5 {
-      margin: 0 0 10px 0;
-      font-size: 1.2rem;
-      font-weight: 500;
+      margin: 0 0 10px 0; font-size: 1.2rem; font-weight: 500;
     }
     .listing-desc-container input {
-      width: 500px;
-      height: 30px;
-      border: 1px solid #000;
-      padding: 5px;
+      width: 500px; height: 30px; border: 1px solid #000; padding: 5px;
     }
 
     /* "User Provided Search Key Phrases" textarea */
     #searchKeyPhrases {
-      resize: none;
-      box-sizing: border-box;
-      border: 1px solid grey;
+      resize: none; box-sizing: border-box; border: 1px solid grey;
     }
     #searchKeyPhrases[rows="14"] {
       height: auto;
     }
     .flex-container {
-      display: flex;
-      gap: 10px;
-      align-items: stretch;
+      display: flex; gap: 10px; align-items: stretch;
     }
     .textbox-container {
       flex: 1;
     }
     .textbox-container textarea {
-      width: 100%;
-      padding: 0.8rem;
-      font-size: 1rem;
-      line-height: 1.2;
-      resize: none;
-      overflow: visible;
-      box-sizing: border-box;
+      width: 100%; padding: 0.8rem; font-size: 1rem; line-height: 1.2;
+      resize: none; overflow: visible; box-sizing: border-box;
     }
     .button-container {
-      width: 200px;
-      display: flex;
-      flex-direction: column;
-      gap: 10px;
+      width: 200px; display: flex; flex-direction: column; gap: 10px;
       align-self: flex-start;
     }
     #listingTitle {
       min-height: 45px;
     }
     #listingDescInput {
-      width: 500px; height: 30px;
-      border: 1px solid #000; padding: 5px;
+      width: 500px; height: 30px; border: 1px solid #000; padding: 5px;
     }
     #listingDescription {
       min-height: 150px;
     }
     .section-heading {
-      font-size: 1.2rem;
-      font-weight: 500;
-      margin-bottom: 5px;
+      font-size: 1.2rem; font-weight: 500; margin-bottom: 5px;
       display: inline-block;
     }
     .count-text {
-      font-style: italic;
-      font-size: 0.9em;
-      margin-top: 5px;
+      font-style: italic; font-size: 0.9em; margin-top: 5px;
     }
 
     /* Drag and Drop Boxes */
     #dropZone,
     #ordersDropZone,
     #listingsDropZone {
-      width: 138px; height: 138px;
-      border: 2px dashed #ccc;
-      border-radius: 3px;
-      display: inline-block;
-      vertical-align: middle;
-      text-align: center;
-      line-height: 138px;
-      position: relative;
+      width: 138px; height: 138px; border: 2px dashed #ccc;
+      border-radius: 3px; display: inline-block; vertical-align: middle;
+      text-align: center; line-height: 138px; position: relative;
     }
-
     /* Orders container */
     #ordersContainer {
-      display: flex;
-      flex-direction: column;
+      display: flex; flex-direction: column;
     }
     /* CSV Progress Bar */
     #csvProgressBar {
-      width: 100%; height: 20px;
-      border: 1px solid blue;
-      background-color: #e0f0ff;
-      margin-top: 5px;
-      -webkit-appearance: none;
-      appearance: none;
+      width: 100%; height: 20px; border: 1px solid blue;
+      background-color: #e0f0ff; margin-top: 5px;
+      -webkit-appearance: none; appearance: none;
     }
     #csvProgressBar::-webkit-progress-bar {
-      background-color: #e0f0ff;
-      border: 1px solid blue;
+      background-color: #e0f0ff; border: 1px solid blue;
     }
     #csvProgressBar::-webkit-progress-value {
       background-color: blue;
@@ -156,16 +117,11 @@
     }
     /* File Drop Zones container */
     #fileDropZonesContainer {
-      display: flex;
-      gap: 10px;
-      margin-left: 100px;
+      display: flex; gap: 10px; margin-left: 100px;
     }
     #uploadedFilesList {
-      width: 300px; height: 125px;
-      resize: none;
-      box-sizing: border-box;
-      border: 1px solid grey;
-      margin-left: 85px;
+      width: 300px; height: 125px; resize: none;
+      box-sizing: border-box; border: 1px solid grey; margin-left: 85px;
     }
 
     /* Primary Preview – clickable for cropping */
@@ -185,60 +141,49 @@
 
     /* Static 10-Photo Preview Grid */
     #previewGridContainer {
-      position: relative;
-      margin: 20px auto;
-      width: auto;
-      max-width: 600px;
-      text-align: center;
+      position: relative; margin: 20px auto; width: auto;
+      max-width: 600px; text-align: center;
     }
     #previewGridStatic {
-      display: grid;
-      grid-template-columns: repeat(5, 100px);
-      grid-column-gap: 23px;
-      grid-row-gap: 18px;
-      margin: 0 auto;
+      display: grid; grid-template-columns: repeat(5, 100px);
+      grid-column-gap: 23px; grid-row-gap: 18px; margin: 0 auto;
     }
     .preview-cell {
-      position: relative; width: 100px; height: 132px;
-      border: 2px solid #ccc; border-radius: 3px;
-      display: flex; flex-direction: column;
-      align-items: center; justify-content: center;
-      font-size: 12px; color: #666;
-      /* We'll allow dropping onto these for reorder. */
+      position: relative; width: 100px; height: 132px; border: 2px solid #ccc;
+      border-radius: 3px; display: flex; flex-direction: column;
+      align-items: center; justify-content: center; font-size: 12px; color: #666;
+      /* We'll allow dropping here for reorder. */
     }
     .preview-box {
       position: relative; width: 100%; height: 100%;
-      /* We'll mark this as draggable for reorder. */
+      /* Mark draggable for reorder. */
     }
     .preview-box img {
-      width: 100px; height: 100px;
-      object-fit: cover; border-radius: 3px; display: block;
+      width: 100px; height: 100px; object-fit: cover;
+      border-radius: 3px; display: block;
     }
     .remove-btn {
-      position: absolute; top: -5px; left: -5px;
-      width: 15px; height: 15px; background-color: black; color: white;
-      font-size: 10px; text-align: center; cursor: pointer; z-index: 999;
-      border-radius: 50%;
+      position: absolute; top: -5px; left: -5px; width: 15px; height: 15px;
+      background-color: black; color: white; font-size: 10px;
+      text-align: center; cursor: pointer; z-index: 999; border-radius: 50%;
     }
     .number-overlay {
-      position: absolute; top: 0; right: 0;
-      width: 16px; height: 16px;
-      background-color: rgba(0,0,255,0.3);
-      color: white; display: flex; align-items: center; justify-content: center;
-      font-size: 10px; z-index: 999; border-radius: 3px;
+      position: absolute; top: 0; right: 0; width: 16px; height: 16px;
+      background-color: rgba(0,0,0,0.7); color: white; display: flex;
+      align-items: center; justify-content: center; font-size: 10px;
+      z-index: 999; border-radius: 3px;
     }
     /* Metadata status styles */
     .metadata-status {
-      margin-top: 5px; text-align: center; font-size: 14px;
-      min-height: 20px;
+      margin-top: 5px; text-align: center; font-size: 14px; min-height: 20px;
     }
     .metadata-progress {
       width: 90%;
     }
 
-    /* Hover highlight for reordering */
+    /* Blue overlay highlight for dragover */
     .cell-drag-hover {
-      background-color: rgba(0,0,255,0.3) !important;
+      background-color: rgba(0,0,255,0.25) !important;
     }
 
     /* Container #13 */
@@ -272,8 +217,8 @@
       transform: translateX(-50%); display: inline-block;
     }
     #uploadPhotoContainer {
-      position: fixed; bottom: 20px;
-      left: calc(50% + 120px); display: inline-block;
+      position: fixed; bottom: 20px; left: calc(50% + 120px);
+      display: inline-block;
     }
   </style>
 </head>
@@ -301,8 +246,7 @@
       </div>
       <div id="listingsDropZone">Etsy Listings</div>
       <textarea id="uploadedFilesList"
-                class="materialize-textarea"
-                rows="2"
+                class="materialize-textarea" rows="2"
                 placeholder="Uploaded .csv, .doc, .docx files will appear here">
       </textarea>
     </div>
@@ -364,9 +308,7 @@
       <div class="section-heading configurable">Etsy Listing TITLE</div>
       <div class="flex-container configurable">
         <div class="textbox-container configurable">
-          <textarea id="listingTitle"
-                    class="materialize-textarea"
-                    rows="2"></textarea>
+          <textarea id="listingTitle" class="materialize-textarea" rows="2"></textarea>
         </div>
         <div class="button-container configurable" style="margin-top: -60px;">
           <button id="regenTitleBtn"
@@ -391,8 +333,7 @@
       <div class="section-heading configurable">Etsy Listing DESCRIPTION</div>
       <div class="flex-container configurable">
         <div class="textbox-container configurable">
-          <textarea id="listingDescription"
-                    class="materialize-textarea"></textarea>
+          <textarea id="listingDescription" class="materialize-textarea"></textarea>
         </div>
         <div class="button-container configurable">
           <button id="regenDescriptionBtn"
@@ -591,7 +532,8 @@ Using Sales Report and Product List Files:
       <h4>Configure Button Positions</h4>
       <div id="buttonConfigContainer"></div>
       <textarea id="uploadedFilesListModal"
-                class="materialize-textarea" rows="2"
+                class="materialize-textarea"
+                rows="2"
                 placeholder="Uploaded files will appear here">
       </textarea>
     </div>
@@ -631,19 +573,245 @@ Using Sales Report and Product List Files:
     src="https://cdnjs.cloudflare.com/ajax/libs/materialize/1.0.0/js/materialize.min.js">
   </script>
 
-  <!-- Add your existing JS code here (including the reorder logic above). -->
   <script>
-    // All the code shown in the snippet above for:
-    // - resizing images to 3000x3000
-    // - analyzing photos
-    // - alt_text handling
-    // - reorder logic (cell-drag-hover highlight & reordering)
-    // - updating listings, etc.
-    //
-    // This is the entire code, ensuring the immediate visual overlay
-    // upon dragenter and reorder on drop.
+    // ------------------------------------------------
+    // GLOBALS & MAIN LOGIC
+    // ------------------------------------------------
+    const ETSY_SHOP_URL = "https://www.etsy.com/shop/custombrites";
+    const CLIENT_ID = "k75zdspz4r99txpqdji7i2em";
+    const REDIRECT_URI = "https://delicate-tanuki-616ac0.netlify.app/";
+    const modelName = "chatgpt-4o-latest";
+    let accessToken;
 
-    // Already included above. No partial code withheld. 
+    let soldOrdersCSV = [];
+    let listingsCSV = [];
+    let photoNames = [];
+    let previewImages = [];  // data URLs (resized)
+    let photoMeta = [];      // AI metadata for alt_text
+
+    // [Your existing code for:
+    //  - CSV upload
+    //  - updateVectorStore
+    //  - connecting to Etsy
+    //  - generating Title/Desc
+    //  - "alt_text" upload
+    //  - etc.
+    //  remains the same as your stable version.]
+
+    //  We only add the cell-drag-hover highlight & reorder logic below.
+
+    // ----------------------------------------------------------------------
+    // DRAG & DROP for IMAGES with Resizing
+    // ----------------------------------------------------------------------
+    async function resizeImage(dataURL, width, height) {
+      return new Promise((resolve, reject) => {
+        const img = new Image();
+        img.onload = () => {
+          const canvas = document.createElement("canvas");
+          canvas.width = width;
+          canvas.height = height;
+          const ctx = canvas.getContext("2d");
+          ctx.drawImage(img, 0, 0, width, height);
+          const resizedDataURL = canvas.toDataURL("image/jpeg", 0.85);
+          resolve(resizedDataURL);
+        };
+        img.onerror = reject;
+        img.src = dataURL;
+      });
+    }
+
+    // [ ... code for uploading docs, CSV, listing, etc. omitted for brevity - same as stable ... ]
+
+    const dropZone = document.getElementById("dropZone");
+    dropZone.addEventListener("dragover", e => {
+      e.preventDefault(); e.stopPropagation();
+      dropZone.style.borderColor = "#000";
+    });
+    dropZone.addEventListener("dragleave", e => {
+      e.preventDefault(); e.stopPropagation();
+      dropZone.style.borderColor = "#ccc";
+    });
+    dropZone.addEventListener("drop", async e => {
+      e.preventDefault(); e.stopPropagation();
+      dropZone.style.borderColor = "#ccc";
+
+      const files = e.dataTransfer.files;
+      const maxRemaining = 10 - previewImages.length;
+
+      for (let i = 0; i < Math.min(files.length, maxRemaining); i++) {
+        const file = files[i];
+        if (file.type === "image/jpeg" || file.type === "image/png") {
+          try {
+            const dataURL = await new Promise((resolve, reject) => {
+              const reader = new FileReader();
+              reader.onload = event => resolve(event.target.result);
+              reader.onerror = reject;
+              reader.readAsDataURL(file);
+            });
+            // resize to 3000x3000
+            const resized = await resizeImage(dataURL, 3000, 3000);
+            previewImages.push(resized);
+            photoNames.push(file.name);
+            updatePrimaryPreview();
+            updateStaticPreviewGrid();
+            // updateUploadedFilesList();  // if needed
+          } catch (err) {
+            console.error("Error resizing image:", err);
+          }
+        } else {
+          M.toast({ html: "Only JPEG/PNG images are supported." });
+        }
+      }
+    });
+
+    function updatePrimaryPreview() {
+      const primaryPreview = document.getElementById("primaryPreview");
+      if (previewImages.length > 0) {
+        primaryPreview.innerHTML = `<img src="${previewImages[0]}" alt="Primary Preview">`;
+      } else {
+        primaryPreview.innerHTML = "";
+      }
+    }
+
+    // ----------------------------------------------------------------------
+    // STATIC PREVIEW GRID: REORDER WITH BLUE OVERLAY
+    // ----------------------------------------------------------------------
+    function updateStaticPreviewGrid() {
+      for (let i = 0; i < 10; i++) {
+        const cell = document.getElementById("previewCell" + i);
+        cell.innerHTML = "";
+
+        // The real-time highlight
+        cell.addEventListener("dragenter", e => {
+          e.preventDefault();
+          cell.classList.add("cell-drag-hover");
+        });
+        cell.addEventListener("dragleave", e => {
+          cell.classList.remove("cell-drag-hover");
+        });
+        cell.addEventListener("dragover", e => {
+          e.preventDefault(); // must do this to allow a drop
+        });
+        cell.addEventListener("drop", e => {
+          e.preventDefault();
+          cell.classList.remove("cell-drag-hover");
+          const sourceIndex = parseInt(e.dataTransfer.getData("text/plain"), 10);
+          const targetIndex = i;
+          if (
+            !isNaN(sourceIndex) &&
+            sourceIndex !== targetIndex &&
+            sourceIndex >= 0 &&
+            sourceIndex < previewImages.length
+          ) {
+            // reorder arrays
+            const [imgData] = previewImages.splice(sourceIndex, 1);
+            previewImages.splice(targetIndex, 0, imgData);
+
+            const [nameData] = photoNames.splice(sourceIndex, 1);
+            photoNames.splice(targetIndex, 0, nameData);
+
+            const [metaData] = photoMeta.splice(sourceIndex, 1);
+            photoMeta.splice(targetIndex, 0, metaData);
+
+            updateStaticPreviewGrid();
+            updatePrimaryPreview();
+          }
+        });
+
+        if (i < previewImages.length) {
+          const previewBox = document.createElement("div");
+          previewBox.className = "preview-box";
+          previewBox.draggable = true;
+          previewBox.addEventListener("dragstart", e => {
+            e.dataTransfer.setData("text/plain", i.toString());
+          });
+
+          const img = document.createElement("img");
+          img.src = previewImages[i];
+          previewBox.appendChild(img);
+
+          // remove button
+          const removeBtn = document.createElement("div");
+          removeBtn.className = "remove-btn";
+          removeBtn.textContent = "X";
+          removeBtn.addEventListener("click", (ev) => {
+            ev.stopPropagation();
+            previewImages.splice(i, 1);
+            photoNames.splice(i, 1);
+            photoMeta.splice(i, 1);
+            updateStaticPreviewGrid();
+            updatePrimaryPreview();
+          });
+          previewBox.appendChild(removeBtn);
+
+          const numOverlay = document.createElement("div");
+          numOverlay.className = "number-overlay";
+          numOverlay.textContent = (i + 1).toString();
+          previewBox.appendChild(numOverlay);
+
+          // show metadata on click
+          previewBox.addEventListener("click", () => {
+            showMetadata(i);
+          });
+
+          cell.appendChild(previewBox);
+
+          const metadataStatus = document.createElement("div");
+          metadataStatus.className = "metadata-status";
+          metadataStatus.id = "metadataStatus" + i;
+          cell.appendChild(metadataStatus);
+        } else {
+          cell.textContent = "Empty";
+        }
+      }
+    }
+
+    function showMetadata(index) {
+      const metadata = photoMeta[index] || "No metadata available for this photo.";
+      document.getElementById("metadataTextarea").value = metadata;
+      const modalElem = document.getElementById("metadataModal");
+      let instance = M.Modal.getInstance(modalElem);
+      if (!instance) {
+        instance = M.Modal.init(modalElem, {});
+      }
+      instance.open();
+    }
+
+    // ----------------------------------------------------------------------
+    // REST OF YOUR LOGIC (Analyze Photos, alt_text upload, etc.)
+    // ----------------------------------------------------------------------
+    // (Use the code from your stable version with no changes 
+    //  except the reorder changes shown above.)
+
+    // Example: analyzeMetadataBtn, generateTitleOnly, etc.
+    // ...
+    
+    document.addEventListener("DOMContentLoaded", () => {
+      loadButtonPositions();
+      // check if we got code from OAuth
+      const urlParams = new URLSearchParams(window.location.search);
+      const code = urlParams.get("code");
+      if (code) {
+        exchangeCodeForToken(code);
+        window.history.replaceState({}, document.title, REDIRECT_URI);
+      }
+      updateStaticPreviewGrid();
+      // updateUploadedFilesList(); // if you want to see uploaded docs
+    });
+
+    function loadButtonPositions() {
+      const stored = localStorage.getItem("buttonPositions");
+      if (stored) {
+        const positions = JSON.parse(stored);
+        for (const id in positions) {
+          const el = document.getElementById(id);
+          if (el) {
+            el.style.top = positions[id].top;
+            el.style.left = positions[id].left;
+          }
+        }
+      }
+    }
   </script>
 </body>
 </html>
