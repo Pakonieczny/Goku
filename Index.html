@@ -23,6 +23,7 @@
     .listing-desc-container h5 { margin: 0 0 10px 0; font-size: 1.2rem; font-weight: 500; }
     .listing-desc-container label.section-heading { font-size: 1.2rem; font-weight: 500; }
     .listing-desc-container input { width: 500px; height: 30px; border: 1px solid #000; padding: 5px; }
+    
     /* "User Provided Search Key Phrases" textarea */
     #searchKeyPhrases { resize: none; box-sizing: border-box; border: 1px solid grey; }
     #searchKeyPhrases[rows="14"] { height: auto; }
@@ -45,9 +46,7 @@
     /* Orders container */
     #ordersContainer { display: flex; flex-direction: column; }
     /* CSV Progress Bar */
-    #csvProgressBar { width: 100%; height: 20px; border: 1px solid blue; background-color: #e0f0ff; margin-top: 5px;
-      -webkit-appearance: none; appearance: none;
-    }
+    #csvProgressBar { width: 100%; height: 20px; border: 1px solid blue; background-color: #e0f0ff; margin-top: 5px; -webkit-appearance: none; appearance: none; }
     #csvProgressBar::-webkit-progress-bar { background-color: #e0f0ff; border: 1px solid blue; }
     #csvProgressBar::-webkit-progress-value { background-color: blue; }
     #csvProgressContainer { margin-left: 85px; }
@@ -225,14 +224,10 @@
       <h4>Photo Analysis Rules</h4>
       <textarea id="analyzeRulesTextarea" style="width:100%; height:300px;">
 Default Photo Analysis Rules:
-1. Use SEO-friendly descriptive long-tail key phrases without special characters.
-2. Emphasize charm details (what it is, occasion, metal, size, style).
-3. Focus solely on the jewelry details in the image.
-4. Ignore environment, model, and clothing.
-5. Organize into a short paragraph.
-6. Limit the description to 300 characters.
-7. Do not mention earrings unless explicitly identified.
-8. Do not mix necklace and earring descriptions.
+1. Analyze the image and provide an SEO-friendly, detailed description of the jewelry piece.
+2. Include details such as the jewelry type (e.g. ring, necklace, bracelet), metal, gemstones, style, and design elements.
+3. Ensure the description is accurate and reflects the uploaded image.
+4. Limit the description to 300 characters.
       </textarea>
     </div>
     <div class="modal-footer">
@@ -371,8 +366,9 @@ Using Sales Report and Product List Files:
     let soldOrdersCSV = [];
     let listingsCSV = [];
     let photoNames = [];
-    let previewImages = [];
-    let photoMeta = []; // To store metadata for each photo
+    let previewImages = []; // For display (object URLs)
+    let photoFiles = [];    // Actual File objects
+    let photoMeta = [];     // To store metadata for each photo
     let photoStatuses = [];
     let photoObjects = [];
     
@@ -389,7 +385,7 @@ Using Sales Report and Product List Files:
       return await response.json();
     }
     
-    // File upload functions for CSV and DOC files
+    // File upload functions for CSV and DOC files remain unchanged
     async function uploadCSVFile(file, progressCallback) {
       return new Promise((resolve, reject) => {
         const reader = new FileReader();
@@ -568,7 +564,7 @@ Using Sales Report and Product List Files:
     
     document.getElementById("uploadToEtsyBtn").addEventListener("click", updateExistingListing);
     
-    // Upload Photo: loop through previewImages and upload each
+    // Upload Photo: loop through previewImages and upload each photo
     async function uploadPhoto() {
       const listingInput = document.getElementById("shopListings").value.trim();
       if (!listingInput) { M.toast({ html: "Please provide a listing URL or ID in 'My Etsy Shop Listings'." }); return; }
@@ -584,14 +580,15 @@ Using Sales Report and Product List Files:
         const dataURL = previewImages[i];
         const rankNumber = i + 1;
         try {
-          const res = await fetch(dataURL);
-          const blob = await res.blob();
+          // Here we still use the object URL for display,
+          // but for uploading we rely on the File stored in photoFiles.
+          const file = photoFiles[i];
           const formData = new FormData();
           formData.append("listingId", listingId);
           formData.append("token", accessToken);
           formData.append("fileName", photoNames[i] || `uploaded_photo_${i}.jpg`);
           formData.append("rank", rankNumber);
-          formData.append("file", blob, photoNames[i] || `uploaded_photo_${i}.jpg`);
+          formData.append("file", file, photoNames[i] || `uploaded_photo_${i}.jpg`);
   
           console.log(`Uploading photo #${rankNumber} for listing ${listingId}...`);
           const uploadUrl = `/.netlify/functions/imageUpload`;
@@ -610,27 +607,44 @@ Using Sales Report and Product List Files:
     }
     document.getElementById("uploadPhotoBtn").addEventListener("click", uploadPhoto);
     
+    // New function: Analyze image using binary File and send to OpenAI API via our backend
+    async function analyzeImage(file) {
+      const formData = new FormData();
+      formData.append("image", file);
+      // Pass along the analysis rules to help guide metadata generation.
+      formData.append("rules", document.getElementById("analyzeRulesTextarea").value);
+      // Send the binary file via FormData to our backend endpoint
+      const response = await fetch("/.netlify/functions/analyzeImage", {
+        method: "POST",
+        body: formData
+      });
+      if (!response.ok) {
+        throw new Error("Image analysis failed with status " + response.status);
+      }
+      const data = await response.json();
+      return data.metadata; // Expecting { metadata: "description here" }
+    }
+    
     // Upload metadata for a photo (simulate API call)
     function uploadMetadata(index, metadata) {
-      // In production, replace this simulation with a real API call to upload metadata for the photo.
+      // In production, replace this simulation with a real API call.
       return new Promise((resolve) => {
         setTimeout(() => { resolve(true); }, 1000);
       });
     }
     
-    // Analyze Photos: for each photo, send it for metadata generation to OpenAI and then upload it.
+    // Analyze Photos: for each photo, send the binary file to OpenAI API for metadata generation, then upload it.
     async function analyzePhoto(index) {
       const statusElem = document.getElementById("metadataStatus" + index);
       if (!statusElem) return;
       statusElem.innerHTML = "";
-      // Create a blue progress bar element
       const progressBar = document.createElement("progress");
       progressBar.className = "metadata-progress";
       progressBar.max = 100;
       progressBar.value = 0;
       statusElem.appendChild(progressBar);
       
-      // Phase 1: Update progress while generating metadata
+      // Phase 1: Generate metadata (progress 0-50)
       let progress = 0;
       const progressInterval = setInterval(() => {
          progress = Math.min(progress + 3, 50);
@@ -638,26 +652,13 @@ Using Sales Report and Product List Files:
       }, 100);
       
       try {
-        // Include the image file name in the prompt to help generate relevant metadata
-        const imageInfo = "The uploaded image file is named '" + photoNames[index] + "'.";
-        const rules = document.getElementById("analyzeRulesTextarea").value;
-        const payload = {
-          model: modelName,
-          messages: [
-            { role: "system", content: "Generate metadata for an Etsy photo using the following rules: " + rules },
-            { role: "user", content: imageInfo + " Based on this image, provide a brief and accurate metadata description." }
-          ],
-          temperature: 0.7,
-          max_tokens: 100
-        };
-        const aiResponse = await callOpenAI(payload);
+        // Use the actual File (from photoFiles) and send it to our analyzeImage endpoint.
+        const metadata = await analyzeImage(photoFiles[index]);
         clearInterval(progressInterval);
         progress = 50;
         progressBar.value = progress;
-        const metadata = (aiResponse.choices && aiResponse.choices.length > 0) ?
-          stripMarkdownJSON(aiResponse.choices[0].message.content) : "No metadata generated.";
-          
-        // Phase 2: Simulate uploading metadata and update progress to 100
+        
+        // Phase 2: Upload metadata (simulate with progress 50-100)
         const uploadInterval = setInterval(() => {
            progress = Math.min(progress + 5, 100);
            progressBar.value = progress;
@@ -666,7 +667,7 @@ Using Sales Report and Product List Files:
         clearInterval(uploadInterval);
         progress = 100;
         progressBar.value = progress;
-        // On successful metadata upload, store metadata and show green checkmark
+        // On successful upload, store metadata and show green checkmark.
         photoMeta[index] = metadata;
         statusElem.innerHTML = '<span style="color:green; font-size:16px;"><i class="material-icons">check_circle</i></span>';
       } catch (error) {
@@ -676,7 +677,7 @@ Using Sales Report and Product List Files:
     }
     
     async function analyzePhotos() {
-      // Process only the photos currently in previewImages
+      // Only process the images currently in the grid.
       for (let i = 0; i < previewImages.length; i++) {
         await analyzePhoto(i);
       }
@@ -694,7 +695,7 @@ Using Sales Report and Product List Files:
       instance.open();
     }
     
-    // Update static preview grid: adds a metadata status div and click listener on each photo.
+    // Update static preview grid: now adds a metadata status div and click listener on each photo.
     function updateStaticPreviewGrid() {
       for (let i = 0; i < 10; i++) {
         const cell = document.getElementById("previewCell" + i);
@@ -707,7 +708,7 @@ Using Sales Report and Product List Files:
           img.src = previewImages[i];
           previewBox.appendChild(img);
           
-          // Attach click event on the preview box to show metadata.
+          // Clicking the photo shows its metadata.
           previewBox.addEventListener("click", () => { showMetadata(i); });
   
           const removeBtn = document.createElement("div");
@@ -718,6 +719,7 @@ Using Sales Report and Product List Files:
             previewImages.splice(i, 1);
             photoNames.splice(i, 1);
             photoMeta.splice(i, 1);
+            photoFiles.splice(i, 1);
             updateStaticPreviewGrid();
             updatePrimaryPreview();
           });
@@ -749,14 +751,10 @@ Using Sales Report and Product List Files:
       }
     }
     
-    // File drop handling for images (limit 10)
+    // File drop handling for images (limit 10, without base64 encoding)
     const dropZone = document.getElementById("dropZone");
-    dropZone.addEventListener("dragover", e => {
-      e.preventDefault(); e.stopPropagation(); dropZone.style.borderColor = "#000";
-    });
-    dropZone.addEventListener("dragleave", e => {
-      e.preventDefault(); e.stopPropagation(); dropZone.style.borderColor = "#ccc";
-    });
+    dropZone.addEventListener("dragover", e => { e.preventDefault(); e.stopPropagation(); dropZone.style.borderColor = "#000"; });
+    dropZone.addEventListener("dragleave", e => { e.preventDefault(); e.stopPropagation(); dropZone.style.borderColor = "#ccc"; });
     dropZone.addEventListener("drop", async e => {
       e.preventDefault(); e.stopPropagation(); dropZone.style.borderColor = "#ccc";
       const files = e.dataTransfer.files;
@@ -764,21 +762,14 @@ Using Sales Report and Product List Files:
       for (let i = 0; i < Math.min(files.length, maxRemaining); i++) {
         const file = files[i];
         if (file.type === "image/jpeg" || file.type === "image/png") {
-          try {
-            const dataURL = await new Promise((resolve, reject) => {
-              const reader = new FileReader();
-              reader.onload = event => resolve(event.target.result);
-              reader.onerror = reject;
-              reader.readAsDataURL(file);
-            });
-            previewImages.push(dataURL);
-            photoNames.push(file.name);
-            updatePrimaryPreview();
-            updateStaticPreviewGrid();
-            updateUploadedFilesList();
-          } catch (err) {
-            console.error("Error processing image:", err);
-          }
+          // Use object URL for display and store the File object
+          const objectURL = URL.createObjectURL(file);
+          previewImages.push(objectURL);
+          photoNames.push(file.name);
+          photoFiles.push(file);
+          updatePrimaryPreview();
+          updateStaticPreviewGrid();
+          updateUploadedFilesList();
         } else {
           M.toast({ html: "Only JPEG/PNG images are supported." });
         }
@@ -843,6 +834,492 @@ Using Sales Report and Product List Files:
             } catch(err) {
               console.error("Error uploading file:", err);
             }
+         } else {
+            alert("Only .csv, .doc, and .docx files are supported for Etsy Listings.");
+         }
+      }
+    });
+    
+    function updateUploadedFilesList() {
+      let fileList = [];
+      soldOrdersCSV.forEach(file => fileList.push(file.name));
+      listingsCSV.forEach(file => fileList.push(file.name));
+      document.getElementById("uploadedFilesList").value = fileList.join("\n");
+    }
+    
+    // Button configuration for positioning
+    document.getElementById("configureButtonsBtn").addEventListener("click", function() {
+      var configContainer = document.getElementById("buttonConfigContainer");
+      configContainer.innerHTML = "";
+      var selectors = "button:not(#configureButtonsBtn), #listingDescContainer, #ordersDropZone, #listingsDropZone, #dropZone, #csvProgressContainer, #previewGridContainer, #primaryPreview, #container13, #uploadedFilesList";
+      var elements = document.querySelectorAll(selectors);
+      var table = document.createElement("table");
+      table.className = "striped";
+      var thead = document.createElement("thead");
+      thead.innerHTML = "<tr><th>Element ID</th><th>Top (px)</th><th>Left (px)</th></tr>";
+      table.appendChild(thead);
+      var tbody = document.createElement("tbody");
+      elements.forEach(function(el) {
+        var id = el.id;
+        var computedStyle = window.getComputedStyle(el);
+        var currentTop = el.style.top || computedStyle.top || "0";
+        var currentLeft = el.style.left || computedStyle.left || "0";
+        var tr = document.createElement("tr");
+        tr.innerHTML = `<td>${id}</td>
+                        <td><input type="number" id="${id}_top" value="${parseInt(currentTop)||0}"></td>
+                        <td><input type="number" id="${id}_left" value="${parseInt(currentLeft)||0}"></td>`;
+        var topInput = tr.querySelector(`#${id}_top`);
+        var leftInput = tr.querySelector(`#${id}_left`);
+        topInput.addEventListener("input", function() { el.style.top = topInput.value + "px"; });
+        leftInput.addEventListener("input", function() { el.style.left = leftInput.value + "px"; });
+        tbody.appendChild(tr);
+      });
+      table.appendChild(tbody);
+      configContainer.appendChild(table);
+      var modalElem = document.getElementById("buttonConfigModal");
+      var modalInstance = M.Modal.getInstance(modalElem) || M.Modal.init(modalElem, { preventScrolling: false });
+      modalInstance.open();
+    });
+    
+    document.getElementById("saveButtonPositionsBtn").addEventListener("click", function() {
+      var selectors = "button:not(#configureButtonsBtn), #listingDescContainer, #ordersDropZone, #listingsDropZone, #dropZone, #csvProgressContainer, #previewGridContainer, #primaryPreview, #container13, #uploadedFilesList";
+      var elements = document.querySelectorAll(selectors);
+      var positions = {};
+      elements.forEach(function(el) {
+        positions[el.id] = { top: el.style.top || "0px", left: el.style.left || "0px" };
+      });
+      localStorage.setItem("buttonPositions", JSON.stringify(positions));
+      M.toast({ html: "Button positions saved." });
+    });
+    
+    function loadButtonPositions() {
+      var stored = localStorage.getItem("buttonPositions");
+      if (stored) {
+        var positions = JSON.parse(stored);
+        for (var id in positions) {
+          var el = document.getElementById(id);
+          if (el) { el.style.top = positions[id].top; el.style.left = positions[id].left; }
+        }
+      }
+    }
+    
+    window.addEventListener("load", function() {
+      var container13 = document.getElementById("container13");
+      container13.style.height = (container13.offsetHeight * 2.5) + "px";
+    });
+    
+    document.getElementById("listingDescInput").addEventListener("input", function() {
+      document.getElementById("searchKeyPhrases").value = "";
+    });
+    
+    function stripMarkdownJSON(text) {
+      return text.replace(/^```json\s*/, "").replace(/\s*```$/, "").trim();
+    }
+    
+    function updateTitleCount(text) {
+      document.getElementById("titleCount").textContent = "Count: " + text.length;
+    }
+    
+    async function generateBoth() { 
+      await Promise.all([generateTitleOnly(), generateDescriptionOnly()]);
+      const titleEl = document.getElementById("listingTitle");
+      const descEl = document.getElementById("listingDescription");
+      console.log("Generate Output:", { title: titleEl.value, description: descEl.value });
+    }
+    
+    async function generateTitleOnly() {
+      const etsyLink = ETSY_SHOP_URL;
+      const keyPhrases = document.getElementById("searchKeyPhrases").value.trim();
+      if (!keyPhrases) { M.toast({ html: "Please provide the search key phrases." }); return; }
+      const promptText = `
+You are ChatGPT using ${modelName}.
+Based on the inputs below, generate an Etsy Listing TITLE only.
+Input Context:
+Etsy Link: "${etsyLink}"
+Search Key Phrases: "${keyPhrases}"
+--- Rules for TITLE ---
+${stripMarkdownJSON(document.getElementById("titleRulesTextarea").value)}
+Important: Return ONLY the title as plain text.`;
+      document.getElementById("listingTitle").value = "Generating title...";
+      const payload = {
+        model: modelName,
+        messages: [
+          { role: "system", content: "Return ONLY the title as plain text." },
+          { role: "user", content: promptText }
+        ],
+        temperature: 0.7
+      };
+      try {
+        const data = await callOpenAI(payload);
+        if (data.choices && data.choices.length > 0) {
+          let output = stripMarkdownJSON(data.choices[0].message.content);
+          document.getElementById("listingTitle").value = output || "No title generated.";
+          updateTitleCount(output);
+        } else { document.getElementById("listingTitle").value = "No title generated."; }
+      } catch (error) {
+        document.getElementById("listingTitle").value = "Error: " + error;
+      }
+    }
+    
+    async function generateDescriptionOnly() {
+      const etsyLink = ETSY_SHOP_URL;
+      const keyPhrases = document.getElementById("searchKeyPhrases").value.trim();
+      if (!keyPhrases) { M.toast({ html: "Please provide the search key phrases." }); return; }
+      const promptText = `
+You are ChatGPT using ${modelName}.
+Based on the inputs below, generate an Etsy Listing DESCRIPTION only.
+Input Context:
+Etsy Link: "${etsyLink}"
+Search Key Phrases: "${keyPhrases}"
+--- Rules for DESCRIPTION ---
+${stripMarkdownJSON(document.getElementById("descriptionRulesTextarea").value)}
+Important: Return ONLY the description as plain text.`;
+      document.getElementById("listingDescription").value = "Generating description...";
+      const payload = {
+        model: modelName,
+        messages: [
+          { role: "system", content: "Return ONLY the description as plain text." },
+          { role: "user", content: promptText }
+        ],
+        temperature: 0.7
+      };
+      try {
+        const data = await callOpenAI(payload);
+        if (data.choices && data.choices.length > 0) {
+          let output = stripMarkdownJSON(data.choices[0].message.content);
+          document.getElementById("listingDescription").value = output || "No description generated.";
+        } else { document.getElementById("listingDescription").value = "No description generated."; }
+      } catch (error) {
+        document.getElementById("listingDescription").value = "Error: " + error;
+      }
+    }
+    
+    async function generateTagPhrases() {
+      let question = document.getElementById("listingDescInput").value;
+      if (!question.trim()) { M.toast({ html: "Please enter a question in the Listing Description." }); return; }
+      let extraText = "Emphasis on SEO friendliness with a focus on generating effective long tail tag phrases for Etsy.";
+      const keywordRules = stripMarkdownJSON(document.getElementById("keywordRulesTextarea").value);
+      let prompt = `
+Listing Description (for emphasis): "${question}"
+${extraText}
+
+Keyword Rules:
+${keywordRules}
+
+Using Sales Report and Product List Files, generate exactly 13 tag phrases (each ≤ 20 characters).
+Include "Gift for Her", ensure "Charm" appears at least once in a multi-word phrase (max 4 times total),
+"Necklace" appears no more than 3 times, "Gift" no more than 3 times, "Lover" no more than 2 times,
+and exclude prohibited words.
+Return your answer as plain text.`;
+      try {
+        const payload = {
+          model: modelName,
+          messages: [
+            { role: "system", content: "Generate tag phrases according to the provided rules." },
+            { role: "user", content: prompt }
+          ],
+          temperature: 0.7,
+          max_tokens: 500
+        };
+        const data = await callOpenAI(payload);
+        let answer = data.choices[0].message.content;
+        let phrases = answer.split(/[\n,]+/).map(s => s.replace(/^\d+\.\s*/, "").trim()).join("\n");
+        document.getElementById("searchKeyPhrases").value = phrases;
+      } catch (err) {
+        console.error("Error generating tag phrases:", err);
+        M.toast({ html: "Error generating tag phrases: " + err.message });
+      }
+    }
+    
+    document.getElementById("listingDescInput").addEventListener("keydown", async function(e) {
+      if (e.key === "Enter" && !e.shiftKey) {
+        e.preventDefault();
+        await generateTagPhrases();
+        await delay(100);
+        await processKeyPhrases();
+      }
+    });
+    
+    async function processKeyPhrases() {
+      let keyText = document.getElementById("searchKeyPhrases").value;
+      let phrases = keyText.split(/\n+/).map(phrase => phrase.trim()).filter(phrase => phrase !== "");
+      let processedPhrases = [];
+      for (let phrase of phrases) {
+        while (phrase.length > 20) {
+          try {
+            const altPayload = {
+              model: modelName,
+              messages: [
+                { role: "system", content: "Generate an alternate key phrase that is ≤ 20 characters." },
+                { role: "user", content: phrase }
+              ],
+              temperature: 0.7,
+              max_tokens: 20
+            };
+            const altData = await callOpenAI(altPayload);
+            phrase = stripMarkdownJSON(altData.choices[0].message.content).trim();
+          } catch (error) { break; }
+          await delay(50);
+        }
+        while (processedPhrases.includes(phrase)) {
+          try {
+            const dupPayload = {
+              model: modelName,
+              messages: [
+                { role: "system", content: "Generate a unique key phrase that is ≤ 20 characters." },
+                { role: "user", content: phrase }
+              ],
+              temperature: 0.7,
+              max_tokens: 20
+            };
+            const dupData = await callOpenAI(dupPayload);
+            phrase = stripMarkdownJSON(dupData.choices[0].message.content).trim();
+          } catch (error) { break; }
+          await delay(50);
+        }
+        processedPhrases.push(phrase);
+      }
+      document.getElementById("searchKeyPhrases").value = processedPhrases.join("\n");
+    }
+    
+    document.getElementById("copyKeyPhrasesBtn").addEventListener("click", () => {
+      const lines = document.getElementById("searchKeyPhrases").value.split(/\n+/).map(l => l.trim()).filter(l => l !== "");
+      navigator.clipboard.writeText(lines.join(", ")).catch(err => console.error("Error copying key phrases: " + err));
+    });
+    
+    document.getElementById("generateBtn").addEventListener("click", generateBoth);
+    document.getElementById("regenTitleBtn").addEventListener("click", generateTitleOnly);
+    document.getElementById("regenDescriptionBtn").addEventListener("click", generateDescriptionOnly);
+    document.getElementById("copyTitleBtn").addEventListener("click", () => {
+      navigator.clipboard.writeText(document.getElementById("listingTitle").value).catch(err => console.error("Error copying title: " + err));
+    });
+    document.getElementById("copyDescriptionBtn").addEventListener("click", () => {
+      navigator.clipboard.writeText(document.getElementById("listingDescription").value).catch(err => console.error("Error copying description: " + err));
+    });
+    
+    function delay(ms) { return new Promise(resolve => setTimeout(resolve, ms)); }
+    
+    // New function: Analyze image by sending binary file via FormData to our analyzeImage endpoint.
+    async function analyzeImage(file) {
+      const formData = new FormData();
+      formData.append("image", file);
+      formData.append("rules", document.getElementById("analyzeRulesTextarea").value);
+      // Call our backend endpoint that uses the OpenAI API to analyze the image.
+      const response = await fetch("/.netlify/functions/analyzeImage", {
+        method: "POST",
+        body: formData
+      });
+      if (!response.ok) {
+        throw new Error("Image analysis failed with status " + response.status);
+      }
+      const data = await response.json();
+      return data.metadata; // Expecting a JSON response { metadata: "description here" }
+    }
+    
+    // Upload metadata for a photo (simulate API call)
+    function uploadMetadata(index, metadata) {
+      // Replace with real API call as needed.
+      return new Promise((resolve) => {
+        setTimeout(() => { resolve(true); }, 1000);
+      });
+    }
+    
+    // Analyze Photos: for each photo in the grid, analyze using its binary file and upload metadata.
+    async function analyzePhoto(index) {
+      const statusElem = document.getElementById("metadataStatus" + index);
+      if (!statusElem) return;
+      statusElem.innerHTML = "";
+      const progressBar = document.createElement("progress");
+      progressBar.className = "metadata-progress";
+      progressBar.max = 100;
+      progressBar.value = 0;
+      statusElem.appendChild(progressBar);
+      
+      // Phase 1: Generate metadata (progress 0-50)
+      let progress = 0;
+      const progressInterval = setInterval(() => {
+         progress = Math.min(progress + 3, 50);
+         progressBar.value = progress;
+      }, 100);
+      
+      try {
+        // Use the File from photoFiles (which was stored on drop)
+        const metadata = await analyzeImage(photoFiles[index]);
+        clearInterval(progressInterval);
+        progress = 50;
+        progressBar.value = progress;
+        
+        // Phase 2: Simulate uploading metadata (progress 50-100)
+        const uploadInterval = setInterval(() => {
+           progress = Math.min(progress + 5, 100);
+           progressBar.value = progress;
+        }, 100);
+        await uploadMetadata(index, metadata);
+        clearInterval(uploadInterval);
+        progress = 100;
+        progressBar.value = progress;
+        // On successful upload, store metadata and show green checkmark.
+        photoMeta[index] = metadata;
+        statusElem.innerHTML = '<span style="color:green; font-size:16px;"><i class="material-icons">check_circle</i></span>';
+      } catch (error) {
+        clearInterval(progressInterval);
+        statusElem.innerHTML = '<span style="color:red;">Error: ' + error.message + '</span>';
+      }
+    }
+    
+    async function analyzePhotos() {
+      // Process only the images currently visible in the grid.
+      for (let i = 0; i < previewImages.length; i++) {
+        await analyzePhoto(i);
+      }
+    }
+    
+    document.getElementById("analyzeMetadataBtn").addEventListener("click", analyzePhotos);
+    
+    // Show metadata in modal when clicking on a photo.
+    function showMetadata(index) {
+      const metadata = photoMeta[index] || "No metadata available for this photo.";
+      document.getElementById("metadataTextarea").value = metadata;
+      const modalElem = document.getElementById("metadataModal");
+      let instance = M.Modal.getInstance(modalElem);
+      if (!instance) { instance = M.Modal.init(modalElem, {}); }
+      instance.open();
+    }
+    
+    // Update static preview grid: now adds a metadata status div and click listener on each photo.
+    function updateStaticPreviewGrid() {
+      for (let i = 0; i < 10; i++) {
+        const cell = document.getElementById("previewCell" + i);
+        cell.innerHTML = "";
+        if (i < previewImages.length) {
+          const previewBox = document.createElement("div");
+          previewBox.className = "preview-box";
+  
+          const img = document.createElement("img");
+          img.src = previewImages[i];
+          previewBox.appendChild(img);
+          
+          // Clicking the photo shows its metadata.
+          previewBox.addEventListener("click", () => { showMetadata(i); });
+  
+          const removeBtn = document.createElement("div");
+          removeBtn.className = "remove-btn";
+          removeBtn.textContent = "X";
+          removeBtn.addEventListener("click", (e) => {
+            e.stopPropagation();
+            previewImages.splice(i, 1);
+            photoNames.splice(i, 1);
+            photoMeta.splice(i, 1);
+            photoFiles.splice(i, 1);
+            updateStaticPreviewGrid();
+            updatePrimaryPreview();
+          });
+          previewBox.appendChild(removeBtn);
+  
+          const numOverlay = document.createElement("div");
+          numOverlay.className = "number-overlay";
+          numOverlay.textContent = (i + 1).toString();
+          previewBox.appendChild(numOverlay);
+  
+          cell.appendChild(previewBox);
+          // Append a metadata status div for progress or checkmark.
+          const metadataStatus = document.createElement("div");
+          metadataStatus.className = "metadata-status";
+          metadataStatus.id = "metadataStatus" + i;
+          cell.appendChild(metadataStatus);
+        } else {
+          cell.textContent = "Empty";
+        }
+      }
+    }
+    
+    function updatePrimaryPreview() {
+      const primaryPreview = document.getElementById("primaryPreview");
+      if (previewImages.length > 0) {
+        primaryPreview.innerHTML = `<img src="${previewImages[0]}" alt="Primary Preview">`;
+      } else {
+        primaryPreview.innerHTML = "";
+      }
+    }
+    
+    // File drop handling for images (limit 10, using object URLs and storing File objects)
+    const dropZone = document.getElementById("dropZone");
+    dropZone.addEventListener("dragover", e => { e.preventDefault(); e.stopPropagation(); dropZone.style.borderColor = "#000"; });
+    dropZone.addEventListener("dragleave", e => { e.preventDefault(); e.stopPropagation(); dropZone.style.borderColor = "#ccc"; });
+    dropZone.addEventListener("drop", async e => {
+      e.preventDefault(); e.stopPropagation(); dropZone.style.borderColor = "#ccc";
+      const files = e.dataTransfer.files;
+      const maxRemaining = 10 - previewImages.length;
+      for (let i = 0; i < Math.min(files.length, maxRemaining); i++) {
+        const file = files[i];
+        if (file.type === "image/jpeg" || file.type === "image/png") {
+          const objectURL = URL.createObjectURL(file);
+          previewImages.push(objectURL);
+          photoNames.push(file.name);
+          photoFiles.push(file);
+          updatePrimaryPreview();
+          updateStaticPreviewGrid();
+          updateUploadedFilesList();
+        } else {
+          M.toast({ html: "Only JPEG/PNG images are supported." });
+        }
+      }
+    });
+    
+    // Restore drag and drop for "Etsy Sold Orders" CSV/DOC files
+    const ordersDropZone = document.getElementById("ordersDropZone");
+    ordersDropZone.addEventListener("dragover", e => { e.preventDefault(); e.stopPropagation(); ordersDropZone.style.borderColor = "#000"; });
+    ordersDropZone.addEventListener("dragleave", e => { e.preventDefault(); e.stopPropagation(); ordersDropZone.style.borderColor = "#ccc"; });
+    ordersDropZone.addEventListener("drop", async e => {
+      e.preventDefault(); e.stopPropagation(); ordersDropZone.style.borderColor = "#ccc";
+      const files = e.dataTransfer.files;
+      const progressBar = document.getElementById("csvProgressBar");
+      for (let i = 0; i < files.length; i++) {
+         let file = files[i];
+         const fileName = file.name.toLowerCase();
+         if (fileName.endsWith(".csv") || fileName.endsWith(".doc") || fileName.endsWith(".docx")) {
+            try {
+              let fileData;
+              if (fileName.endsWith(".csv")) {
+                 fileData = await uploadCSVFile(file, percent => { progressBar.value = percent; });
+              } else {
+                 fileData = await uploadDocFile(file, percent => { progressBar.value = percent; });
+              }
+              progressBar.value = 0;
+              soldOrdersCSV.push(fileData);
+              updateUploadedFilesList();
+              await updateVectorStore();
+            } catch(err) { console.error("Error uploading file:", err); }
+         } else {
+            alert("Only .csv, .doc, and .docx files are supported for Etsy Sold Orders.");
+         }
+      }
+    });
+    
+    // Restore drag and drop for "Etsy Listings" CSV/DOC files
+    const listingsDropZone = document.getElementById("listingsDropZone");
+    listingsDropZone.addEventListener("dragover", e => { e.preventDefault(); e.stopPropagation(); listingsDropZone.style.borderColor = "#000"; });
+    listingsDropZone.addEventListener("dragleave", e => { e.preventDefault(); e.stopPropagation(); listingsDropZone.style.borderColor = "#ccc"; });
+    listingsDropZone.addEventListener("drop", async e => {
+      e.preventDefault(); e.stopPropagation(); listingsDropZone.style.borderColor = "#ccc";
+      const files = e.dataTransfer.files;
+      const progressBar = document.getElementById("csvProgressBar");
+      for (let i = 0; i < files.length; i++) {
+         let file = files[i];
+         const fileName = file.name.toLowerCase();
+         if (fileName.endsWith(".csv") || fileName.endsWith(".doc") || fileName.endsWith(".docx")) {
+            try {
+              let fileData;
+              if (fileName.endsWith(".csv")) {
+                 fileData = await uploadCSVFile(file, percent => { progressBar.value = percent; });
+              } else {
+                 fileData = await uploadDocFile(file, percent => { progressBar.value = percent; });
+              }
+              progressBar.value = 0;
+              listingsCSV.push(fileData);
+              updateUploadedFilesList();
+              await updateVectorStore();
+            } catch(err) { console.error("Error uploading file:", err); }
          } else {
             alert("Only .csv, .doc, and .docx files are supported for Etsy Listings.");
          }
