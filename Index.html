@@ -7,100 +7,147 @@
   <link rel="icon" type="image/png" href="assets/favicon.png">
   <!-- Import Google Material Icons and Materialize CSS -->
   <link href="https://fonts.googleapis.com/icon?family=Material+Icons" rel="stylesheet">
-  <link rel="stylesheet"
-        href="https://cdnjs.cloudflare.com/ajax/libs/materialize/1.0.0/css/materialize.min.css">
+  <link
+    rel="stylesheet"
+    href="https://cdnjs.cloudflare.com/ajax/libs/materialize/1.0.0/css/materialize.min.css"
+  >
   <!-- Include piexifjs for EXIF manipulation (optional, if needed) -->
   <script src="https://cdn.jsdelivr.net/npm/piexifjs@1.0.4/piexif.min.js"></script>
   <style>
     /* Basic layout */
     html, body {
-      margin: 0; padding: 0; width: 100vw;
+      margin: 0;
+      padding: 0;
+      width: 100vw;
       font-family: Arial, sans-serif;
     }
     .container {
-      width: 100vw; padding: 10px; box-sizing: border-box;
+      width: 100vw;
+      padding: 10px;
+      box-sizing: border-box;
       text-align: left;
     }
     h5, label, p {
       text-align: left;
     }
     input, textarea {
-      width: 100%; box-sizing: border-box;
+      width: 100%;
+      box-sizing: border-box;
     }
 
     /* Wrap Listing Description and File Drop Zones */
     #descriptionAndFileUploadContainer {
-      display: flex; align-items: center;
+      display: flex;
+      align-items: center;
     }
     .listing-desc-container {
-      position: relative; display: inline-block; width: 500px;
+      position: relative;
+      display: inline-block;
+      width: 500px;
     }
     .listing-desc-container h5 {
-      margin: 0 0 10px 0; font-size: 1.2rem; font-weight: 500;
+      margin: 0 0 10px 0;
+      font-size: 1.2rem;
+      font-weight: 500;
     }
     .listing-desc-container label.section-heading {
-      font-size: 1.2rem; font-weight: 500;
+      font-size: 1.2rem;
+      font-weight: 500;
     }
     .listing-desc-container input {
-      width: 500px; height: 30px; border: 1px solid #000; padding: 5px;
+      width: 500px;
+      height: 30px;
+      border: 1px solid #000;
+      padding: 5px;
     }
 
     /* "User Provided Search Key Phrases" textarea */
     #searchKeyPhrases {
-      resize: none; box-sizing: border-box; border: 1px solid grey;
+      resize: none;
+      box-sizing: border-box;
+      border: 1px solid grey;
     }
     #searchKeyPhrases[rows="14"] {
       height: auto;
     }
     .flex-container {
-      display: flex; gap: 10px; align-items: stretch;
+      display: flex;
+      gap: 10px;
+      align-items: stretch;
     }
     .textbox-container {
       flex: 1;
     }
     .textbox-container textarea {
-      width: 100%; padding: 0.8rem; font-size: 1rem; line-height: 1.2;
-      resize: none; overflow: visible; box-sizing: border-box;
+      width: 100%;
+      padding: 0.8rem;
+      font-size: 1rem;
+      line-height: 1.2;
+      resize: none;
+      overflow: visible;
+      box-sizing: border-box;
     }
     .button-container {
-      width: 200px; display: flex; flex-direction: column; gap: 10px;
+      width: 200px;
+      display: flex;
+      flex-direction: column;
+      gap: 10px;
       align-self: flex-start;
     }
     #listingTitle {
       min-height: 45px;
     }
     #listingDescInput {
-      width: 500px; height: 30px; border: 1px solid #000; padding: 5px;
+      width: 500px;
+      height: 30px;
+      border: 1px solid #000;
+      padding: 5px;
     }
     #listingDescription {
       min-height: 150px;
     }
     .section-heading {
-      font-size: 1.2rem; font-weight: 500; margin-bottom: 5px;
+      font-size: 1.2rem;
+      font-weight: 500;
+      margin-bottom: 5px;
       display: inline-block;
     }
     .count-text {
-      font-style: italic; font-size: 0.9em; margin-top: 5px;
+      font-style: italic;
+      font-size: 0.9em;
+      margin-top: 5px;
     }
 
     /* Drag and Drop Boxes */
     #dropZone, #ordersDropZone, #listingsDropZone {
-      width: 138px; height: 138px; border: 2px dashed #ccc;
-      border-radius: 3px; display: inline-block; vertical-align: middle;
-      text-align: center; line-height: 138px; position: relative;
+      width: 138px;
+      height: 138px;
+      border: 2px dashed #ccc;
+      border-radius: 3px;
+      display: inline-block;
+      vertical-align: middle;
+      text-align: center;
+      line-height: 138px;
+      position: relative;
     }
     /* Orders container */
     #ordersContainer {
-      display: flex; flex-direction: column;
+      display: flex;
+      flex-direction: column;
     }
     /* CSV Progress Bar */
     #csvProgressBar {
-      width: 100%; height: 20px; border: 1px solid blue;
-      background-color: #e0f0ff; margin-top: 5px;
-      -webkit-appearance: none; appearance: none;
+      width: 100%;
+      height: 20px;
+      border: 1px solid blue;
+      background-color: #e0f0ff;
+      margin-top: 5px;
+      -webkit-appearance: none;
+      appearance: none;
     }
     #csvProgressBar::-webkit-progress-bar {
-      background-color: #e0f0ff; border: 1px solid blue;
+      background-color: #e0f0ff;
+      border: 1px solid blue;
     }
     #csvProgressBar::-webkit-progress-value {
       background-color: blue;
@@ -110,63 +157,118 @@
     }
     /* File Drop Zones container */
     #fileDropZonesContainer {
-      display: flex; gap: 10px; margin-left: 100px;
+      display: flex;
+      gap: 10px;
+      margin-left: 100px;
     }
     #uploadedFilesList {
-      width: 300px; height: 125px; resize: none;
-      box-sizing: border-box; border: 1px solid grey; margin-left: 85px;
+      width: 300px;
+      height: 125px;
+      resize: none;
+      box-sizing: border-box;
+      border: 1px solid grey;
+      margin-left: 85px;
     }
 
     /* Primary Preview – clickable for cropping */
     #primaryPreview {
-      width: 138px; height: 138px; border: 1px solid #ccc;
-      border-radius: 3px; display: inline-block; vertical-align: middle;
-      position: relative; top: -250px; left: 285px;
-      text-align: center; overflow: hidden; cursor: pointer;
+      width: 138px;
+      height: 138px;
+      border: 1px solid #ccc;
+      border-radius: 3px;
+      display: inline-block;
+      vertical-align: middle;
+      position: relative;
+      top: -250px;
+      left: 285px;
+      text-align: center;
+      overflow: hidden;
+      cursor: pointer;
     }
     #primaryPreview:empty {
       background: #fff;
     }
     #primaryPreview img {
-      width: 100%; height: 100%; object-fit: contain;
+      width: 100%;
+      height: 100%;
+      object-fit: contain;
       border-radius: 3px;
     }
 
     /* Static 10-Photo Preview Grid */
     #previewGridContainer {
-      position: relative; margin: 20px auto; width: auto;
-      max-width: 600px; text-align: center;
+      position: relative;
+      margin: 20px auto;
+      width: auto;
+      max-width: 600px;
+      text-align: center;
     }
     #previewGridStatic {
-      display: grid; grid-template-columns: repeat(5, 100px);
-      grid-column-gap: 23px; grid-row-gap: 18px; margin: 0 auto;
+      display: grid;
+      grid-template-columns: repeat(5, 100px);
+      grid-column-gap: 23px;
+      grid-row-gap: 18px;
+      margin: 0 auto;
     }
     .preview-cell {
-      position: relative; width: 100px; height: 132px; border: 2px solid #ccc;
-      border-radius: 3px; display: flex; flex-direction: column;
-      align-items: center; justify-content: center; font-size: 12px; color: #666;
+      position: relative;
+      width: 100px;
+      height: 132px;
+      border: 2px solid #ccc;
+      border-radius: 3px;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      font-size: 12px;
+      color: #666;
     }
     .preview-box {
-      position: relative; width: 100%; height: 100%;
+      position: relative;
+      width: 100%;
+      height: 100%;
     }
     .preview-box img {
-      width: 100px; height: 100px; object-fit: cover;
-      border-radius: 3px; display: block;
+      width: 100px;
+      height: 100px;
+      object-fit: cover;
+      border-radius: 3px;
+      display: block;
     }
     .remove-btn {
-      position: absolute; top: -5px; left: -5px; width: 15px; height: 15px;
-      background-color: black; color: white; font-size: 10px;
-      text-align: center; cursor: pointer; z-index: 999; border-radius: 50%;
+      position: absolute;
+      top: -5px;
+      left: -5px;
+      width: 15px;
+      height: 15px;
+      background-color: black;
+      color: white;
+      font-size: 10px;
+      text-align: center;
+      cursor: pointer;
+      z-index: 999;
+      border-radius: 50%;
     }
     .number-overlay {
-      position: absolute; top: 0; right: 0; width: 16px; height: 16px;
-      background-color: rgba(0,0,0,0.7); color: white; display: flex;
-      align-items: center; justify-content: center; font-size: 10px;
-      z-index: 999; border-radius: 3px;
+      position: absolute;
+      top: 0;
+      right: 0;
+      width: 16px;
+      height: 16px;
+      background-color: rgba(0,0,0,0.7);
+      color: white;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 10px;
+      z-index: 999;
+      border-radius: 3px;
     }
     /* Metadata status styles */
     .metadata-status {
-      margin-top: 5px; text-align: center; font-size: 14px;
+      margin-top: 5px;
+      text-align: center;
+      font-size: 14px;
       min-height: 20px;
     }
     .metadata-progress {
@@ -175,12 +277,15 @@
 
     /* Container #13 */
     #container13 {
-      position: relative; width: 250px; top: -150px;
+      position: relative;
+      width: 250px;
+      top: -150px;
     }
 
     /* Components below search key phrases */
     #belowSearch {
-      margin-top: -180px; margin-left: 10px;
+      margin-top: -180px;
+      margin-left: 10px;
     }
     .title-container {
       margin-top: -50px;
@@ -195,17 +300,24 @@
       margin-top: 25px;
     }
     .phrases-header {
-      position: relative; top: 125px; left: 10px;
+      position: relative;
+      top: 125px;
+      left: 10px;
     }
 
     /* Update Listing and Upload Photo button containers */
     #uploadContainer {
-      position: fixed; bottom: 20px; left: 50%;
-      transform: translateX(-50%); display: inline-block;
+      position: fixed;
+      bottom: 20px;
+      left: 50%;
+      transform: translateX(-50%);
+      display: inline-block;
     }
     #uploadPhotoContainer {
-      position: fixed; bottom: 20px;
-      left: calc(50% + 120px); display: inline-block;
+      position: fixed;
+      bottom: 20px;
+      left: calc(50% + 120px);
+      display: inline-block;
     }
   </style>
 </head>
@@ -526,7 +638,7 @@ Using Sales Report and Product List Files:
     </div>
   </div>
 
-  <!-- Crop Modal -->
+  <!-- Crop Modal (optional) -->
   <div id="photoCropModal" class="modal">
     <div class="crop-container">
       <h4 style="text-align:center; margin: 0 0 10px 0;">Crop Photo</h4>
@@ -570,8 +682,26 @@ Using Sales Report and Product List Files:
     let photoNames = [];
     let previewImages = []; // data URLs for display
     let photoMeta = [];     // textual analysis from "Analyze" step
-    let photoStatuses = [];
-    let photoObjects = [];
+
+    // ---- IMAGE RESIZE FUNCTION ----
+    // Force-resizes an image to 3000 x 3000 px
+    async function resizeImage(dataURL, width, height) {
+      return new Promise((resolve, reject) => {
+        const img = new Image();
+        img.onload = () => {
+          const canvas = document.createElement("canvas");
+          canvas.width = width;
+          canvas.height = height;
+          const ctx = canvas.getContext("2d");
+          ctx.drawImage(img, 0, 0, width, height);
+          // Convert to a quality-based JPEG for size control
+          const resizedDataURL = canvas.toDataURL("image/jpeg", 0.85);
+          resolve(resizedDataURL);
+        };
+        img.onerror = reject;
+        img.src = dataURL;
+      });
+    }
 
     // Basic function to call the OpenAI text completions endpoint
     async function callOpenAI(payload) {
@@ -597,7 +727,7 @@ Using Sales Report and Product List Files:
         reader.onload = async (event) => {
           try {
             const dataURL = event.target.result;
-            const base64Content = dataURL.split(',')[1];
+            const base64Content = dataURL.split(",")[1];
             if (!base64Content) throw new Error("File content is empty.");
             const payload = {
               file: base64Content,
@@ -627,7 +757,7 @@ Using Sales Report and Product List Files:
         reader.onload = async (event) => {
           try {
             const dataURL = event.target.result;
-            const base64Content = dataURL.split(',')[1];
+            const base64Content = dataURL.split(",")[1];
             if (!base64Content) throw new Error("File content is empty.");
             const payload = {
               file: base64Content,
@@ -679,8 +809,8 @@ Using Sales Report and Product List Files:
     // OAUTH
     // -------------
     function generateRandomString(length) {
-      const possible = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789';
-      let text = '';
+      const possible = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789";
+      let text = "";
       for (let i = 0; i < length; i++) {
         text += possible.charAt(Math.floor(Math.random() * possible.length));
       }
@@ -689,7 +819,7 @@ Using Sales Report and Product List Files:
 
     function base64urlEncode(buffer) {
       return btoa(String.fromCharCode(...new Uint8Array(buffer)))
-        .replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, '');
+        .replace(/\+/g, "-").replace(/\//g, "_").replace(/=+$/, "");
     }
 
     async function generateCodeChallenge(codeVerifier) {
@@ -842,9 +972,8 @@ Using Sales Report and Product List Files:
           formData.append("token", accessToken);
           formData.append("fileName", photoNames[i] || `uploaded_photo_${i}.jpg`);
           formData.append("rank", rankNumber);
-          // Pass alt_text to the serverless function
+          // Pass alt_text if needed by your serverless function (e.g., to store as alt_text)
           formData.append("alt_text", altText);
-
           formData.append("file", blob, photoNames[i] || `uploaded_photo_${i}.jpg`);
 
           console.log(`Uploading photo #${rankNumber} with alt_text =`, altText);
@@ -889,16 +1018,16 @@ Using Sales Report and Product List Files:
       }, 100);
 
       try {
-        // For demonstration, we only pass the file name text to callOpenAI
-        // In real usage, you'd do a fetch("/.netlify/functions/analyzeImage", ...) 
-        // with the actual file binary, and store the returned text in photoMeta.
         const imageInfo = "File name: " + photoNames[index];
         const rules = document.getElementById("analyzeRulesTextarea").value;
 
         const payload = {
           model: modelName,
           messages: [
-            { role: "system", content: "Generate a short descriptive metadata based on these rules:\n" + rules },
+            {
+              role: "system",
+              content: "Generate a short descriptive metadata based on these rules:\n" + rules
+            },
             { role: "user", content: "Here is the photo name: " + imageInfo }
           ],
           temperature: 0.7,
@@ -1014,19 +1143,22 @@ Using Sales Report and Product List Files:
     }
 
     // -------------
-    // FILE DROP for images
+    // FILE DROP for images - NOW RESIZES to 3000x3000
     // -------------
     const dropZone = document.getElementById("dropZone");
     dropZone.addEventListener("dragover", e => {
-      e.preventDefault(); e.stopPropagation();
+      e.preventDefault();
+      e.stopPropagation();
       dropZone.style.borderColor = "#000";
     });
     dropZone.addEventListener("dragleave", e => {
-      e.preventDefault(); e.stopPropagation();
+      e.preventDefault();
+      e.stopPropagation();
       dropZone.style.borderColor = "#ccc";
     });
     dropZone.addEventListener("drop", async e => {
-      e.preventDefault(); e.stopPropagation();
+      e.preventDefault();
+      e.stopPropagation();
       dropZone.style.borderColor = "#ccc";
       const files = e.dataTransfer.files;
       const maxRemaining = 10 - previewImages.length;
@@ -1036,13 +1168,14 @@ Using Sales Report and Product List Files:
           try {
             const dataURL = await new Promise((resolve, reject) => {
               const reader = new FileReader();
-              reader.onload = event => {
-                resolve(event.target.result);
-              };
+              reader.onload = event => resolve(event.target.result);
               reader.onerror = reject;
               reader.readAsDataURL(file);
             });
-            previewImages.push(dataURL);
+            // Resize to 3000x3000
+            const resizedDataURL = await resizeImage(dataURL, 3000, 3000);
+
+            previewImages.push(resizedDataURL);
             photoNames.push(file.name);
             updatePrimaryPreview();
             updateStaticPreviewGrid();
@@ -1061,15 +1194,18 @@ Using Sales Report and Product List Files:
     // -------------
     const ordersDropZone = document.getElementById("ordersDropZone");
     ordersDropZone.addEventListener("dragover", e => {
-      e.preventDefault(); e.stopPropagation();
+      e.preventDefault();
+      e.stopPropagation();
       ordersDropZone.style.borderColor = "#000";
     });
     ordersDropZone.addEventListener("dragleave", e => {
-      e.preventDefault(); e.stopPropagation();
+      e.preventDefault();
+      e.stopPropagation();
       ordersDropZone.style.borderColor = "#ccc";
     });
     ordersDropZone.addEventListener("drop", async e => {
-      e.preventDefault(); e.stopPropagation();
+      e.preventDefault();
+      e.stopPropagation();
       ordersDropZone.style.borderColor = "#ccc";
       const files = e.dataTransfer.files;
       const progressBar = document.getElementById("csvProgressBar");
@@ -1099,15 +1235,18 @@ Using Sales Report and Product List Files:
 
     const listingsDropZone = document.getElementById("listingsDropZone");
     listingsDropZone.addEventListener("dragover", e => {
-      e.preventDefault(); e.stopPropagation();
+      e.preventDefault();
+      e.stopPropagation();
       listingsDropZone.style.borderColor = "#000";
     });
     listingsDropZone.addEventListener("dragleave", e => {
-      e.preventDefault(); e.stopPropagation();
+      e.preventDefault();
+      e.stopPropagation();
       listingsDropZone.style.borderColor = "#ccc";
     });
     listingsDropZone.addEventListener("drop", async e => {
-      e.preventDefault(); e.stopPropagation();
+      e.preventDefault();
+      e.stopPropagation();
       listingsDropZone.style.borderColor = "#ccc";
       const files = e.dataTransfer.files;
       const progressBar = document.getElementById("csvProgressBar");
@@ -1254,15 +1393,15 @@ Using Sales Report and Product List Files:
         M.toast({ html: "Please provide the search key phrases." });
         return;
       }
-      const promptText = `
-You are ChatGPT using ${modelName}.
+      const promptText = \`
+You are ChatGPT using \${modelName}.
 Based on the inputs below, generate an Etsy Listing TITLE only.
 Input Context:
-Etsy Link: "${etsyLink}"
-Search Key Phrases: "${keyPhrases}"
+Etsy Link: "\${etsyLink}"
+Search Key Phrases: "\${keyPhrases}"
 --- Rules for TITLE ---
-${stripMarkdownJSON(document.getElementById("titleRulesTextarea").value)}
-Important: Return ONLY the title as plain text.`;
+\${stripMarkdownJSON(document.getElementById("titleRulesTextarea").value)}
+Important: Return ONLY the title as plain text.\`;
 
       document.getElementById("listingTitle").value = "Generating title...";
       const payload = {
@@ -1294,15 +1433,15 @@ Important: Return ONLY the title as plain text.`;
         M.toast({ html: "Please provide the search key phrases." });
         return;
       }
-      const promptText = `
-You are ChatGPT using ${modelName}.
+      const promptText = \`
+You are ChatGPT using \${modelName}.
 Based on the inputs below, generate an Etsy Listing DESCRIPTION only.
 Input Context:
-Etsy Link: "${etsyLink}"
-Search Key Phrases: "${keyPhrases}"
+Etsy Link: "\${etsyLink}"
+Search Key Phrases: "\${keyPhrases}"
 --- Rules for DESCRIPTION ---
-${stripMarkdownJSON(document.getElementById("descriptionRulesTextarea").value)}
-Important: Return ONLY the description as plain text.`;
+\${stripMarkdownJSON(document.getElementById("descriptionRulesTextarea").value)}
+Important: Return ONLY the description as plain text.\`;
 
       document.getElementById("listingDescription").value = "Generating description...";
       const payload = {
@@ -1334,18 +1473,18 @@ Important: Return ONLY the description as plain text.`;
       }
       let extraText = "Emphasis on SEO friendliness with a focus on generating effective long tail tag phrases for Etsy.";
       const keywordRules = stripMarkdownJSON(document.getElementById("keywordRulesTextarea").value);
-      let prompt = `
-Listing Description (for emphasis): "${question}"
-${extraText}
+      let prompt = \`
+Listing Description (for emphasis): "\${question}"
+\${extraText}
 
 Keyword Rules:
-${keywordRules}
+\${keywordRules}
 
 Using Sales Report and Product List Files, generate exactly 13 tag phrases (each ≤ 20 characters).
 Include "Gift for Her", ensure "Charm" appears at least once in a multi-word phrase (max 4 times total),
 "Necklace" appears no more than 3 times, "Gift" no more than 3 times, "Lover" no more than 2 times,
 and exclude prohibited words.
-Return your answer as plain text.`;
+Return your answer as plain text.\`;
 
       try {
         const payload = {
