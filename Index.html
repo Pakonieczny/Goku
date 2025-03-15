@@ -39,12 +39,15 @@
     /* Drag and Drop Boxes */
     #dropZone, #ordersDropZone, #listingsDropZone {
       width: 138px; height: 138px; border: 2px dashed #ccc; border-radius: 3px;
-      display: inline-block; vertical-align: middle; text-align: center; line-height: 138px; position: relative;
+      display: inline-block; vertical-align: middle; text-align: center; line-height: 138px;
+      position: relative;
     }
     /* Orders container */
     #ordersContainer { display: flex; flex-direction: column; }
     /* CSV Progress Bar */
-    #csvProgressBar { width: 100%; height: 20px; border: 1px solid blue; background-color: #e0f0ff; margin-top: 5px; -webkit-appearance: none; appearance: none; }
+    #csvProgressBar { width: 100%; height: 20px; border: 1px solid blue; background-color: #e0f0ff; margin-top: 5px;
+      -webkit-appearance: none; appearance: none;
+    }
     #csvProgressBar::-webkit-progress-bar { background-color: #e0f0ff; border: 1px solid blue; }
     #csvProgressBar::-webkit-progress-value { background-color: blue; }
     #csvProgressContainer { margin-left: 85px; }
@@ -528,9 +531,8 @@ Using Sales Report and Product List Files:
       const listingInput = document.getElementById("shopListings").value.trim();
       if (!listingInput) { M.toast({ html: "Please provide a listing URL or ID in 'My Etsy Shop Listings'." }); return; }
       let listingId;
-      if (/^\d+$/.test(listingInput)) {
-        listingId = listingInput;
-      } else {
+      if (/^\d+$/.test(listingInput)) { listingId = listingInput; }
+      else {
         const match = listingInput.match(/\/listing\/(\d+)/);
         if (match) { listingId = match[1]; }
         else { M.toast({ html: "Invalid listing URL or ID." }); return; }
@@ -610,29 +612,25 @@ Using Sales Report and Product List Files:
     
     // Upload metadata for a photo (simulate API call)
     function uploadMetadata(index, metadata) {
-      // In a real implementation, call your backend API to upload metadata.
-      // Here, we simulate an upload delay.
-      return new Promise((resolve, reject) => {
-        setTimeout(() => {
-          // Simulate a successful upload.
-          resolve(true);
-        }, 1000);
+      // In production, replace this simulation with a real API call to upload metadata for the photo.
+      return new Promise((resolve) => {
+        setTimeout(() => { resolve(true); }, 1000);
       });
     }
     
-    // Analyze Photos: for each photo, send to OpenAI to generate metadata, then upload it.
+    // Analyze Photos: for each photo, send it for metadata generation to OpenAI and then upload it.
     async function analyzePhoto(index) {
       const statusElem = document.getElementById("metadataStatus" + index);
       if (!statusElem) return;
       statusElem.innerHTML = "";
-      // Create a progress bar element
+      // Create a blue progress bar element
       const progressBar = document.createElement("progress");
       progressBar.className = "metadata-progress";
       progressBar.max = 100;
       progressBar.value = 0;
       statusElem.appendChild(progressBar);
       
-      // Simulate progress: first phase (0-50) while generating metadata
+      // Phase 1: Update progress while generating metadata
       let progress = 0;
       const progressInterval = setInterval(() => {
          progress = Math.min(progress + 3, 50);
@@ -640,12 +638,14 @@ Using Sales Report and Product List Files:
       }, 100);
       
       try {
+        // Include the image file name in the prompt to help generate relevant metadata
+        const imageInfo = "The uploaded image file is named '" + photoNames[index] + "'.";
         const rules = document.getElementById("analyzeRulesTextarea").value;
         const payload = {
           model: modelName,
           messages: [
             { role: "system", content: "Generate metadata for an Etsy photo using the following rules: " + rules },
-            { role: "user", content: "Photo index " + (index + 1) + ". Provide a brief metadata description for this photo." }
+            { role: "user", content: imageInfo + " Based on this image, provide a brief and accurate metadata description." }
           ],
           temperature: 0.7,
           max_tokens: 100
@@ -657,7 +657,7 @@ Using Sales Report and Product List Files:
         const metadata = (aiResponse.choices && aiResponse.choices.length > 0) ?
           stripMarkdownJSON(aiResponse.choices[0].message.content) : "No metadata generated.";
           
-        // Now simulate uploading metadata (phase 2)
+        // Phase 2: Simulate uploading metadata and update progress to 100
         const uploadInterval = setInterval(() => {
            progress = Math.min(progress + 5, 100);
            progressBar.value = progress;
@@ -666,7 +666,7 @@ Using Sales Report and Product List Files:
         clearInterval(uploadInterval);
         progress = 100;
         progressBar.value = progress;
-        // On successful upload, store metadata and show green checkmark
+        // On successful metadata upload, store metadata and show green checkmark
         photoMeta[index] = metadata;
         statusElem.innerHTML = '<span style="color:green; font-size:16px;"><i class="material-icons">check_circle</i></span>';
       } catch (error) {
@@ -676,6 +676,7 @@ Using Sales Report and Product List Files:
     }
     
     async function analyzePhotos() {
+      // Process only the photos currently in previewImages
       for (let i = 0; i < previewImages.length; i++) {
         await analyzePhoto(i);
       }
@@ -693,7 +694,7 @@ Using Sales Report and Product List Files:
       instance.open();
     }
     
-    // Update static preview grid: now adds a metadata status div and click listener on each photo.
+    // Update static preview grid: adds a metadata status div and click listener on each photo.
     function updateStaticPreviewGrid() {
       for (let i = 0; i < 10; i++) {
         const cell = document.getElementById("previewCell" + i);
@@ -706,7 +707,7 @@ Using Sales Report and Product List Files:
           img.src = previewImages[i];
           previewBox.appendChild(img);
           
-          // Clicking the photo shows its metadata.
+          // Attach click event on the preview box to show metadata.
           previewBox.addEventListener("click", () => { showMetadata(i); });
   
           const removeBtn = document.createElement("div");
@@ -728,7 +729,7 @@ Using Sales Report and Product List Files:
           previewBox.appendChild(numOverlay);
   
           cell.appendChild(previewBox);
-          // Append a metadata status div (for progress/checkmark)
+          // Append a metadata status div for progress or checkmark.
           const metadataStatus = document.createElement("div");
           metadataStatus.className = "metadata-status";
           metadataStatus.id = "metadataStatus" + i;
@@ -751,16 +752,13 @@ Using Sales Report and Product List Files:
     // File drop handling for images (limit 10)
     const dropZone = document.getElementById("dropZone");
     dropZone.addEventListener("dragover", e => {
-      e.preventDefault(); e.stopPropagation();
-      dropZone.style.borderColor = "#000";
+      e.preventDefault(); e.stopPropagation(); dropZone.style.borderColor = "#000";
     });
     dropZone.addEventListener("dragleave", e => {
-      e.preventDefault(); e.stopPropagation();
-      dropZone.style.borderColor = "#ccc";
+      e.preventDefault(); e.stopPropagation(); dropZone.style.borderColor = "#ccc";
     });
     dropZone.addEventListener("drop", async e => {
-      e.preventDefault(); e.stopPropagation();
-      dropZone.style.borderColor = "#ccc";
+      e.preventDefault(); e.stopPropagation(); dropZone.style.borderColor = "#ccc";
       const files = e.dataTransfer.files;
       const maxRemaining = 10 - previewImages.length;
       for (let i = 0; i < Math.min(files.length, maxRemaining); i++) {
@@ -789,17 +787,10 @@ Using Sales Report and Product List Files:
     
     // Restore drag and drop for "Etsy Sold Orders" CSV/DOC files
     const ordersDropZone = document.getElementById("ordersDropZone");
-    ordersDropZone.addEventListener("dragover", e => { 
-      e.preventDefault(); e.stopPropagation(); 
-      ordersDropZone.style.borderColor = "#000"; 
-    });
-    ordersDropZone.addEventListener("dragleave", e => { 
-      e.preventDefault(); e.stopPropagation(); 
-      ordersDropZone.style.borderColor = "#ccc"; 
-    });
+    ordersDropZone.addEventListener("dragover", e => { e.preventDefault(); e.stopPropagation(); ordersDropZone.style.borderColor = "#000"; });
+    ordersDropZone.addEventListener("dragleave", e => { e.preventDefault(); e.stopPropagation(); ordersDropZone.style.borderColor = "#ccc"; });
     ordersDropZone.addEventListener("drop", async e => {
-      e.preventDefault(); e.stopPropagation(); 
-      ordersDropZone.style.borderColor = "#ccc";
+      e.preventDefault(); e.stopPropagation(); ordersDropZone.style.borderColor = "#ccc";
       const files = e.dataTransfer.files;
       const progressBar = document.getElementById("csvProgressBar");
       for (let i = 0; i < files.length; i++) {
@@ -828,17 +819,10 @@ Using Sales Report and Product List Files:
     
     // Restore drag and drop for "Etsy Listings" CSV/DOC files
     const listingsDropZone = document.getElementById("listingsDropZone");
-    listingsDropZone.addEventListener("dragover", e => { 
-      e.preventDefault(); e.stopPropagation(); 
-      listingsDropZone.style.borderColor = "#000"; 
-    });
-    listingsDropZone.addEventListener("dragleave", e => { 
-      e.preventDefault(); e.stopPropagation(); 
-      listingsDropZone.style.borderColor = "#ccc"; 
-    });
+    listingsDropZone.addEventListener("dragover", e => { e.preventDefault(); e.stopPropagation(); listingsDropZone.style.borderColor = "#000"; });
+    listingsDropZone.addEventListener("dragleave", e => { e.preventDefault(); e.stopPropagation(); listingsDropZone.style.borderColor = "#ccc"; });
     listingsDropZone.addEventListener("drop", async e => {
-      e.preventDefault(); e.stopPropagation(); 
-      listingsDropZone.style.borderColor = "#ccc";
+      e.preventDefault(); e.stopPropagation(); listingsDropZone.style.borderColor = "#ccc";
       const files = e.dataTransfer.files;
       const progressBar = document.getElementById("csvProgressBar");
       for (let i = 0; i < files.length; i++) {
