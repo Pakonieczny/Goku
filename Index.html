@@ -19,32 +19,12 @@
     
     /* Wrap Listing Description and File Drop Zones */
     #descriptionAndFileUploadContainer { display: flex; align-items: center; }
-    .listing-desc-container {
-      position: relative;
-      display: inline-block;
-      width: 500px;
-    }
-    .listing-desc-container h5 {
-      margin: 0 0 10px 0;
-      font-size: 1.2rem;
-      font-weight: 500;
-    }
-    .listing-desc-container label.section-heading { 
-      font-size: 1.2rem; 
-      font-weight: 500; 
-    }
-    .listing-desc-container input {
-      width: 500px;
-      height: 30px;
-      border: 1px solid #000;
-      padding: 5px;
-    }
+    .listing-desc-container { position: relative; display: inline-block; width: 500px; }
+    .listing-desc-container h5 { margin: 0 0 10px 0; font-size: 1.2rem; font-weight: 500; }
+    .listing-desc-container label.section-heading { font-size: 1.2rem; font-weight: 500; }
+    .listing-desc-container input { width: 500px; height: 30px; border: 1px solid #000; padding: 5px; }
     /* "User Provided Search Key Phrases" textarea */
-    #searchKeyPhrases {
-      resize: none;
-      box-sizing: border-box;
-      border: 1px solid grey;
-    }
+    #searchKeyPhrases { resize: none; box-sizing: border-box; border: 1px solid grey; }
     #searchKeyPhrases[rows="14"] { height: auto; }
     .flex-container { display: flex; gap: 10px; align-items: stretch; }
     .textbox-container { flex: 1; }
@@ -58,121 +38,47 @@
     
     /* Drag and Drop Boxes */
     #dropZone, #ordersDropZone, #listingsDropZone {
-      width: 138px; 
-      height: 138px; 
-      border: 2px dashed #ccc; 
-      border-radius: 3px; 
-      display: inline-block; 
-      vertical-align: middle; 
-      text-align: center; 
-      line-height: 138px;
-      position: relative;
+      width: 138px; height: 138px; border: 2px dashed #ccc; border-radius: 3px;
+      display: inline-block; vertical-align: middle; text-align: center; line-height: 138px; position: relative;
     }
     /* Orders container */
     #ordersContainer { display: flex; flex-direction: column; }
     /* CSV Progress Bar */
-    #csvProgressBar {
-      width: 100%; height: 20px; border: 1px solid blue; background-color: #e0f0ff; margin-top: 5px;
-      -webkit-appearance: none; appearance: none;
-    }
+    #csvProgressBar { width: 100%; height: 20px; border: 1px solid blue; background-color: #e0f0ff; margin-top: 5px; -webkit-appearance: none; appearance: none; }
     #csvProgressBar::-webkit-progress-bar { background-color: #e0f0ff; border: 1px solid blue; }
     #csvProgressBar::-webkit-progress-value { background-color: blue; }
     #csvProgressContainer { margin-left: 85px; }
     /* File Drop Zones container */
     #fileDropZonesContainer { display: flex; gap: 10px; margin-left: 100px; }
-    #uploadedFilesList {
-      width: 300px;
-      height: 125px;
-      resize: none;
-      box-sizing: border-box;
-      border: 1px solid grey;
-      margin-left: 85px;
-    }
+    #uploadedFilesList { width: 300px; height: 125px; resize: none; box-sizing: border-box; border: 1px solid grey; margin-left: 85px; }
     
     /* Primary Preview – clickable for cropping */
-    #primaryPreview { 
-      width: 138px; 
-      height: 138px; 
-      border: 1px solid #ccc; 
-      border-radius: 3px;
-      display: inline-block; 
-      vertical-align: middle; 
-      position: relative;
-      top: -250px;
-      left: 285px;
-      text-align: center; 
-      overflow: hidden; 
-      cursor: pointer;
+    #primaryPreview { width: 138px; height: 138px; border: 1px solid #ccc; border-radius: 3px;
+      display: inline-block; vertical-align: middle; position: relative; top: -250px; left: 285px;
+      text-align: center; overflow: hidden; cursor: pointer;
     }
     #primaryPreview:empty { background: #fff; }
     #primaryPreview img { width: 100%; height: 100%; object-fit: contain; border-radius: 3px; }
     
     /* Static 10-Photo Preview Grid */
-    #previewGridContainer {
-      position: relative;
-      margin: 20px auto;
-      width: auto;
-      max-width: 600px;
-      text-align: center;
+    #previewGridContainer { position: relative; margin: 20px auto; width: auto; max-width: 600px; text-align: center; }
+    #previewGridStatic { display: grid; grid-template-columns: repeat(5, 100px); grid-column-gap: 23px; grid-row-gap: 18px; margin: 0 auto; }
+    .preview-cell { position: relative; width: 100px; height: 132px; border: 2px solid #ccc; border-radius: 3px;
+      display: flex; flex-direction: column; align-items: center; justify-content: center; font-size: 12px; color: #666;
     }
-    #previewGridStatic {
-      display: grid;
-      grid-template-columns: repeat(5, 100px);
-      grid-column-gap: 23px;
-      grid-row-gap: 18px;
-      margin: 0 auto;
+    .preview-box { position: relative; width: 100%; height: 100%; }
+    .preview-box img { width: 100px; height: 100px; object-fit: cover; border-radius: 3px; display: block; }
+    .remove-btn { position: absolute; top: -5px; left: -5px; width: 15px; height: 15px;
+      background-color: black; color: white; font-size: 10px; text-align: center; cursor: pointer;
+      z-index: 999; border-radius: 50%;
     }
-    .preview-cell {
-      position: relative;
-      width: 100px;
-      height: 132px;
-      border: 2px solid #ccc;
-      border-radius: 3px;
-      display: flex;
-      flex-direction: column;
-      align-items: center;
-      justify-content: center;
-      font-size: 12px;
-      color: #666;
-    }
-    .preview-box {
-      position: relative;
-      width: 100%;
-      height: 100%;
-    }
-    .preview-box img { 
-      width: 100px; 
-      height: 100px; 
-      object-fit: cover; 
-      border-radius: 3px; 
-      display: block; 
-    }
-    .remove-btn { 
-      position: absolute; top: -5px; left: -5px; 
-      width: 15px; height: 15px; 
-      background-color: black;
-      color: white; font-size: 10px; 
-      text-align: center; cursor: pointer; 
-      z-index: 999; border-radius: 50%; 
-    }
-    .number-overlay { 
-      position: absolute; top: 0; right: 0; 
-      width: 16px; height: 16px; 
-      background-color: rgba(0,0,0,0.7);
-      color: white; display: flex; align-items: center; 
-      justify-content: center; font-size: 10px; 
-      z-index: 999; border-radius: 3px; 
+    .number-overlay { position: absolute; top: 0; right: 0; width: 16px; height: 16px;
+      background-color: rgba(0,0,0,0.7); color: white; display: flex; align-items: center; justify-content: center;
+      font-size: 10px; z-index: 999; border-radius: 3px;
     }
     /* Metadata status styles */
-    .metadata-status {
-      margin-top: 5px;
-      text-align: center;
-      font-size: 14px;
-      min-height: 20px;
-    }
-    .metadata-progress {
-      width: 90%;
-    }
+    .metadata-status { margin-top: 5px; text-align: center; font-size: 14px; min-height: 20px; }
+    .metadata-progress { width: 90%; }
     
     /* Container #13 */
     #container13 { position: relative; width: 250px; top: -150px; }
@@ -186,19 +92,8 @@
     .phrases-header { position: relative; top: 125px; left: 10px; }
     
     /* Update Listing and Upload Photo button containers */
-    #uploadContainer {
-      position: fixed;
-      bottom: 20px;
-      left: 50%;
-      transform: translateX(-50%);
-      display: inline-block;
-    }
-    #uploadPhotoContainer {
-      position: fixed;
-      bottom: 20px;
-      left: calc(50% + 120px);
-      display: inline-block;
-    }
+    #uploadContainer { position: fixed; bottom: 20px; left: 50%; transform: translateX(-50%); display: inline-block; }
+    #uploadPhotoContainer { position: fixed; bottom: 20px; left: calc(50% + 120px); display: inline-block; }
   </style>
 </head>
 <body>
@@ -321,7 +216,27 @@
     </div>
   </div>
   
-  <!-- Other Modals (Title Rules, Description Rules, Analyze Rules, Keyword Rules, Button Config) remain unchanged -->
+  <!-- Analyze Rules Modal -->
+  <div id="analyzeRulesModal" class="modal">
+    <div class="modal-content">
+      <h4>Photo Analysis Rules</h4>
+      <textarea id="analyzeRulesTextarea" style="width:100%; height:300px;">
+Default Photo Analysis Rules:
+1. Use SEO-friendly descriptive long-tail key phrases without special characters.
+2. Emphasize charm details (what it is, occasion, metal, size, style).
+3. Focus solely on the jewelry details in the image.
+4. Ignore environment, model, and clothing.
+5. Organize into a short paragraph.
+6. Limit the description to 300 characters.
+7. Do not mention earrings unless explicitly identified.
+8. Do not mix necklace and earring descriptions.
+      </textarea>
+    </div>
+    <div class="modal-footer">
+      <a href="#!" id="updateAnalyzeRulesBtn" class="modal-close waves-effect waves-green btn">Update</a>
+    </div>
+  </div>
+  
   <!-- Title Rules Modal -->
   <div id="titleRulesModal" class="modal">
     <div class="modal-content">
@@ -384,27 +299,6 @@ Option 3:
     </div>
     <div class="modal-footer">
       <a href="#!" id="updateDescriptionRulesBtn" class="modal-close waves-effect waves-green btn">Update</a>
-    </div>
-  </div>
-  
-  <!-- Analyze Rules Modal -->
-  <div id="analyzeRulesModal" class="modal">
-    <div class="modal-content">
-      <h4>Photo Analysis Rules</h4>
-      <textarea id="analyzeRulesTextarea" style="width:100%; height:300px;">
-Default Photo Analysis Rules:
-1. Use SEO-friendly descriptive long-tail key phrases without special characters.
-2. Emphasize charm details (what it is, occasion, metal, size, style).
-3. Focus solely on the jewelry details in the image.
-4. Ignore environment, model, and clothing.
-5. Organize into a short paragraph.
-6. Limit the description to 300 characters.
-7. Do not mention earrings unless explicitly identified.
-8. Do not mix necklace and earring descriptions.
-      </textarea>
-    </div>
-    <div class="modal-footer">
-      <a href="#!" id="updateAnalyzeRulesBtn" class="modal-close waves-effect waves-green btn">Update</a>
     </div>
   </div>
   
@@ -475,7 +369,7 @@ Using Sales Report and Product List Files:
     let listingsCSV = [];
     let photoNames = [];
     let previewImages = [];
-    let photoMeta = []; // Array to hold metadata for each photo
+    let photoMeta = []; // To store metadata for each photo
     let photoStatuses = [];
     let photoObjects = [];
     
@@ -501,11 +395,7 @@ Using Sales Report and Product List Files:
             const dataURL = event.target.result;
             const base64Content = dataURL.split(',')[1];
             if (!base64Content) throw new Error("File content is empty.");
-            const payload = {
-              file: base64Content,
-              fileName: file.name,
-              purpose: "user_data"
-            };
+            const payload = { file: base64Content, fileName: file.name, purpose: "user_data" };
             const response = await fetch("/.netlify/functions/uploadFile", {
               method: "POST",
               headers: { "Content-Type": "application/json" },
@@ -514,9 +404,7 @@ Using Sales Report and Product List Files:
             if (!response.ok) throw new Error("Upload failed with status " + response.status);
             const responseData = await response.json();
             resolve({ id: responseData.id, name: file.name });
-          } catch (err) {
-            reject(err);
-          }
+          } catch (err) { reject(err); }
         };
         reader.onerror = reject;
         reader.readAsDataURL(file);
@@ -531,11 +419,7 @@ Using Sales Report and Product List Files:
             const dataURL = event.target.result;
             const base64Content = dataURL.split(',')[1];
             if (!base64Content) throw new Error("File content is empty.");
-            const payload = {
-              file: base64Content,
-              fileName: file.name,
-              purpose: "user_data"
-            };
+            const payload = { file: base64Content, fileName: file.name, purpose: "user_data" };
             const response = await fetch("/.netlify/functions/uploadFile", {
               method: "POST",
               headers: { "Content-Type": "application/json" },
@@ -544,9 +428,7 @@ Using Sales Report and Product List Files:
             if (!response.ok) throw new Error("Upload failed with status " + response.status);
             const responseData = await response.json();
             resolve({ id: responseData.id, name: file.name });
-          } catch (err) {
-            reject(err);
-          }
+          } catch (err) { reject(err); }
         };
         reader.onerror = reject;
         reader.readAsDataURL(file);
@@ -555,10 +437,7 @@ Using Sales Report and Product List Files:
     
     async function updateVectorStore() {
       const allFileIds = [...soldOrdersCSV, ...listingsCSV].map(file => file.id);
-      if (allFileIds.length === 0) {
-        console.log("No supported files uploaded yet.");
-        return;
-      }
+      if (allFileIds.length === 0) { console.log("No supported files uploaded yet."); return; }
       try {
         const vectorStorePayload = { name: "CSV Vector Store", file_ids: allFileIds };
         const vectorStoreResponse = await fetch("/.netlify/functions/vectorStore", {
@@ -572,9 +451,7 @@ Using Sales Report and Product List Files:
         }
         const vectorStoreData = await vectorStoreResponse.json();
         console.log("Vector store created:", vectorStoreData);
-      } catch (err) {
-        console.error("Error in updateVectorStore:", err);
-      }
+      } catch (err) { console.error("Error in updateVectorStore:", err); }
     }
     
     // OAuth helper functions
@@ -631,10 +508,7 @@ Using Sales Report and Product List Files:
     
     async function exchangeCodeForToken(code) {
       const codeVerifier = localStorage.getItem("etsy_code_verifier");
-      if (!codeVerifier) {
-        M.toast({ html: "No code verifier found. Please try connecting again." });
-        return;
-      }
+      if (!codeVerifier) { M.toast({ html: "No code verifier found. Please try connecting again." }); return; }
       try {
         const response = await fetch(`/.netlify/functions/exchangeToken?code=${encodeURIComponent(code)}&code_verifier=${encodeURIComponent(codeVerifier)}`);
         const tokenData = await response.json();
@@ -652,21 +526,14 @@ Using Sales Report and Product List Files:
     
     async function updateExistingListing() {
       const listingInput = document.getElementById("shopListings").value.trim();
-      if (!listingInput) {
-        M.toast({ html: "Please provide a listing URL or ID in 'My Etsy Shop Listings'." });
-        return;
-      }
+      if (!listingInput) { M.toast({ html: "Please provide a listing URL or ID in 'My Etsy Shop Listings'." }); return; }
       let listingId;
       if (/^\d+$/.test(listingInput)) {
         listingId = listingInput;
       } else {
         const match = listingInput.match(/\/listing\/(\d+)/);
-        if (match) {
-          listingId = match[1];
-        } else {
-          M.toast({ html: "Invalid listing URL or ID." });
-          return;
-        }
+        if (match) { listingId = match[1]; }
+        else { M.toast({ html: "Invalid listing URL or ID." }); return; }
       }
       const payload = {
         title: document.getElementById("listingTitle").value,
@@ -702,26 +569,15 @@ Using Sales Report and Product List Files:
     // Upload Photo: loop through previewImages and upload each
     async function uploadPhoto() {
       const listingInput = document.getElementById("shopListings").value.trim();
-      if (!listingInput) {
-        M.toast({ html: "Please provide a listing URL or ID in 'My Etsy Shop Listings'." });
-        return;
-      }
+      if (!listingInput) { M.toast({ html: "Please provide a listing URL or ID in 'My Etsy Shop Listings'." }); return; }
       let listingId;
-      if (/^\d+$/.test(listingInput)) {
-        listingId = listingInput;
-      } else {
+      if (/^\d+$/.test(listingInput)) { listingId = listingInput; }
+      else {
         const match = listingInput.match(/\/listing\/(\d+)/);
-        if (match) {
-          listingId = match[1];
-        } else {
-          M.toast({ html: "Invalid listing URL or ID." });
-          return;
-        }
+        if (match) { listingId = match[1]; }
+        else { M.toast({ html: "Invalid listing URL or ID." }); return; }
       }
-      if (previewImages.length === 0) {
-        M.toast({ html: "No images to upload. Please drag and drop images first." });
-        return;
-      }
+      if (previewImages.length === 0) { M.toast({ html: "No images to upload. Please drag and drop images first." }); return; }
       for (let i = 0; i < previewImages.length; i++) {
         const dataURL = previewImages[i];
         const rankNumber = i + 1;
@@ -737,19 +593,13 @@ Using Sales Report and Product List Files:
   
           console.log(`Uploading photo #${rankNumber} for listing ${listingId}...`);
           const uploadUrl = `/.netlify/functions/imageUpload`;
-          const response = await fetch(uploadUrl, {
-            method: "POST",
-            body: formData
-          });
+          const response = await fetch(uploadUrl, { method: "POST", body: formData });
           console.log("Photo Upload response status:", response.status);
           const responseText = await response.text();
           console.log("Photo upload response:", responseText);
   
-          if (!response.ok) {
-            M.toast({ html: `Error uploading photo #${rankNumber}: ` + response.status });
-          } else {
-            M.toast({ html: `Photo #${rankNumber} uploaded successfully!` });
-          }
+          if (!response.ok) { M.toast({ html: `Error uploading photo #${rankNumber}: ` + response.status }); }
+          else { M.toast({ html: `Photo #${rankNumber} uploaded successfully!` }); }
         } catch (e) {
           console.error(`Exception uploading photo #${rankNumber}:`, e);
           M.toast({ html: `Exception uploading photo #${rankNumber}: ${e.message}` });
@@ -758,56 +608,92 @@ Using Sales Report and Product List Files:
     }
     document.getElementById("uploadPhotoBtn").addEventListener("click", uploadPhoto);
     
-    // Analyze Photos: loop through each photo and simulate metadata analysis/upload
-    function analyzePhotos() {
-      for (let i = 0; i < previewImages.length; i++) {
-        analyzePhoto(i);
-      }
+    // Upload metadata for a photo (simulate API call)
+    function uploadMetadata(index, metadata) {
+      // In a real implementation, call your backend API to upload metadata.
+      // Here, we simulate an upload delay.
+      return new Promise((resolve, reject) => {
+        setTimeout(() => {
+          // Simulate a successful upload.
+          resolve(true);
+        }, 1000);
+      });
     }
     
-    function analyzePhoto(index) {
-      // Get the metadata status container by ID (created in updateStaticPreviewGrid)
+    // Analyze Photos: for each photo, send to OpenAI to generate metadata, then upload it.
+    async function analyzePhoto(index) {
       const statusElem = document.getElementById("metadataStatus" + index);
       if (!statusElem) return;
       statusElem.innerHTML = "";
-      
-      // Create a blue progress bar
+      // Create a progress bar element
       const progressBar = document.createElement("progress");
       progressBar.className = "metadata-progress";
       progressBar.max = 100;
       progressBar.value = 0;
       statusElem.appendChild(progressBar);
       
+      // Simulate progress: first phase (0-50) while generating metadata
       let progress = 0;
-      const interval = setInterval(() => {
-        progress += 5;
-        progressBar.value = progress;
-        if (progress >= 100) {
-          clearInterval(interval);
-          // Simulate metadata received and store it
-          photoMeta[index] = "Metadata for photo " + (index+1) + ": [Simulated metadata details here]";
-          // Replace the progress bar with a green checkmark
-          statusElem.innerHTML = '<span style="color:green; font-size:16px;"><i class="material-icons">check_circle</i></span>';
-        }
+      const progressInterval = setInterval(() => {
+         progress = Math.min(progress + 3, 50);
+         progressBar.value = progress;
       }, 100);
+      
+      try {
+        const rules = document.getElementById("analyzeRulesTextarea").value;
+        const payload = {
+          model: modelName,
+          messages: [
+            { role: "system", content: "Generate metadata for an Etsy photo using the following rules: " + rules },
+            { role: "user", content: "Photo index " + (index + 1) + ". Provide a brief metadata description for this photo." }
+          ],
+          temperature: 0.7,
+          max_tokens: 100
+        };
+        const aiResponse = await callOpenAI(payload);
+        clearInterval(progressInterval);
+        progress = 50;
+        progressBar.value = progress;
+        const metadata = (aiResponse.choices && aiResponse.choices.length > 0) ?
+          stripMarkdownJSON(aiResponse.choices[0].message.content) : "No metadata generated.";
+          
+        // Now simulate uploading metadata (phase 2)
+        const uploadInterval = setInterval(() => {
+           progress = Math.min(progress + 5, 100);
+           progressBar.value = progress;
+        }, 100);
+        await uploadMetadata(index, metadata);
+        clearInterval(uploadInterval);
+        progress = 100;
+        progressBar.value = progress;
+        // On successful upload, store metadata and show green checkmark
+        photoMeta[index] = metadata;
+        statusElem.innerHTML = '<span style="color:green; font-size:16px;"><i class="material-icons">check_circle</i></span>';
+      } catch (error) {
+        clearInterval(progressInterval);
+        statusElem.innerHTML = '<span style="color:red;">Error: ' + error.message + '</span>';
+      }
     }
     
-    // When "Analyze Photos" is clicked, run analysis for each photo
+    async function analyzePhotos() {
+      for (let i = 0; i < previewImages.length; i++) {
+        await analyzePhoto(i);
+      }
+    }
+    
     document.getElementById("analyzeMetadataBtn").addEventListener("click", analyzePhotos);
     
-    // Function to show metadata in a modal when clicking on a photo
+    // Show metadata in modal when clicking on a photo
     function showMetadata(index) {
       const metadata = photoMeta[index] || "No metadata available for this photo.";
       document.getElementById("metadataTextarea").value = metadata;
       const modalElem = document.getElementById("metadataModal");
       let instance = M.Modal.getInstance(modalElem);
-      if (!instance) {
-        instance = M.Modal.init(modalElem, {});
-      }
+      if (!instance) { instance = M.Modal.init(modalElem, {}); }
       instance.open();
     }
     
-    // Update static preview grid (now also adds a metadata status div and click listener)
+    // Update static preview grid: now adds a metadata status div and click listener on each photo.
     function updateStaticPreviewGrid() {
       for (let i = 0; i < 10; i++) {
         const cell = document.getElementById("previewCell" + i);
@@ -820,7 +706,7 @@ Using Sales Report and Product List Files:
           img.src = previewImages[i];
           previewBox.appendChild(img);
           
-          // Attach click event on the preview box to show metadata
+          // Clicking the photo shows its metadata.
           previewBox.addEventListener("click", () => { showMetadata(i); });
   
           const removeBtn = document.createElement("div");
@@ -842,7 +728,7 @@ Using Sales Report and Product List Files:
           previewBox.appendChild(numOverlay);
   
           cell.appendChild(previewBox);
-          // Append a metadata status div for progress or checkmark
+          // Append a metadata status div (for progress/checkmark)
           const metadataStatus = document.createElement("div");
           metadataStatus.className = "metadata-status";
           metadataStatus.id = "metadataStatus" + i;
@@ -865,20 +751,16 @@ Using Sales Report and Product List Files:
     // File drop handling for images (limit 10)
     const dropZone = document.getElementById("dropZone");
     dropZone.addEventListener("dragover", e => {
-      e.preventDefault();
-      e.stopPropagation();
+      e.preventDefault(); e.stopPropagation();
       dropZone.style.borderColor = "#000";
     });
     dropZone.addEventListener("dragleave", e => {
-      e.preventDefault();
-      e.stopPropagation();
+      e.preventDefault(); e.stopPropagation();
       dropZone.style.borderColor = "#ccc";
     });
     dropZone.addEventListener("drop", async e => {
-      e.preventDefault();
-      e.stopPropagation();
+      e.preventDefault(); e.stopPropagation();
       dropZone.style.borderColor = "#ccc";
-  
       const files = e.dataTransfer.files;
       const maxRemaining = 10 - previewImages.length;
       for (let i = 0; i < Math.min(files.length, maxRemaining); i++) {
@@ -908,18 +790,15 @@ Using Sales Report and Product List Files:
     // Restore drag and drop for "Etsy Sold Orders" CSV/DOC files
     const ordersDropZone = document.getElementById("ordersDropZone");
     ordersDropZone.addEventListener("dragover", e => { 
-      e.preventDefault(); 
-      e.stopPropagation(); 
+      e.preventDefault(); e.stopPropagation(); 
       ordersDropZone.style.borderColor = "#000"; 
     });
     ordersDropZone.addEventListener("dragleave", e => { 
-      e.preventDefault(); 
-      e.stopPropagation(); 
+      e.preventDefault(); e.stopPropagation(); 
       ordersDropZone.style.borderColor = "#ccc"; 
     });
     ordersDropZone.addEventListener("drop", async e => {
-      e.preventDefault(); 
-      e.stopPropagation(); 
+      e.preventDefault(); e.stopPropagation(); 
       ordersDropZone.style.borderColor = "#ccc";
       const files = e.dataTransfer.files;
       const progressBar = document.getElementById("csvProgressBar");
@@ -950,18 +829,15 @@ Using Sales Report and Product List Files:
     // Restore drag and drop for "Etsy Listings" CSV/DOC files
     const listingsDropZone = document.getElementById("listingsDropZone");
     listingsDropZone.addEventListener("dragover", e => { 
-      e.preventDefault(); 
-      e.stopPropagation(); 
+      e.preventDefault(); e.stopPropagation(); 
       listingsDropZone.style.borderColor = "#000"; 
     });
     listingsDropZone.addEventListener("dragleave", e => { 
-      e.preventDefault(); 
-      e.stopPropagation(); 
+      e.preventDefault(); e.stopPropagation(); 
       listingsDropZone.style.borderColor = "#ccc"; 
     });
     listingsDropZone.addEventListener("drop", async e => {
-      e.preventDefault(); 
-      e.stopPropagation(); 
+      e.preventDefault(); e.stopPropagation(); 
       listingsDropZone.style.borderColor = "#ccc";
       const files = e.dataTransfer.files;
       const progressBar = document.getElementById("csvProgressBar");
@@ -1047,10 +923,7 @@ Using Sales Report and Product List Files:
         var positions = JSON.parse(stored);
         for (var id in positions) {
           var el = document.getElementById(id);
-          if (el) {
-            el.style.top = positions[id].top;
-            el.style.left = positions[id].left;
-          }
+          if (el) { el.style.top = positions[id].top; el.style.left = positions[id].left; }
         }
       }
     }
@@ -1082,10 +955,7 @@ Using Sales Report and Product List Files:
     async function generateTitleOnly() {
       const etsyLink = ETSY_SHOP_URL;
       const keyPhrases = document.getElementById("searchKeyPhrases").value.trim();
-      if (!keyPhrases) {
-        M.toast({ html: "Please provide the search key phrases." });
-        return;
-      }
+      if (!keyPhrases) { M.toast({ html: "Please provide the search key phrases." }); return; }
       const promptText = `
 You are ChatGPT using ${modelName}.
 Based on the inputs below, generate an Etsy Listing TITLE only.
@@ -1110,9 +980,7 @@ Important: Return ONLY the title as plain text.`;
           let output = stripMarkdownJSON(data.choices[0].message.content);
           document.getElementById("listingTitle").value = output || "No title generated.";
           updateTitleCount(output);
-        } else {
-          document.getElementById("listingTitle").value = "No title generated.";
-        }
+        } else { document.getElementById("listingTitle").value = "No title generated."; }
       } catch (error) {
         document.getElementById("listingTitle").value = "Error: " + error;
       }
@@ -1121,10 +989,7 @@ Important: Return ONLY the title as plain text.`;
     async function generateDescriptionOnly() {
       const etsyLink = ETSY_SHOP_URL;
       const keyPhrases = document.getElementById("searchKeyPhrases").value.trim();
-      if (!keyPhrases) {
-        M.toast({ html: "Please provide the search key phrases." });
-        return;
-      }
+      if (!keyPhrases) { M.toast({ html: "Please provide the search key phrases." }); return; }
       const promptText = `
 You are ChatGPT using ${modelName}.
 Based on the inputs below, generate an Etsy Listing DESCRIPTION only.
@@ -1148,9 +1013,7 @@ Important: Return ONLY the description as plain text.`;
         if (data.choices && data.choices.length > 0) {
           let output = stripMarkdownJSON(data.choices[0].message.content);
           document.getElementById("listingDescription").value = output || "No description generated.";
-        } else {
-          document.getElementById("listingDescription").value = "No description generated.";
-        }
+        } else { document.getElementById("listingDescription").value = "No description generated."; }
       } catch (error) {
         document.getElementById("listingDescription").value = "Error: " + error;
       }
@@ -1158,10 +1021,7 @@ Important: Return ONLY the description as plain text.`;
     
     async function generateTagPhrases() {
       let question = document.getElementById("listingDescInput").value;
-      if (!question.trim()) {
-        M.toast({ html: "Please enter a question in the Listing Description." });
-        return;
-      }
+      if (!question.trim()) { M.toast({ html: "Please enter a question in the Listing Description." }); return; }
       let extraText = "Emphasis on SEO friendliness with a focus on generating effective long tail tag phrases for Etsy.";
       const keywordRules = stripMarkdownJSON(document.getElementById("keywordRulesTextarea").value);
       let prompt = `
@@ -1188,9 +1048,7 @@ Return your answer as plain text.`;
         };
         const data = await callOpenAI(payload);
         let answer = data.choices[0].message.content;
-        let phrases = answer.split(/[\n,]+/)
-          .map(s => s.replace(/^\d+\.\s*/, "").trim())
-          .join("\n");
+        let phrases = answer.split(/[\n,]+/).map(s => s.replace(/^\d+\.\s*/, "").trim()).join("\n");
         document.getElementById("searchKeyPhrases").value = phrases;
       } catch (err) {
         console.error("Error generating tag phrases:", err);
@@ -1225,9 +1083,7 @@ Return your answer as plain text.`;
             };
             const altData = await callOpenAI(altPayload);
             phrase = stripMarkdownJSON(altData.choices[0].message.content).trim();
-          } catch (error) {
-            break;
-          }
+          } catch (error) { break; }
           await delay(50);
         }
         while (processedPhrases.includes(phrase)) {
@@ -1243,9 +1099,7 @@ Return your answer as plain text.`;
             };
             const dupData = await callOpenAI(dupPayload);
             phrase = stripMarkdownJSON(dupData.choices[0].message.content).trim();
-          } catch (error) {
-            break;
-          }
+          } catch (error) { break; }
           await delay(50);
         }
         processedPhrases.push(phrase);
