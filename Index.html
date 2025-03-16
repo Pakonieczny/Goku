@@ -544,14 +544,15 @@ Using Sales Report and Product List Files:
   </div>
 
   <!-- Crop Modal -->
-  <!-- UPDATED CROP MODAL: Modal size increased to 650x650; preview box remains 400x400; Save/Cancel buttons centered at bottom -->
+  <!-- UPDATED CROP MODAL: Modal size increased to 650x650; preview box is 400x400 and centered -->
   <div id="photoCropModal" class="modal">
     <div class="crop-container" style="width:650px; height:650px; margin:0 auto; position:relative;">
       <h4 style="text-align:center; margin: 0 0 10px 0;">Crop Photo</h4>
-      <div class="img-container" style="width:400px; height:400px; margin:0 auto; overflow:hidden; position:relative;">
-        <img id="cropImage" src="" alt="Crop Image" style="position:absolute; cursor:move; transform-origin:center center;">
+      <!-- The preview box is fixed at 400x400 and centered -->
+      <div class="img-container" style="width:400px; height:400px; margin:0 auto; position:relative; overflow:hidden; background:#000;">
+        <img id="cropImage" src="" alt="Crop Image" style="position:absolute; cursor:move;">
       </div>
-      <div class="controls">
+      <div class="controls" style="text-align:center; margin-top:10px;">
         <label for="zoomSlider">Zoom:</label>
         <input type="range" id="zoomSlider" min="0.1" max="3" step="0.01" value="1">
       </div>
@@ -592,6 +593,14 @@ Using Sales Report and Product List Files:
     // ADDED GLOBAL VARIABLE FOR DRAGGING:
     let draggedIndex = null;
     let photoIds = [];
+
+    // Variables for Crop Modal
+    let initialScale, currentScale;
+    let currentLeft, currentTop;
+    let isPanning = false, startX, startY, panInitialLeft, panInitialTop;
+    let currentCropIndex = null;
+    const cropImage = document.getElementById("cropImage");
+    const zoomSlider = document.getElementById("zoomSlider");
 
     // -------------------------------------------
     // IMAGE RESIZE UTILITY (3000×3000)
@@ -879,23 +888,8 @@ Using Sales Report and Product List Files:
             ev.stopPropagation();
             currentCropIndex = i;
             cropImage.src = previewImages[i];
-            // Calculate initial zoom so that the image fully fits inside 400x400 preview box
-            cropImage.onload = function() {
-              cropImage.style.transformOrigin = "center center";
-              const container = document.querySelector("#photoCropModal .img-container");
-              const containerWidth = container.clientWidth;
-              const containerHeight = container.clientHeight;
-              const naturalWidth = cropImage.naturalWidth;
-              const naturalHeight = cropImage.naturalHeight;
-              const initialZoom = Math.min(containerWidth / naturalWidth, containerHeight / naturalHeight);
-              zoomSlider.value = initialZoom;
-              cropImage.style.transform = "scale(" + initialZoom + ")";
-              centerCropImage();
-            };
-            // In case image already loaded, trigger onload manually:
-            if (cropImage.complete) {
-              cropImage.onload();
-            }
+            // Initialize crop image in the modal
+            initializeCropImage();
             let cropModalInstance = M.Modal.getInstance(document.getElementById("photoCropModal"));
             if (!cropModalInstance) {
               cropModalInstance = M.Modal.init(document.getElementById("photoCropModal"));
@@ -1012,80 +1006,75 @@ Using Sales Report and Product List Files:
     }
 
     // ----------------------------------------------------------------------
-    // UPDATED CROP MODAL CODE START
+    // UPDATED CROP MODAL CODE (Bespoke Approach)
     // ----------------------------------------------------------------------
-    const cropImage = document.getElementById("cropImage");
-    const zoomSlider = document.getElementById("zoomSlider");
-    let currentCropIndex = null;
-    // CENTER FUNCTION: Updated to use .img-container
-    function centerCropImage() {
+    // Initialize crop image to fit entirely within the 400x400 preview box and center it
+    function initializeCropImage() {
       const container = document.querySelector("#photoCropModal .img-container");
-      const containerRect = container.getBoundingClientRect();
-      const zoom = parseFloat(zoomSlider.value);
-      // Use the natural dimensions scaled by the current zoom for centering
-      const displayedWidth = cropImage.naturalWidth * zoom;
-      const displayedHeight = cropImage.naturalHeight * zoom;
-      cropImage.style.left = ((containerRect.width - displayedWidth) / 2) + "px";
-      cropImage.style.top = ((containerRect.height - displayedHeight) / 2) + "px";
-    }
-    // When the crop modal opens, center the image and set transform-origin to center, and adjust initial zoom so the image fits fully in 400x400
-    cropImage.onload = function() {
-      cropImage.style.transformOrigin = "center center";
-      const container = document.querySelector("#photoCropModal .img-container");
-      const containerWidth = container.clientWidth;
-      const containerHeight = container.clientHeight;
+      const containerWidth = container.clientWidth; // should be 400
+      const containerHeight = container.clientHeight; // should be 400
       const naturalWidth = cropImage.naturalWidth;
       const naturalHeight = cropImage.naturalHeight;
-      const initialZoom = Math.min(containerWidth / naturalWidth, containerHeight / naturalHeight);
-      zoomSlider.value = initialZoom;
-      cropImage.style.transform = "scale(" + initialZoom + ")";
-      centerCropImage();
+      initialScale = Math.min(containerWidth / naturalWidth, containerHeight / naturalHeight);
+      currentScale = initialScale;
+      currentLeft = (containerWidth - naturalWidth * initialScale) / 2;
+      currentTop = (containerHeight - naturalHeight * initialScale) / 2;
+      updateCropImageTransform();
+    }
+    function updateCropImageTransform() {
+      cropImage.style.transform = "scale(" + currentScale + ")";
+      cropImage.style.left = currentLeft + "px";
+      cropImage.style.top = currentTop + "px";
+    }
+    // When crop image loads, initialize it
+    cropImage.onload = function() {
+      cropImage.style.position = "absolute";
+      cropImage.style.transformOrigin = "center center";
+      initializeCropImage();
     };
+    // Zoom slider: recalc translation to keep center constant
     zoomSlider.addEventListener("input", function() {
-      const zoom = this.value;
-      cropImage.style.transform = "scale(" + zoom + ")";
-      centerCropImage();
+      const newScale = parseFloat(this.value);
+      // Compute center of current image
+      const container = document.querySelector("#photoCropModal .img-container");
+      const centerX = currentLeft + cropImage.naturalWidth * currentScale / 2;
+      const centerY = currentTop + cropImage.naturalHeight * currentScale / 2;
+      currentScale = newScale;
+      currentLeft = centerX - (cropImage.naturalWidth * currentScale / 2);
+      currentTop = centerY - (cropImage.naturalHeight * currentScale / 2);
+      updateCropImageTransform();
     });
-    // ADD PAN FUNCTIONALITY TO CROP IMAGE
-    let isPanning = false;
-    let startX, startY, initialLeft, initialTop;
+    // Pan functionality for crop image
     cropImage.addEventListener("mousedown", function(e) {
       e.preventDefault();
       isPanning = true;
       startX = e.clientX;
       startY = e.clientY;
-      const style = window.getComputedStyle(cropImage);
-      initialLeft = parseFloat(style.left) || 0;
-      initialTop = parseFloat(style.top) || 0;
+      panInitialLeft = currentLeft;
+      panInitialTop = currentTop;
     });
     document.addEventListener("mousemove", function(e) {
       if (!isPanning) return;
-      let dx = e.clientX - startX;
-      let dy = e.clientY - startY;
-      cropImage.style.left = (initialLeft + dx) + "px";
-      cropImage.style.top = (initialTop + dy) + "px";
+      const dx = e.clientX - startX;
+      const dy = e.clientY - startY;
+      currentLeft = panInitialLeft + dx;
+      currentTop = panInitialTop + dy;
+      updateCropImageTransform();
     });
     document.addEventListener("mouseup", function(e) {
       isPanning = false;
     });
+    // Save cropped image: crop visible portion from the preview box and resize to 3000x3000
     document.getElementById("saveCropBtn").addEventListener("click", async function() {
       if (currentCropIndex === null) return;
       const container = document.querySelector("#photoCropModal .img-container");
-      const containerRect = container.getBoundingClientRect();
-      const style = window.getComputedStyle(cropImage);
-      const left = parseFloat(style.left) || 0;
-      const top = parseFloat(style.top) || 0;
-      const zoom = parseFloat(zoomSlider.value);
-      const naturalWidth = cropImage.naturalWidth;
-      const naturalHeight = cropImage.naturalHeight;
-      const displayedWidth = naturalWidth * zoom;
-      const displayedHeight = naturalHeight * zoom;
-      const ratioX = naturalWidth / displayedWidth;
-      const ratioY = naturalHeight / displayedHeight;
-      const cropX = -left * ratioX;
-      const cropY = -top * ratioY;
-      const cropW = containerRect.width * ratioX;
-      const cropH = containerRect.height * ratioY;
+      const containerWidth = container.clientWidth;
+      const containerHeight = container.clientHeight;
+      // Calculate crop region relative to original image
+      const cropX = -currentLeft / currentScale;
+      const cropY = -currentTop / currentScale;
+      const cropW = containerWidth / currentScale;
+      const cropH = containerHeight / currentScale;
       const canvas = document.createElement("canvas");
       canvas.width = cropW;
       canvas.height = cropH;
