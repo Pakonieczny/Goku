@@ -207,6 +207,7 @@
       text-align: center;
     }
     /* ADDED NEW STYLE FOR ZOOM SLIDER (ensure center zoom) is set via transform-origin in JS */
+
     /* Metadata status styles */
     .metadata-status {
       margin-top: 5px; text-align: center; font-size: 14px;
@@ -577,14 +578,14 @@ Using Sales Report and Product List Files:
   <div id="photoCropModal" class="modal">
     <div class="crop-container"> <!-- ADDED: crop-container sized to 500x500 via CSS rule -->
       <h4 style="text-align:center; margin: 0 0 10px 0;">Crop Photo</h4>
-      <div class="img-container" style="overflow:hidden; position:relative; width:100%; height:100%; display:flex; align-items:center; justify-content:center;"> <!-- UPDATED: added flex centering -->
-        <img id="cropImage" src="" alt="Crop Image" style="position:absolute; cursor:move; transform-origin:center center;"> <!-- UPDATED: added transform-origin -->
+      <div class="img-container" style="overflow:hidden; position:relative; width:100%; height:100%; display:flex; align-items:center; justify-content:center;">
+        <img id="cropImage" src="" alt="Crop Image" style="position:absolute; cursor:move; transform-origin:center center;">
       </div>
       <div class="controls">
         <label for="zoomSlider">Zoom:</label>
         <input type="range" id="zoomSlider" min="0.1" max="3" step="0.01" value="1">
       </div>
-      <div style="text-align:center; margin-top:10px;"> <!-- UPDATED: Removed margin-left from Cancel button by not applying extra margins -->
+      <div style="text-align:center; margin-top:10px;">
         <button id="saveCropBtn" class="btn waves-effect waves-light">Save</button>
         <button id="cancelCropBtn"
                 class="btn waves-effect waves-light"
@@ -910,7 +911,8 @@ Using Sales Report and Product List Files:
             document.getElementById("cropImage").style.left = "0px";
             document.getElementById("cropImage").style.top = "0px";
             // When crop image loads, center it in the modal
-            document.getElementById("cropImage").onload = function() { /* ADDED/UPDATED */
+            document.getElementById("cropImage").onload = function() {
+              /* ADDED: On load, compute center fit scale */
               const container = document.querySelector("#photoCropModal .crop-container");
               const containerWidth = container.clientWidth;
               const containerHeight = container.clientHeight;
@@ -1038,29 +1040,30 @@ Using Sales Report and Product List Files:
     // CROP MODAL PAN & ZOOM IMPLEMENTATION (CUSTOM)
     // ----------------------------------------------------------------------
     const cropImage = document.getElementById("cropImage");
-    cropImage.addEventListener("mousedown", function(e) { /* ADDED */
+    const zoomSlider = document.getElementById("zoomSlider"); /* ADDED reference to zoomSlider */
+    cropImage.addEventListener("mousedown", function(e) {
       isPanning = true;
       cropStartX = e.clientX;
       cropStartY = e.clientY;
       imgOffsetX = parseInt(cropImage.style.left || "0");
       imgOffsetY = parseInt(cropImage.style.top || "0");
     });
-    document.addEventListener("mousemove", function(e) { /* ADDED */
+    document.addEventListener("mousemove", function(e) {
       if (!isPanning) return;
       const dx = e.clientX - cropStartX;
       const dy = e.clientY - cropStartY;
       cropImage.style.left = (imgOffsetX + dx) + "px";
       cropImage.style.top = (imgOffsetY + dy) + "px";
     });
-    document.addEventListener("mouseup", function(e) { /* ADDED */
+    document.addEventListener("mouseup", function(e) {
       isPanning = false;
     });
-    zoomSlider.addEventListener("input", function(e) { /* ADDED/UPDATED */
-      const zoom = e.target.value;
+    zoomSlider.addEventListener("input", function() {
+      const zoom = this.value;
       cropImage.style.transformOrigin = "center center";
       cropImage.style.transform = "scale(" + zoom + ")";
     });
-    document.getElementById("saveCropBtn").addEventListener("click", async function() { /* ADDED */
+    document.getElementById("saveCropBtn").addEventListener("click", async function() {
       if (currentCropIndex === null) return;
       const container = document.querySelector("#photoCropModal .crop-container");
       const containerRect = container.getBoundingClientRect();
@@ -1069,6 +1072,7 @@ Using Sales Report and Product List Files:
       const left = parseInt(style.left) || 0;
       const top = parseInt(style.top) || 0;
       const zoom = parseFloat(zoomSlider.value);
+      /* ADDED: use containerRect.width/height to define the “view” area */
       const canvas = document.createElement("canvas");
       canvas.width = containerRect.width;
       canvas.height = containerRect.height;
@@ -1095,7 +1099,7 @@ Using Sales Report and Product List Files:
       }
       currentCropIndex = null;
     });
-    document.getElementById("cancelCropBtn").addEventListener("click", function() { /* ADDED */
+    document.getElementById("cancelCropBtn").addEventListener("click", function() {
       let cropModalInstance = M.Modal.getInstance(document.getElementById("photoCropModal"));
       if (cropModalInstance) {
         cropModalInstance.close();
@@ -1149,11 +1153,11 @@ Using Sales Report and Product List Files:
       }
       updateStaticPreviewGrid();
       updateUploadedFilesList();
+
       // ADDED LINES FOR SORTABLE INIT:
       new Sortable(document.getElementById("previewGridStatic"), {
         animation: 150,
         onEnd: function(evt) {
-          // When sorting ends, update the previewImages, photoNames, photoMeta, and photoIds arrays based on new order
           const oldIndex = evt.oldIndex;
           const newIndex = evt.newIndex;
           if (oldIndex === newIndex) return;
@@ -1236,6 +1240,7 @@ Using Sales Report and Product List Files:
         M.toast({ html: "Exception: " + e.message });
       }
     });
+
     // ----------------------------------------------------------------------
     // UPLOAD PHOTOS (includes alt_text from photoMeta)
     // ----------------------------------------------------------------------
@@ -1291,12 +1296,14 @@ Using Sales Report and Product List Files:
         }
       }
     });
+
     // ----------------------------------------------------------------------
     // RULES & TITLE / DESCRIPTION GENERATION
     // ----------------------------------------------------------------------
     function stripMarkdownJSON(text) {
       return text.replace(/^```json\s*/, "").replace(/\s*```$/, "").trim();
     }
+
     async function generateTitleOnly() {
       const etsyLink = ETSY_SHOP_URL;
       const keyPhrases = document.getElementById("searchKeyPhrases").value.trim();
@@ -1336,6 +1343,7 @@ Important: Return ONLY the title as plain text.`;
         document.getElementById("listingTitle").value = "Error: " + error;
       }
     }
+
     async function generateDescriptionOnly() {
       const etsyLink = ETSY_SHOP_URL;
       const keyPhrases = document.getElementById("searchKeyPhrases").value.trim();
@@ -1374,6 +1382,7 @@ Important: Return ONLY the description as plain text.`;
         document.getElementById("listingDescription").value = "Error: " + error;
       }
     }
+
     async function callOpenAI(payload) {
       const response = await fetch("/.netlify/functions/openaiProxy", {
         method: "POST",
@@ -1387,14 +1396,17 @@ Important: Return ONLY the description as plain text.`;
       }
       return await response.json();
     }
+
     document.getElementById("generateBtn").addEventListener("click", async () => {
       await Promise.all([generateTitleOnly(), generateDescriptionOnly()]);
     });
     document.getElementById("regenTitleBtn").addEventListener("click", generateTitleOnly);
     document.getElementById("regenDescriptionBtn").addEventListener("click", generateDescriptionOnly);
+
     function updateTitleCount(text) {
       document.getElementById("titleCount").textContent = "Count: " + text.length;
     }
+
     // Copy to clipboard
     document.getElementById("copyTitleBtn").addEventListener("click", () => {
       const text = document.getElementById("listingTitle").value;
@@ -1413,6 +1425,7 @@ Important: Return ONLY the description as plain text.`;
       navigator.clipboard.writeText(lines.join(", "))
         .catch(err => console.error("Error copying key phrases:", err));
     });
+
     // Key phrase generation from "listingDescInput" if needed
     document.getElementById("listingDescInput").addEventListener("keydown", async (e) => {
       if (e.key === "Enter" && !e.shiftKey) {
@@ -1420,6 +1433,7 @@ Important: Return ONLY the description as plain text.`;
         await generateTagPhrases();
       }
     });
+
     async function generateTagPhrases() {
       const question = document.getElementById("listingDescInput").value.trim();
       if (!question) {
@@ -1459,6 +1473,7 @@ Generate exactly 13 tag phrases (each ≤ 20 characters). Return as plain text.
         M.toast({ html: "Error generating tag phrases: " + err.message });
       }
     }
+
     // ----------------------------------------------------------------------
     // BUTTON CONFIG
     // ----------------------------------------------------------------------
@@ -1514,6 +1529,7 @@ Generate exactly 13 tag phrases (each ≤ 20 characters). Return as plain text.
       }
       modalInstance.open();
     });
+
     document.getElementById("saveButtonPositionsBtn").addEventListener("click", () => {
       const selectors = [
         "button:not(#configureButtonsBtn)",
@@ -1538,6 +1554,7 @@ Generate exactly 13 tag phrases (each ≤ 20 characters). Return as plain text.
       localStorage.setItem("buttonPositions", JSON.stringify(positions));
       M.toast({ html: "Button positions saved." });
     });
+
     function loadButtonPositions() {
       const stored = localStorage.getItem("buttonPositions");
       if (stored) {
@@ -1551,6 +1568,7 @@ Generate exactly 13 tag phrases (each ≤ 20 characters). Return as plain text.
         }
       }
     }
+
     window.addEventListener("load", () => {
       const container13 = document.getElementById("container13");
       container13.style.height = (container13.offsetHeight * 2.5) + "px";
