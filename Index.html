@@ -835,7 +835,35 @@ Using Sales Report and Product List Files:
         const cell = document.getElementById("previewCell" + i);
         cell.innerHTML = "";
 
-        // REMOVED native dragover/drop event listeners so SortableJS can handle everything
+        // Allow dropping onto each cell for reorder
+        cell.addEventListener("dragover", e => {
+          e.preventDefault(); // must prevent default to allow drop
+        });
+        cell.addEventListener("drop", e => {
+          e.preventDefault();
+          const sourceIndex = parseInt(e.dataTransfer.getData("text/plain"), 10);
+          const targetIndex = i;
+          // Reorder arrays if valid
+          if (
+            !isNaN(sourceIndex) &&
+            sourceIndex !== targetIndex &&
+            sourceIndex >= 0 &&
+            sourceIndex < previewImages.length
+          ) {
+            const [movedImage] = previewImages.splice(sourceIndex, 1);
+            previewImages.splice(targetIndex, 0, movedImage);
+
+            const [movedName] = photoNames.splice(sourceIndex, 1);
+            photoNames.splice(targetIndex, 0, movedName);
+
+            const [movedMeta] = photoMeta.splice(sourceIndex, 1);
+            photoMeta.splice(targetIndex, 0, movedMeta);
+
+            // Refresh
+            updateStaticPreviewGrid();
+            updatePrimaryPreview();
+          }
+        });
 
         if (i < previewImages.length) {
           const previewBox = document.createElement("div");
@@ -1009,15 +1037,13 @@ Using Sales Report and Product List Files:
       updateStaticPreviewGrid();
       updateUploadedFilesList();
 
-      // PREVIOUS CODE: new Sortable(...) minus onMove
+      // ADDED LINES FOR SORTABLE INIT:
       new Sortable(document.getElementById("previewGridStatic"), {
         animation: 150,
-        draggable: ".preview-box",
-        onEnd: function (evt) {
+        onEnd: function(evt) {
           const oldIndex = evt.oldIndex;
           const newIndex = evt.newIndex;
           if (oldIndex === newIndex) return;
-
           const [movedImage] = previewImages.splice(oldIndex, 1);
           previewImages.splice(newIndex, 0, movedImage);
 
