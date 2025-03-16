@@ -1028,18 +1028,19 @@ Using Sales Report and Product List Files:
     // When crop image loads, initialize it
     cropImage.onload = function() {
       cropImage.style.position = "absolute";
-      cropImage.style.transformOrigin = "center center";
+      // Remove transformOrigin override so calculations are based on top-left origin
+      // cropImage.style.transformOrigin = "center center";
       initializeCropImage();
     };
-    // Zoom slider: recalc translation to keep center constant
+    // Zoom slider: recalc translation to always center the image in the preview box
     zoomSlider.addEventListener("input", function() {
       const newScale = parseFloat(this.value);
       const container = document.querySelector("#photoCropModal .img-container");
-      const centerX = currentLeft + cropImage.naturalWidth * currentScale / 2;
-      const centerY = currentTop + cropImage.naturalHeight * currentScale / 2;
+      const containerWidth = container.clientWidth;
+      const containerHeight = container.clientHeight;
       currentScale = newScale;
-      currentLeft = centerX - (cropImage.naturalWidth * currentScale / 2);
-      currentTop = centerY - (cropImage.naturalHeight * currentScale / 2);
+      currentLeft = (containerWidth - cropImage.naturalWidth * currentScale) / 2;
+      currentTop = (containerHeight - cropImage.naturalHeight * currentScale) / 2;
       updateCropImageTransform();
     });
     // Pan functionality for crop image
