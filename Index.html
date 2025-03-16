@@ -206,8 +206,6 @@
     #photoCropModal .modal-footer {
       text-align: center;
     }
-    /* ADDED NEW STYLE FOR ZOOM SLIDER (ensure center zoom) is set via transform-origin in JS */
-
     /* Metadata status styles */
     .metadata-status {
       margin-top: 5px; text-align: center; font-size: 14px;
@@ -905,25 +903,24 @@ Using Sales Report and Product List Files:
             ev.stopPropagation();
             currentCropIndex = i;
             document.getElementById("cropImage").src = previewImages[i];
-            // Reset panning variables and reset image position
-            imgOffsetX = 0;
-            imgOffsetY = 0;
-            document.getElementById("cropImage").style.left = "0px";
-            document.getElementById("cropImage").style.top = "0px";
-            // When crop image loads, center it in the modal
-            document.getElementById("cropImage").onload = function() {
-              /* ADDED: On load, compute center fit scale */
-              const container = document.querySelector("#photoCropModal .crop-container");
-              const containerWidth = container.clientWidth;
-              const containerHeight = container.clientHeight;
-              const naturalWidth = cropImage.naturalWidth;
-              const naturalHeight = cropImage.naturalHeight;
-              const fitScale = Math.min(containerWidth / naturalWidth, containerHeight / naturalHeight);
-              cropImage.style.transform = "scale(" + fitScale + ")";
-              const newWidth = naturalWidth * fitScale;
-              const newHeight = naturalHeight * fitScale;
-              cropImage.style.left = ((containerWidth - newWidth) / 2) + "px";
-              cropImage.style.top = ((containerHeight - newHeight) / 2) + "px";
+            // Reset panning and zoom variables
+            isPanning = false;
+            zoomSlider.value = 1;
+            cropImage.style.transform = "scale(1)";
+            // Center the image in the crop modal
+            const container = document.querySelector("#photoCropModal .crop-container");
+            const containerWidth = container.clientWidth;
+            const containerHeight = container.clientHeight;
+            cropImage.onload = function() {
+              const naturalW = cropImage.naturalWidth;
+              const naturalH = cropImage.naturalHeight;
+              const initialScale = Math.min(containerWidth / naturalW, containerHeight / naturalH);
+              zoomSlider.value = initialScale;
+              cropImage.style.transform = "scale(" + initialScale + ")";
+              const displayW = naturalW * initialScale;
+              const displayH = naturalH * initialScale;
+              cropImage.style.left = ((containerWidth - displayW) / 2) + "px";
+              cropImage.style.top = ((containerHeight - displayH) / 2) + "px";
             };
             let cropModal = M.Modal.init(document.getElementById("photoCropModal"), {dismissible: false});
             cropModal.open();
@@ -1037,10 +1034,10 @@ Using Sales Report and Product List Files:
     }
 
     // ----------------------------------------------------------------------
-    // CROP MODAL PAN & ZOOM IMPLEMENTATION (CUSTOM)
+    // UPDATED CROP MODAL CODE START
     // ----------------------------------------------------------------------
     const cropImage = document.getElementById("cropImage");
-    const zoomSlider = document.getElementById("zoomSlider"); /* ADDED reference to zoomSlider */
+    const zoomSlider = document.getElementById("zoomSlider");
     cropImage.addEventListener("mousedown", function(e) {
       isPanning = true;
       cropStartX = e.clientX;
@@ -1068,26 +1065,27 @@ Using Sales Report and Product List Files:
       const container = document.querySelector("#photoCropModal .crop-container");
       const containerRect = container.getBoundingClientRect();
       const img = cropImage;
-      const style = window.getComputedStyle(img);
-      const left = parseInt(style.left) || 0;
-      const top = parseInt(style.top) || 0;
+      const computed = window.getComputedStyle(img);
+      const left = parseFloat(computed.left) || 0;
+      const top = parseFloat(computed.top) || 0;
       const zoom = parseFloat(zoomSlider.value);
-      /* ADDED: use containerRect.width/height to define the “view” area */
-      const canvas = document.createElement("canvas");
-      canvas.width = containerRect.width;
-      canvas.height = containerRect.height;
-      const ctx = canvas.getContext("2d");
+      // Calculate the crop area relative to the natural size of the image
       const tempImg = new Image();
       tempImg.src = img.src;
       await new Promise((resolve, reject) => {
         tempImg.onload = resolve;
         tempImg.onerror = reject;
       });
-      const drawX = -left / zoom;
-      const drawY = -top / zoom;
-      const drawWidth = containerRect.width / zoom;
-      const drawHeight = containerRect.height / zoom;
-      ctx.drawImage(tempImg, drawX, drawY, drawWidth, drawHeight, 0, 0, containerRect.width, containerRect.height);
+      const scaleFactor = tempImg.naturalWidth * zoom / tempImg.width; // if width of element scaled
+      const cropX = -left / zoom;
+      const cropY = -top / zoom;
+      const cropW = containerRect.width / zoom;
+      const cropH = containerRect.height / zoom;
+      const canvas = document.createElement("canvas");
+      canvas.width = cropW;
+      canvas.height = cropH;
+      const ctx = canvas.getContext("2d");
+      ctx.drawImage(tempImg, cropX, cropY, cropW, cropH, 0, 0, cropW, cropH);
       const croppedDataURL = canvas.toDataURL("image/jpeg", 0.85);
       const finalDataURL = await resizeImage(croppedDataURL, 3000, 3000);
       previewImages[currentCropIndex] = finalDataURL;
@@ -1106,6 +1104,9 @@ Using Sales Report and Product List Files:
       }
       currentCropIndex = null;
     });
+    // ----------------------------------------------------------------------
+    // UPDATED CROP MODAL CODE END
+    // ----------------------------------------------------------------------
 
     // ----------------------------------------------------------------------
     // OAUTH CONNECT (Etsy)
@@ -1240,7 +1241,6 @@ Using Sales Report and Product List Files:
         M.toast({ html: "Exception: " + e.message });
       }
     });
-
     // ----------------------------------------------------------------------
     // UPLOAD PHOTOS (includes alt_text from photoMeta)
     // ----------------------------------------------------------------------
@@ -1296,14 +1296,12 @@ Using Sales Report and Product List Files:
         }
       }
     });
-
     // ----------------------------------------------------------------------
     // RULES & TITLE / DESCRIPTION GENERATION
     // ----------------------------------------------------------------------
     function stripMarkdownJSON(text) {
       return text.replace(/^```json\s*/, "").replace(/\s*```$/, "").trim();
     }
-
     async function generateTitleOnly() {
       const etsyLink = ETSY_SHOP_URL;
       const keyPhrases = document.getElementById("searchKeyPhrases").value.trim();
@@ -1343,7 +1341,6 @@ Important: Return ONLY the title as plain text.`;
         document.getElementById("listingTitle").value = "Error: " + error;
       }
     }
-
     async function generateDescriptionOnly() {
       const etsyLink = ETSY_SHOP_URL;
       const keyPhrases = document.getElementById("searchKeyPhrases").value.trim();
@@ -1382,7 +1379,6 @@ Important: Return ONLY the description as plain text.`;
         document.getElementById("listingDescription").value = "Error: " + error;
       }
     }
-
     async function callOpenAI(payload) {
       const response = await fetch("/.netlify/functions/openaiProxy", {
         method: "POST",
@@ -1396,17 +1392,14 @@ Important: Return ONLY the description as plain text.`;
       }
       return await response.json();
     }
-
     document.getElementById("generateBtn").addEventListener("click", async () => {
       await Promise.all([generateTitleOnly(), generateDescriptionOnly()]);
     });
     document.getElementById("regenTitleBtn").addEventListener("click", generateTitleOnly);
     document.getElementById("regenDescriptionBtn").addEventListener("click", generateDescriptionOnly);
-
     function updateTitleCount(text) {
       document.getElementById("titleCount").textContent = "Count: " + text.length;
     }
-
     // Copy to clipboard
     document.getElementById("copyTitleBtn").addEventListener("click", () => {
       const text = document.getElementById("listingTitle").value;
@@ -1425,7 +1418,6 @@ Important: Return ONLY the description as plain text.`;
       navigator.clipboard.writeText(lines.join(", "))
         .catch(err => console.error("Error copying key phrases:", err));
     });
-
     // Key phrase generation from "listingDescInput" if needed
     document.getElementById("listingDescInput").addEventListener("keydown", async (e) => {
       if (e.key === "Enter" && !e.shiftKey) {
@@ -1433,7 +1425,6 @@ Important: Return ONLY the description as plain text.`;
         await generateTagPhrases();
       }
     });
-
     async function generateTagPhrases() {
       const question = document.getElementById("listingDescInput").value.trim();
       if (!question) {
@@ -1473,7 +1464,6 @@ Generate exactly 13 tag phrases (each ≤ 20 characters). Return as plain text.
         M.toast({ html: "Error generating tag phrases: " + err.message });
       }
     }
-
     // ----------------------------------------------------------------------
     // BUTTON CONFIG
     // ----------------------------------------------------------------------
@@ -1529,7 +1519,6 @@ Generate exactly 13 tag phrases (each ≤ 20 characters). Return as plain text.
       }
       modalInstance.open();
     });
-
     document.getElementById("saveButtonPositionsBtn").addEventListener("click", () => {
       const selectors = [
         "button:not(#configureButtonsBtn)",
@@ -1554,7 +1543,6 @@ Generate exactly 13 tag phrases (each ≤ 20 characters). Return as plain text.
       localStorage.setItem("buttonPositions", JSON.stringify(positions));
       M.toast({ html: "Button positions saved." });
     });
-
     function loadButtonPositions() {
       const stored = localStorage.getItem("buttonPositions");
       if (stored) {
@@ -1568,7 +1556,6 @@ Generate exactly 13 tag phrases (each ≤ 20 characters). Return as plain text.
         }
       }
     }
-
     window.addEventListener("load", () => {
       const container13 = document.getElementById("container13");
       container13.style.height = (container13.offsetHeight * 2.5) + "px";
