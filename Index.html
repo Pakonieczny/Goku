@@ -544,9 +544,9 @@ Using Sales Report and Product List Files:
   </div>
 
   <!-- Crop Modal -->
-  <!-- UPDATED CROP MODAL: Modal size 500x500 with a 400x400 preview box centered inside -->
+  <!-- UPDATED CROP MODAL: Modal size increased to 650x650; preview box remains 400x400; Save/Cancel buttons centered at bottom -->
   <div id="photoCropModal" class="modal">
-    <div class="crop-container" style="width:500px; height:500px; margin:0 auto;">
+    <div class="crop-container" style="width:650px; height:650px; margin:0 auto; position:relative;">
       <h4 style="text-align:center; margin: 0 0 10px 0;">Crop Photo</h4>
       <div class="img-container" style="width:400px; height:400px; margin:0 auto; overflow:hidden; position:relative;">
         <img id="cropImage" src="" alt="Crop Image" style="position:absolute; cursor:move; transform-origin:center center;">
@@ -555,7 +555,7 @@ Using Sales Report and Product List Files:
         <label for="zoomSlider">Zoom:</label>
         <input type="range" id="zoomSlider" min="0.1" max="3" step="0.01" value="1">
       </div>
-      <div style="text-align:center; margin-top:10px;">
+      <div style="position:absolute; bottom:20px; left:50%; transform:translateX(-50%);">
         <button id="saveCropBtn" class="btn waves-effect waves-light">Save</button>
         <button id="cancelCropBtn"
                 class="btn waves-effect waves-light"
@@ -879,9 +879,23 @@ Using Sales Report and Product List Files:
             ev.stopPropagation();
             currentCropIndex = i;
             cropImage.src = previewImages[i];
-            zoomSlider.value = 1;
-            cropImage.style.transform = "scale(1)";
-            centerCropImage();
+            // Calculate initial zoom so that the image fully fits inside 400x400 preview box
+            cropImage.onload = function() {
+              cropImage.style.transformOrigin = "center center";
+              const container = document.querySelector("#photoCropModal .img-container");
+              const containerWidth = container.clientWidth;
+              const containerHeight = container.clientHeight;
+              const naturalWidth = cropImage.naturalWidth;
+              const naturalHeight = cropImage.naturalHeight;
+              const initialZoom = Math.min(containerWidth / naturalWidth, containerHeight / naturalHeight);
+              zoomSlider.value = initialZoom;
+              cropImage.style.transform = "scale(" + initialZoom + ")";
+              centerCropImage();
+            };
+            // In case image already loaded, trigger onload manually:
+            if (cropImage.complete) {
+              cropImage.onload();
+            }
             let cropModalInstance = M.Modal.getInstance(document.getElementById("photoCropModal"));
             if (!cropModalInstance) {
               cropModalInstance = M.Modal.init(document.getElementById("photoCropModal"));
@@ -1008,14 +1022,23 @@ Using Sales Report and Product List Files:
       const container = document.querySelector("#photoCropModal .img-container");
       const containerRect = container.getBoundingClientRect();
       const zoom = parseFloat(zoomSlider.value);
-      const displayedWidth = cropImage.offsetWidth * zoom;
-      const displayedHeight = cropImage.offsetHeight * zoom;
+      // Use the natural dimensions scaled by the current zoom for centering
+      const displayedWidth = cropImage.naturalWidth * zoom;
+      const displayedHeight = cropImage.naturalHeight * zoom;
       cropImage.style.left = ((containerRect.width - displayedWidth) / 2) + "px";
       cropImage.style.top = ((containerRect.height - displayedHeight) / 2) + "px";
     }
-    // When the crop modal opens, center the image and set transform-origin to center
+    // When the crop modal opens, center the image and set transform-origin to center, and adjust initial zoom so the image fits fully in 400x400
     cropImage.onload = function() {
       cropImage.style.transformOrigin = "center center";
+      const container = document.querySelector("#photoCropModal .img-container");
+      const containerWidth = container.clientWidth;
+      const containerHeight = container.clientHeight;
+      const naturalWidth = cropImage.naturalWidth;
+      const naturalHeight = cropImage.naturalHeight;
+      const initialZoom = Math.min(containerWidth / naturalWidth, containerHeight / naturalHeight);
+      zoomSlider.value = initialZoom;
+      cropImage.style.transform = "scale(" + initialZoom + ")";
       centerCropImage();
     };
     zoomSlider.addEventListener("input", function() {
@@ -1055,8 +1078,8 @@ Using Sales Report and Product List Files:
       const zoom = parseFloat(zoomSlider.value);
       const naturalWidth = cropImage.naturalWidth;
       const naturalHeight = cropImage.naturalHeight;
-      const displayedWidth = cropImage.offsetWidth * zoom;
-      const displayedHeight = cropImage.offsetHeight * zoom;
+      const displayedWidth = naturalWidth * zoom;
+      const displayedHeight = naturalHeight * zoom;
       const ratioX = naturalWidth / displayedWidth;
       const ratioY = naturalHeight / displayedHeight;
       const cropX = -left * ratioX;
