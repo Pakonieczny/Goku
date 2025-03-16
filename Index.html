@@ -5,7 +5,6 @@
   <title>Etsy Listing Generator & Shop Listings</title>
   <!-- Favicon -->
   <link rel="icon" type="image/png" href="assets/favicon.png">
-
   <!-- Material Icons + Materialize CSS -->
   <link
     href="https://fonts.googleapis.com/icon?family=Material+Icons"
@@ -16,15 +15,14 @@
     href="https://cdnjs.cloudflare.com/ajax/libs/materialize/1.0.0/css/materialize.min.css"
   >
 
-  <!-- (Optional) piexifjs -->
+  <!-- (Optional) piexifjs for EXIF manipulation -->
   <script src="https://cdn.jsdelivr.net/npm/piexifjs@1.0.4/piexif.min.js"></script>
 
-  <!-- STEP 1: Import SortableJS from a CDN -->
+  <!-- STEP 1: Import SortableJS from a CDN to handle DnD -->
   <script src="https://cdn.jsdelivr.net/npm/sortablejs@1.14.0/Sortable.min.js"></script>
 
   <style>
-    /* Base layout and styling from your code, unchanged except for removing 
-       the old drag events from .preview-cell */
+    /* Basic layout */
     html, body {
       margin: 0; padding: 0; width: 100vw;
       font-family: Arial, sans-serif;
@@ -40,7 +38,7 @@
       width: 100%; box-sizing: border-box;
     }
 
-    /* Listing & file drop zones */
+    /* #descriptionAndFileUploadContainer, etc. remain the same as your base code. */
     #descriptionAndFileUploadContainer {
       display: flex; align-items: center;
     }
@@ -91,7 +89,7 @@
       font-style: italic; font-size: 0.9em; margin-top: 5px;
     }
 
-    /* Drag/Drop boxes */
+    /* DRAG & DROP Boxes for CSV / DOC */
     #dropZone, #ordersDropZone, #listingsDropZone {
       width: 138px; height: 138px; border: 2px dashed #ccc;
       border-radius: 3px; display: inline-block; vertical-align: middle;
@@ -116,11 +114,12 @@
       box-sizing: border-box; border: 1px solid grey; margin-left: 85px;
     }
 
-    /* Primary Preview */
+    /* #primaryPreview => remove negative offsets. */
     #primaryPreview {
       width: 138px; height: 138px; border: 1px solid #ccc;
       border-radius: 3px; display: inline-block; vertical-align: middle;
-      position: relative; top: -250px; left: 285px;
+      /* remove top:-250px, left:285px => set to 0 instead */
+      position: relative; top: 0; left: 0;
       text-align: center; overflow: hidden; cursor: pointer;
     }
     #primaryPreview img {
@@ -128,14 +127,12 @@
       border-radius: 3px;
     }
 
-    /* Static 10-Photo Preview Grid */
+    /* 10-Photo Preview Grid */
     #previewGridContainer {
       position: relative; margin: 20px auto; width: auto;
       max-width: 600px; text-align: center;
     }
     #previewGridStatic {
-      /* We'll let SortableJS handle these cells. 
-         Just keep the same grid layout. */
       display: grid; grid-template-columns: repeat(5, 100px);
       grid-column-gap: 23px; grid-row-gap: 18px; margin: 0 auto;
     }
@@ -166,18 +163,30 @@
       margin-top: 5px; text-align: center; font-size: 14px; min-height: 20px;
     }
 
-    /* Container #13 + belowSearch */
+    /* #container13 => remove top:-150px => set top:0; */
     #container13 {
-      position: relative; width: 250px; top: -150px;
-    }
-    #belowSearch {
-      margin-top: -180px; margin-left: 10px;
-    }
-    .title-container {
-      margin-top: -50px;
+      position: relative; width: 250px; top: 0;
     }
 
-    /* Fixed update listing + upload photo containers */
+    /* #belowSearch => remove margin-top:-180px => set to 0. */
+    #belowSearch {
+      margin-top: 0; margin-left: 10px; /* keep left:10px if you want it */
+    }
+
+    /* .title-container => remove margin-top:-50px => set to 0. */
+    .title-container {
+      margin-top: 0;
+    }
+    .description-container {
+      margin-top: 0px;
+    }
+
+    /* #analyzeMetadataBtn, etc. remain same. .phrases-header => remove top:125px => set 0 if you prefer. */
+    .phrases-header {
+      position: relative; top: 0; left: 10px; /* remove top:125px => set 0 */
+    }
+
+    /* Final "Update Listing" + "Upload Photo" containers, no change. */
     #uploadContainer {
       position: fixed; bottom: 20px; left: 50%;
       transform: translateX(-50%); display: inline-block;
@@ -190,13 +199,13 @@
 </head>
 
 <body>
-
-  <!-- STEP 2: The rest of your HTML structure is the same as the base code -->
+  <!-- Configure Buttons control -->
   <button id="configureButtonsBtn"
           class="btn waves-effect waves-light configurable">
     Configure Buttons
   </button>
 
+  <!-- Wrap Listing Description and File Drop Zones -->
   <div id="descriptionAndFileUploadContainer">
     <div class="listing-desc-container" id="listingDescContainer">
       <h5>Listing Description</h5>
@@ -218,11 +227,12 @@
     </div>
   </div>
 
+  <!-- Etsy OAuth + My Etsy Shop Listings -->
   <button id="connectEtsyBtn"
           class="btn waves-effect waves-light configurable">
     Connect to Etsy
   </button>
-  <div style="margin-top: -180px; margin-left: 10px;">
+  <div style="margin-top: 0; margin-left: 10px;">
     <div class="section-heading configurable">My Etsy Shop Listings</div>
     <div class="textbox-container configurable">
       <textarea id="shopListings"
@@ -231,8 +241,9 @@
     </div>
   </div>
 
+  <!-- Etsy Listing Generator UI -->
   <div class="phrases-header configurable"
-       style="position: relative; top: 125px; left: 10px;">
+       style="position: relative; top: 0; left: 10px;"> <!-- removing top:125px -->
     <span class="section-heading configurable">2. User Provided Search Key Phrases</span>
     <button id="clearKeyPhrasesBtn"
             class="btn-small waves-effect waves-light configurable">
@@ -250,8 +261,7 @@
     </button>
     <button id="showAnalyzeRulesBtn"
             class="btn waves-effect waves-light configurable"
-            data-target="analyzeRulesModal"
-            style="margin-top:25px;">
+            data-target="analyzeRulesModal" style="margin-top:25px;">
       Analyze Rules
     </button>
   </div>
@@ -264,12 +274,13 @@
     </div>
   </div>
 
+  <!-- Components below Search Key Phrases -->
   <div id="belowSearch">
     <button id="generateBtn"
             class="btn waves-effect waves-light configurable">
       Generate
     </button>
-    <div class="title-container" style="margin-top: -50px;">
+    <div class="title-container" style="margin-top:0;">
       <div class="section-heading configurable">Etsy Listing TITLE</div>
       <div class="flex-container configurable">
         <div class="textbox-container configurable">
@@ -277,7 +288,7 @@
                     class="materialize-textarea"
                     rows="2"></textarea>
         </div>
-        <div class="button-container configurable" style="margin-top: -60px;">
+        <div class="button-container configurable" style="margin-top: 0;">
           <button id="regenTitleBtn"
                   class="btn-small waves-effect waves-light configurable">
             Re-Generate
@@ -296,7 +307,7 @@
       <p id="titleCount" class="count-text configurable">Count: 0</p>
     </div>
 
-    <div class="description-container" style="margin-top: 0px;">
+    <div class="description-container" style="margin-top:0;">
       <div class="section-heading configurable">Etsy Listing DESCRIPTION</div>
       <div class="flex-container configurable">
         <div class="textbox-container configurable">
@@ -321,8 +332,8 @@
     </div>
   </div>
 
+  <!-- 10-Photo Grid Container -->
   <div id="previewGridContainer">
-    <!-- STEP 2: The same 10 static cells. We'll let SortableJS handle reordering. -->
     <div id="previewGridStatic">
       <div class="preview-cell" id="previewCell0">Empty</div>
       <div class="preview-cell" id="previewCell1">Empty</div>
@@ -337,6 +348,7 @@
     </div>
   </div>
 
+  <!-- Update Listing + Upload Photo Buttons -->
   <div id="uploadContainer">
     <button id="uploadToEtsyBtn"
             class="btn waves-effect waves-light configurable">
@@ -350,6 +362,7 @@
     </button>
   </div>
 
+  <!-- Metadata Modal -->
   <div id="metadataModal" class="modal">
     <div class="modal-content">
       <h4>Photo Metadata</h4>
@@ -365,6 +378,7 @@
     </div>
   </div>
 
+  <!-- Analyze Rules Modal -->
   <div id="analyzeRulesModal" class="modal">
     <div class="modal-content">
       <h4>Photo Analysis Rules</h4>
@@ -388,6 +402,7 @@ Default Photo Analysis Rules:
     </div>
   </div>
 
+  <!-- Title Rules Modal -->
   <div id="titleRulesModal" class="modal">
     <div class="modal-content">
       <h4>Title Rules</h4>
@@ -430,6 +445,7 @@ Prohibited Words:
     </div>
   </div>
 
+  <!-- Description Rules Modal -->
   <div id="descriptionRulesModal" class="modal">
     <div class="modal-content">
       <h4>Description Rules</h4>
@@ -457,6 +473,7 @@ Option 3:
     </div>
   </div>
 
+  <!-- Keyword Rules Modal -->
   <div id="keywordRulesModal" class="modal">
     <div class="modal-content">
       <h4>Keyword Rules</h4>
@@ -480,6 +497,7 @@ Using Sales Report and Product List Files:
     </div>
   </div>
 
+  <!-- Button Config Modal -->
   <div id="buttonConfigModal" class="modal">
     <div class="modal-content">
       <h4>Configure Button Positions</h4>
@@ -497,6 +515,7 @@ Using Sales Report and Product List Files:
     </div>
   </div>
 
+  <!-- Crop Modal -->
   <div id="photoCropModal" class="modal">
     <div class="crop-container">
       <h4 style="text-align:center; margin: 0 0 10px 0;">Crop Photo</h4>
@@ -518,25 +537,23 @@ Using Sales Report and Product List Files:
     </div>
   </div>
 
-  <!-- jQuery + Materialize JS -->
+  <!-- jQuery + Materialize -->
   <script src="https://code.jquery.com/jquery-3.6.0.min.js"></script>
   <script
     src="https://cdnjs.cloudflare.com/ajax/libs/materialize/1.0.0/js/materialize.min.js">
   </script>
 
   <script>
-    // (Your existing code for CSV uploads, analyzing, listing updates, etc.)
+    // STEP 2 & 3: All old "dragover" / "drop" / "dragstart" code removed from each preview cell.
+    // We rely exclusively on SortableJS to reorder images.
+    // Negative offsets have been zeroed out in CSS to avoid leftover overlays.
 
-    // STEP 3: Initialize Sortable on #previewGridStatic
-    // We'll reorder previewImages[] in "onEnd".
-
-    // Example placeholders
     let photoNames = [];
-    let previewImages = []; 
+    let previewImages = [];
     let photoMeta = [];
 
     document.addEventListener("DOMContentLoaded", () => {
-      // Basic Sortable init:
+      // Initialize Sortable on #previewGridStatic
       new Sortable(document.getElementById("previewGridStatic"), {
         animation: 150,
         onEnd: (evt) => {
@@ -544,7 +561,7 @@ Using Sales Report and Product List Files:
           const newIndex = evt.newIndex;
           if (oldIndex === newIndex) return;
 
-          // Reorder arrays
+          // reorder arrays
           const [movedImg] = previewImages.splice(oldIndex, 1);
           previewImages.splice(newIndex, 0, movedImg);
 
@@ -554,20 +571,19 @@ Using Sales Report and Product List Files:
           const [movedMeta] = photoMeta.splice(oldIndex, 1);
           photoMeta.splice(newIndex, 0, movedMeta);
 
-          // Refresh the grid:
           updateStaticPreviewGrid();
         }
       });
 
-      // Optionally call updateStaticPreviewGrid() if you have initial images
+      // Initially fill the cells
       updateStaticPreviewGrid();
     });
 
-    // The function that sets the content of #previewCell0..9
     function updateStaticPreviewGrid() {
       for (let i = 0; i < 10; i++) {
         const cell = document.getElementById("previewCell" + i);
         cell.innerHTML = "";
+
         if (i < previewImages.length) {
           const previewBox = document.createElement("div");
           previewBox.className = "preview-box";
@@ -592,13 +608,13 @@ Using Sales Report and Product List Files:
           // number overlay
           const numOverlay = document.createElement("div");
           numOverlay.className = "number-overlay";
-          numOverlay.textContent = String(i + 1);
+          numOverlay.textContent = (i + 1).toString();
           previewBox.appendChild(numOverlay);
 
-          // on click => show metadata
+          // click => show metadata
           previewBox.addEventListener("click", () => {
-            const metaTextarea = document.getElementById("metadataTextarea");
-            metaTextarea.value = photoMeta[i] || "No metadata available.";
+            const metaArea = document.getElementById("metadataTextarea");
+            metaArea.value = photoMeta[i] || "No metadata available.";
             const modalElem = document.getElementById("metadataModal");
             let instance = M.Modal.getInstance(modalElem);
             if (!instance) {
@@ -613,6 +629,9 @@ Using Sales Report and Product List Files:
         }
       }
     }
+
+    // (Keep your other code for CSV / analyzing / alt_text / button config, etc.)
+    // ...
   </script>
 </body>
 </html>
