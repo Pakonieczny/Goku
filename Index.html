@@ -156,7 +156,7 @@
     }
     .preview-box {
       position: relative; width: 100%; height: 100%;
-      /* We'll mark this draggable for reorder. */
+      /* We'll mark this draggable for reorder. (REMOVED DRAG EVENT CODE) */
     }
     .preview-box img {
       width: 100px; height: 100px; object-fit: cover;
@@ -840,11 +840,8 @@ Using Sales Report and Product List Files:
         if (i < previewImages.length) {
           const previewBox = document.createElement("div");
           previewBox.className = "preview-box";
-          // Mark draggable for reorder
-          previewBox.draggable = true;
-          previewBox.addEventListener("dragstart", e => {
-            e.dataTransfer.setData("text/plain", i.toString());
-          });
+          // REMOVED `previewBox.draggable = true;`
+          // REMOVED old "dragstart" code
 
           const img = document.createElement("img");
           img.src = previewImages[i];
