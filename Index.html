@@ -189,6 +189,24 @@
       cursor: pointer;
       z-index: 1000;
     }
+    /* ADDED NEW STYLE FOR DRAG-OVER VISUAL FEEDBACK: */
+    .drag-over {
+      background-color: rgba(0, 0, 255, 0.2);
+    }
+    /* ADDED NEW STYLE FOR CROP MODAL SIZE: */
+    #photoCropModal .crop-container {
+      width: 500px;
+      height: 500px;
+    }
+    /* ADDED NEW STYLE TO CENTER IMG CONTAINER CONTENT: */
+    #photoCropModal .img-container {
+      overflow: hidden; position: relative; width: 100%; height: 100%; display: flex; align-items: center; justify-content: center;
+    }
+    /* ADDED NEW STYLE FOR CROP MODAL BUTTONS CONTAINER: */
+    #photoCropModal .modal-footer {
+      text-align: center;
+    }
+    /* ADDED NEW STYLE FOR ZOOM SLIDER (ensure center zoom) is set via transform-origin in JS */
     /* Metadata status styles */
     .metadata-status {
       margin-top: 5px; text-align: center; font-size: 14px;
@@ -231,15 +249,6 @@
     #uploadPhotoContainer {
       position: fixed; bottom: 20px;
       left: calc(50% + 120px); display: inline-block;
-    }
-    /* ADDED NEW STYLE FOR DRAG-OVER VISUAL FEEDBACK: */
-    .drag-over {
-      background-color: rgba(0, 0, 255, 0.2);
-    }
-    /* ADDED NEW STYLE FOR CROP MODAL SIZE: */
-    #photoCropModal .crop-container {
-      width: 500px;
-      height: 500px;
     }
   </style>
 </head>
@@ -568,20 +577,18 @@ Using Sales Report and Product List Files:
   <div id="photoCropModal" class="modal">
     <div class="crop-container"> <!-- ADDED: crop-container sized to 500x500 via CSS rule -->
       <h4 style="text-align:center; margin: 0 0 10px 0;">Crop Photo</h4>
-      <div class="img-container" style="overflow:hidden; position:relative; width:100%; height:100%;"> <!-- ADDED inline style for relative positioning -->
-        <img id="cropImage" src="" alt="Crop Image" style="position:absolute; cursor:move;"> <!-- ADDED style for panning -->
+      <div class="img-container" style="overflow:hidden; position:relative; width:100%; height:100%; display:flex; align-items:center; justify-content:center;"> <!-- UPDATED: added flex centering -->
+        <img id="cropImage" src="" alt="Crop Image" style="position:absolute; cursor:move; transform-origin:center center;"> <!-- UPDATED: added transform-origin -->
       </div>
       <div class="controls">
         <label for="zoomSlider">Zoom:</label>
         <input type="range" id="zoomSlider" min="0.1" max="3" step="0.01" value="1">
       </div>
-      <div style="text-align:center; margin-top:10px;">
+      <div style="text-align:center; margin-top:10px;"> <!-- UPDATED: Removed margin-left from Cancel button by not applying extra margins -->
         <button id="saveCropBtn" class="btn waves-effect waves-light">Save</button>
         <button id="cancelCropBtn"
                 class="btn waves-effect waves-light"
-                style="background-color:#f44336; margin-left:10px;">
-          Cancel
-        </button>
+                style="background-color:#f44336;">Cancel</button>
       </div>
     </div>
   </div>
@@ -608,7 +615,6 @@ Using Sales Report and Product List Files:
     let photoNames = [];
     let previewImages = []; // data URLs for display (3000×3000 resized)
     let photoMeta = [];     // AI-generated metadata for alt_text
-    // ADDED GLOBAL VARIABLES FOR DRAG & CROP:
     let draggedIndex = null;
     let photoIds = [];
     let currentCropIndex = null;
@@ -867,7 +873,6 @@ Using Sales Report and Product List Files:
           const previewBox = document.createElement("div");
           previewBox.className = "preview-box";
           previewBox.setAttribute("data-id", photoIds[i]);
-          // ADDED: custom dragstart to store dragged index
           previewBox.addEventListener("dragstart", e => {
             draggedIndex = i;
           });
@@ -894,16 +899,30 @@ Using Sales Report and Product List Files:
           // ADDED: Crop button (10px by 10px round) at bottom-right
           const cropBtn = document.createElement("div");
           cropBtn.className = "crop-btn";
-          cropBtn.textContent = "C"; // Using "C" to denote Crop
+          cropBtn.textContent = "C";
           cropBtn.addEventListener("click", function(ev) {
             ev.stopPropagation();
             currentCropIndex = i;
             document.getElementById("cropImage").src = previewImages[i];
-            // Initialize modal and reset panning variables
+            // Reset panning variables and reset image position
             imgOffsetX = 0;
             imgOffsetY = 0;
             document.getElementById("cropImage").style.left = "0px";
             document.getElementById("cropImage").style.top = "0px";
+            // When crop image loads, center it in the modal
+            document.getElementById("cropImage").onload = function() { /* ADDED/UPDATED */
+              const container = document.querySelector("#photoCropModal .crop-container");
+              const containerWidth = container.clientWidth;
+              const containerHeight = container.clientHeight;
+              const naturalWidth = cropImage.naturalWidth;
+              const naturalHeight = cropImage.naturalHeight;
+              const fitScale = Math.min(containerWidth / naturalWidth, containerHeight / naturalHeight);
+              cropImage.style.transform = "scale(" + fitScale + ")";
+              const newWidth = naturalWidth * fitScale;
+              const newHeight = naturalHeight * fitScale;
+              cropImage.style.left = ((containerWidth - newWidth) / 2) + "px";
+              cropImage.style.top = ((containerHeight - newHeight) / 2) + "px";
+            };
             let cropModal = M.Modal.init(document.getElementById("photoCropModal"), {dismissible: false});
             cropModal.open();
           });
@@ -912,7 +931,6 @@ Using Sales Report and Product List Files:
             showMetadata(i);
           });
           cell.appendChild(previewBox);
-          // ADDED: Custom drag event listeners on cell for reordering
           cell.addEventListener("dragover", function(e) {
             e.preventDefault();
             if(cell.querySelector(".preview-box") != null) {
@@ -1019,13 +1037,11 @@ Using Sales Report and Product List Files:
     // ----------------------------------------------------------------------
     // CROP MODAL PAN & ZOOM IMPLEMENTATION (CUSTOM)
     // ----------------------------------------------------------------------
-    // Add mouse event listeners to #cropImage for panning
     const cropImage = document.getElementById("cropImage");
     cropImage.addEventListener("mousedown", function(e) { /* ADDED */
       isPanning = true;
       cropStartX = e.clientX;
       cropStartY = e.clientY;
-      // Get current offset
       imgOffsetX = parseInt(cropImage.style.left || "0");
       imgOffsetY = parseInt(cropImage.style.top || "0");
     });
@@ -1039,25 +1055,20 @@ Using Sales Report and Product List Files:
     document.addEventListener("mouseup", function(e) { /* ADDED */
       isPanning = false;
     });
-    // Add zoom functionality using zoomSlider
-    const zoomSlider = document.getElementById("zoomSlider");
-    zoomSlider.addEventListener("input", function(e) { /* ADDED */
+    zoomSlider.addEventListener("input", function(e) { /* ADDED/UPDATED */
       const zoom = e.target.value;
+      cropImage.style.transformOrigin = "center center";
       cropImage.style.transform = "scale(" + zoom + ")";
     });
-    // Add event listener for saveCropBtn to perform cropping and resize to 3000x3000
     document.getElementById("saveCropBtn").addEventListener("click", async function() { /* ADDED */
       if (currentCropIndex === null) return;
-      // Get crop modal container dimensions (500x500)
       const container = document.querySelector("#photoCropModal .crop-container");
       const containerRect = container.getBoundingClientRect();
-      // Get image element and its current position and scale
       const img = cropImage;
       const style = window.getComputedStyle(img);
       const left = parseInt(style.left) || 0;
       const top = parseInt(style.top) || 0;
       const zoom = parseFloat(zoomSlider.value);
-      // Create a canvas of 500x500 to extract the visible portion
       const canvas = document.createElement("canvas");
       canvas.width = containerRect.width;
       canvas.height = containerRect.height;
@@ -1068,29 +1079,22 @@ Using Sales Report and Product List Files:
         tempImg.onload = resolve;
         tempImg.onerror = reject;
       });
-      // Calculate draw position (accounting for zoom)
       const drawX = -left / zoom;
       const drawY = -top / zoom;
       const drawWidth = containerRect.width / zoom;
       const drawHeight = containerRect.height / zoom;
       ctx.drawImage(tempImg, drawX, drawY, drawWidth, drawHeight, 0, 0, containerRect.width, containerRect.height);
-      // Get cropped image data URL from canvas
       const croppedDataURL = canvas.toDataURL("image/jpeg", 0.85);
-      // Resize cropped image to 3000x3000 using resizeImage utility
       const finalDataURL = await resizeImage(croppedDataURL, 3000, 3000);
-      // Update previewImages for the current cropped image
       previewImages[currentCropIndex] = finalDataURL;
-      // Refresh grid and primary preview
       updateStaticPreviewGrid();
       updatePrimaryPreview();
-      // Close crop modal
       let cropModalInstance = M.Modal.getInstance(document.getElementById("photoCropModal"));
       if (cropModalInstance) {
         cropModalInstance.close();
       }
       currentCropIndex = null;
     });
-    // Cancel button for crop modal
     document.getElementById("cancelCropBtn").addEventListener("click", function() { /* ADDED */
       let cropModalInstance = M.Modal.getInstance(document.getElementById("photoCropModal"));
       if (cropModalInstance) {
@@ -1110,19 +1114,16 @@ Using Sales Report and Product List Files:
       }
       return text;
     }
-
     function base64urlEncode(buffer) {
       return btoa(String.fromCharCode(...new Uint8Array(buffer)))
         .replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, '');
     }
-
     async function generateCodeChallenge(codeVerifier) {
       const encoder = new TextEncoder();
       const data = encoder.encode(codeVerifier);
       const digest = await crypto.subtle.digest("SHA-256", data);
       return base64urlEncode(digest);
     }
-
     document.getElementById("connectEtsyBtn").addEventListener("click", async () => {
       const state = "randomState123";
       const scope = "listings_w listings_r";
@@ -1138,7 +1139,6 @@ Using Sales Report and Product List Files:
         `&code_challenge_method=S256`;
       window.location.href = etsyAuthUrl;
     });
-
     document.addEventListener("DOMContentLoaded", () => {
       loadButtonPositions();
       const urlParams = new URLSearchParams(window.location.search);
@@ -1149,8 +1149,27 @@ Using Sales Report and Product List Files:
       }
       updateStaticPreviewGrid();
       updateUploadedFilesList();
+      // ADDED LINES FOR SORTABLE INIT:
+      new Sortable(document.getElementById("previewGridStatic"), {
+        animation: 150,
+        onEnd: function(evt) {
+          // When sorting ends, update the previewImages, photoNames, photoMeta, and photoIds arrays based on new order
+          const oldIndex = evt.oldIndex;
+          const newIndex = evt.newIndex;
+          if (oldIndex === newIndex) return;
+          const [movedImage] = previewImages.splice(oldIndex, 1);
+          previewImages.splice(newIndex, 0, movedImage);
+          const [movedName] = photoNames.splice(oldIndex, 1);
+          photoNames.splice(newIndex, 0, movedName);
+          const [movedMeta] = photoMeta.splice(oldIndex, 1);
+          photoMeta.splice(newIndex, 0, movedMeta);
+          const [movedId] = photoIds.splice(oldIndex, 1);
+          photoIds.splice(newIndex, 0, movedId);
+          updateStaticPreviewGrid();
+          updatePrimaryPreview();
+        }
+      });
     });
-
     async function exchangeCodeForToken(code) {
       const codeVerifier = localStorage.getItem("etsy_code_verifier");
       if (!codeVerifier) {
@@ -1171,7 +1190,6 @@ Using Sales Report and Product List Files:
         M.toast({ html: "Error exchanging code for token" });
       }
     }
-
     // ----------------------------------------------------------------------
     // UPDATE LISTING
     // ----------------------------------------------------------------------
@@ -1218,7 +1236,6 @@ Using Sales Report and Product List Files:
         M.toast({ html: "Exception: " + e.message });
       }
     });
-
     // ----------------------------------------------------------------------
     // UPLOAD PHOTOS (includes alt_text from photoMeta)
     // ----------------------------------------------------------------------
@@ -1274,14 +1291,12 @@ Using Sales Report and Product List Files:
         }
       }
     });
-
     // ----------------------------------------------------------------------
     // RULES & TITLE / DESCRIPTION GENERATION
     // ----------------------------------------------------------------------
     function stripMarkdownJSON(text) {
       return text.replace(/^```json\s*/, "").replace(/\s*```$/, "").trim();
     }
-
     async function generateTitleOnly() {
       const etsyLink = ETSY_SHOP_URL;
       const keyPhrases = document.getElementById("searchKeyPhrases").value.trim();
@@ -1321,7 +1336,6 @@ Important: Return ONLY the title as plain text.`;
         document.getElementById("listingTitle").value = "Error: " + error;
       }
     }
-
     async function generateDescriptionOnly() {
       const etsyLink = ETSY_SHOP_URL;
       const keyPhrases = document.getElementById("searchKeyPhrases").value.trim();
@@ -1360,7 +1374,6 @@ Important: Return ONLY the description as plain text.`;
         document.getElementById("listingDescription").value = "Error: " + error;
       }
     }
-
     async function callOpenAI(payload) {
       const response = await fetch("/.netlify/functions/openaiProxy", {
         method: "POST",
@@ -1374,17 +1387,14 @@ Important: Return ONLY the description as plain text.`;
       }
       return await response.json();
     }
-
     document.getElementById("generateBtn").addEventListener("click", async () => {
       await Promise.all([generateTitleOnly(), generateDescriptionOnly()]);
     });
     document.getElementById("regenTitleBtn").addEventListener("click", generateTitleOnly);
     document.getElementById("regenDescriptionBtn").addEventListener("click", generateDescriptionOnly);
-
     function updateTitleCount(text) {
       document.getElementById("titleCount").textContent = "Count: " + text.length;
     }
-
     // Copy to clipboard
     document.getElementById("copyTitleBtn").addEventListener("click", () => {
       const text = document.getElementById("listingTitle").value;
