@@ -18,6 +18,9 @@
   <script src="https://cdn.jsdelivr.net/npm/piexifjs@1.0.4/piexif.min.js"></script>
   <!-- ADDED LINE FOR SORTABLEJS: -->
   <script src="https://cdn.jsdelivr.net/npm/sortablejs@1.14.0/Sortable.min.js"></script>
+  <!-- ADDED LINES FOR CROPPER.JS: -->
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/cropperjs/1.5.13/cropper.min.css" />
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/cropperjs/1.5.13/cropper.min.js"></script>
   <style>
     /* Basic layout */
     html, body {
@@ -544,19 +547,19 @@ Using Sales Report and Product List Files:
   </div>
 
   <!-- Crop Modal -->
-  <!-- UPDATED CROP MODAL: Modal size increased to 650x650; preview box is 400x400 and centered -->
+  <!-- COMMENTED OUT OLD CROP MODAL -->
+  <!--
   <div id="photoCropModal" class="modal">
-    <div class="crop-container" style="width:650px; height:650px; margin:0 auto; position:relative;">
+    <div class="crop-container">
       <h4 style="text-align:center; margin: 0 0 10px 0;">Crop Photo</h4>
-      <!-- The preview box is fixed at 400x400 and centered -->
-      <div class="img-container" style="width:400px; height:400px; margin:0 auto; position:relative; overflow:hidden; background:#000;">
-        <img id="cropImage" src="" alt="Crop Image" style="position:absolute; cursor:move;">
+      <div class="img-container">
+        <img id="cropImage" src="" alt="Crop Image">
       </div>
-      <div class="controls" style="text-align:center; margin-top:10px;">
+      <div class="controls">
         <label for="zoomSlider">Zoom:</label>
         <input type="range" id="zoomSlider" min="0.1" max="3" step="0.01" value="1">
       </div>
-      <div style="position:absolute; bottom:20px; left:50%; transform:translateX(-50%);">
+      <div style="text-align:center; margin-top:10px;">
         <button id="saveCropBtn" class="btn waves-effect waves-light">Save</button>
         <button id="cancelCropBtn"
                 class="btn waves-effect waves-light"
@@ -566,7 +569,20 @@ Using Sales Report and Product List Files:
       </div>
     </div>
   </div>
-  <!-- End Crop Modal -->
+  -->
+  <!-- NEW CROP MODAL USING Cropper.js -->
+  <div id="photoCropModal" class="modal" style="width:650px; height:650px;">
+    <div class="crop-container" style="position: relative; width: 100%; height: 100%;">
+      <h4 style="text-align:center; margin: 0 0 10px 0;">Crop Photo</h4>
+      <div class="img-preview-container" style="width:400px; height:400px; margin: 0 auto; overflow: hidden;">
+        <img id="cropImage" src="" alt="Crop Image" style="display:block; margin:auto; max-width: none;">
+      </div>
+      <div style="text-align:center; margin-top:10px;">
+        <button id="saveCropBtn" class="btn waves-effect waves-light" style="margin-right:10px;">Save</button>
+        <button id="cancelCropBtn" class="btn waves-effect waves-light" style="background-color:#f44336;">Cancel</button>
+      </div>
+    </div>
+  </div>
 
   <!-- Include jQuery and Materialize JS -->
   <script src="https://code.jquery.com/jquery-3.6.0.min.js"></script>
@@ -593,14 +609,9 @@ Using Sales Report and Product List Files:
     // ADDED GLOBAL VARIABLE FOR DRAGGING:
     let draggedIndex = null;
     let photoIds = [];
-
-    // Variables for Crop Modal
-    let initialScale, currentScale;
-    let currentLeft, currentTop;
-    let isPanning = false, startX, startY, panInitialLeft, panInitialTop;
+    // ADDED GLOBAL VARIABLE FOR CROP INDEX AND Cropper instance:
     let currentCropIndex = null;
-    const cropImage = document.getElementById("cropImage");
-    const zoomSlider = document.getElementById("zoomSlider");
+    let cropper = null;
 
     // -------------------------------------------
     // IMAGE RESIZE UTILITY (3000×3000)
@@ -844,7 +855,7 @@ Using Sales Report and Product List Files:
     }
 
     // ----------------------------------------------------------------------
-    // REORDER LOGIC in updateStaticPreviewGrid() using custom native events
+    // REORDER LOGIC in updateStaticPreviewGrid()
     // ----------------------------------------------------------------------
     function updateStaticPreviewGrid() {
       for (let i = 0; i < 10; i++) {
@@ -879,22 +890,21 @@ Using Sales Report and Product List Files:
           numOverlay.className = "number-overlay";
           numOverlay.textContent = (i + 1).toString();
           previewBox.appendChild(numOverlay);
-          // ADD: Crop button 20x20 round at bottom-right of each previewBox
-          var cropBtn = document.createElement("button");
-          cropBtn.className = "crop-btn";
-          cropBtn.style.cssText = "width:20px; height:20px; border-radius:50%; position:absolute; bottom:2px; right:2px; padding:0; margin:0; background-color:#4CAF50; color:white; border:none;";
-          cropBtn.innerHTML = "C";
-          cropBtn.addEventListener("click", function(ev) {
-            ev.stopPropagation();
-            currentCropIndex = i;
-            cropImage.src = previewImages[i];
-            // Initialize crop image in the modal
-            initializeCropImage();
-            let cropModalInstance = M.Modal.getInstance(document.getElementById("photoCropModal"));
-            if (!cropModalInstance) {
-              cropModalInstance = M.Modal.init(document.getElementById("photoCropModal"));
-            }
-            cropModalInstance.open();
+          // ADDED NEW CROP BUTTON:
+          const cropBtn = document.createElement("button");
+          cropBtn.textContent = "Crop";
+          cropBtn.style.position = "absolute";
+          cropBtn.style.bottom = "2px";
+          cropBtn.style.right = "2px";
+          cropBtn.style.width = "20px";
+          cropBtn.style.height = "20px";
+          cropBtn.style.borderRadius = "50%";
+          cropBtn.style.backgroundColor = "green";
+          cropBtn.style.color = "white";
+          cropBtn.style.fontSize = "10px";
+          cropBtn.addEventListener("click", (ev) => {
+              ev.stopPropagation();
+              openCropModal(i);
           });
           previewBox.appendChild(cropBtn);
           previewBox.addEventListener("click", () => {
@@ -1006,106 +1016,6 @@ Using Sales Report and Product List Files:
     }
 
     // ----------------------------------------------------------------------
-    // UPDATED CROP MODAL CODE (Bespoke Approach)
-    // ----------------------------------------------------------------------
-    // Initialize crop image to fit entirely within the 400x400 preview box and center it
-    function initializeCropImage() {
-      const container = document.querySelector("#photoCropModal .img-container");
-      const containerWidth = container.clientWidth; // 400
-      const containerHeight = container.clientHeight; // 400
-      const naturalWidth = cropImage.naturalWidth;
-      const naturalHeight = cropImage.naturalHeight;
-      initialScale = Math.min(containerWidth / naturalWidth, containerHeight / naturalHeight);
-      currentScale = initialScale;
-      // Center the image in the preview box
-      currentLeft = (containerWidth - naturalWidth * currentScale) / 2;
-      currentTop = (containerHeight - naturalHeight * currentScale) / 2;
-      updateCropImageTransform();
-    }
-    // Update transform: translate and scale
-    function updateCropImageTransform() {
-      cropImage.style.transform = "translate(" + currentLeft + "px, " + currentTop + "px) scale(" + currentScale + ")";
-    }
-    // When crop image loads, initialize it
-    cropImage.onload = function() {
-      cropImage.style.position = "absolute";
-      initializeCropImage();
-    };
-    // Zoom slider: when adjusted, maintain the current center of the visible image.
-    zoomSlider.addEventListener("input", function() {
-      const newScale = parseFloat(this.value);
-      const container = document.querySelector("#photoCropModal .img-container");
-      const containerWidth = container.clientWidth;
-      const containerHeight = container.clientHeight;
-      // Compute the current center of the visible image
-      const visibleCenterX = -currentLeft + containerWidth / 2;
-      const visibleCenterY = -currentTop + containerHeight / 2;
-      // Compute new translation so that the same image point remains centered
-      const scaleFactor = newScale / currentScale;
-      currentLeft = containerWidth / 2 - visibleCenterX * scaleFactor;
-      currentTop = containerHeight / 2 - visibleCenterY * scaleFactor;
-      currentScale = newScale;
-      updateCropImageTransform();
-    });
-    // Pan functionality for crop image
-    cropImage.addEventListener("mousedown", function(e) {
-      e.preventDefault();
-      isPanning = true;
-      startX = e.clientX;
-      startY = e.clientY;
-      panInitialLeft = currentLeft;
-      panInitialTop = currentTop;
-    });
-    document.addEventListener("mousemove", function(e) {
-      if (!isPanning) return;
-      const dx = e.clientX - startX;
-      const dy = e.clientY - startY;
-      currentLeft = panInitialLeft + dx;
-      currentTop = panInitialTop + dy;
-      updateCropImageTransform();
-    });
-    document.addEventListener("mouseup", function(e) {
-      isPanning = false;
-    });
-    // Save cropped image: crop visible portion from the preview box and resize to 3000x3000
-    document.getElementById("saveCropBtn").addEventListener("click", async function() {
-      if (currentCropIndex === null) return;
-      const container = document.querySelector("#photoCropModal .img-container");
-      const containerWidth = container.clientWidth;
-      const containerHeight = container.clientHeight;
-      // Calculate crop coordinates based on current translation and scale
-      const cropX = -currentLeft / currentScale;
-      const cropY = -currentTop / currentScale;
-      const cropW = containerWidth / currentScale;
-      const cropH = containerHeight / currentScale;
-      const canvas = document.createElement("canvas");
-      canvas.width = cropW;
-      canvas.height = cropH;
-      const ctx = canvas.getContext("2d");
-      ctx.drawImage(cropImage, cropX, cropY, cropW, cropH, 0, 0, cropW, cropH);
-      const croppedDataURL = canvas.toDataURL("image/jpeg", 0.85);
-      const finalDataURL = await resizeImage(croppedDataURL, 3000, 3000);
-      previewImages[currentCropIndex] = finalDataURL;
-      updateStaticPreviewGrid();
-      updatePrimaryPreview();
-      let cropModalInstance = M.Modal.getInstance(document.getElementById("photoCropModal"));
-      if (cropModalInstance) {
-        cropModalInstance.close();
-      }
-      currentCropIndex = null;
-    });
-    document.getElementById("cancelCropBtn").addEventListener("click", function() {
-      let cropModalInstance = M.Modal.getInstance(document.getElementById("photoCropModal"));
-      if (cropModalInstance) {
-        cropModalInstance.close();
-      }
-      currentCropIndex = null;
-    });
-    // ----------------------------------------------------------------------
-    // UPDATED CROP MODAL CODE END
-    // ----------------------------------------------------------------------
-
-    // ----------------------------------------------------------------------
     // OAUTH CONNECT (Etsy)
     // ----------------------------------------------------------------------
     function generateRandomString(length) {
@@ -1116,16 +1026,19 @@ Using Sales Report and Product List Files:
       }
       return text;
     }
+
     function base64urlEncode(buffer) {
       return btoa(String.fromCharCode(...new Uint8Array(buffer)))
         .replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, '');
     }
+
     async function generateCodeChallenge(codeVerifier) {
       const encoder = new TextEncoder();
       const data = encoder.encode(codeVerifier);
       const digest = await crypto.subtle.digest("SHA-256", data);
       return base64urlEncode(digest);
     }
+
     document.getElementById("connectEtsyBtn").addEventListener("click", async () => {
       const state = "randomState123";
       const scope = "listings_w listings_r";
@@ -1141,6 +1054,7 @@ Using Sales Report and Product List Files:
         `&code_challenge_method=S256`;
       window.location.href = etsyAuthUrl;
     });
+
     document.addEventListener("DOMContentLoaded", () => {
       loadButtonPositions();
       const urlParams = new URLSearchParams(window.location.search);
@@ -1152,6 +1066,7 @@ Using Sales Report and Product List Files:
       updateStaticPreviewGrid();
       updateUploadedFilesList();
     });
+
     async function exchangeCodeForToken(code) {
       const codeVerifier = localStorage.getItem("etsy_code_verifier");
       if (!codeVerifier) {
@@ -1172,6 +1087,7 @@ Using Sales Report and Product List Files:
         M.toast({ html: "Error exchanging code for token" });
       }
     }
+
     // ----------------------------------------------------------------------
     // UPDATE LISTING
     // ----------------------------------------------------------------------
@@ -1218,6 +1134,7 @@ Using Sales Report and Product List Files:
         M.toast({ html: "Exception: " + e.message });
       }
     });
+
     // ----------------------------------------------------------------------
     // UPLOAD PHOTOS (includes alt_text from photoMeta)
     // ----------------------------------------------------------------------
@@ -1273,12 +1190,14 @@ Using Sales Report and Product List Files:
         }
       }
     });
+
     // ----------------------------------------------------------------------
     // RULES & TITLE / DESCRIPTION GENERATION
     // ----------------------------------------------------------------------
     function stripMarkdownJSON(text) {
       return text.replace(/^```json\s*/, "").replace(/\s*```$/, "").trim();
     }
+
     async function generateTitleOnly() {
       const etsyLink = ETSY_SHOP_URL;
       const keyPhrases = document.getElementById("searchKeyPhrases").value.trim();
@@ -1318,6 +1237,7 @@ Important: Return ONLY the title as plain text.`;
         document.getElementById("listingTitle").value = "Error: " + error;
       }
     }
+
     async function generateDescriptionOnly() {
       const etsyLink = ETSY_SHOP_URL;
       const keyPhrases = document.getElementById("searchKeyPhrases").value.trim();
@@ -1356,6 +1276,7 @@ Important: Return ONLY the description as plain text.`;
         document.getElementById("listingDescription").value = "Error: " + error;
       }
     }
+
     async function callOpenAI(payload) {
       const response = await fetch("/.netlify/functions/openaiProxy", {
         method: "POST",
@@ -1369,14 +1290,17 @@ Important: Return ONLY the description as plain text.`;
       }
       return await response.json();
     }
+
     document.getElementById("generateBtn").addEventListener("click", async () => {
       await Promise.all([generateTitleOnly(), generateDescriptionOnly()]);
     });
     document.getElementById("regenTitleBtn").addEventListener("click", generateTitleOnly);
     document.getElementById("regenDescriptionBtn").addEventListener("click", generateDescriptionOnly);
+
     function updateTitleCount(text) {
       document.getElementById("titleCount").textContent = "Count: " + text.length;
     }
+
     // Copy to clipboard
     document.getElementById("copyTitleBtn").addEventListener("click", () => {
       const text = document.getElementById("listingTitle").value;
@@ -1536,6 +1460,81 @@ Generate exactly 13 tag phrases (each ≤ 20 characters). Return as plain text.
     window.addEventListener("load", () => {
       const container13 = document.getElementById("container13");
       container13.style.height = (container13.offsetHeight * 2.5) + "px";
+    });
+
+    // NEW FUNCTIONS FOR CROPPING WITH Cropper.js:
+    function openCropModal(index) {
+      currentCropIndex = index;
+      const cropModal = document.getElementById("photoCropModal");
+      const cropImage = document.getElementById("cropImage");
+      // Set the cropImage src to the preview image
+      cropImage.src = previewImages[index];
+      // When the image is loaded, initialize Cropper.js
+      cropImage.onload = function() {
+        // Calculate initial zoom factor to fit the image into 400x400 preview box
+        // (Cropper.js will automatically center if viewMode is set)
+        cropper = new Cropper(cropImage, {
+          viewMode: 1,
+          autoCropArea: 1,
+          movable: true,
+          zoomable: true,
+          scalable: false,
+          rotatable: false,
+          responsive: true,
+          background: false,
+          modal: true,
+          guides: true,
+          center: true,
+          highlight: true,
+          cropBoxMovable: true,
+          cropBoxResizable: true,
+          dragMode: 'move',
+          ready: function() {
+            // Ensure image is centered in the 400x400 preview box
+            const containerData = cropper.getContainerData();
+            const cropBoxData = cropper.getCropBoxData();
+            cropper.setCropBoxData({
+              left: (containerData.width - cropBoxData.width) / 2,
+              top: (containerData.height - cropBoxData.height) / 2
+            });
+          }
+        });
+      };
+      // Open modal
+      let instance = M.Modal.getInstance(cropModal);
+      if (!instance) {
+        instance = M.Modal.init(cropModal, {});
+      }
+      instance.open();
+    }
+
+    document.getElementById("saveCropBtn").addEventListener("click", () => {
+      if (cropper && currentCropIndex !== null) {
+        // Get cropped canvas (cropped area equals the visible area in the preview box)
+        const croppedCanvas = cropper.getCroppedCanvas({
+          width: 3000,
+          height: 3000
+        });
+        // Update the previewImages with the cropped (and resized) image
+        previewImages[currentCropIndex] = croppedCanvas.toDataURL("image/jpeg", 0.85);
+        // Update the UI
+        updatePrimaryPreview();
+        updateStaticPreviewGrid();
+        // Destroy cropper and close modal
+        cropper.destroy();
+        cropper = null;
+        currentCropIndex = null;
+        M.Modal.getInstance(document.getElementById("photoCropModal")).close();
+      }
+    });
+
+    document.getElementById("cancelCropBtn").addEventListener("click", () => {
+      if (cropper) {
+        cropper.destroy();
+        cropper = null;
+      }
+      currentCropIndex = null;
+      M.Modal.getInstance(document.getElementById("photoCropModal")).close();
     });
   </script>
 </body>
