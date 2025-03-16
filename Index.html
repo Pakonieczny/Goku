@@ -582,6 +582,9 @@ Using Sales Report and Product List Files:
     let previewImages = []; // data URLs for display (3000×3000 resized)
     let photoMeta = [];     // AI-generated metadata for alt_text
 
+    // ADDED stable IDs array:
+    let photoIds = [];
+
     // -------------------------------------------
     // IMAGE RESIZE UTILITY (3000×3000)
     // -------------------------------------------
@@ -804,6 +807,9 @@ Using Sales Report and Product List Files:
             previewImages.push(resizedDataURL);
             photoNames.push(file.name);
 
+            // ADDED stable ID line:
+            photoIds.push("photo-" + Date.now() + "-" + i);
+
             updatePrimaryPreview();
             updateStaticPreviewGrid();
             updateUploadedFilesList();
@@ -833,20 +839,19 @@ Using Sales Report and Product List Files:
         const cell = document.getElementById("previewCell" + i);
         cell.innerHTML = "Empty";
 
-        // Only if there's an actual image for index i, we fill the cell
         if (i < previewImages.length) {
           cell.innerHTML = "";
           const previewBox = document.createElement("div");
           previewBox.className = "preview-box";
-
-          // *** Make the previewBox draggable only if i < previewImages.length
           previewBox.draggable = true;
+
+          // ADDED data-id attribute using stable ID:
+          previewBox.setAttribute("data-id", photoIds[i]);
 
           const img = document.createElement("img");
           img.src = previewImages[i];
           previewBox.appendChild(img);
 
-          // Remove button
           const removeBtn = document.createElement("div");
           removeBtn.className = "remove-btn";
           removeBtn.textContent = "X";
@@ -855,25 +860,25 @@ Using Sales Report and Product List Files:
             previewImages.splice(i, 1);
             photoNames.splice(i, 1);
             photoMeta.splice(i, 1);
+            // remove the stable ID as well:
+            photoIds.splice(i, 1);
+
             updateStaticPreviewGrid();
             updatePrimaryPreview();
           });
           previewBox.appendChild(removeBtn);
 
-          // Number overlay
           const numOverlay = document.createElement("div");
           numOverlay.className = "number-overlay";
           numOverlay.textContent = (i + 1).toString();
           previewBox.appendChild(numOverlay);
 
-          // On click, show metadata
           previewBox.addEventListener("click", () => {
             showMetadata(i);
           });
 
           cell.appendChild(previewBox);
 
-          // For "Analyze" status
           const metadataStatus = document.createElement("div");
           metadataStatus.className = "metadata-status";
           metadataStatus.id = "metadataStatus" + i;
@@ -1006,32 +1011,12 @@ Using Sales Report and Product List Files:
       // Sortable init on the entire #previewGridStatic container:
       new Sortable(document.getElementById("previewGridStatic"), {
         animation: 150,
+        // ADDED to read data-id from each preview box:
+        dataIdAttr: "data-id",
         onEnd: function (evt) {
-          // If the user tries to drop outside the # of actual images, revert:
-          if (evt.newIndex >= previewImages.length) {
-            // revert by resetting
-            this.sort([...Array(previewImages.length).keys()]);
-            return;
-          }
-          const oldIndex = evt.oldIndex;
-          const newIndex = evt.newIndex;
-          // If no actual move or invalid, do nothing:
-          if (
-            oldIndex === newIndex ||
-            oldIndex >= previewImages.length ||
-            newIndex >= previewImages.length
-          ) {
-            this.sort([...Array(previewImages.length).keys()]);
-            return;
-          }
-          // reorder arrays:
-          const [movedImage] = previewImages.splice(oldIndex, 1);
-          previewImages.splice(newIndex, 0, movedImage);
-          const [movedName] = photoNames.splice(oldIndex, 1);
-          photoNames.splice(newIndex, 0, movedName);
-          const [movedMeta] = photoMeta.splice(oldIndex, 1);
-          photoMeta.splice(newIndex, 0, movedMeta);
-          // Refresh grid & ranks:
+          // We'll read the final IDs from toArray:
+          const finalOrder = this.toArray();
+          reorderArraysToMatch(finalOrder);
           updateStaticPreviewGrid();
         }
       });
@@ -1056,6 +1041,25 @@ Using Sales Report and Product List Files:
         console.error("Error exchanging code:", error);
         M.toast({ html: "Error exchanging code for token" });
       }
+    }
+
+    // ADDED: reorderArraysToMatch function
+    function reorderArraysToMatch(finalOrder) {
+      const newPreviewImages = [];
+      const newPhotoNames = [];
+      const newPhotoMeta = [];
+      const newPhotoIds = [];
+      finalOrder.forEach(id => {
+        const oldIndex = photoIds.indexOf(id);
+        newPreviewImages.push(previewImages[oldIndex]);
+        newPhotoNames.push(photoNames[oldIndex]);
+        newPhotoMeta.push(photoMeta[oldIndex]);
+        newPhotoIds.push(photoIds[oldIndex]);
+      });
+      previewImages = newPreviewImages;
+      photoNames = newPhotoNames;
+      photoMeta = newPhotoMeta;
+      photoIds = newPhotoIds;
     }
 
     // ----------------------------------------------------------------------
@@ -1138,7 +1142,6 @@ Using Sales Report and Product List Files:
         const rankNumber = i + 1;
 
         try {
-          // Convert dataURL -> blob
           const res = await fetch(dataURL);
           const blob = await res.blob();
           const formData = new FormData();
