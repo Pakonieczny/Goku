@@ -835,35 +835,7 @@ Using Sales Report and Product List Files:
         const cell = document.getElementById("previewCell" + i);
         cell.innerHTML = "";
 
-        // Allow dropping onto each cell for reorder
-        cell.addEventListener("dragover", e => {
-          e.preventDefault(); // must prevent default to allow drop
-        });
-        cell.addEventListener("drop", e => {
-          e.preventDefault();
-          const sourceIndex = parseInt(e.dataTransfer.getData("text/plain"), 10);
-          const targetIndex = i;
-          // Reorder arrays if valid
-          if (
-            !isNaN(sourceIndex) &&
-            sourceIndex !== targetIndex &&
-            sourceIndex >= 0 &&
-            sourceIndex < previewImages.length
-          ) {
-            const [movedImage] = previewImages.splice(sourceIndex, 1);
-            previewImages.splice(targetIndex, 0, movedImage);
-
-            const [movedName] = photoNames.splice(sourceIndex, 1);
-            photoNames.splice(targetIndex, 0, movedName);
-
-            const [movedMeta] = photoMeta.splice(sourceIndex, 1);
-            photoMeta.splice(targetIndex, 0, movedMeta);
-
-            // Refresh
-            updateStaticPreviewGrid();
-            updatePrimaryPreview();
-          }
-        });
+        // REMOVED native dragover/drop event listeners so SortableJS can handle everything
 
         if (i < previewImages.length) {
           const previewBox = document.createElement("div");
