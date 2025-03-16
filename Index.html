@@ -604,16 +604,17 @@ Using Sales Report and Product List Files:
     let listingsCSV = [];
 
     let photoNames = [];
-    let previewImages = []; // data URLs for display (3000×3000 resized) for cells 1–7
-    let photoMeta = [];     // AI-generated metadata for alt_text for cells 1–7
+    let previewImages = []; // data URLs for display (3000×3000 resized)
+    let photoMeta = [];     // AI-generated metadata for alt_text
     // ADDED GLOBAL VARIABLE FOR DRAGGING:
     let draggedIndex = null;
     let photoIds = [];
     // ADDED GLOBAL VARIABLE FOR CROP INDEX AND Cropper instance:
     let currentCropIndex = null;
     let cropper = null;
-    // ADDED GLOBAL VARIABLE FOR RESERVED PHOTOS (cells 8–10 reserved)
+    // ADDED GLOBAL VARIABLE FOR RESERVED PHOTOS (cells 8-10 reserved)
     let reservedPhotos = [];
+
     // NEW FUNCTIONS FOR RESERVED PHOTOS:
     function loadReservedPhotos() {
       const stored = localStorage.getItem("reservedPhotos");
@@ -830,7 +831,7 @@ Using Sales Report and Product List Files:
       e.preventDefault(); e.stopPropagation();
       dropZone.style.borderColor = "#ccc";
       const files = e.dataTransfer.files;
-      const maxRemaining = 10 - previewImages.length - reservedPhotos.length;
+      const maxRemaining = 10 - previewImages.length;
       for (let i = 0; i < Math.min(files.length, maxRemaining); i++) {
         const file = files[i];
         if (file.type === "image/jpeg" || file.type === "image/png") {
@@ -904,7 +905,7 @@ Using Sales Report and Product List Files:
             numOverlay.className = "number-overlay";
             numOverlay.textContent = (i + 1).toString();
             previewBox.appendChild(numOverlay);
-            // REMOVED CROP BUTTON FOR RESERVED PHOTOS
+            // Do NOT add Crop button for reserved photos
             previewBox.addEventListener("click", () => {
               showMetadata(i);
             });
@@ -922,7 +923,7 @@ Using Sales Report and Product List Files:
           cell.addEventListener("drop", function(e) {
             e.preventDefault();
             cell.classList.remove("drag-over");
-            // New alternate approach for reserved cell drop:
+            // For external file drop onto reserved cell
             if(e.dataTransfer.files && e.dataTransfer.files.length > 0) {
               const file = e.dataTransfer.files[0];
               if(file.type === "image/jpeg" || file.type === "image/png") {
@@ -948,33 +949,22 @@ Using Sales Report and Product List Files:
                 reader.readAsDataURL(file);
               }
             } else {
-              // Handle internal drag drop (swapping) between reserved cells
+              // Internal drag-drop within reserved area only
               let targetIndex = i;
               if(draggedIndex === null) {
+                return;
+              }
+              // Block drop if dragged from non-reserved area
+              if(draggedIndex < 7) {
                 return;
               }
               if(draggedIndex === targetIndex) {
                 return;
               }
-              if(draggedIndex < 7) {
-                let newReserved = {
-                  src: previewImages[draggedIndex],
-                  name: photoNames[draggedIndex],
-                  meta: photoMeta[draggedIndex],
-                  id: photoIds[draggedIndex]
-                };
-                previewImages.splice(draggedIndex, 1);
-                photoNames.splice(draggedIndex, 1);
-                photoMeta.splice(draggedIndex, 1);
-                photoIds.splice(draggedIndex, 1);
-                reservedPhotos[rIndex] = newReserved;
-                saveReservedPhotos();
-              } else {
-                let temp = reservedPhotos[draggedIndex - 7];
-                reservedPhotos[draggedIndex - 7] = reservedPhotos[rIndex];
-                reservedPhotos[rIndex] = temp;
-                saveReservedPhotos();
-              }
+              let temp = reservedPhotos[draggedIndex - 7];
+              reservedPhotos[draggedIndex - 7] = reservedPhotos[rIndex];
+              reservedPhotos[rIndex] = temp;
+              saveReservedPhotos();
               updateStaticPreviewGrid();
               updatePrimaryPreview();
               draggedIndex = null;
@@ -992,6 +982,8 @@ Using Sales Report and Product List Files:
             previewBox.className = "preview-box";
             previewBox.setAttribute("data-id", photoIds[i]);
             previewBox.addEventListener("dragstart", e => {
+              // Block drag-drop if dragging reserved photo from non-reserved area
+              if(i >= 7) return;
               draggedIndex = i;
             });
             const img = document.createElement("img");
@@ -1046,6 +1038,10 @@ Using Sales Report and Product List Files:
               cell.classList.remove("drag-over");
               let targetIndex = i;
               if(draggedIndex === null) {
+                return;
+              }
+              // Block drop if dragging from reserved area
+              if(draggedIndex >= 7) {
                 return;
               }
               if(draggedIndex === targetIndex) {
@@ -1275,47 +1271,24 @@ Using Sales Report and Product List Files:
           return;
         }
       }
-      // Build an array of photos to upload for all 10 grid cells.
-      // For cells 0-6, use previewImages; for cells 7-9, use reservedPhotos.
-      let allPhotos = [];
-      for (let i = 0; i < 7; i++) {
-        if (previewImages[i]) {
-          allPhotos.push({
-            src: previewImages[i],
-            name: photoNames[i],
-            meta: photoMeta[i] || "",
-            rank: i + 1
-          });
-        }
-      }
-      for (let j = 0; j < 3; j++) {
-        if (reservedPhotos[j] && reservedPhotos[j].src) {
-          allPhotos.push({
-            src: reservedPhotos[j].src,
-            name: reservedPhotos[j].name,
-            meta: reservedPhotos[j].meta || "",
-            rank: 7 + j + 1
-          });
-        }
-      }
-      if (allPhotos.length === 0) {
+      if (previewImages.length === 0) {
         M.toast({ html: "No images to upload. Please drag and drop images first." });
         return;
       }
-      for (let i = 0; i < allPhotos.length; i++) {
-        const dataURL = allPhotos[i].src;
-        const altText = allPhotos[i].meta;
-        const rankNumber = allPhotos[i].rank;
+      for (let i = 0; i < previewImages.length; i++) {
+        const dataURL = previewImages[i];
+        const altText = photoMeta[i] || "";
+        const rankNumber = i + 1;
         try {
           const res = await fetch(dataURL);
           const blob = await res.blob();
           const formData = new FormData();
           formData.append("listingId", listingId);
           formData.append("token", accessToken);
-          formData.append("fileName", allPhotos[i].name || `uploaded_photo_${i}.jpg`);
+          formData.append("fileName", photoNames[i] || `uploaded_photo_${i}.jpg`);
           formData.append("rank", rankNumber);
           formData.append("alt_text", altText);
-          formData.append("file", blob, allPhotos[i].name || `uploaded_photo_${i}.jpg`);
+          formData.append("file", blob, photoNames[i] || `uploaded_photo_${i}.jpg`);
           const uploadUrl = `/.netlify/functions/imageUpload`;
           const response = await fetch(uploadUrl, {
             method: "POST",
@@ -1324,7 +1297,7 @@ Using Sales Report and Product List Files:
           if (!response.ok) {
             M.toast({ html: `Error uploading photo #${rankNumber}: ` + response.status });
           } else {
-            M.toast({ html: `Photo #${rankNumber} uploaded successfully!` });
+            M.toast({ html: `Photo #${rankNumber} uploaded with alt_text!` });
           }
         } catch (e) {
           console.error(`Exception uploading photo #${rankNumber}:`, e);
@@ -1609,9 +1582,7 @@ Generate exactly 13 tag phrases (each ≤ 20 characters). Return as plain text.
       currentCropIndex = index;
       const cropModal = document.getElementById("photoCropModal");
       const cropImage = document.getElementById("cropImage");
-      // Set the cropImage src to the preview image
       cropImage.src = previewImages[index];
-      // When the image is loaded, initialize Cropper.js
       cropImage.onload = function() {
         cropper = new Cropper(cropImage, {
           viewMode: 1,
@@ -1670,7 +1641,7 @@ Generate exactly 13 tag phrases (each ≤ 20 characters). Return as plain text.
     });
 
     // ----------------------------------------------------------------------
-    // NEW FUNCTIONS & MODIFICATIONS FOR RESERVED PHOTOS (cells 8–10)
+    // NEW FUNCTIONS & MODIFICATIONS FOR RESERVED PHOTOS (cells 8-10)
     // ----------------------------------------------------------------------
     function updateStaticPreviewGrid() {
       for (let i = 0; i < 10; i++) {
@@ -1703,7 +1674,7 @@ Generate exactly 13 tag phrases (each ≤ 20 characters). Return as plain text.
             numOverlay.className = "number-overlay";
             numOverlay.textContent = (i + 1).toString();
             previewBox.appendChild(numOverlay);
-            // DO NOT ADD CROP BUTTON FOR RESERVED PHOTOS
+            // Do NOT add Crop button for reserved photos
             previewBox.addEventListener("click", () => {
               showMetadata(i);
             });
@@ -1721,7 +1692,6 @@ Generate exactly 13 tag phrases (each ≤ 20 characters). Return as plain text.
           cell.addEventListener("drop", function(e) {
             e.preventDefault();
             cell.classList.remove("drag-over");
-            // New alternate approach for reserved cell drop:
             if(e.dataTransfer.files && e.dataTransfer.files.length > 0) {
               const file = e.dataTransfer.files[0];
               if(file.type === "image/jpeg" || file.type === "image/png") {
@@ -1747,33 +1717,21 @@ Generate exactly 13 tag phrases (each ≤ 20 characters). Return as plain text.
                 reader.readAsDataURL(file);
               }
             } else {
-              // Handle internal drag drop (swapping) between reserved cells
               let targetIndex = i;
               if(draggedIndex === null) {
+                return;
+              }
+              // Block cross-zone drop: if dragged from non-reserved area, do nothing
+              if(draggedIndex < 7) {
                 return;
               }
               if(draggedIndex === targetIndex) {
                 return;
               }
-              if(draggedIndex < 7) {
-                let newReserved = {
-                  src: previewImages[draggedIndex],
-                  name: photoNames[draggedIndex],
-                  meta: photoMeta[draggedIndex],
-                  id: photoIds[draggedIndex]
-                };
-                previewImages.splice(draggedIndex, 1);
-                photoNames.splice(draggedIndex, 1);
-                photoMeta.splice(draggedIndex, 1);
-                photoIds.splice(draggedIndex, 1);
-                reservedPhotos[rIndex] = newReserved;
-                saveReservedPhotos();
-              } else {
-                let temp = reservedPhotos[draggedIndex - 7];
-                reservedPhotos[draggedIndex - 7] = reservedPhotos[rIndex];
-                reservedPhotos[rIndex] = temp;
-                saveReservedPhotos();
-              }
+              let temp = reservedPhotos[draggedIndex - 7];
+              reservedPhotos[draggedIndex - 7] = reservedPhotos[rIndex];
+              reservedPhotos[rIndex] = temp;
+              saveReservedPhotos();
               updateStaticPreviewGrid();
               updatePrimaryPreview();
               draggedIndex = null;
@@ -1791,6 +1749,8 @@ Generate exactly 13 tag phrases (each ≤ 20 characters). Return as plain text.
             previewBox.className = "preview-box";
             previewBox.setAttribute("data-id", photoIds[i]);
             previewBox.addEventListener("dragstart", e => {
+              // Block drag if the dragged item is reserved
+              if(i >= 7) return;
               draggedIndex = i;
             });
             const img = document.createElement("img");
@@ -1845,6 +1805,10 @@ Generate exactly 13 tag phrases (each ≤ 20 characters). Return as plain text.
               cell.classList.remove("drag-over");
               let targetIndex = i;
               if(draggedIndex === null) {
+                return;
+              }
+              // Block drop if dragging from reserved area
+              if(draggedIndex >= 7) {
                 return;
               }
               if(draggedIndex === targetIndex) {
@@ -2074,46 +2038,24 @@ Generate exactly 13 tag phrases (each ≤ 20 characters). Return as plain text.
           return;
         }
       }
-      // Build an array for all 10 grid cells:
-      let allPhotos = [];
-      for (let i = 0; i < 7; i++) {
-        if (previewImages[i]) {
-          allPhotos.push({
-            src: previewImages[i],
-            name: photoNames[i],
-            meta: photoMeta[i] || "",
-            rank: i + 1
-          });
-        }
-      }
-      for (let j = 0; j < 3; j++) {
-        if (reservedPhotos[j] && reservedPhotos[j].src) {
-          allPhotos.push({
-            src: reservedPhotos[j].src,
-            name: reservedPhotos[j].name,
-            meta: reservedPhotos[j].meta || "",
-            rank: 7 + j + 1
-          });
-        }
-      }
-      if (allPhotos.length === 0) {
+      if (previewImages.length === 0) {
         M.toast({ html: "No images to upload. Please drag and drop images first." });
         return;
       }
-      for (let i = 0; i < allPhotos.length; i++) {
-        const dataURL = allPhotos[i].src;
-        const altText = allPhotos[i].meta;
-        const rankNumber = allPhotos[i].rank;
+      for (let i = 0; i < previewImages.length; i++) {
+        const dataURL = previewImages[i];
+        const altText = photoMeta[i] || "";
+        const rankNumber = i + 1;
         try {
           const res = await fetch(dataURL);
           const blob = await res.blob();
           const formData = new FormData();
           formData.append("listingId", listingId);
           formData.append("token", accessToken);
-          formData.append("fileName", allPhotos[i].name || `uploaded_photo_${i}.jpg`);
+          formData.append("fileName", photoNames[i] || `uploaded_photo_${i}.jpg`);
           formData.append("rank", rankNumber);
           formData.append("alt_text", altText);
-          formData.append("file", blob, allPhotos[i].name || `uploaded_photo_${i}.jpg`);
+          formData.append("file", blob, photoNames[i] || `uploaded_photo_${i}.jpg`);
           const uploadUrl = `/.netlify/functions/imageUpload`;
           const response = await fetch(uploadUrl, {
             method: "POST",
@@ -2122,7 +2064,7 @@ Generate exactly 13 tag phrases (each ≤ 20 characters). Return as plain text.
           if (!response.ok) {
             M.toast({ html: `Error uploading photo #${rankNumber}: ` + response.status });
           } else {
-            M.toast({ html: `Photo #${rankNumber} uploaded successfully!` });
+            M.toast({ html: `Photo #${rankNumber} uploaded with alt_text!` });
           }
         } catch (e) {
           console.error(`Exception uploading photo #${rankNumber}:`, e);
