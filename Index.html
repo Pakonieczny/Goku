@@ -544,11 +544,12 @@ Using Sales Report and Product List Files:
   </div>
 
   <!-- Crop Modal -->
+  <!-- UPDATED CROP MODAL: Modal size 500x500 with a 400x400 preview box centered inside -->
   <div id="photoCropModal" class="modal">
-    <div class="crop-container">
+    <div class="crop-container" style="width:500px; height:500px; margin:0 auto;">
       <h4 style="text-align:center; margin: 0 0 10px 0;">Crop Photo</h4>
-      <div class="img-container">
-        <img id="cropImage" src="" alt="Crop Image">
+      <div class="img-container" style="width:400px; height:400px; margin:0 auto; overflow:hidden; position:relative;">
+        <img id="cropImage" src="" alt="Crop Image" style="position:absolute; cursor:move; transform-origin:center center;">
       </div>
       <div class="controls">
         <label for="zoomSlider">Zoom:</label>
@@ -564,6 +565,7 @@ Using Sales Report and Product List Files:
       </div>
     </div>
   </div>
+  <!-- End Crop Modal -->
 
   <!-- Include jQuery and Materialize JS -->
   <script src="https://code.jquery.com/jquery-3.6.0.min.js"></script>
@@ -833,7 +835,7 @@ Using Sales Report and Product List Files:
     }
 
     // ----------------------------------------------------------------------
-    // REORDER LOGIC in updateStaticPreviewGrid()
+    // REORDER LOGIC in updateStaticPreviewGrid() using custom native events
     // ----------------------------------------------------------------------
     function updateStaticPreviewGrid() {
       for (let i = 0; i < 10; i++) {
@@ -868,6 +870,25 @@ Using Sales Report and Product List Files:
           numOverlay.className = "number-overlay";
           numOverlay.textContent = (i + 1).toString();
           previewBox.appendChild(numOverlay);
+          // ADDED: Crop button 20x20 round at bottom-right of each previewBox
+          var cropBtn = document.createElement("button");
+          cropBtn.className = "crop-btn";
+          cropBtn.style.cssText = "width:20px; height:20px; border-radius:50%; position:absolute; bottom:2px; right:2px; padding:0; margin:0; background-color:#4CAF50; color:white; border:none;";
+          cropBtn.innerHTML = "C";
+          cropBtn.addEventListener("click", function(ev) {
+            ev.stopPropagation();
+            currentCropIndex = i;
+            cropImage.src = previewImages[i];
+            zoomSlider.value = 1;
+            cropImage.style.transform = "scale(1)";
+            centerCropImage();
+            let cropModalInstance = M.Modal.getInstance(document.getElementById("photoCropModal"));
+            if (!cropModalInstance) {
+              cropModalInstance = M.Modal.init(document.getElementById("photoCropModal"));
+            }
+            cropModalInstance.open();
+          });
+          previewBox.appendChild(cropBtn);
           previewBox.addEventListener("click", () => {
             showMetadata(i);
           });
@@ -977,6 +998,99 @@ Using Sales Report and Product List Files:
     }
 
     // ----------------------------------------------------------------------
+    // UPDATED CROP MODAL CODE START
+    // ----------------------------------------------------------------------
+    const cropImage = document.getElementById("cropImage");
+    const zoomSlider = document.getElementById("zoomSlider");
+    let currentCropIndex = null;
+    // CENTER FUNCTION: Updated to use .img-container
+    function centerCropImage() {
+      const container = document.querySelector("#photoCropModal .img-container");
+      const containerRect = container.getBoundingClientRect();
+      const zoom = parseFloat(zoomSlider.value);
+      const displayedWidth = cropImage.offsetWidth * zoom;
+      const displayedHeight = cropImage.offsetHeight * zoom;
+      cropImage.style.left = ((containerRect.width - displayedWidth) / 2) + "px";
+      cropImage.style.top = ((containerRect.height - displayedHeight) / 2) + "px";
+    }
+    // When the crop modal opens, center the image and set transform-origin to center
+    cropImage.onload = function() {
+      cropImage.style.transformOrigin = "center center";
+      centerCropImage();
+    };
+    zoomSlider.addEventListener("input", function() {
+      const zoom = this.value;
+      cropImage.style.transform = "scale(" + zoom + ")";
+      centerCropImage();
+    });
+    // ADD PAN FUNCTIONALITY TO CROP IMAGE
+    let isPanning = false;
+    let startX, startY, initialLeft, initialTop;
+    cropImage.addEventListener("mousedown", function(e) {
+      e.preventDefault();
+      isPanning = true;
+      startX = e.clientX;
+      startY = e.clientY;
+      const style = window.getComputedStyle(cropImage);
+      initialLeft = parseFloat(style.left) || 0;
+      initialTop = parseFloat(style.top) || 0;
+    });
+    document.addEventListener("mousemove", function(e) {
+      if (!isPanning) return;
+      let dx = e.clientX - startX;
+      let dy = e.clientY - startY;
+      cropImage.style.left = (initialLeft + dx) + "px";
+      cropImage.style.top = (initialTop + dy) + "px";
+    });
+    document.addEventListener("mouseup", function(e) {
+      isPanning = false;
+    });
+    document.getElementById("saveCropBtn").addEventListener("click", async function() {
+      if (currentCropIndex === null) return;
+      const container = document.querySelector("#photoCropModal .img-container");
+      const containerRect = container.getBoundingClientRect();
+      const style = window.getComputedStyle(cropImage);
+      const left = parseFloat(style.left) || 0;
+      const top = parseFloat(style.top) || 0;
+      const zoom = parseFloat(zoomSlider.value);
+      const naturalWidth = cropImage.naturalWidth;
+      const naturalHeight = cropImage.naturalHeight;
+      const displayedWidth = cropImage.offsetWidth * zoom;
+      const displayedHeight = cropImage.offsetHeight * zoom;
+      const ratioX = naturalWidth / displayedWidth;
+      const ratioY = naturalHeight / displayedHeight;
+      const cropX = -left * ratioX;
+      const cropY = -top * ratioY;
+      const cropW = containerRect.width * ratioX;
+      const cropH = containerRect.height * ratioY;
+      const canvas = document.createElement("canvas");
+      canvas.width = cropW;
+      canvas.height = cropH;
+      const ctx = canvas.getContext("2d");
+      ctx.drawImage(cropImage, cropX, cropY, cropW, cropH, 0, 0, cropW, cropH);
+      const croppedDataURL = canvas.toDataURL("image/jpeg", 0.85);
+      const finalDataURL = await resizeImage(croppedDataURL, 3000, 3000);
+      previewImages[currentCropIndex] = finalDataURL;
+      updateStaticPreviewGrid();
+      updatePrimaryPreview();
+      let cropModalInstance = M.Modal.getInstance(document.getElementById("photoCropModal"));
+      if (cropModalInstance) {
+        cropModalInstance.close();
+      }
+      currentCropIndex = null;
+    });
+    document.getElementById("cancelCropBtn").addEventListener("click", function() {
+      let cropModalInstance = M.Modal.getInstance(document.getElementById("photoCropModal"));
+      if (cropModalInstance) {
+        cropModalInstance.close();
+      }
+      currentCropIndex = null;
+    });
+    // ----------------------------------------------------------------------
+    // UPDATED CROP MODAL CODE END
+    // ----------------------------------------------------------------------
+
+    // ----------------------------------------------------------------------
     // OAUTH CONNECT (Etsy)
     // ----------------------------------------------------------------------
     function generateRandomString(length) {
@@ -987,19 +1101,16 @@ Using Sales Report and Product List Files:
       }
       return text;
     }
-
     function base64urlEncode(buffer) {
       return btoa(String.fromCharCode(...new Uint8Array(buffer)))
         .replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, '');
     }
-
     async function generateCodeChallenge(codeVerifier) {
       const encoder = new TextEncoder();
       const data = encoder.encode(codeVerifier);
       const digest = await crypto.subtle.digest("SHA-256", data);
       return base64urlEncode(digest);
     }
-
     document.getElementById("connectEtsyBtn").addEventListener("click", async () => {
       const state = "randomState123";
       const scope = "listings_w listings_r";
@@ -1015,7 +1126,6 @@ Using Sales Report and Product List Files:
         `&code_challenge_method=S256`;
       window.location.href = etsyAuthUrl;
     });
-
     document.addEventListener("DOMContentLoaded", () => {
       loadButtonPositions();
       const urlParams = new URLSearchParams(window.location.search);
@@ -1027,7 +1137,6 @@ Using Sales Report and Product List Files:
       updateStaticPreviewGrid();
       updateUploadedFilesList();
     });
-
     async function exchangeCodeForToken(code) {
       const codeVerifier = localStorage.getItem("etsy_code_verifier");
       if (!codeVerifier) {
@@ -1048,7 +1157,6 @@ Using Sales Report and Product List Files:
         M.toast({ html: "Error exchanging code for token" });
       }
     }
-
     // ----------------------------------------------------------------------
     // UPDATE LISTING
     // ----------------------------------------------------------------------
@@ -1095,7 +1203,6 @@ Using Sales Report and Product List Files:
         M.toast({ html: "Exception: " + e.message });
       }
     });
-
     // ----------------------------------------------------------------------
     // UPLOAD PHOTOS (includes alt_text from photoMeta)
     // ----------------------------------------------------------------------
@@ -1151,14 +1258,12 @@ Using Sales Report and Product List Files:
         }
       }
     });
-
     // ----------------------------------------------------------------------
     // RULES & TITLE / DESCRIPTION GENERATION
     // ----------------------------------------------------------------------
     function stripMarkdownJSON(text) {
       return text.replace(/^```json\s*/, "").replace(/\s*```$/, "").trim();
     }
-
     async function generateTitleOnly() {
       const etsyLink = ETSY_SHOP_URL;
       const keyPhrases = document.getElementById("searchKeyPhrases").value.trim();
@@ -1198,7 +1303,6 @@ Important: Return ONLY the title as plain text.`;
         document.getElementById("listingTitle").value = "Error: " + error;
       }
     }
-
     async function generateDescriptionOnly() {
       const etsyLink = ETSY_SHOP_URL;
       const keyPhrases = document.getElementById("searchKeyPhrases").value.trim();
@@ -1237,7 +1341,6 @@ Important: Return ONLY the description as plain text.`;
         document.getElementById("listingDescription").value = "Error: " + error;
       }
     }
-
     async function callOpenAI(payload) {
       const response = await fetch("/.netlify/functions/openaiProxy", {
         method: "POST",
@@ -1251,17 +1354,14 @@ Important: Return ONLY the description as plain text.`;
       }
       return await response.json();
     }
-
     document.getElementById("generateBtn").addEventListener("click", async () => {
       await Promise.all([generateTitleOnly(), generateDescriptionOnly()]);
     });
     document.getElementById("regenTitleBtn").addEventListener("click", generateTitleOnly);
     document.getElementById("regenDescriptionBtn").addEventListener("click", generateDescriptionOnly);
-
     function updateTitleCount(text) {
       document.getElementById("titleCount").textContent = "Count: " + text.length;
     }
-
     // Copy to clipboard
     document.getElementById("copyTitleBtn").addEventListener("click", () => {
       const text = document.getElementById("listingTitle").value;
