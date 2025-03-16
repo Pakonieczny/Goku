@@ -1010,20 +1010,31 @@ Using Sales Report and Product List Files:
       new Sortable(document.getElementById("previewGridStatic"), {
         animation: 150,
         onEnd: function(evt) {
-          const oldIndex = evt.oldIndex;
-          const newIndex = evt.newIndex;
-          if (oldIndex === newIndex) return;
-          const [movedImage] = previewImages.splice(oldIndex, 1);
-          previewImages.splice(newIndex, 0, movedImage);
+  const oldIndex = evt.oldIndex;
+  const newIndex = evt.newIndex;
 
-          const [movedName] = photoNames.splice(oldIndex, 1);
-          photoNames.splice(newIndex, 0, movedName);
+  // 1) If user drags past the total images (into an "empty" cell),
+  //    ignore or revert. (No array changes.)
+  if (oldIndex >= previewImages.length || newIndex >= previewImages.length) {
+    return;
+  }
 
-          const [movedMeta] = photoMeta.splice(oldIndex, 1);
-          photoMeta.splice(newIndex, 0, movedMeta);
+  // 2) If it's the same position, do nothing:
+  if (oldIndex === newIndex) return;
 
-          updateStaticPreviewGrid();
-        }
+  // 3) Reorder each array:
+  const [movedImage] = previewImages.splice(oldIndex, 1);
+  previewImages.splice(newIndex, 0, movedImage);
+
+  const [movedName] = photoNames.splice(oldIndex, 1);
+  photoNames.splice(newIndex, 0, movedName);
+
+  const [movedMeta] = photoMeta.splice(oldIndex, 1);
+  photoMeta.splice(newIndex, 0, movedMeta);
+
+  // 4) Rebuild the grid so the rank overlay updates:
+  updateStaticPreviewGrid();
+}
       });
     });
 
