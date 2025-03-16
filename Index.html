@@ -1037,9 +1037,33 @@ Using Sales Report and Product List Files:
       updateStaticPreviewGrid();
       updateUploadedFilesList();
 
-      // ADDED LINES FOR SORTABLE INIT:
+      // PREVIOUS CODE: new Sortable(...) plus minimal additions:
       new Sortable(document.getElementById("previewGridStatic"), {
-        animation: 150
+        animation: 150,
+        draggable: ".preview-box",
+        onMove: function (evt) {
+          // Disallow dropping onto empty cells:
+          if (!evt.related.classList.contains("preview-box")) {
+            return false;
+          }
+        },
+        onEnd: function (evt) {
+          // Reorder photo arrays, so rank updates
+          const oldIndex = evt.oldIndex;
+          const newIndex = evt.newIndex;
+          if (oldIndex === newIndex) return;
+
+          const [movedImage] = previewImages.splice(oldIndex, 1);
+          previewImages.splice(newIndex, 0, movedImage);
+
+          const [movedName] = photoNames.splice(oldIndex, 1);
+          photoNames.splice(newIndex, 0, movedName);
+
+          const [movedMeta] = photoMeta.splice(oldIndex, 1);
+          photoMeta.splice(newIndex, 0, movedMeta);
+
+          updateStaticPreviewGrid();
+        }
       });
     });
 
