@@ -879,7 +879,7 @@ Using Sales Report and Product List Files:
           numOverlay.className = "number-overlay";
           numOverlay.textContent = (i + 1).toString();
           previewBox.appendChild(numOverlay);
-          // ADDED: Crop button 20x20 round at bottom-right of each previewBox
+          // ADD: Crop button 20x20 round at bottom-right of each previewBox
           var cropBtn = document.createElement("button");
           cropBtn.className = "crop-btn";
           cropBtn.style.cssText = "width:20px; height:20px; border-radius:50%; position:absolute; bottom:2px; right:2px; padding:0; margin:0; background-color:#4CAF50; color:white; border:none;";
@@ -1011,36 +1011,40 @@ Using Sales Report and Product List Files:
     // Initialize crop image to fit entirely within the 400x400 preview box and center it
     function initializeCropImage() {
       const container = document.querySelector("#photoCropModal .img-container");
-      const containerWidth = container.clientWidth; // should be 400
-      const containerHeight = container.clientHeight; // should be 400
+      const containerWidth = container.clientWidth; // 400
+      const containerHeight = container.clientHeight; // 400
       const naturalWidth = cropImage.naturalWidth;
       const naturalHeight = cropImage.naturalHeight;
       initialScale = Math.min(containerWidth / naturalWidth, containerHeight / naturalHeight);
       currentScale = initialScale;
-      currentLeft = (containerWidth - naturalWidth * initialScale) / 2;
-      currentTop = (containerHeight - naturalHeight * initialScale) / 2;
+      // Center the image in the preview box
+      currentLeft = (containerWidth - naturalWidth * currentScale) / 2;
+      currentTop = (containerHeight - naturalHeight * currentScale) / 2;
       updateCropImageTransform();
     }
-    // Update transform using combined translate and scale so that the image is centered and scaled correctly
+    // Update transform: translate and scale
     function updateCropImageTransform() {
       cropImage.style.transform = "translate(" + currentLeft + "px, " + currentTop + "px) scale(" + currentScale + ")";
     }
     // When crop image loads, initialize it
     cropImage.onload = function() {
       cropImage.style.position = "absolute";
-      // Remove transformOrigin override so calculations are based on top-left origin
-      // cropImage.style.transformOrigin = "center center";
       initializeCropImage();
     };
-    // Zoom slider: recalc translation to always center the image in the preview box
+    // Zoom slider: when adjusted, maintain the current center of the visible image.
     zoomSlider.addEventListener("input", function() {
       const newScale = parseFloat(this.value);
       const container = document.querySelector("#photoCropModal .img-container");
       const containerWidth = container.clientWidth;
       const containerHeight = container.clientHeight;
+      // Compute the current center of the visible image
+      const visibleCenterX = -currentLeft + containerWidth / 2;
+      const visibleCenterY = -currentTop + containerHeight / 2;
+      // Compute new translation so that the same image point remains centered
+      const scaleFactor = newScale / currentScale;
+      currentLeft = containerWidth / 2 - visibleCenterX * scaleFactor;
+      currentTop = containerHeight / 2 - visibleCenterY * scaleFactor;
       currentScale = newScale;
-      currentLeft = (containerWidth - cropImage.naturalWidth * currentScale) / 2;
-      currentTop = (containerHeight - cropImage.naturalHeight * currentScale) / 2;
       updateCropImageTransform();
     });
     // Pan functionality for crop image
@@ -1069,6 +1073,7 @@ Using Sales Report and Product List Files:
       const container = document.querySelector("#photoCropModal .img-container");
       const containerWidth = container.clientWidth;
       const containerHeight = container.clientHeight;
+      // Calculate crop coordinates based on current translation and scale
       const cropX = -currentLeft / currentScale;
       const cropY = -currentTop / currentScale;
       const cropW = containerWidth / currentScale;
