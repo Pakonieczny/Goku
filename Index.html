@@ -839,20 +839,15 @@ Using Sales Report and Product List Files:
       for (let i = 0; i < 10; i++) {
         const cell = document.getElementById("previewCell" + i);
         cell.innerHTML = "Empty";
-
         if (i < previewImages.length) {
           cell.innerHTML = "";
-
           const previewBox = document.createElement("div");
           previewBox.className = "preview-box";
-          // We use the stable ID for data-attr
           previewBox.setAttribute("data-id", photoIds[i]);
-          previewBox.draggable = true; // even though we'll rely on html5sortable
-
+          previewBox.draggable = true;
           const img = document.createElement("img");
           img.src = previewImages[i];
           previewBox.appendChild(img);
-
           const removeBtn = document.createElement("div");
           removeBtn.className = "remove-btn";
           removeBtn.textContent = "X";
@@ -866,18 +861,14 @@ Using Sales Report and Product List Files:
             updatePrimaryPreview();
           });
           previewBox.appendChild(removeBtn);
-
           const numOverlay = document.createElement("div");
           numOverlay.className = "number-overlay";
           numOverlay.textContent = (i + 1).toString();
           previewBox.appendChild(numOverlay);
-
           previewBox.addEventListener("click", () => {
             showMetadata(i);
           });
-
           cell.appendChild(previewBox);
-
           const metadataStatus = document.createElement("div");
           metadataStatus.className = "metadata-status";
           metadataStatus.id = "metadataStatus" + i;
@@ -910,35 +901,29 @@ Using Sales Report and Product List Files:
       const statusElem = document.getElementById("metadataStatus" + index);
       if (!statusElem) return;
       statusElem.innerHTML = "";
-
       const progressBar = document.createElement("progress");
       progressBar.className = "metadata-progress";
       progressBar.max = 100;
       progressBar.value = 0;
       statusElem.appendChild(progressBar);
-
       let progress = 0;
       const interval = setInterval(() => {
         progress = Math.min(progress + 3, 60);
         progressBar.value = progress;
       }, 100);
-
       try {
         const rulesText = document.getElementById("analyzeRulesTextarea").value || "";
         const dataURL = previewImages[index];
         const blob = await (await fetch(dataURL)).blob();
-
         const formData = new FormData();
         formData.append("rules", rulesText);
         formData.append("imageFile", blob, photoNames[index] || `image_${index}.jpg`);
-
         const resp = await fetch("/.netlify/functions/analyzeImage", {
           method: "POST",
           body: formData
         });
         clearInterval(interval);
         progressBar.value = 80;
-
         if (!resp.ok) {
           const errData = await resp.text();
           throw new Error(`analyzeImage error: ${resp.status} - ${errData}`);
@@ -946,7 +931,6 @@ Using Sales Report and Product List Files:
         const json = await resp.json();
         photoMeta[index] = json.metadata || "No metadata returned.";
         progressBar.value = 100;
-
         statusElem.innerHTML = '<span style="color:green; font-size:16px;"><i class="material-icons">check_circle</i></span>';
       } catch (err) {
         clearInterval(interval);
@@ -984,7 +968,6 @@ Using Sales Report and Product List Files:
       const codeVerifier = generateRandomString(64);
       localStorage.setItem("etsy_code_verifier", codeVerifier);
       const codeChallenge = await generateCodeChallenge(codeVerifier);
-
       const etsyAuthUrl =
         `https://www.etsy.com/oauth/connect?response_type=code&client_id=${CLIENT_ID}` +
         `&redirect_uri=${encodeURIComponent(REDIRECT_URI)}` +
@@ -992,7 +975,6 @@ Using Sales Report and Product List Files:
         `&state=${state}` +
         `&code_challenge=${encodeURIComponent(codeChallenge)}` +
         `&code_challenge_method=S256`;
-
       window.location.href = etsyAuthUrl;
     });
 
@@ -1008,20 +990,20 @@ Using Sales Report and Product List Files:
       updateUploadedFilesList();
 
       // Initialize HTML5Sortable on the grid container:
-      sortable('#previewGridStatic');
-
-      // On "sortupdate", reorder our in-memory arrays by stable ID and update rank numbers
-      document.getElementById('previewGridStatic').addEventListener('sortupdate', function(e) {
-        const finalOrder = Array.from(document.querySelectorAll('#previewGridStatic .preview-box'))
-          .map(el => el.getAttribute('data-id'));
-        reorderArraysToMatch(finalOrder);
-        const previewBoxes = document.querySelectorAll('#previewGridStatic .preview-box');
-        previewBoxes.forEach((box, index) => {
-          const overlay = box.querySelector('.number-overlay');
-          if (overlay) {
-            overlay.textContent = (index + 1).toString();
-          }
-        });
+      sortable('#previewGridStatic', {
+        items: '.preview-box',
+        onUpdate: function(e) {
+          const finalOrder = Array.from(document.querySelectorAll('#previewGridStatic .preview-box'))
+            .map(el => el.getAttribute('data-id'));
+          reorderArraysToMatch(finalOrder);
+          const previewBoxes = document.querySelectorAll('#previewGridStatic .preview-box');
+          previewBoxes.forEach((box, index) => {
+            const overlay = box.querySelector('.number-overlay');
+            if (overlay) {
+              overlay.textContent = (index + 1).toString();
+            }
+          });
+        }
       });
     });
 
@@ -1052,7 +1034,6 @@ Using Sales Report and Product List Files:
       let newPhotoNames = [];
       let newPhotoMeta = [];
       let newIds = [];
-
       finalOrder.forEach(stableId => {
         const oldIndex = photoIds.indexOf(stableId);
         newPreviewImages.push(previewImages[oldIndex]);
@@ -1060,7 +1041,6 @@ Using Sales Report and Product List Files:
         newPhotoMeta.push(photoMeta[oldIndex]);
         newIds.push(photoIds[oldIndex]);
       });
-
       previewImages = newPreviewImages;
       photoNames = newPhotoNames;
       photoMeta = newPhotoMeta;
@@ -1088,7 +1068,6 @@ Using Sales Report and Product List Files:
           return;
         }
       }
-
       const payload = {
         title: document.getElementById("listingTitle").value,
         description: document.getElementById("listingDescription").value,
@@ -1140,14 +1119,11 @@ Using Sales Report and Product List Files:
         M.toast({ html: "No images to upload. Please drag and drop images first." });
         return;
       }
-
       for (let i = 0; i < previewImages.length; i++) {
         const dataURL = previewImages[i];
-        const altText = photoMeta[i] || "";  // alt_text from analyze step
+        const altText = photoMeta[i] || "";
         const rankNumber = i + 1;
-
         try {
-          // Convert dataURL -> blob
           const res = await fetch(dataURL);
           const blob = await res.blob();
           const formData = new FormData();
@@ -1157,7 +1133,6 @@ Using Sales Report and Product List Files:
           formData.append("rank", rankNumber);
           formData.append("alt_text", altText);
           formData.append("file", blob, photoNames[i] || `uploaded_photo_${i}.jpg`);
-
           const uploadUrl = `/.netlify/functions/imageUpload`;
           const response = await fetch(uploadUrl, {
             method: "POST",
@@ -1199,7 +1174,6 @@ Search Key Phrases: "${keyPhrases}"
 --- Rules for TITLE ---
 ${stripMarkdownJSON(rulesText)}
 Important: Return ONLY the title as plain text.`;
-
       document.getElementById("listingTitle").value = "Generating title...";
       const payload = {
         model: modelName,
@@ -1209,7 +1183,6 @@ Important: Return ONLY the title as plain text.`;
         ],
         temperature: 0.7
       };
-
       try {
         const data = await callOpenAI(payload);
         if (data.choices && data.choices.length > 0) {
@@ -1241,7 +1214,6 @@ Search Key Phrases: "${keyPhrases}"
 --- Rules for DESCRIPTION ---
 ${stripMarkdownJSON(rulesText)}
 Important: Return ONLY the description as plain text.`;
-
       document.getElementById("listingDescription").value = "Generating description...";
       const payload = {
         model: modelName,
@@ -1251,7 +1223,6 @@ Important: Return ONLY the description as plain text.`;
         ],
         temperature: 0.7
       };
-
       try {
         const data = await callOpenAI(payload);
         if (data.choices && data.choices.length > 0) {
@@ -1307,7 +1278,6 @@ Important: Return ONLY the description as plain text.`;
       navigator.clipboard.writeText(lines.join(", "))
         .catch(err => console.error("Error copying key phrases:", err));
     });
-
     // Key phrase generation from "listingDescInput" if needed
     document.getElementById("listingDescInput").addEventListener("keydown", async (e) => {
       if (e.key === "Enter" && !e.shiftKey) {
@@ -1315,10 +1285,6 @@ Important: Return ONLY the description as plain text.`;
         await generateTagPhrases();
       }
     });
-
-    async function generateTagThrases() {
-      // (Function body unchanged)
-    }
     async function generateTagPhrases() {
       const question = document.getElementById("listingDescInput").value.trim();
       if (!question) {
@@ -1358,7 +1324,6 @@ Generate exactly 13 tag phrases (each ≤ 20 characters). Return as plain text.
         M.toast({ html: "Error generating tag phrases: " + err.message });
       }
     }
-
     // ----------------------------------------------------------------------
     // BUTTON CONFIG
     // ----------------------------------------------------------------------
@@ -1377,14 +1342,12 @@ Generate exactly 13 tag phrases (each ≤ 20 characters). Return as plain text.
         "#container13",
         "#uploadedFilesList"
       ].join(", ");
-
       const elements = document.querySelectorAll(selectors);
       const table = document.createElement("table");
       table.className = "striped";
       const thead = document.createElement("thead");
       thead.innerHTML = "<tr><th>Element ID</th><th>Top (px)</th><th>Left (px)</th></tr>";
       table.appendChild(thead);
-
       const tbody = document.createElement("tbody");
       elements.forEach(el => {
         const id = el.id;
@@ -1409,7 +1372,6 @@ Generate exactly 13 tag phrases (each ≤ 20 characters). Return as plain text.
       });
       table.appendChild(tbody);
       configContainer.appendChild(table);
-
       const modalElem = document.getElementById("buttonConfigModal");
       let modalInstance = M.Modal.getInstance(modalElem);
       if (!modalInstance) {
@@ -1417,7 +1379,6 @@ Generate exactly 13 tag phrases (each ≤ 20 characters). Return as plain text.
       }
       modalInstance.open();
     });
-
     document.getElementById("saveButtonPositionsBtn").addEventListener("click", () => {
       const selectors = [
         "button:not(#configureButtonsBtn)",
@@ -1431,7 +1392,6 @@ Generate exactly 13 tag phrases (each ≤ 20 characters). Return as plain text.
         "#container13",
         "#uploadedFilesList"
       ].join(", ");
-
       const elements = document.querySelectorAll(selectors);
       const positions = {};
       elements.forEach(el => {
@@ -1443,7 +1403,6 @@ Generate exactly 13 tag phrases (each ≤ 20 characters). Return as plain text.
       localStorage.setItem("buttonPositions", JSON.stringify(positions));
       M.toast({ html: "Button positions saved." });
     });
-
     function loadButtonPositions() {
       const stored = localStorage.getItem("buttonPositions");
       if (stored) {
@@ -1457,7 +1416,6 @@ Generate exactly 13 tag phrases (each ≤ 20 characters). Return as plain text.
         }
       }
     }
-
     window.addEventListener("load", () => {
       const container13 = document.getElementById("container13");
       container13.style.height = (container13.offsetHeight * 2.5) + "px";
