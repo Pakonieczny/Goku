@@ -16,10 +16,8 @@
   >
   <!-- Include piexifjs for EXIF manipulation (optional, if needed) -->
   <script src="https://cdn.jsdelivr.net/npm/piexifjs@1.0.4/piexif.min.js"></script>
-
-  <!-- STEP A: Added SortableJS script, but NOT initializing it yet. -->
+  <!-- ADDED LINE FOR SORTABLEJS: -->
   <script src="https://cdn.jsdelivr.net/npm/sortablejs@1.14.0/Sortable.min.js"></script>
-
   <style>
     /* Basic layout */
     html, body {
@@ -1038,6 +1036,11 @@ Using Sales Report and Product List Files:
       }
       updateStaticPreviewGrid();
       updateUploadedFilesList();
+
+      // ADDED LINES FOR SORTABLE INIT:
+      new Sortable(document.getElementById("previewGridStatic"), {
+        animation: 150
+      });
     });
 
     async function exchangeCodeForToken(code) {
