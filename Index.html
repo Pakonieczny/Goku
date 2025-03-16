@@ -16,8 +16,8 @@
   >
   <!-- Include piexifjs for EXIF manipulation (optional, if needed) -->
   <script src="https://cdn.jsdelivr.net/npm/piexifjs@1.0.4/piexif.min.js"></script>
-  <!-- ADDED LINE FOR SORTABLEJS: -->
-  <script src="https://cdn.jsdelivr.net/npm/sortablejs@1.14.0/Sortable.min.js"></script>
+  <!-- REMOVE SortableJS, ADD HTML5Sortable (MINIMAL CHANGE ONLY) -->
+  <script src="https://cdn.jsdelivr.net/npm/html5sortable@0.9.21/dist/html5sortable.min.js"></script>
   <style>
     /* Basic layout */
     html, body {
@@ -1008,17 +1008,17 @@ Using Sales Report and Product List Files:
       updateStaticPreviewGrid();
       updateUploadedFilesList();
 
-      // Sortable init on the entire #previewGridStatic container:
-      new Sortable(document.getElementById("previewGridStatic"), {
-        animation: 150,
-        // ADDED to read data-id from each preview box:
-        dataIdAttr: "data-id",
-        onEnd: function (evt) {
-          // We'll read the final IDs from toArray:
-          const finalOrder = this.toArray();
-          reorderArraysToMatch(finalOrder);
-          updateStaticPreviewGrid();
-        }
+      // REMOVE Sortable code; ADD HTML5Sortable usage
+      // Initialize the container with html5sortable:
+      sortable('#previewGridStatic');
+
+      // Listen for "sortupdate" event to reorder arrays to final ID sequence:
+      document.getElementById("previewGridStatic").addEventListener('sortupdate', function(e) {
+        // get final order by reading data-id in the new child arrangement
+        const finalOrder = Array.from(document.getElementById("previewGridStatic").querySelectorAll('[data-id]'))
+          .map(x => x.getAttribute('data-id'));
+        reorderArraysToMatch(finalOrder);
+        updateStaticPreviewGrid();
       });
     });
 
