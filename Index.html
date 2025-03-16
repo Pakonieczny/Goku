@@ -860,7 +860,6 @@ Using Sales Report and Product List Files:
       }
     });
 
-    // UPDATED updatePrimaryPreview() FUNCTION:
     function updatePrimaryPreview() {
       const primaryPreview = document.getElementById("primaryPreview");
       if (previewImages.length > 0) {
@@ -939,35 +938,63 @@ Using Sales Report and Product List Files:
           cell.addEventListener("drop", function(e) {
             e.preventDefault();
             cell.classList.remove("drag-over");
-            let targetIndex = i;
-            if(draggedIndex === null) {
-              return;
-            }
-            if(draggedIndex === targetIndex) {
-              return;
-            }
-            if(draggedIndex < 7) {
-              let newReserved = {
-                src: previewImages[draggedIndex],
-                name: photoNames[draggedIndex],
-                meta: photoMeta[draggedIndex],
-                id: photoIds[draggedIndex]
-              };
-              previewImages.splice(draggedIndex, 1);
-              photoNames.splice(draggedIndex, 1);
-              photoMeta.splice(draggedIndex, 1);
-              photoIds.splice(draggedIndex, 1);
-              reservedPhotos[rIndex] = newReserved;
-              saveReservedPhotos();
+            // New alternate approach: If files are dropped externally onto a reserved cell
+            if(e.dataTransfer.files && e.dataTransfer.files.length > 0) {
+              const file = e.dataTransfer.files[0];
+              if(file.type === "image/jpeg" || file.type === "image/png") {
+                const reader = new FileReader();
+                reader.onload = async function(ev) {
+                  try {
+                    const dataURL = ev.target.result;
+                    const resizedDataURL = await resizeImage(dataURL, 3000, 3000);
+                    let newReserved = {
+                      src: resizedDataURL,
+                      name: file.name,
+                      meta: "",
+                      id: 'img-' + Date.now()
+                    };
+                    reservedPhotos[rIndex] = newReserved;
+                    saveReservedPhotos();
+                    updateStaticPreviewGrid();
+                    updatePrimaryPreview();
+                  } catch (err) {
+                    console.error("Error processing reserved file:", err);
+                  }
+                };
+                reader.readAsDataURL(file);
+              }
             } else {
-              let temp = reservedPhotos[draggedIndex - 7];
-              reservedPhotos[draggedIndex - 7] = reservedPhotos[rIndex];
-              reservedPhotos[rIndex] = temp;
-              saveReservedPhotos();
+              // Handle internal drag drop (swapping)
+              let targetIndex = i;
+              if(draggedIndex === null) {
+                return;
+              }
+              if(draggedIndex === targetIndex) {
+                return;
+              }
+              if(draggedIndex < 7) {
+                let newReserved = {
+                  src: previewImages[draggedIndex],
+                  name: photoNames[draggedIndex],
+                  meta: photoMeta[draggedIndex],
+                  id: photoIds[draggedIndex]
+                };
+                previewImages.splice(draggedIndex, 1);
+                photoNames.splice(draggedIndex, 1);
+                photoMeta.splice(draggedIndex, 1);
+                photoIds.splice(draggedIndex, 1);
+                reservedPhotos[rIndex] = newReserved;
+                saveReservedPhotos();
+              } else {
+                let temp = reservedPhotos[draggedIndex - 7];
+                reservedPhotos[draggedIndex - 7] = reservedPhotos[rIndex];
+                reservedPhotos[rIndex] = temp;
+                saveReservedPhotos();
+              }
+              updateStaticPreviewGrid();
+              updatePrimaryPreview();
+              draggedIndex = null;
             }
-            updateStaticPreviewGrid();
-            updatePrimaryPreview();
-            draggedIndex = null;
           });
           const metadataStatus = document.createElement("div");
           metadataStatus.className = "metadata-status";
@@ -1702,35 +1729,64 @@ Generate exactly 13 tag phrases (each ≤ 20 characters). Return as plain text.
           cell.addEventListener("drop", function(e) {
             e.preventDefault();
             cell.classList.remove("drag-over");
-            let targetIndex = i;
-            if(draggedIndex === null) {
-              return;
-            }
-            if(draggedIndex === targetIndex) {
-              return;
-            }
-            if(draggedIndex < 7) {
-              let newReserved = {
-                src: previewImages[draggedIndex],
-                name: photoNames[draggedIndex],
-                meta: photoMeta[draggedIndex],
-                id: photoIds[draggedIndex]
-              };
-              previewImages.splice(draggedIndex, 1);
-              photoNames.splice(draggedIndex, 1);
-              photoMeta.splice(draggedIndex, 1);
-              photoIds.splice(draggedIndex, 1);
-              reservedPhotos[rIndex] = newReserved;
-              saveReservedPhotos();
+            // New alternate approach for reserved cell drop:
+            if(e.dataTransfer.files && e.dataTransfer.files.length > 0) {
+              // External file drop into reserved cell
+              const file = e.dataTransfer.files[0];
+              if(file.type === "image/jpeg" || file.type === "image/png") {
+                const reader = new FileReader();
+                reader.onload = async function(ev) {
+                  try {
+                    const dataURL = ev.target.result;
+                    const resizedDataURL = await resizeImage(dataURL, 3000, 3000);
+                    let newReserved = {
+                      src: resizedDataURL,
+                      name: file.name,
+                      meta: "",
+                      id: 'img-' + Date.now()
+                    };
+                    reservedPhotos[rIndex] = newReserved;
+                    saveReservedPhotos();
+                    updateStaticPreviewGrid();
+                    updatePrimaryPreview();
+                  } catch (err) {
+                    console.error("Error processing reserved file:", err);
+                  }
+                };
+                reader.readAsDataURL(file);
+              }
             } else {
-              let temp = reservedPhotos[draggedIndex - 7];
-              reservedPhotos[draggedIndex - 7] = reservedPhotos[rIndex];
-              reservedPhotos[rIndex] = temp;
-              saveReservedPhotos();
+              // Internal drag drop between reserved cells
+              let targetIndex = i;
+              if(draggedIndex === null) {
+                return;
+              }
+              if(draggedIndex === targetIndex) {
+                return;
+              }
+              if(draggedIndex < 7) {
+                let newReserved = {
+                  src: previewImages[draggedIndex],
+                  name: photoNames[draggedIndex],
+                  meta: photoMeta[draggedIndex],
+                  id: photoIds[draggedIndex]
+                };
+                previewImages.splice(draggedIndex, 1);
+                photoNames.splice(draggedIndex, 1);
+                photoMeta.splice(draggedIndex, 1);
+                photoIds.splice(draggedIndex, 1);
+                reservedPhotos[rIndex] = newReserved;
+                saveReservedPhotos();
+              } else {
+                let temp = reservedPhotos[draggedIndex - 7];
+                reservedPhotos[draggedIndex - 7] = reservedPhotos[rIndex];
+                reservedPhotos[rIndex] = temp;
+                saveReservedPhotos();
+              }
+              updateStaticPreviewGrid();
+              updatePrimaryPreview();
+              draggedIndex = null;
             }
-            updateStaticPreviewGrid();
-            updatePrimaryPreview();
-            draggedIndex = null;
           });
           const metadataStatus = document.createElement("div");
           metadataStatus.className = "metadata-status";
