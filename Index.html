@@ -1021,10 +1021,9 @@ Using Sales Report and Product List Files:
       currentTop = (containerHeight - naturalHeight * initialScale) / 2;
       updateCropImageTransform();
     }
+    // Update transform using combined translate and scale so that the image is centered and scaled correctly
     function updateCropImageTransform() {
-      cropImage.style.transform = "scale(" + currentScale + ")";
-      cropImage.style.left = currentLeft + "px";
-      cropImage.style.top = currentTop + "px";
+      cropImage.style.transform = "translate(" + currentLeft + "px, " + currentTop + "px) scale(" + currentScale + ")";
     }
     // When crop image loads, initialize it
     cropImage.onload = function() {
@@ -1035,7 +1034,6 @@ Using Sales Report and Product List Files:
     // Zoom slider: recalc translation to keep center constant
     zoomSlider.addEventListener("input", function() {
       const newScale = parseFloat(this.value);
-      // Compute center of current image
       const container = document.querySelector("#photoCropModal .img-container");
       const centerX = currentLeft + cropImage.naturalWidth * currentScale / 2;
       const centerY = currentTop + cropImage.naturalHeight * currentScale / 2;
@@ -1070,7 +1068,6 @@ Using Sales Report and Product List Files:
       const container = document.querySelector("#photoCropModal .img-container");
       const containerWidth = container.clientWidth;
       const containerHeight = container.clientHeight;
-      // Calculate crop region relative to original image
       const cropX = -currentLeft / currentScale;
       const cropY = -currentTop / currentScale;
       const cropW = containerWidth / currentScale;
