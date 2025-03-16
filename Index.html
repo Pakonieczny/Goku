@@ -5,7 +5,8 @@
   <title>Etsy Listing Generator & Shop Listings</title>
   <!-- Favicon -->
   <link rel="icon" type="image/png" href="assets/favicon.png">
-  <!-- Material Icons + Materialize CSS -->
+
+  <!-- Google Material Icons + Materialize CSS -->
   <link
     href="https://fonts.googleapis.com/icon?family=Material+Icons"
     rel="stylesheet"
@@ -14,9 +15,11 @@
     rel="stylesheet"
     href="https://cdnjs.cloudflare.com/ajax/libs/materialize/1.0.0/css/materialize.min.css"
   >
-  <!-- Optional: piexifjs for EXIF manipulation -->
+
+  <!-- piexifjs (optional) -->
   <script src="https://cdn.jsdelivr.net/npm/piexifjs@1.0.4/piexif.min.js"></script>
-  <!-- Import SortableJS via CDN (version can vary) -->
+
+  <!-- Include SortableJS from a CDN -->
   <script src="https://cdn.jsdelivr.net/npm/sortablejs@1.14.0/Sortable.min.js"></script>
 
   <style>
@@ -88,7 +91,7 @@
       font-style: italic; font-size: 0.9em; margin-top: 5px;
     }
 
-    /* Drag/Drop for CSV/Docs */
+    /* CSV/Doc Drag & Drop for orders, listings, etc. */
     #dropZone, #ordersDropZone, #listingsDropZone {
       width: 138px; height: 138px; border: 2px dashed #ccc;
       border-radius: 3px; display: inline-block; vertical-align: middle;
@@ -134,17 +137,13 @@
       border-radius: 3px;
     }
 
-    /*
-      The 10-photo Preview Container:
-      Now fixed to 592px x 282px to match 5 columns of 100px + 4 gaps of 23px,
-      and 2 rows of 132px + 1 gap of 18px
-    */
+    /* 10-Photo Preview Grid Container sized to 592×282 */
     #previewGridContainer {
       position: relative;
       margin: 20px auto;
       text-align: center;
-      width: 592px;
-      height: 282px;
+      width: 592px;  /* 5 * 100 + 4*gaps(23) => 592 */
+      height: 282px; /* 2 * 132 + 1 gap(18) => 282 */
       border: 1px solid #ccc;
       box-sizing: border-box;
     }
@@ -185,7 +184,7 @@
       width: 90%;
     }
 
-    /* Container #13 */
+    /* Container #13, etc. */
     #container13 {
       position: relative; width: 250px; top: -150px;
     }
@@ -212,26 +211,13 @@
       transform: translateX(-50%); display: inline-block;
     }
     #uploadPhotoContainer {
-      position: fixed; bottom: 20px;
-      left: calc(50% + 120px); display: inline-block;
+      position: fixed; bottom: 20px; left: calc(50% + 120px);
+      display: inline-block;
     }
   </style>
 </head>
 
 <body>
-  <!-- 
-    All your existing HTML: 
-    The "Configure Buttons" modal, 
-    your listingDescInput, 
-    CSV Upload elements,
-    OAuth button, 
-    the "Etsy Listing Generator UI" area, 
-    the "belowSearch" section with "Generate" and title/desc,
-    the 10-slot grid,
-    all modals for rules, etc. 
-    are included below unchanged.
-  -->
-
   <!-- Configure Buttons control -->
   <button id="configureButtonsBtn"
           class="btn waves-effect waves-light configurable">
@@ -260,7 +246,7 @@
     </div>
   </div>
 
-  <!-- Etsy OAuth and Shop Listings Section -->
+  <!-- Etsy OAuth + Shop Listings Section -->
   <button id="connectEtsyBtn"
           class="btn waves-effect waves-light configurable">
     Connect to Etsy
@@ -299,7 +285,6 @@
       Analyze Rules
     </button>
   </div>
-
   <div id="container13" class="flex-container configurable">
     <div class="textbox-container configurable">
       <textarea id="searchKeyPhrases"
@@ -346,7 +331,8 @@
       <div class="section-heading configurable">Etsy Listing DESCRIPTION</div>
       <div class="flex-container configurable">
         <div class="textbox-container configurable">
-          <textarea id="listingDescription" class="materialize-textarea"></textarea>
+          <textarea id="listingDescription"
+                    class="materialize-textarea"></textarea>
         </div>
         <div class="button-container configurable">
           <button id="regenDescriptionBtn"
@@ -367,22 +353,11 @@
     </div>
   </div>
 
-  <!-- Static 10-Photo Preview Grid Container -->
+  <!-- The 10-Photo Preview Grid Container -->
   <div id="previewGridContainer">
-    <!-- Sortable will act on #previewGridStatic. 
-         Each .preview-cell is a "draggable item" in the DOM. -->
-    <div id="previewGridStatic">
-      <div class="preview-cell" id="previewCell0">Empty</div>
-      <div class="preview-cell" id="previewCell1">Empty</div>
-      <div class="preview-cell" id="previewCell2">Empty</div>
-      <div class="preview-cell" id="previewCell3">Empty</div>
-      <div class="preview-cell" id="previewCell4">Empty</div>
-      <div class="preview-cell" id="previewCell5">Empty</div>
-      <div class="preview-cell" id="previewCell6">Empty</div>
-      <div class="preview-cell" id="previewCell7">Empty</div>
-      <div class="preview-cell" id="previewCell8">Empty</div>
-      <div class="preview-cell" id="previewCell9">Empty</div>
-    </div>
+    <div id="previewGridStatic"></div> 
+    <!-- We'll dynamically build the 10 .preview-cell items in JS, 
+         then let SortableJS reorder them. -->
   </div>
 
   <!-- Update Listing button container -->
@@ -393,7 +368,7 @@
     </button>
   </div>
 
-  <!-- New Upload Photo button container -->
+  <!-- Upload Photo button container -->
   <div id="uploadPhotoContainer">
     <button id="uploadPhotoBtn"
             class="btn waves-effect waves-light configurable">
@@ -584,30 +559,110 @@ Using Sales Report and Product List Files:
 
   <script>
     /* -------------------------------------------------------------
-       ALL YOUR EXISTING JAVASCRIPT: 
-       - loadButtonPositions, 
-       - placeholders for vectorStore, 
-       - analyzing images, 
-       - alt_text uploads, 
-       - openaiProxy calls, 
-       - generating titles/descriptions, etc.
-       remain the same
+       GLOBALS & MAIN LOGIC (Unchanged except for removing native drag events)
     ------------------------------------------------------------- */
-
-    // Sample placeholders for demonstration:
+    const ETSY_SHOP_URL = "https://www.etsy.com/shop/custombrites";
+    const CLIENT_ID = "k75zdspz4r99txpqdji7i2em";
+    const REDIRECT_URI = "https://delicate-tanuki-616ac0.netlify.app/";
+    const modelName = "chatgpt-4o-latest";
     let accessToken;
-    // ... your other global variables from the stable code ...
-    
-    // Arrays for images & metadata:
+
+    let soldOrdersCSV = [];
+    let listingsCSV = [];
+
     let photoNames = [];
     let previewImages = [];
     let photoMeta = [];
 
-    // The function that draws the 10 cells:
+    // We keep all your CSV doc logic, alt_text, analyzing, openai calls, etc...
+
+    // ~~~~~ CSV / DOC UPLOAD EXAMPLE ~~~~~
+    // (unchanged code for uploadCSVFile, uploadDocFile, updateVectorStore, 
+    //  plus the dragover events for ordersDropZone, listingsDropZone, etc.)
+
+    // ~~~~~ DRAG & DROP for IMAGES (RESIZE to 3000x3000) ~~~~~
+    async function resizeImage(dataURL, width, height) {
+      return new Promise((resolve, reject) => {
+        const img = new Image();
+        img.onload = () => {
+          const canvas = document.createElement("canvas");
+          canvas.width = width;
+          canvas.height = height;
+          const ctx = canvas.getContext("2d");
+          ctx.drawImage(img, 0, 0, width, height);
+          const resizedDataURL = canvas.toDataURL("image/jpeg", 0.85);
+          resolve(resizedDataURL);
+        };
+        img.onerror = reject;
+        img.src = dataURL;
+      });
+    }
+
+    const dropZone = document.getElementById("dropZone");
+    dropZone.addEventListener("dragover", e => {
+      e.preventDefault(); e.stopPropagation();
+      dropZone.style.borderColor = "#000";
+    });
+    dropZone.addEventListener("dragleave", e => {
+      e.preventDefault(); e.stopPropagation();
+      dropZone.style.borderColor = "#ccc";
+    });
+    dropZone.addEventListener("drop", async e => {
+      e.preventDefault(); e.stopPropagation();
+      dropZone.style.borderColor = "#ccc";
+
+      const files = e.dataTransfer.files;
+      const maxRemaining = 10 - previewImages.length;
+
+      for (let i = 0; i < Math.min(files.length, maxRemaining); i++) {
+        const file = files[i];
+        if (file.type === "image/jpeg" || file.type === "image/png") {
+          try {
+            const dataURL = await new Promise((resolve, reject) => {
+              const reader = new FileReader();
+              reader.onload = event => resolve(event.target.result);
+              reader.onerror = reject;
+              reader.readAsDataURL(file);
+            });
+            const resizedDataURL = await resizeImage(dataURL, 3000, 3000);
+
+            previewImages.push(resizedDataURL);
+            photoNames.push(file.name);
+            photoMeta.push(""); // no metadata yet
+
+            updatePrimaryPreview();
+            updateStaticPreviewGrid();
+            updateUploadedFilesList();
+          } catch (err) {
+            console.error("Error processing image:", err);
+          }
+        } else {
+          M.toast({ html: "Only JPEG/PNG images are supported." });
+        }
+      }
+    });
+
+    function updatePrimaryPreview() {
+      const primaryPreview = document.getElementById("primaryPreview");
+      if (previewImages.length > 0) {
+        primaryPreview.innerHTML = `<img src="${previewImages[0]}" alt="Primary Preview">`;
+      } else {
+        primaryPreview.innerHTML = "";
+      }
+    }
+
+    // ~~~~~ The new approach for generating 10 .preview-cell items and Sortable ~~~~~
+    let sortableInstance;
     function updateStaticPreviewGrid() {
+      const grid = document.getElementById("previewGridStatic");
+      // Clear existing child cells
+      grid.innerHTML = "";
+
+      // Build up to 10 cells
       for (let i = 0; i < 10; i++) {
-        const cell = document.getElementById("previewCell" + i);
-        cell.innerHTML = "";
+        const cell = document.createElement("div");
+        cell.className = "preview-cell";
+
         if (i < previewImages.length) {
           const previewBox = document.createElement("div");
           previewBox.className = "preview-box";
@@ -636,58 +691,39 @@ Using Sales Report and Product List Files:
           numOverlay.textContent = (i + 1).toString();
           previewBox.appendChild(numOverlay);
 
-          // On click => show metadata
+          // On click, show metadata
           previewBox.addEventListener("click", () => {
-            const metadata = photoMeta[i] || "No metadata available for this photo.";
-            document.getElementById("metadataTextarea").value = metadata;
-            const modalElem = document.getElementById("metadataModal");
-            let instance = M.Modal.getInstance(modalElem);
-            if (!instance) {
-              instance = M.Modal.init(modalElem, {});
-            }
-            instance.open();
+            showMetadata(i);
           });
 
           cell.appendChild(previewBox);
 
-          // Optionally add a "metadataStatus" div
           const metadataStatus = document.createElement("div");
           metadataStatus.className = "metadata-status";
           metadataStatus.id = "metadataStatus" + i;
           cell.appendChild(metadataStatus);
         } else {
+          // If no image for this slot
           cell.textContent = "Empty";
         }
+
+        grid.appendChild(cell);
       }
-    }
 
-    function updatePrimaryPreview() {
-      const primaryPreview = document.getElementById("primaryPreview");
-      if (previewImages.length > 0) {
-        primaryPreview.innerHTML =
-          `<img src="${previewImages[0]}" alt="Primary Preview">`;
-      } else {
-        primaryPreview.innerHTML = "";
+      // Re-initialize Sortable on #previewGridStatic each time we rebuild
+      if (sortableInstance) {
+        sortableInstance.destroy();
       }
-    }
-
-    // Called after DOM loaded:
-    document.addEventListener("DOMContentLoaded", () => {
-      // loadButtonPositions(), check OAuth, etc...
-      updateStaticPreviewGrid();
-      updateUploadedFilesList();
-
-      // Now initialize Sortable on #previewGridStatic
-      new Sortable(document.getElementById("previewGridStatic"), {
-        animation: 150,  // optional animation
+      sortableInstance = new Sortable(grid, {
+        animation: 150,
         onEnd: (evt) => {
           const oldIndex = evt.oldIndex;
           const newIndex = evt.newIndex;
           if (oldIndex === newIndex) return;
 
-          // Reorder arrays accordingly
-          const [movedImage] = previewImages.splice(oldIndex, 1);
-          previewImages.splice(newIndex, 0, movedImage);
+          // Reorder arrays
+          const [movedImg] = previewImages.splice(oldIndex, 1);
+          previewImages.splice(newIndex, 0, movedImg);
 
           const [movedName] = photoNames.splice(oldIndex, 1);
           photoNames.splice(newIndex, 0, movedName);
@@ -695,16 +731,77 @@ Using Sales Report and Product List Files:
           const [movedMeta] = photoMeta.splice(oldIndex, 1);
           photoMeta.splice(newIndex, 0, movedMeta);
 
-          // Refresh
           updateStaticPreviewGrid();
           updatePrimaryPreview();
         }
       });
+    }
+
+    function showMetadata(index) {
+      const metadata = photoMeta[index] || "No metadata available for this photo.";
+      document.getElementById("metadataTextarea").value = metadata;
+      const modalElem = document.getElementById("metadataModal");
+      let instance = M.Modal.getInstance(modalElem);
+      if (!instance) {
+        instance = M.Modal.init(modalElem, {});
+      }
+      instance.open();
+    }
+
+    // ~~~~~ Analyze Photos => /analyzeImage logic ~~~~~
+    async function analyzePhoto(index) {
+      // your code ...
+    }
+    document.getElementById("analyzeMetadataBtn").addEventListener("click", async () => {
+      for (let i = 0; i < previewImages.length; i++) {
+        await analyzePhoto(i);
+      }
     });
 
-    // The rest of your code: 
-    // e.g., uploading images, analyzing, alt_text, 
-    // calling openai for titles/descriptions, etc.
+    // ~~~~~ OAuth connect to Etsy, token exchange ~~~~~
+    // ...
+    // your code for connectEtsyBtn, exchangeCodeForToken, etc.
+
+    // ~~~~~ Update listing, upload photo with alt_text ~~~~~
+    // ...
+    // your code for updateListing, uploadPhotoBtn, etc.
+
+    // ~~~~~ Title/Description generation code (OpenAI) ~~~~~
+    // ...
+    // your code for generateTitleOnly, generateDescriptionOnly, etc.
+
+    // ~~~~~ Key phrase generation logic, plus the "copy" & "clear" ~~~~~
+    // ...
+    // your code from stable version
+
+    // ~~~~~ Button config code ~~~~~
+    document.getElementById("configureButtonsBtn").addEventListener("click", () => {
+      // your code to open the config modal, etc.
+    });
+    document.getElementById("saveButtonPositionsBtn").addEventListener("click", () => {
+      // saving positions
+    });
+    function loadButtonPositions() {
+      // ...
+    }
+
+    // ~~~~~ On DOM load ~~~~~
+    document.addEventListener("DOMContentLoaded", () => {
+      loadButtonPositions();
+      const urlParams = new URLSearchParams(window.location.search);
+      const code = urlParams.get("code");
+      if (code) {
+        // exchange token
+      }
+      updateStaticPreviewGrid();
+      updateUploadedFilesList();
+    });
+
+    function updateUploadedFilesList() {
+      // your code for listing CSV doc names
+    }
+
+    // ~~~~~ Possibly other logic you had, e.g. "window.addEventListener('load', ...)" ~~~~~
   </script>
 </body>
 </html>
