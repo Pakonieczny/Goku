@@ -5,8 +5,7 @@
   <title>Etsy Listing Generator & Shop Listings</title>
   <!-- Favicon -->
   <link rel="icon" type="image/png" href="assets/favicon.png">
-
-  <!-- Google Material Icons + Materialize CSS -->
+  <!-- Import Google Material Icons and Materialize CSS -->
   <link
     href="https://fonts.googleapis.com/icon?family=Material+Icons"
     rel="stylesheet"
@@ -15,20 +14,14 @@
     rel="stylesheet"
     href="https://cdnjs.cloudflare.com/ajax/libs/materialize/1.0.0/css/materialize.min.css"
   >
-
-  <!-- piexifjs (optional) -->
+  <!-- Include piexifjs for EXIF manipulation (optional, if needed) -->
   <script src="https://cdn.jsdelivr.net/npm/piexifjs@1.0.4/piexif.min.js"></script>
 
-  <!-- Include SortableJS from a CDN (for your 10-photo reorder) -->
+  <!-- STEP 1: Include SortableJS from a CDN -->
   <script src="https://cdn.jsdelivr.net/npm/sortablejs@1.14.0/Sortable.min.js"></script>
 
   <style>
-    /* 
-       =============== 
-       BASIC LAYOUT (SAME AS YOURS, 
-       MINUS NEGATIVE OFFSETS) 
-       =============== 
-    */
+    /* Basic layout */
     html, body {
       margin: 0; padding: 0; width: 100vw;
       font-family: Arial, sans-serif;
@@ -44,88 +37,119 @@
       width: 100%; box-sizing: border-box;
     }
 
-    /* 
-       =============== 
-       COMMENTING OUT DEBUG BACKGROUNDS 
-       ===============
-       We keep them in code but comment out their lines. 
-       If you want to re-enable, remove the comment markers.
-    */
-
-    /*
+    /* Wrap Listing Description and File Drop Zones */
     #descriptionAndFileUploadContainer {
-      background-color: rgba(255,0,0,0.15);
+      display: flex; align-items: center;
     }
-    #fileDropZonesContainer {
-      background-color: rgba(0,255,0,0.15);
+    .listing-desc-container {
+      position: relative; display: inline-block; width: 500px;
     }
-    #ordersContainer {
-      background-color: rgba(0,0,255,0.15);
+    .listing-desc-container h5 {
+      margin: 0 0 10px 0; font-size: 1.2rem; font-weight: 500;
     }
-    #dropZone {
-      background-color: rgba(255,165,0,0.15);
+    .listing-desc-container label.section-heading {
+      font-size: 1.2rem; font-weight: 500;
     }
-    #primaryPreview {
-      background-color: rgba(255,0,255,0.15);
+    .listing-desc-container input {
+      width: 500px; height: 30px; border: 1px solid #000; padding: 5px;
     }
-    #container13 {
-      background-color: rgba(128,0,128,0.15);
-    }
-    #belowSearch {
-      background-color: rgba(0,255,255,0.15);
-    }
-    #previewGridContainer {
-      background-color: rgba(255,255,0,0.15);
-    }
-    #uploadContainer {
-      background-color: rgba(255,0,0,0.15);
-    }
-    #uploadPhotoContainer {
-      background-color: rgba(0,255,255,0.15);
-    }
-    #listingDescContainer {
-      background-color: rgba(128,128,0,0.15);
-    }
-    */
 
-    /* 
-       Removing negative offsets from your original code 
-       #primaryPreview top:-250px => top:0; left:0 
-       #container13 top:-150px => top:0 
-       #belowSearch margin-top:-180px => margin-top:0 
-       .title-container margin-top:-50px => margin-top:0 
-    */
+    /* "User Provided Search Key Phrases" textarea */
+    #searchKeyPhrases {
+      resize: none; box-sizing: border-box; border: 1px solid grey;
+    }
+    #searchKeyPhrases[rows="14"] {
+      height: auto;
+    }
+    .flex-container {
+      display: flex; gap: 10px; align-items: stretch;
+    }
+    .textbox-container {
+      flex: 1;
+    }
+    .textbox-container textarea {
+      width: 100%; padding: 0.8rem; font-size: 1rem; line-height: 1.2;
+      resize: none; overflow: visible; box-sizing: border-box;
+    }
+    .button-container {
+      width: 200px; display: flex; flex-direction: column; gap: 10px;
+      align-self: flex-start;
+    }
+    #listingTitle {
+      min-height: 45px;
+    }
+    #listingDescInput {
+      width: 500px; height: 30px; border: 1px solid #000; padding: 5px;
+    }
+    #listingDescription {
+      min-height: 150px;
+    }
+    .section-heading {
+      font-size: 1.2rem; font-weight: 500; margin-bottom: 5px;
+      display: inline-block;
+    }
+    .count-text {
+      font-style: italic; font-size: 0.9em; margin-top: 5px;
+    }
+
+    /* Drag and Drop Boxes */
+    #dropZone, #ordersDropZone, #listingsDropZone {
+      width: 138px; height: 138px; border: 2px dashed #ccc;
+      border-radius: 3px; display: inline-block; vertical-align: middle;
+      text-align: center; line-height: 138px; position: relative;
+    }
+    /* Orders container */
+    #ordersContainer {
+      display: flex; flex-direction: column;
+    }
+    /* CSV Progress Bar */
+    #csvProgressBar {
+      width: 100%; height: 20px; border: 1px solid blue;
+      background-color: #e0f0ff; margin-top: 5px;
+      -webkit-appearance: none; appearance: none;
+    }
+    #csvProgressBar::-webkit-progress-bar {
+      background-color: #e0f0ff; border: 1px solid blue;
+    }
+    #csvProgressBar::-webkit-progress-value {
+      background-color: blue;
+    }
+    #csvProgressContainer {
+      margin-left: 85px;
+    }
+    /* File Drop Zones container */
+    #fileDropZonesContainer {
+      display: flex; gap: 10px; margin-left: 100px;
+    }
+    #uploadedFilesList {
+      width: 300px; height: 125px; resize: none;
+      box-sizing: border-box; border: 1px solid grey; margin-left: 85px;
+    }
+
+    /* Primary Preview – clickable for cropping */
     #primaryPreview {
       width: 138px; height: 138px; border: 1px solid #ccc;
       border-radius: 3px; display: inline-block; vertical-align: middle;
-      position: relative; top: 0; left: 0;
+      position: relative; top: -250px; left: 285px;
       text-align: center; overflow: hidden; cursor: pointer;
     }
-    #container13 {
-      position: relative; width: 250px; top: 0;
+    #primaryPreview:empty {
+      background: #fff;
     }
-    #belowSearch {
-      margin-top: 0; margin-left: 0;
-    }
-    .title-container {
-      margin-top: 0;
+    #primaryPreview img {
+      width: 100%; height: 100%; object-fit: contain;
+      border-radius: 3px;
     }
 
-    /* 
-       #previewGridContainer 
-       sized 592x282 to match 5 columns + 2 rows + gaps 
-    */
+    /* Static 10-Photo Preview Grid */
     #previewGridContainer {
-      position: relative; margin: 20px auto; text-align: center;
-      width: 592px; height: 282px; border: 1px solid #ccc; 
-      box-sizing: border-box;
+      position: relative; margin: 20px auto; width: auto;
+      max-width: 600px; text-align: center;
     }
     #previewGridStatic {
-      display: grid;
-      grid-template-columns: repeat(5, 100px);
-      grid-column-gap: 23px;
-      grid-row-gap: 18px;
-      margin: 0 auto;
+      /* We'll rely on SortableJS to reorder these child cells in the DOM. */
+      display: grid; grid-template-columns: repeat(5, 100px);
+      grid-column-gap: 23px; grid-row-gap: 18px; margin: 0 auto;
     }
     .preview-cell {
       position: relative; width: 100px; height: 132px; border: 2px solid #ccc;
@@ -150,72 +174,53 @@
       align-items: center; justify-content: center; font-size: 10px;
       z-index: 999; border-radius: 3px;
     }
+    /* Metadata status styles */
     .metadata-status {
-      margin-top: 5px; text-align: center; font-size: 14px; min-height: 20px;
+      margin-top: 5px; text-align: center; font-size: 14px;
+      min-height: 20px;
     }
     .metadata-progress {
       width: 90%;
     }
 
-    /*
-       =============== 
-       COMMENT OUT DEBUG LEGEND 
-       ===============
-       We keep the code but comment it out so it doesn’t appear
-    */
+    /* Container #13 */
+    #container13 {
+      position: relative; width: 250px; top: -150px;
+    }
 
-    /*
-    #debugLegend {
-      position: absolute; top:0; left:0;
-      background-color: #fff; color: #000;
-      padding: 10px; z-index: 9999;
-      font-size: 14px; max-width: 250px;
-      border: 1px solid #000;
-      box-shadow: 2px 2px 4px rgba(0,0,0,0.3);
+    /* Components below search key phrases */
+    #belowSearch {
+      margin-top: -180px; margin-left: 10px;
     }
-    #debugLegend h4 {
-      margin:0 0 5px 0; padding:0; font-size:16px;
+    .title-container {
+      margin-top: -50px;
     }
-    #debugLegend .legend-item {
-      margin-bottom:5px; 
-      display:flex; align-items:center; gap:6px;
+    .description-container {
+      margin-top: 0px;
     }
-    .legend-box {
-      width:20px; height:20px; 
-      display:inline-block; border:1px solid #000;
+    #analyzeMetadataBtn {
+      margin-left: 50px;
     }
-    */
+    #showAnalyzeRulesBtn {
+      margin-top: 25px;
+    }
+    .phrases-header {
+      position: relative; top: 125px; left: 10px;
+    }
+
+    /* Update Listing and Upload Photo button containers */
+    #uploadContainer {
+      position: fixed; bottom: 20px; left: 50%;
+      transform: translateX(-50%); display: inline-block;
+    }
+    #uploadPhotoContainer {
+      position: fixed; bottom: 20px;
+      left: calc(50% + 120px); display: inline-block;
+    }
   </style>
 </head>
 
 <body>
-
-  <!-- 
-    COMMENTING OUT THE DEBUG LEGEND OVERLAY
-    (We keep the code but it’s inside an HTML comment now)
-  -->
-  <!-- 
-  <div id="debugLegend">
-    <h4>Debug Legend</h4>
-    <div class="legend-item">
-      <div class="legend-box" style="background-color: rgba(255,0,0,0.15);"></div>
-      <span>(1) #descriptionAndFileUploadContainer, #uploadContainer</span>
-    </div>
-    <div class="legend-item">
-      <div class="legend-box" style="background-color: rgba(0,255,0,0.15);"></div>
-      <span>(2) #fileDropZonesContainer</span>
-    </div>
-    ...
-  </div>
-  -->
-
-  <!-- 
-    =============== 
-    ENTIRE REST OF YOUR INDEX.HTML 
-    (Now with no negative offsets and debugging backgrounds commented out)
-    ===============
-  -->
-
   <!-- Configure Buttons control -->
   <button id="configureButtonsBtn"
           class="btn waves-effect waves-light configurable">
@@ -238,8 +243,7 @@
       </div>
       <div id="listingsDropZone">Etsy Listings</div>
       <textarea id="uploadedFilesList"
-                class="materialize-textarea"
-                rows="2"
+                class="materialize-textarea" rows="2"
                 placeholder="Uploaded .csv, .doc, .docx files will appear here">
       </textarea>
     </div>
@@ -250,7 +254,7 @@
           class="btn waves-effect waves-light configurable">
     Connect to Etsy
   </button>
-  <div style="margin-top:0; margin-left:0;">
+  <div style="margin-top: -180px; margin-left: 10px;">
     <div class="section-heading configurable">My Etsy Shop Listings</div>
     <div class="textbox-container configurable">
       <textarea id="shopListings"
@@ -260,7 +264,8 @@
   </div>
 
   <!-- Etsy Listing Generator UI -->
-  <div class="phrases-header configurable" style="position:relative; top:0; left:0;">
+  <div class="phrases-header configurable"
+       style="position: relative; top: 125px; left: 10px;">
     <span class="section-heading configurable">2. User Provided Search Key Phrases</span>
     <button id="clearKeyPhrasesBtn"
             class="btn-small waves-effect waves-light configurable">
@@ -279,11 +284,11 @@
     <button id="showAnalyzeRulesBtn"
             class="btn waves-effect waves-light configurable"
             data-target="analyzeRulesModal"
-            style="margin-top:0;">
+            style="margin-top:25px;">
       Analyze Rules
     </button>
   </div>
-  <div id="container13" class="flex-container configurable" style="height:auto;">
+  <div id="container13" class="flex-container configurable">
     <div class="textbox-container configurable">
       <textarea id="searchKeyPhrases"
                 class="materialize-textarea"
@@ -293,12 +298,12 @@
   </div>
 
   <!-- Components below Search Key Phrases -->
-  <div id="belowSearch" style="margin-top:0; margin-left:0;">
+  <div id="belowSearch">
     <button id="generateBtn"
             class="btn waves-effect waves-light configurable">
       Generate
     </button>
-    <div class="title-container" style="margin-top:0;">
+    <div class="title-container" style="margin-top: -50px;">
       <div class="section-heading configurable">Etsy Listing TITLE</div>
       <div class="flex-container configurable">
         <div class="textbox-container configurable">
@@ -306,7 +311,7 @@
                     class="materialize-textarea"
                     rows="2"></textarea>
         </div>
-        <div class="button-container configurable" style="margin-top:0;">
+        <div class="button-container configurable" style="margin-top: -60px;">
           <button id="regenTitleBtn"
                   class="btn-small waves-effect waves-light configurable">
             Re-Generate
@@ -325,7 +330,7 @@
       <p id="titleCount" class="count-text configurable">Count: 0</p>
     </div>
 
-    <div class="description-container" style="margin-top:0;">
+    <div class="description-container" style="margin-top: 0px;">
       <div class="section-heading configurable">Etsy Listing DESCRIPTION</div>
       <div class="flex-container configurable">
         <div class="textbox-container configurable">
@@ -352,7 +357,22 @@
 
   <!-- Static 10-Photo Preview Grid Container -->
   <div id="previewGridContainer">
-    <div id="previewGridStatic"></div>
+    <!-- 
+      We'll rely on SortableJS to reorder these child cells in the DOM. 
+      We'll remove any direct "dragover"/"drop" code on them. 
+    -->
+    <div id="previewGridStatic">
+      <div class="preview-cell" id="previewCell0">Empty</div>
+      <div class="preview-cell" id="previewCell1">Empty</div>
+      <div class="preview-cell" id="previewCell2">Empty</div>
+      <div class="preview-cell" id="previewCell3">Empty</div>
+      <div class="preview-cell" id="previewCell4">Empty</div>
+      <div class="preview-cell" id="previewCell5">Empty</div>
+      <div class="preview-cell" id="previewCell6">Empty</div>
+      <div class="preview-cell" id="previewCell7">Empty</div>
+      <div class="preview-cell" id="previewCell8">Empty</div>
+      <div class="preview-cell" id="previewCell9">Empty</div>
+    </div>
   </div>
 
   <!-- Update Listing button container -->
@@ -371,7 +391,7 @@
     </button>
   </div>
 
-  <!-- Metadata Modal -->
+  <!-- Metadata Modal (for viewing metadata on click) -->
   <div id="metadataModal" class="modal">
     <div class="modal-content">
       <h4>Photo Metadata</h4>
@@ -527,7 +547,7 @@ Using Sales Report and Product List Files:
   <!-- Crop Modal -->
   <div id="photoCropModal" class="modal">
     <div class="crop-container">
-      <h4 style="text-align:center; margin:0 0 10px 0;">Crop Photo</h4>
+      <h4 style="text-align:center; margin: 0 0 10px 0;">Crop Photo</h4>
       <div class="img-container">
         <img id="cropImage" src="" alt="Crop Image">
       </div>
@@ -546,101 +566,39 @@ Using Sales Report and Product List Files:
     </div>
   </div>
 
-  <!-- jQuery + Materialize -->
+  <!-- Include jQuery and Materialize JS -->
   <script src="https://code.jquery.com/jquery-3.6.0.min.js"></script>
   <script
     src="https://cdnjs.cloudflare.com/ajax/libs/materialize/1.0.0/js/materialize.min.js">
   </script>
 
   <script>
-    /* 
-      =============== ENTIRE LOGIC ===============
-      Your stable code with negative offsets removed. 
-      Also includes SortableJS logic for reordering.
-    */
+    // 1) We'll store our images in arrays (photoNames, previewImages, photoMeta).
+    // 2) We'll remove any native 'dragover'/'drop' on the #previewCell
+    // 3) We init SortableJS on #previewGridStatic after DOM load
+    // 4) In onEnd, we reorder the arrays and re-call updateStaticPreviewGrid()
 
-    // e.g. global variables
-    let accessToken;
-    let soldOrdersCSV = [];
-    let listingsCSV = [];
+    // If you had other code or logic (like analyzing, resizing, etc.), 
+    // keep it or place it here. Shown below is the minimal approach.
+
     let photoNames = [];
     let previewImages = [];
     let photoMeta = [];
 
-    // Sortable instance
-    let sortableInstance;
+    // On DOMContentLoaded, we init Sortable on #previewGridStatic:
+    document.addEventListener("DOMContentLoaded", function() {
+      // 1) Remove old "dragover"/"drop"/"dragstart" logic from each previewCell
+      //    (We no longer attach them in code.)
 
-    function updateStaticPreviewGrid() {
-      // same approach as before...
-      const grid = document.getElementById("previewGridStatic");
-      grid.innerHTML = "";
-      for (let i = 0; i < 10; i++) {
-        const cell = document.createElement("div");
-        cell.className = "preview-cell";
-
-        if (i < previewImages.length) {
-          const previewBox = document.createElement("div");
-          previewBox.className = "preview-box";
-
-          const img = document.createElement("img");
-          img.src = previewImages[i];
-          previewBox.appendChild(img);
-
-          // remove button
-          const removeBtn = document.createElement("div");
-          removeBtn.className = "remove-btn";
-          removeBtn.textContent = "X";
-          removeBtn.addEventListener("click", ev => {
-            ev.stopPropagation();
-            previewImages.splice(i, 1);
-            photoNames.splice(i, 1);
-            photoMeta.splice(i, 1);
-            updateStaticPreviewGrid();
-            updatePrimaryPreview();
-          });
-          previewBox.appendChild(removeBtn);
-
-          const numOverlay = document.createElement("div");
-          numOverlay.className = "number-overlay";
-          numOverlay.textContent = (i + 1).toString();
-          previewBox.appendChild(numOverlay);
-
-          // On click => show metadata
-          previewBox.addEventListener("click", () => {
-            const metadata = photoMeta[i] || "No metadata available for this photo.";
-            document.getElementById("metadataTextarea").value = metadata;
-            const modalElem = document.getElementById("metadataModal");
-            let instance = M.Modal.getInstance(modalElem);
-            if (!instance) {
-              instance = M.Modal.init(modalElem, {});
-            }
-            instance.open();
-          });
-
-          cell.appendChild(previewBox);
-
-          // optional metadataStatus
-          const metadataStatus = document.createElement("div");
-          metadataStatus.className = "metadata-status";
-          metadataStatus.id = "metadataStatus" + i;
-          cell.appendChild(metadataStatus);
-        } else {
-          cell.textContent = "Empty";
-        }
-        grid.appendChild(cell);
-      }
-
-      // Re-init Sortable
-      if (sortableInstance) {
-        sortableInstance.destroy();
-      }
-      sortableInstance = new Sortable(grid, {
+      // 2) Initialize Sortable
+      new Sortable(document.getElementById("previewGridStatic"), {
         animation: 150,
-        onEnd: evt => {
+        onEnd: function(evt) {
           const oldIndex = evt.oldIndex;
           const newIndex = evt.newIndex;
           if (oldIndex === newIndex) return;
 
+          // reorder arrays
           const [movedImg] = previewImages.splice(oldIndex, 1);
           previewImages.splice(newIndex, 0, movedImg);
 
@@ -650,31 +608,73 @@ Using Sales Report and Product List Files:
           const [movedMeta] = photoMeta.splice(oldIndex, 1);
           photoMeta.splice(newIndex, 0, movedMeta);
 
+          // Re-draw the grid:
           updateStaticPreviewGrid();
-          updatePrimaryPreview();
         }
       });
-    }
 
-    function updatePrimaryPreview() {
-      const primaryPreview = document.getElementById("primaryPreview");
-      if (previewImages.length > 0) {
-        primaryPreview.innerHTML =
-          `<img src="${previewImages[0]}" alt="Primary Preview">`;
-      } else {
-        primaryPreview.innerHTML = "";
-      }
-    }
-
-    // e.g. on DOM load
-    document.addEventListener("DOMContentLoaded", () => {
-      // your stable logic: loadButtonPositions, handle OAuth code, etc.
+      // If you have existing code that sets up the preview images or calls 
+      // updateStaticPreviewGrid() at load, place it here. For example:
       updateStaticPreviewGrid();
-      // other code...
     });
 
-    // The remainder of your code (uploadCSVFile, uploadDocFile, openai calls, etc.)
-    // is unchanged, presumably.
+    function updateStaticPreviewGrid() {
+      // We'll fill #previewCell0..#previewCell9 with the appropriate images
+      for (let i = 0; i < 10; i++) {
+        const cell = document.getElementById("previewCell" + i);
+        if (!cell) continue; // safety check
+
+        // Clear old content
+        cell.innerHTML = "";
+
+        if (i < previewImages.length) {
+          // Show an image
+          const previewBox = document.createElement("div");
+          previewBox.className = "preview-box";
+
+          const img = document.createElement("img");
+          img.src = previewImages[i];
+          previewBox.appendChild(img);
+
+          // Remove button
+          const removeBtn = document.createElement("div");
+          removeBtn.className = "remove-btn";
+          removeBtn.textContent = "X";
+          removeBtn.addEventListener("click", (e) => {
+            e.stopPropagation();
+            previewImages.splice(i, 1);
+            photoNames.splice(i, 1);
+            photoMeta.splice(i, 1);
+            updateStaticPreviewGrid();
+          });
+          previewBox.appendChild(removeBtn);
+
+          // Number overlay
+          const numOverlay = document.createElement("div");
+          numOverlay.className = "number-overlay";
+          numOverlay.textContent = (i + 1).toString();
+          previewBox.appendChild(numOverlay);
+
+          // On click => show metadata
+          previewBox.addEventListener("click", () => {
+            const metadata = photoMeta[i] || "No metadata available for this photo.";
+            const metaText = document.getElementById("metadataTextarea");
+            metaText.value = metadata;
+            const modalElem = document.getElementById("metadataModal");
+            let instance = M.Modal.getInstance(modalElem);
+            if (!instance) {
+              instance = M.Modal.init(modalElem, {});
+            }
+            instance.open();
+          });
+
+          cell.appendChild(previewBox);
+        } else {
+          // If we have no image for this slot
+          cell.textContent = "Empty";
+        }
+      }
+    }
   </script>
 </body>
 </html>
