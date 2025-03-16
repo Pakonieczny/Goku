@@ -18,8 +18,7 @@
   <script src="https://cdn.jsdelivr.net/npm/piexifjs@1.0.4/piexif.min.js"></script>
   <!-- ADDED LINE FOR SORTABLEJS: -->
   <script src="https://cdn.jsdelivr.net/npm/sortablejs@1.14.0/Sortable.min.js"></script>
-  <!-- ADDED LINES FOR CROPPER.JS: -->
-  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/cropperjs/1.5.13/cropper.min.css" />
+  <!-- ADDED LINE FOR CROPPER.JS: -->
   <script src="https://cdnjs.cloudflare.com/ajax/libs/cropperjs/1.5.13/cropper.min.js"></script>
   <style>
     /* Basic layout */
@@ -222,6 +221,23 @@
     /* ADDED NEW STYLE FOR DRAG-OVER VISUAL FEEDBACK: */
     .drag-over {
       background-color: rgba(0, 0, 255, 0.2);
+    }
+    /* ADDED NEW STYLE FOR CROP MODAL IMAGE PREVIEW BOX: */
+    .img-container {
+      width: 400px;
+      height: 400px;
+      margin: 0 auto;
+      overflow: hidden;
+      position: relative;
+      background-color: #000;
+    }
+    /* ADDED NEW STYLE FOR CROPPING MODAL (modal size 650x650, centered buttons) */
+    #photoCropModal .modal-content {
+      width: 650px;
+      height: 650px;
+    }
+    #photoCropModal .modal-footer {
+      text-align: center;
     }
   </style>
 </head>
@@ -547,8 +563,6 @@ Using Sales Report and Product List Files:
   </div>
 
   <!-- Crop Modal -->
-  <!-- COMMENTED OUT OLD CROP MODAL -->
-  <!--
   <div id="photoCropModal" class="modal">
     <div class="crop-container">
       <h4 style="text-align:center; margin: 0 0 10px 0;">Crop Photo</h4>
@@ -566,20 +580,6 @@ Using Sales Report and Product List Files:
                 style="background-color:#f44336; margin-left:10px;">
           Cancel
         </button>
-      </div>
-    </div>
-  </div>
-  -->
-  <!-- NEW CROP MODAL USING Cropper.js -->
-  <div id="photoCropModal" class="modal" style="width:650px; height:650px;">
-    <div class="crop-container" style="position: relative; width: 100%; height: 100%;">
-      <h4 style="text-align:center; margin: 0 0 10px 0;">Crop Photo</h4>
-      <div class="img-preview-container" style="width:400px; height:400px; margin: 0 auto; overflow: hidden;">
-        <img id="cropImage" src="" alt="Crop Image" style="display:block; margin:auto; max-width: none;">
-      </div>
-      <div style="text-align:center; margin-top:10px;">
-        <button id="saveCropBtn" class="btn waves-effect waves-light" style="margin-right:10px;">Save</button>
-        <button id="cancelCropBtn" class="btn waves-effect waves-light" style="background-color:#f44336;">Cancel</button>
       </div>
     </div>
   </div>
@@ -609,9 +609,44 @@ Using Sales Report and Product List Files:
     // ADDED GLOBAL VARIABLE FOR DRAGGING:
     let draggedIndex = null;
     let photoIds = [];
-    // ADDED GLOBAL VARIABLE FOR CROP INDEX AND Cropper instance:
-    let currentCropIndex = null;
-    let cropper = null;
+
+    // ADDED NEW FUNCTIONS FOR DEDICATED PHOTOS (ranks 8,9,10)
+    function loadDedicatedPhotos() {
+      const stored = localStorage.getItem("dedicatedPhotos");
+      if (stored) {
+        try {
+          const dedicated = JSON.parse(stored);
+          if (Array.isArray(dedicated) && dedicated.length === 3) {
+            previewImages[7] = dedicated[0].dataURL || "";
+            previewImages[8] = dedicated[1].dataURL || "";
+            previewImages[9] = dedicated[2].dataURL || "";
+            photoNames[7] = dedicated[0].photoName || "";
+            photoNames[8] = dedicated[1].photoName || "";
+            photoNames[9] = dedicated[2].photoName || "";
+            photoMeta[7] = dedicated[0].photoMeta || "";
+            photoMeta[8] = dedicated[1].photoMeta || "";
+            photoMeta[9] = dedicated[2].photoMeta || "";
+            photoIds[7] = dedicated[0].photoId || "dedicated-8";
+            photoIds[8] = dedicated[1].photoId || "dedicated-9";
+            photoIds[9] = dedicated[2].photoId || "dedicated-10";
+          }
+        } catch (e) {
+          console.error("Error loading dedicated photos", e);
+        }
+      }
+    }
+    function saveDedicatedPhotos() {
+      const dedicated = [];
+      for (let i = 7; i < 10; i++) {
+        dedicated.push({
+          dataURL: previewImages[i] || "",
+          photoName: photoNames[i] || "",
+          photoMeta: photoMeta[i] || "",
+          photoId: photoIds[i] || ("dedicated-" + (i+1))
+        });
+      }
+      localStorage.setItem("dedicatedPhotos", JSON.stringify(dedicated));
+    }
 
     // -------------------------------------------
     // IMAGE RESIZE UTILITY (3000×3000)
@@ -666,7 +701,6 @@ Using Sales Report and Product List Files:
         reader.readAsDataURL(file);
       });
     }
-
     async function uploadDocFile(file) {
       return new Promise((resolve, reject) => {
         const reader = new FileReader();
@@ -696,7 +730,6 @@ Using Sales Report and Product List Files:
         reader.readAsDataURL(file);
       });
     }
-
     async function updateVectorStore() {
       const allFileIds = [...soldOrdersCSV, ...listingsCSV].map(file => file.id);
       if (allFileIds.length === 0) {
@@ -720,7 +753,6 @@ Using Sales Report and Product List Files:
         console.error("Error in updateVectorStore:", err);
       }
     }
-
     const ordersDropZone = document.getElementById("ordersDropZone");
     ordersDropZone.addEventListener("dragover", e => {
       e.preventDefault(); e.stopPropagation();
@@ -756,7 +788,6 @@ Using Sales Report and Product List Files:
         }
       }
     });
-
     const listingsDropZone = document.getElementById("listingsDropZone");
     listingsDropZone.addEventListener("dragover", e => {
       e.preventDefault(); e.stopPropagation();
@@ -792,14 +823,12 @@ Using Sales Report and Product List Files:
         }
       }
     });
-
     function updateUploadedFilesList() {
       let fileList = [];
       soldOrdersCSV.forEach(file => fileList.push(file.name));
       listingsCSV.forEach(file => fileList.push(file.name));
       document.getElementById("uploadedFilesList").value = fileList.join("\n");
     }
-
     // -------------------------------------------
     // DRAG & DROP IMAGES (Now Resizing to 3000×3000)
     // -------------------------------------------
@@ -844,7 +873,6 @@ Using Sales Report and Product List Files:
         }
       }
     });
-
     function updatePrimaryPreview() {
       const primaryPreview = document.getElementById("primaryPreview");
       if (previewImages.length > 0) {
@@ -853,7 +881,6 @@ Using Sales Report and Product List Files:
         primaryPreview.innerHTML = "";
       }
     }
-
     // ----------------------------------------------------------------------
     // REORDER LOGIC in updateStaticPreviewGrid()
     // ----------------------------------------------------------------------
@@ -863,97 +890,162 @@ Using Sales Report and Product List Files:
         cell.innerHTML = "Empty";
         if (i < previewImages.length) {
           cell.innerHTML = "";
-          const previewBox = document.createElement("div");
-          previewBox.className = "preview-box";
-          previewBox.setAttribute("data-id", photoIds[i]);
-          // Modify dragstart to use custom variable:
-          previewBox.addEventListener("dragstart", e => {
-            draggedIndex = i;
-          });
-          const img = document.createElement("img");
-          img.src = previewImages[i];
-          previewBox.appendChild(img);
-          const removeBtn = document.createElement("div");
-          removeBtn.className = "remove-btn";
-          removeBtn.textContent = "X";
-          removeBtn.addEventListener("click", ev => {
-            ev.stopPropagation();
-            previewImages.splice(i, 1);
-            photoNames.splice(i, 1);
-            photoMeta.splice(i, 1);
-            photoIds.splice(i, 1);
-            updateStaticPreviewGrid();
-            updatePrimaryPreview();
-          });
-          previewBox.appendChild(removeBtn);
-          const numOverlay = document.createElement("div");
-          numOverlay.className = "number-overlay";
-          numOverlay.textContent = (i + 1).toString();
-          previewBox.appendChild(numOverlay);
-          // ADDED NEW CROP BUTTON:
-          const cropBtn = document.createElement("button");
-          cropBtn.textContent = "Crop";
-          cropBtn.style.position = "absolute";
-          cropBtn.style.bottom = "2px";
-          cropBtn.style.right = "2px";
-          cropBtn.style.width = "20px";
-          cropBtn.style.height = "20px";
-          cropBtn.style.borderRadius = "50%";
-          cropBtn.style.backgroundColor = "green";
-          cropBtn.style.color = "white";
-          cropBtn.style.fontSize = "10px";
-          cropBtn.addEventListener("click", (ev) => {
+          if(i < 7) {
+            // Non-dedicated cells (ranks 1-7) with existing reordering functionality:
+            const previewBox = document.createElement("div");
+            previewBox.className = "preview-box";
+            previewBox.setAttribute("data-id", photoIds[i]);
+            previewBox.addEventListener("dragstart", e => {
+              draggedIndex = i;
+            });
+            const img = document.createElement("img");
+            img.src = previewImages[i];
+            previewBox.appendChild(img);
+            const removeBtn = document.createElement("div");
+            removeBtn.className = "remove-btn";
+            removeBtn.textContent = "X";
+            removeBtn.addEventListener("click", ev => {
+              ev.stopPropagation();
+              previewImages.splice(i, 1);
+              photoNames.splice(i, 1);
+              photoMeta.splice(i, 1);
+              photoIds.splice(i, 1);
+              updateStaticPreviewGrid();
+              updatePrimaryPreview();
+            });
+            previewBox.appendChild(removeBtn);
+            const numOverlay = document.createElement("div");
+            numOverlay.className = "number-overlay";
+            numOverlay.textContent = (i + 1).toString();
+            previewBox.appendChild(numOverlay);
+            previewBox.addEventListener("click", () => {
+              showMetadata(i);
+            });
+            cell.appendChild(previewBox);
+            cell.addEventListener("dragover", function(e) {
+              e.preventDefault();
+              cell.classList.add("drag-over");
+            });
+            cell.addEventListener("dragleave", function(e) {
+              cell.classList.remove("drag-over");
+            });
+            cell.addEventListener("drop", function(e) {
+              e.preventDefault();
+              cell.classList.remove("drag-over");
+              let targetIndex = i;
+              if(draggedIndex === null) {
+                return;
+              }
+              if(draggedIndex === targetIndex) {
+                return;
+              }
+              const [movedImage] = previewImages.splice(draggedIndex, 1);
+              previewImages.splice(targetIndex, 0, movedImage);
+              const [movedName] = photoNames.splice(draggedIndex, 1);
+              photoNames.splice(targetIndex, 0, movedName);
+              const [movedMeta] = photoMeta.splice(draggedIndex, 1);
+              photoMeta.splice(targetIndex, 0, movedMeta);
+              const [movedId] = photoIds.splice(draggedIndex, 1);
+              photoIds.splice(targetIndex, 0, movedId);
+              updateStaticPreviewGrid();
+              updatePrimaryPreview();
+              draggedIndex = null;
+            });
+            const metadataStatus = document.createElement("div");
+            metadataStatus.className = "metadata-status";
+            metadataStatus.id = "metadataStatus" + i;
+            cell.appendChild(metadataStatus);
+          } else {
+            // Dedicated cells: indices 7,8,9 (ranks 8,9,10)
+            cell.innerHTML = "";
+            const previewBox = document.createElement("div");
+            previewBox.className = "preview-box";
+            previewBox.setAttribute("data-id", photoIds[i] || ("dedicated-" + (i+1)));
+            // Do not add dragstart event for dedicated cells.
+            const img = document.createElement("img");
+            img.src = previewImages[i] || "";
+            previewBox.appendChild(img);
+            // Add 20x20 round Crop button
+            const cropBtn = document.createElement("button");
+            cropBtn.textContent = "Crop";
+            cropBtn.style.position = "absolute";
+            cropBtn.style.bottom = "2px";
+            cropBtn.style.right = "2px";
+            cropBtn.style.width = "20px";
+            cropBtn.style.height = "20px";
+            cropBtn.style.borderRadius = "50%";
+            cropBtn.style.fontSize = "10px";
+            cropBtn.style.padding = "0";
+            cropBtn.addEventListener("click", function(ev) {
               ev.stopPropagation();
               openCropModal(i);
-          });
-          previewBox.appendChild(cropBtn);
-          previewBox.addEventListener("click", () => {
-            showMetadata(i);
-          });
-          cell.appendChild(previewBox);
-          // ADD NEW NATIVE DRAG EVENT LISTENERS ON THE CELL:
-          cell.addEventListener("dragover", function(e) {
-            e.preventDefault();
-            if(cell.querySelector(".preview-box") != null) {
+            });
+            previewBox.appendChild(cropBtn);
+            const removeBtn = document.createElement("div");
+            removeBtn.className = "remove-btn";
+            removeBtn.textContent = "X";
+            removeBtn.addEventListener("click", ev => {
+              ev.stopPropagation();
+              previewImages.splice(i, 1);
+              photoNames.splice(i, 1);
+              photoMeta.splice(i, 1);
+              photoIds.splice(i, 1);
+              updateStaticPreviewGrid();
+              updatePrimaryPreview();
+              saveDedicatedPhotos();
+            });
+            previewBox.appendChild(removeBtn);
+            const numOverlay = document.createElement("div");
+            numOverlay.className = "number-overlay";
+            numOverlay.textContent = (i + 1).toString();
+            previewBox.appendChild(numOverlay);
+            previewBox.addEventListener("click", () => {
+              showMetadata(i);
+            });
+            cell.appendChild(previewBox);
+            cell.addEventListener("dragover", function(e) {
+              e.preventDefault();
               cell.classList.add("drag-over");
-            }
-          });
-          cell.addEventListener("dragleave", function(e) {
-            cell.classList.remove("drag-over");
-          });
-          cell.addEventListener("drop", function(e) {
-            e.preventDefault();
-            cell.classList.remove("drag-over");
-            let targetIndex = i;
-            if(cell.querySelector(".preview-box") == null) {
-              return;
-            }
-            if(draggedIndex === null) {
-              return;
-            }
-            if(draggedIndex === targetIndex) {
-              return;
-            }
-            const [movedImage] = previewImages.splice(draggedIndex, 1);
-            previewImages.splice(targetIndex, 0, movedImage);
-            const [movedName] = photoNames.splice(draggedIndex, 1);
-            photoNames.splice(targetIndex, 0, movedName);
-            const [movedMeta] = photoMeta.splice(draggedIndex, 1);
-            photoMeta.splice(targetIndex, 0, movedMeta);
-            const [movedId] = photoIds.splice(draggedIndex, 1);
-            photoIds.splice(targetIndex, 0, movedId);
-            updateStaticPreviewGrid();
-            updatePrimaryPreview();
-            draggedIndex = null;
-          });
-          const metadataStatus = document.createElement("div");
-          metadataStatus.className = "metadata-status";
-          metadataStatus.id = "metadataStatus" + i;
-          cell.appendChild(metadataStatus);
+            });
+            cell.addEventListener("dragleave", function(e) {
+              cell.classList.remove("drag-over");
+            });
+            cell.addEventListener("drop", function(e) {
+              e.preventDefault();
+              cell.classList.remove("drag-over");
+              if (e.dataTransfer && e.dataTransfer.files && e.dataTransfer.files.length > 0) {
+                const file = e.dataTransfer.files[0];
+                if (file.type === "image/jpeg" || file.type === "image/png") {
+                  const reader = new FileReader();
+                  reader.onload = async (event) => {
+                    try {
+                      const dataURL = event.target.result;
+                      const resizedDataURL = await resizeImage(dataURL, 3000, 3000);
+                      previewImages[i] = resizedDataURL;
+                      photoNames[i] = file.name;
+                      photoMeta[i] = "";
+                      photoIds[i] = "dedicated-" + (i+1);
+                      updateStaticPreviewGrid();
+                      updatePrimaryPreview();
+                      saveDedicatedPhotos();
+                    } catch (err) {
+                      console.error("Error processing dedicated image:", err);
+                    }
+                  };
+                  reader.readAsDataURL(file);
+                } else {
+                  M.toast({ html: "Only JPEG/PNG images are supported for dedicated photos." });
+                }
+              }
+            });
+            const metadataStatus = document.createElement("div");
+            metadataStatus.className = "metadata-status";
+            metadataStatus.id = "metadataStatus" + i;
+            cell.appendChild(metadataStatus);
+          }
         }
       }
     }
-
     function showMetadata(index) {
       const metadata = photoMeta[index] || "No metadata available for this photo.";
       document.getElementById("metadataTextarea").value = metadata;
@@ -964,7 +1056,6 @@ Using Sales Report and Product List Files:
       }
       instance.open();
     }
-
     // ----------------------------------------------------------------------
     // ANALYZE PHOTOS => calls /analyzeImage
     // ----------------------------------------------------------------------
@@ -973,7 +1064,6 @@ Using Sales Report and Product List Files:
         await analyzePhoto(i);
       }
     });
-
     async function analyzePhoto(index) {
       const statusElem = document.getElementById("metadataStatus" + index);
       if (!statusElem) return;
@@ -1014,7 +1104,6 @@ Using Sales Report and Product List Files:
         statusElem.innerHTML = `<span style="color:red;">Error: ${err.message}</span>`;
       }
     }
-
     // ----------------------------------------------------------------------
     // OAUTH CONNECT (Etsy)
     // ----------------------------------------------------------------------
@@ -1026,19 +1115,16 @@ Using Sales Report and Product List Files:
       }
       return text;
     }
-
     function base64urlEncode(buffer) {
       return btoa(String.fromCharCode(...new Uint8Array(buffer)))
         .replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, '');
     }
-
     async function generateCodeChallenge(codeVerifier) {
       const encoder = new TextEncoder();
       const data = encoder.encode(codeVerifier);
       const digest = await crypto.subtle.digest("SHA-256", data);
       return base64urlEncode(digest);
     }
-
     document.getElementById("connectEtsyBtn").addEventListener("click", async () => {
       const state = "randomState123";
       const scope = "listings_w listings_r";
@@ -1054,9 +1140,9 @@ Using Sales Report and Product List Files:
         `&code_challenge_method=S256`;
       window.location.href = etsyAuthUrl;
     });
-
     document.addEventListener("DOMContentLoaded", () => {
       loadButtonPositions();
+      loadDedicatedPhotos();
       const urlParams = new URLSearchParams(window.location.search);
       const code = urlParams.get("code");
       if (code) {
@@ -1066,7 +1152,6 @@ Using Sales Report and Product List Files:
       updateStaticPreviewGrid();
       updateUploadedFilesList();
     });
-
     async function exchangeCodeForToken(code) {
       const codeVerifier = localStorage.getItem("etsy_code_verifier");
       if (!codeVerifier) {
@@ -1087,7 +1172,6 @@ Using Sales Report and Product List Files:
         M.toast({ html: "Error exchanging code for token" });
       }
     }
-
     // ----------------------------------------------------------------------
     // UPDATE LISTING
     // ----------------------------------------------------------------------
@@ -1134,7 +1218,6 @@ Using Sales Report and Product List Files:
         M.toast({ html: "Exception: " + e.message });
       }
     });
-
     // ----------------------------------------------------------------------
     // UPLOAD PHOTOS (includes alt_text from photoMeta)
     // ----------------------------------------------------------------------
@@ -1190,14 +1273,12 @@ Using Sales Report and Product List Files:
         }
       }
     });
-
     // ----------------------------------------------------------------------
     // RULES & TITLE / DESCRIPTION GENERATION
     // ----------------------------------------------------------------------
     function stripMarkdownJSON(text) {
       return text.replace(/^```json\s*/, "").replace(/\s*```$/, "").trim();
     }
-
     async function generateTitleOnly() {
       const etsyLink = ETSY_SHOP_URL;
       const keyPhrases = document.getElementById("searchKeyPhrases").value.trim();
@@ -1237,7 +1318,6 @@ Important: Return ONLY the title as plain text.`;
         document.getElementById("listingTitle").value = "Error: " + error;
       }
     }
-
     async function generateDescriptionOnly() {
       const etsyLink = ETSY_SHOP_URL;
       const keyPhrases = document.getElementById("searchKeyPhrases").value.trim();
@@ -1276,7 +1356,6 @@ Important: Return ONLY the description as plain text.`;
         document.getElementById("listingDescription").value = "Error: " + error;
       }
     }
-
     async function callOpenAI(payload) {
       const response = await fetch("/.netlify/functions/openaiProxy", {
         method: "POST",
@@ -1290,17 +1369,14 @@ Important: Return ONLY the description as plain text.`;
       }
       return await response.json();
     }
-
     document.getElementById("generateBtn").addEventListener("click", async () => {
       await Promise.all([generateTitleOnly(), generateDescriptionOnly()]);
     });
     document.getElementById("regenTitleBtn").addEventListener("click", generateTitleOnly);
     document.getElementById("regenDescriptionBtn").addEventListener("click", generateDescriptionOnly);
-
     function updateTitleCount(text) {
       document.getElementById("titleCount").textContent = "Count: " + text.length;
     }
-
     // Copy to clipboard
     document.getElementById("copyTitleBtn").addEventListener("click", () => {
       const text = document.getElementById("listingTitle").value;
@@ -1461,81 +1537,65 @@ Generate exactly 13 tag phrases (each ≤ 20 characters). Return as plain text.
       const container13 = document.getElementById("container13");
       container13.style.height = (container13.offsetHeight * 2.5) + "px";
     });
-
-    // NEW FUNCTIONS FOR CROPPING WITH Cropper.js:
+    // ----------------------------------------------------------------------
+    // OPEN CROP MODAL WITH CROPPER.JS
+    // ----------------------------------------------------------------------
     function openCropModal(index) {
-      currentCropIndex = index;
-      const cropModal = document.getElementById("photoCropModal");
-      const cropImage = document.getElementById("cropImage");
-      // Set the cropImage src to the preview image
-      cropImage.src = previewImages[index];
-      // When the image is loaded, initialize Cropper.js
-      cropImage.onload = function() {
-        // Calculate initial zoom factor to fit the image into 400x400 preview box
-        // (Cropper.js will automatically center if viewMode is set)
-        cropper = new Cropper(cropImage, {
-          viewMode: 1,
-          autoCropArea: 1,
-          movable: true,
-          zoomable: true,
-          scalable: false,
-          rotatable: false,
-          responsive: true,
-          background: false,
-          modal: true,
-          guides: true,
-          center: true,
-          highlight: true,
-          cropBoxMovable: true,
-          cropBoxResizable: true,
-          dragMode: 'move',
-          ready: function() {
-            // Ensure image is centered in the 400x400 preview box
-            const containerData = cropper.getContainerData();
-            const cropBoxData = cropper.getCropBoxData();
-            cropper.setCropBoxData({
-              left: (containerData.width - cropBoxData.width) / 2,
-              top: (containerData.height - cropBoxData.height) / 2
-            });
-          }
-        });
-      };
-      // Open modal
-      let instance = M.Modal.getInstance(cropModal);
+      const modalElem = document.getElementById("photoCropModal");
+      const cropImageElem = document.getElementById("cropImage");
+      cropImageElem.src = previewImages[index] || "";
+      cropImageElem.style.maxWidth = "400px";
+      cropImageElem.style.maxHeight = "400px";
+      cropImageElem.style.margin = "auto";
+      let instance = M.Modal.getInstance(modalElem);
       if (!instance) {
-        instance = M.Modal.init(cropModal, {});
+        instance = M.Modal.init(modalElem, { opacity: 0.5, dismissible: true });
       }
       instance.open();
-    }
-
-    document.getElementById("saveCropBtn").addEventListener("click", () => {
-      if (cropper && currentCropIndex !== null) {
-        // Get cropped canvas (cropped area equals the visible area in the preview box)
-        const croppedCanvas = cropper.getCroppedCanvas({
+      if (window.cropper) {
+        window.cropper.destroy();
+      }
+      window.cropper = new Cropper(cropImageElem, {
+        aspectRatio: 1,
+        viewMode: 1,
+        autoCropArea: 1,
+        ready: function() {
+          // Center the image in the preview box
+          centerCropImage();
+        }
+      });
+      document.getElementById("saveCropBtn").onclick = async function() {
+        const canvas = window.cropper.getCroppedCanvas({
           width: 3000,
           height: 3000
         });
-        // Update the previewImages with the cropped (and resized) image
-        previewImages[currentCropIndex] = croppedCanvas.toDataURL("image/jpeg", 0.85);
-        // Update the UI
-        updatePrimaryPreview();
+        const croppedDataURL = canvas.toDataURL("image/jpeg", 0.85);
+        previewImages[index] = croppedDataURL;
         updateStaticPreviewGrid();
-        // Destroy cropper and close modal
-        cropper.destroy();
-        cropper = null;
-        currentCropIndex = null;
-        M.Modal.getInstance(document.getElementById("photoCropModal")).close();
-      }
-    });
-
-    document.getElementById("cancelCropBtn").addEventListener("click", () => {
-      if (cropper) {
-        cropper.destroy();
-        cropper = null;
-      }
-      currentCropIndex = null;
-      M.Modal.getInstance(document.getElementById("photoCropModal")).close();
-    });
+        updatePrimaryPreview();
+        instance.close();
+        window.cropper.destroy();
+        if(index >= 7 && index < 10) { saveDedicatedPhotos(); }
+      };
+      document.getElementById("cancelCropBtn").onclick = function() {
+        instance.close();
+        window.cropper.destroy();
+      };
+    }
+    function centerCropImage() {
+      // Bespoke centering: compute natural dimensions and set transform to center the image
+      const cropImageElem = document.getElementById("cropImage");
+      if (!cropImageElem.naturalWidth || !cropImageElem.naturalHeight) return;
+      const containerWidth = 400, containerHeight = 400;
+      const scaleX = containerWidth / cropImageElem.naturalWidth;
+      const scaleY = containerHeight / cropImageElem.naturalHeight;
+      const initialScale = Math.min(scaleX, scaleY);
+      cropImageElem.style.transform = "scale(" + initialScale + ")";
+      // Centering via margin auto is handled by CSS; additional adjustments can be added if needed.
+    }
+    // ----------------------------------------------------------------------
+    // END OPEN CROP MODAL
+    // ----------------------------------------------------------------------
   </script>
 </body>
 </html>
