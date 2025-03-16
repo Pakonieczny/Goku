@@ -860,10 +860,13 @@ Using Sales Report and Product List Files:
       }
     });
 
+    // UPDATED updatePrimaryPreview() FUNCTION:
     function updatePrimaryPreview() {
       const primaryPreview = document.getElementById("primaryPreview");
       if (previewImages.length > 0) {
         primaryPreview.innerHTML = `<img src="${previewImages[0]}" alt="Primary Preview">`;
+      } else if (reservedPhotos.length > 0 && reservedPhotos[0].src) {
+        primaryPreview.innerHTML = `<img src="${reservedPhotos[0].src}" alt="Primary Preview">`;
       } else {
         primaryPreview.innerHTML = "";
       }
@@ -877,7 +880,6 @@ Using Sales Report and Product List Files:
         const cell = document.getElementById("previewCell" + i);
         if(i >= 7) {
           let rIndex = i - 7;
-          // Always clear cell and add drop event listeners even if empty
           cell.innerHTML = "";
           if(rIndex < reservedPhotos.length && reservedPhotos[rIndex].src) {
             const previewBox = document.createElement("div");
@@ -927,7 +929,6 @@ Using Sales Report and Product List Files:
           } else {
             cell.innerHTML = "Empty";
           }
-          // Always add drop listeners on reserved cells
           cell.addEventListener("dragover", function(e) {
             e.preventDefault();
             cell.classList.add("drag-over");
@@ -946,7 +947,6 @@ Using Sales Report and Product List Files:
               return;
             }
             if(draggedIndex < 7) {
-              // Dragged from non-reserved -> move to reserved cell
               let newReserved = {
                 src: previewImages[draggedIndex],
                 name: photoNames[draggedIndex],
@@ -960,7 +960,6 @@ Using Sales Report and Product List Files:
               reservedPhotos[rIndex] = newReserved;
               saveReservedPhotos();
             } else {
-              // Dragged from reserved -> swap reserved photos
               let temp = reservedPhotos[draggedIndex - 7];
               reservedPhotos[draggedIndex - 7] = reservedPhotos[rIndex];
               reservedPhotos[rIndex] = temp;
@@ -970,7 +969,6 @@ Using Sales Report and Product List Files:
             updatePrimaryPreview();
             draggedIndex = null;
           });
-          // Add metadata status
           const metadataStatus = document.createElement("div");
           metadataStatus.className = "metadata-status";
           metadataStatus.id = "metadataStatus" + i;
@@ -1694,7 +1692,6 @@ Generate exactly 13 tag phrases (each ≤ 20 characters). Return as plain text.
           } else {
             cell.innerHTML = "Empty";
           }
-          // Always add drop event listeners for reserved cells
           cell.addEventListener("dragover", function(e) {
             e.preventDefault();
             cell.classList.add("drag-over");
