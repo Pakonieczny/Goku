@@ -612,7 +612,7 @@ Using Sales Report and Product List Files:
     // ADDED GLOBAL VARIABLE FOR CROP INDEX AND Cropper instance:
     let currentCropIndex = null;
     let cropper = null;
-    // ADDED GLOBAL VARIABLE FOR RESERVED PHOTOS (indexes 7,8,9 reserved)
+    // ADDED GLOBAL VARIABLE FOR RESERVED PHOTOS (cells 8-10 reserved)
     let reservedPhotos = [];
 
     // NEW FUNCTIONS FOR RESERVED PHOTOS:
@@ -875,12 +875,11 @@ Using Sales Report and Product List Files:
     function updateStaticPreviewGrid() {
       for (let i = 0; i < 10; i++) {
         const cell = document.getElementById("previewCell" + i);
-        // For reserved cells (indexes 7,8,9) use reservedPhotos
         if(i >= 7) {
           let rIndex = i - 7;
-          cell.innerHTML = "Empty";
+          // Always clear cell and add drop event listeners even if empty
+          cell.innerHTML = "";
           if(rIndex < reservedPhotos.length && reservedPhotos[rIndex].src) {
-            cell.innerHTML = "";
             const previewBox = document.createElement("div");
             previewBox.className = "preview-box";
             previewBox.setAttribute("data-id", reservedPhotos[rIndex].id);
@@ -925,60 +924,58 @@ Using Sales Report and Product List Files:
               showMetadata(i);
             });
             cell.appendChild(previewBox);
-            cell.addEventListener("dragover", function(e) {
-              e.preventDefault();
-              if(cell.querySelector(".preview-box") != null) {
-                cell.classList.add("drag-over");
-              }
-            });
-            cell.addEventListener("dragleave", function(e) {
-              cell.classList.remove("drag-over");
-            });
-            cell.addEventListener("drop", function(e) {
-              e.preventDefault();
-              cell.classList.remove("drag-over");
-              let targetIndex = i;
-              if(cell.querySelector(".preview-box") == null) {
-                return;
-              }
-              if(draggedIndex === null) {
-                return;
-              }
-              if(draggedIndex === targetIndex) {
-                return;
-              }
-              if(draggedIndex < 7) {
-                // Dragged from non-reserved -> move to reserved
-                let newReserved = {
-                  src: previewImages[draggedIndex],
-                  name: photoNames[draggedIndex],
-                  meta: photoMeta[draggedIndex],
-                  id: photoIds[draggedIndex]
-                };
-                previewImages.splice(draggedIndex, 1);
-                photoNames.splice(draggedIndex, 1);
-                photoMeta.splice(draggedIndex, 1);
-                photoIds.splice(draggedIndex, 1);
-                reservedPhotos[rIndex] = newReserved;
-                saveReservedPhotos();
-              } else {
-                // Dragged from reserved -> swap reserved photos
-                let temp = reservedPhotos[draggedIndex - 7];
-                reservedPhotos[draggedIndex - 7] = reservedPhotos[rIndex];
-                reservedPhotos[rIndex] = temp;
-                saveReservedPhotos();
-              }
-              updateStaticPreviewGrid();
-              updatePrimaryPreview();
-              draggedIndex = null;
-            });
-            const metadataStatus = document.createElement("div");
-            metadataStatus.className = "metadata-status";
-            metadataStatus.id = "metadataStatus" + i;
-            cell.appendChild(metadataStatus);
+          } else {
+            cell.innerHTML = "Empty";
           }
+          // Always add drop listeners on reserved cells
+          cell.addEventListener("dragover", function(e) {
+            e.preventDefault();
+            cell.classList.add("drag-over");
+          });
+          cell.addEventListener("dragleave", function(e) {
+            cell.classList.remove("drag-over");
+          });
+          cell.addEventListener("drop", function(e) {
+            e.preventDefault();
+            cell.classList.remove("drag-over");
+            let targetIndex = i;
+            if(draggedIndex === null) {
+              return;
+            }
+            if(draggedIndex === targetIndex) {
+              return;
+            }
+            if(draggedIndex < 7) {
+              // Dragged from non-reserved -> move to reserved cell
+              let newReserved = {
+                src: previewImages[draggedIndex],
+                name: photoNames[draggedIndex],
+                meta: photoMeta[draggedIndex],
+                id: photoIds[draggedIndex]
+              };
+              previewImages.splice(draggedIndex, 1);
+              photoNames.splice(draggedIndex, 1);
+              photoMeta.splice(draggedIndex, 1);
+              photoIds.splice(draggedIndex, 1);
+              reservedPhotos[rIndex] = newReserved;
+              saveReservedPhotos();
+            } else {
+              // Dragged from reserved -> swap reserved photos
+              let temp = reservedPhotos[draggedIndex - 7];
+              reservedPhotos[draggedIndex - 7] = reservedPhotos[rIndex];
+              reservedPhotos[rIndex] = temp;
+              saveReservedPhotos();
+            }
+            updateStaticPreviewGrid();
+            updatePrimaryPreview();
+            draggedIndex = null;
+          });
+          // Add metadata status
+          const metadataStatus = document.createElement("div");
+          metadataStatus.className = "metadata-status";
+          metadataStatus.id = "metadataStatus" + i;
+          cell.appendChild(metadataStatus);
         } else {
-          // Non-reserved cells (0-6)
           cell.innerHTML = "Empty";
           if (i < previewImages.length) {
             cell.innerHTML = "";
@@ -1030,9 +1027,7 @@ Using Sales Report and Product List Files:
             cell.appendChild(previewBox);
             cell.addEventListener("dragover", function(e) {
               e.preventDefault();
-              if(cell.querySelector(".preview-box") != null) {
-                cell.classList.add("drag-over");
-              }
+              cell.classList.add("drag-over");
             });
             cell.addEventListener("dragleave", function(e) {
               cell.classList.remove("drag-over");
@@ -1041,9 +1036,6 @@ Using Sales Report and Product List Files:
               e.preventDefault();
               cell.classList.remove("drag-over");
               let targetIndex = i;
-              if(cell.querySelector(".preview-box") == null) {
-                return;
-              }
               if(draggedIndex === null) {
                 return;
               }
@@ -1585,7 +1577,9 @@ Generate exactly 13 tag phrases (each ≤ 20 characters). Return as plain text.
       currentCropIndex = index;
       const cropModal = document.getElementById("photoCropModal");
       const cropImage = document.getElementById("cropImage");
+      // Set the cropImage src to the preview image
       cropImage.src = previewImages[index];
+      // When the image is loaded, initialize Cropper.js
       cropImage.onload = function() {
         cropper = new Cropper(cropImage, {
           viewMode: 1,
@@ -1645,19 +1639,14 @@ Generate exactly 13 tag phrases (each ≤ 20 characters). Return as plain text.
 
     // ----------------------------------------------------------------------
     // NEW FUNCTIONS & MODIFICATIONS FOR RESERVED PHOTOS (cells 8-10)
-    // In this approach, cells with index 7, 8, and 9 use reservedPhotos.
-    // Dragging a photo from a non-reserved cell (indexes 0-6) onto a reserved cell
-    // moves that photo into reservedPhotos and removes it from the normal array.
-    // Dragging within reserved cells swaps their positions.
     // ----------------------------------------------------------------------
     function updateStaticPreviewGrid() {
       for (let i = 0; i < 10; i++) {
         const cell = document.getElementById("previewCell" + i);
         if(i >= 7) {
           let rIndex = i - 7;
-          cell.innerHTML = "Empty";
+          cell.innerHTML = "";
           if(rIndex < reservedPhotos.length && reservedPhotos[rIndex].src) {
-            cell.innerHTML = "";
             const previewBox = document.createElement("div");
             previewBox.className = "preview-box";
             previewBox.setAttribute("data-id", reservedPhotos[rIndex].id);
@@ -1702,56 +1691,54 @@ Generate exactly 13 tag phrases (each ≤ 20 characters). Return as plain text.
               showMetadata(i);
             });
             cell.appendChild(previewBox);
-            cell.addEventListener("dragover", function(e) {
-              e.preventDefault();
-              if(cell.querySelector(".preview-box") != null) {
-                cell.classList.add("drag-over");
-              }
-            });
-            cell.addEventListener("dragleave", function(e) {
-              cell.classList.remove("drag-over");
-            });
-            cell.addEventListener("drop", function(e) {
-              e.preventDefault();
-              cell.classList.remove("drag-over");
-              let targetIndex = i;
-              if(cell.querySelector(".preview-box") == null) {
-                return;
-              }
-              if(draggedIndex === null) {
-                return;
-              }
-              if(draggedIndex === targetIndex) {
-                return;
-              }
-              if(draggedIndex < 7) {
-                let newReserved = {
-                  src: previewImages[draggedIndex],
-                  name: photoNames[draggedIndex],
-                  meta: photoMeta[draggedIndex],
-                  id: photoIds[draggedIndex]
-                };
-                previewImages.splice(draggedIndex, 1);
-                photoNames.splice(draggedIndex, 1);
-                photoMeta.splice(draggedIndex, 1);
-                photoIds.splice(draggedIndex, 1);
-                reservedPhotos[rIndex] = newReserved;
-                saveReservedPhotos();
-              } else {
-                let temp = reservedPhotos[draggedIndex - 7];
-                reservedPhotos[draggedIndex - 7] = reservedPhotos[rIndex];
-                reservedPhotos[rIndex] = temp;
-                saveReservedPhotos();
-              }
-              updateStaticPreviewGrid();
-              updatePrimaryPreview();
-              draggedIndex = null;
-            });
-            const metadataStatus = document.createElement("div");
-            metadataStatus.className = "metadata-status";
-            metadataStatus.id = "metadataStatus" + i;
-            cell.appendChild(metadataStatus);
+          } else {
+            cell.innerHTML = "Empty";
           }
+          // Always add drop event listeners for reserved cells
+          cell.addEventListener("dragover", function(e) {
+            e.preventDefault();
+            cell.classList.add("drag-over");
+          });
+          cell.addEventListener("dragleave", function(e) {
+            cell.classList.remove("drag-over");
+          });
+          cell.addEventListener("drop", function(e) {
+            e.preventDefault();
+            cell.classList.remove("drag-over");
+            let targetIndex = i;
+            if(draggedIndex === null) {
+              return;
+            }
+            if(draggedIndex === targetIndex) {
+              return;
+            }
+            if(draggedIndex < 7) {
+              let newReserved = {
+                src: previewImages[draggedIndex],
+                name: photoNames[draggedIndex],
+                meta: photoMeta[draggedIndex],
+                id: photoIds[draggedIndex]
+              };
+              previewImages.splice(draggedIndex, 1);
+              photoNames.splice(draggedIndex, 1);
+              photoMeta.splice(draggedIndex, 1);
+              photoIds.splice(draggedIndex, 1);
+              reservedPhotos[rIndex] = newReserved;
+              saveReservedPhotos();
+            } else {
+              let temp = reservedPhotos[draggedIndex - 7];
+              reservedPhotos[draggedIndex - 7] = reservedPhotos[rIndex];
+              reservedPhotos[rIndex] = temp;
+              saveReservedPhotos();
+            }
+            updateStaticPreviewGrid();
+            updatePrimaryPreview();
+            draggedIndex = null;
+          });
+          const metadataStatus = document.createElement("div");
+          metadataStatus.className = "metadata-status";
+          metadataStatus.id = "metadataStatus" + i;
+          cell.appendChild(metadataStatus);
         } else {
           cell.innerHTML = "Empty";
           if (i < previewImages.length) {
@@ -1804,9 +1791,7 @@ Generate exactly 13 tag phrases (each ≤ 20 characters). Return as plain text.
             cell.appendChild(previewBox);
             cell.addEventListener("dragover", function(e) {
               e.preventDefault();
-              if(cell.querySelector(".preview-box") != null) {
-                cell.classList.add("drag-over");
-              }
+              cell.classList.add("drag-over");
             });
             cell.addEventListener("dragleave", function(e) {
               cell.classList.remove("drag-over");
@@ -1815,9 +1800,6 @@ Generate exactly 13 tag phrases (each ≤ 20 characters). Return as plain text.
               e.preventDefault();
               cell.classList.remove("drag-over");
               let targetIndex = i;
-              if(cell.querySelector(".preview-box") == null) {
-                return;
-              }
               if(draggedIndex === null) {
                 return;
               }
