@@ -173,6 +173,22 @@
       align-items: center; justify-content: center; font-size: 10px;
       z-index: 999; border-radius: 3px;
     }
+    /* ADDED NEW STYLE FOR CROP BUTTON: */
+    .crop-btn {
+      position: absolute;
+      bottom: 0;
+      right: 0;
+      width: 10px;
+      height: 10px;
+      background-color: #4CAF50;
+      border-radius: 50%;
+      color: white;
+      font-size: 6px;
+      line-height: 10px;
+      text-align: center;
+      cursor: pointer;
+      z-index: 1000;
+    }
     /* Metadata status styles */
     .metadata-status {
       margin-top: 5px; text-align: center; font-size: 14px;
@@ -219,6 +235,11 @@
     /* ADDED NEW STYLE FOR DRAG-OVER VISUAL FEEDBACK: */
     .drag-over {
       background-color: rgba(0, 0, 255, 0.2);
+    }
+    /* ADDED NEW STYLE FOR CROP MODAL SIZE: */
+    #photoCropModal .crop-container {
+      width: 500px;
+      height: 500px;
     }
   </style>
 </head>
@@ -545,10 +566,10 @@ Using Sales Report and Product List Files:
 
   <!-- Crop Modal -->
   <div id="photoCropModal" class="modal">
-    <div class="crop-container">
+    <div class="crop-container"> <!-- ADDED: crop-container sized to 500x500 via CSS rule -->
       <h4 style="text-align:center; margin: 0 0 10px 0;">Crop Photo</h4>
-      <div class="img-container">
-        <img id="cropImage" src="" alt="Crop Image">
+      <div class="img-container" style="overflow:hidden; position:relative; width:100%; height:100%;"> <!-- ADDED inline style for relative positioning -->
+        <img id="cropImage" src="" alt="Crop Image" style="position:absolute; cursor:move;"> <!-- ADDED style for panning -->
       </div>
       <div class="controls">
         <label for="zoomSlider">Zoom:</label>
@@ -587,9 +608,11 @@ Using Sales Report and Product List Files:
     let photoNames = [];
     let previewImages = []; // data URLs for display (3000×3000 resized)
     let photoMeta = [];     // AI-generated metadata for alt_text
-    // ADDED GLOBAL VARIABLE FOR DRAGGING:
+    // ADDED GLOBAL VARIABLES FOR DRAG & CROP:
     let draggedIndex = null;
     let photoIds = [];
+    let currentCropIndex = null;
+    let cropStartX = 0, cropStartY = 0, imgOffsetX = 0, imgOffsetY = 0, isPanning = false;
 
     // -------------------------------------------
     // IMAGE RESIZE UTILITY (3000×3000)
@@ -833,7 +856,7 @@ Using Sales Report and Product List Files:
     }
 
     // ----------------------------------------------------------------------
-    // REORDER LOGIC in updateStaticPreviewGrid()
+    // REORDER LOGIC in updateStaticPreviewGrid() using custom native events
     // ----------------------------------------------------------------------
     function updateStaticPreviewGrid() {
       for (let i = 0; i < 10; i++) {
@@ -844,7 +867,7 @@ Using Sales Report and Product List Files:
           const previewBox = document.createElement("div");
           previewBox.className = "preview-box";
           previewBox.setAttribute("data-id", photoIds[i]);
-          // Modify dragstart to use custom variable:
+          // ADDED: custom dragstart to store dragged index
           previewBox.addEventListener("dragstart", e => {
             draggedIndex = i;
           });
@@ -868,11 +891,28 @@ Using Sales Report and Product List Files:
           numOverlay.className = "number-overlay";
           numOverlay.textContent = (i + 1).toString();
           previewBox.appendChild(numOverlay);
+          // ADDED: Crop button (10px by 10px round) at bottom-right
+          const cropBtn = document.createElement("div");
+          cropBtn.className = "crop-btn";
+          cropBtn.textContent = "C"; // Using "C" to denote Crop
+          cropBtn.addEventListener("click", function(ev) {
+            ev.stopPropagation();
+            currentCropIndex = i;
+            document.getElementById("cropImage").src = previewImages[i];
+            // Initialize modal and reset panning variables
+            imgOffsetX = 0;
+            imgOffsetY = 0;
+            document.getElementById("cropImage").style.left = "0px";
+            document.getElementById("cropImage").style.top = "0px";
+            let cropModal = M.Modal.init(document.getElementById("photoCropModal"), {dismissible: false});
+            cropModal.open();
+          });
+          previewBox.appendChild(cropBtn);
           previewBox.addEventListener("click", () => {
             showMetadata(i);
           });
           cell.appendChild(previewBox);
-          // ADD NEW NATIVE DRAG EVENT LISTENERS ON THE CELL:
+          // ADDED: Custom drag event listeners on cell for reordering
           cell.addEventListener("dragover", function(e) {
             e.preventDefault();
             if(cell.querySelector(".preview-box") != null) {
@@ -975,6 +1015,89 @@ Using Sales Report and Product List Files:
         statusElem.innerHTML = `<span style="color:red;">Error: ${err.message}</span>`;
       }
     }
+
+    // ----------------------------------------------------------------------
+    // CROP MODAL PAN & ZOOM IMPLEMENTATION (CUSTOM)
+    // ----------------------------------------------------------------------
+    // Add mouse event listeners to #cropImage for panning
+    const cropImage = document.getElementById("cropImage");
+    cropImage.addEventListener("mousedown", function(e) { /* ADDED */
+      isPanning = true;
+      cropStartX = e.clientX;
+      cropStartY = e.clientY;
+      // Get current offset
+      imgOffsetX = parseInt(cropImage.style.left || "0");
+      imgOffsetY = parseInt(cropImage.style.top || "0");
+    });
+    document.addEventListener("mousemove", function(e) { /* ADDED */
+      if (!isPanning) return;
+      const dx = e.clientX - cropStartX;
+      const dy = e.clientY - cropStartY;
+      cropImage.style.left = (imgOffsetX + dx) + "px";
+      cropImage.style.top = (imgOffsetY + dy) + "px";
+    });
+    document.addEventListener("mouseup", function(e) { /* ADDED */
+      isPanning = false;
+    });
+    // Add zoom functionality using zoomSlider
+    const zoomSlider = document.getElementById("zoomSlider");
+    zoomSlider.addEventListener("input", function(e) { /* ADDED */
+      const zoom = e.target.value;
+      cropImage.style.transform = "scale(" + zoom + ")";
+    });
+    // Add event listener for saveCropBtn to perform cropping and resize to 3000x3000
+    document.getElementById("saveCropBtn").addEventListener("click", async function() { /* ADDED */
+      if (currentCropIndex === null) return;
+      // Get crop modal container dimensions (500x500)
+      const container = document.querySelector("#photoCropModal .crop-container");
+      const containerRect = container.getBoundingClientRect();
+      // Get image element and its current position and scale
+      const img = cropImage;
+      const style = window.getComputedStyle(img);
+      const left = parseInt(style.left) || 0;
+      const top = parseInt(style.top) || 0;
+      const zoom = parseFloat(zoomSlider.value);
+      // Create a canvas of 500x500 to extract the visible portion
+      const canvas = document.createElement("canvas");
+      canvas.width = containerRect.width;
+      canvas.height = containerRect.height;
+      const ctx = canvas.getContext("2d");
+      const tempImg = new Image();
+      tempImg.src = img.src;
+      await new Promise((resolve, reject) => {
+        tempImg.onload = resolve;
+        tempImg.onerror = reject;
+      });
+      // Calculate draw position (accounting for zoom)
+      const drawX = -left / zoom;
+      const drawY = -top / zoom;
+      const drawWidth = containerRect.width / zoom;
+      const drawHeight = containerRect.height / zoom;
+      ctx.drawImage(tempImg, drawX, drawY, drawWidth, drawHeight, 0, 0, containerRect.width, containerRect.height);
+      // Get cropped image data URL from canvas
+      const croppedDataURL = canvas.toDataURL("image/jpeg", 0.85);
+      // Resize cropped image to 3000x3000 using resizeImage utility
+      const finalDataURL = await resizeImage(croppedDataURL, 3000, 3000);
+      // Update previewImages for the current cropped image
+      previewImages[currentCropIndex] = finalDataURL;
+      // Refresh grid and primary preview
+      updateStaticPreviewGrid();
+      updatePrimaryPreview();
+      // Close crop modal
+      let cropModalInstance = M.Modal.getInstance(document.getElementById("photoCropModal"));
+      if (cropModalInstance) {
+        cropModalInstance.close();
+      }
+      currentCropIndex = null;
+    });
+    // Cancel button for crop modal
+    document.getElementById("cancelCropBtn").addEventListener("click", function() { /* ADDED */
+      let cropModalInstance = M.Modal.getInstance(document.getElementById("photoCropModal"));
+      if (cropModalInstance) {
+        cropModalInstance.close();
+      }
+      currentCropIndex = null;
+    });
 
     // ----------------------------------------------------------------------
     // OAUTH CONNECT (Etsy)
