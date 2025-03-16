@@ -16,8 +16,8 @@
   >
   <!-- Include piexifjs for EXIF manipulation (optional, if needed) -->
   <script src="https://cdn.jsdelivr.net/npm/piexifjs@1.0.4/piexif.min.js"></script>
-  <!-- ADDED LINE FOR HTML5Sortable: -->
-  <script src="https://cdn.jsdelivr.net/npm/html5sortable@0.9.21/dist/html5sortable.min.js"></script>
+  <!-- ADDED LINE FOR SORTABLEJS: -->
+  <script src="https://cdn.jsdelivr.net/npm/sortablejs@1.14.0/Sortable.min.js"></script>
   <style>
     /* Basic layout */
     html, body {
@@ -215,6 +215,10 @@
     #uploadPhotoContainer {
       position: fixed; bottom: 20px;
       left: calc(50% + 120px); display: inline-block;
+    }
+    /* ADDED NEW STYLE FOR DRAG-OVER VISUAL FEEDBACK: */
+    .drag-over {
+      background-color: rgba(0, 0, 255, 0.2);
     }
   </style>
 </head>
@@ -583,8 +587,8 @@ Using Sales Report and Product List Files:
     let photoNames = [];
     let previewImages = []; // data URLs for display (3000×3000 resized)
     let photoMeta = [];     // AI-generated metadata for alt_text
-
-    // We'll keep stable "photoIds" so we can reorder the arrays properly.
+    // ADDED GLOBAL VARIABLE FOR DRAGGING:
+    let draggedIndex = null;
     let photoIds = [];
 
     // -------------------------------------------
@@ -789,10 +793,8 @@ Using Sales Report and Product List Files:
     dropZone.addEventListener("drop", async e => {
       e.preventDefault(); e.stopPropagation();
       dropZone.style.borderColor = "#ccc";
-
       const files = e.dataTransfer.files;
       const maxRemaining = 10 - previewImages.length;
-
       for (let i = 0; i < Math.min(files.length, maxRemaining); i++) {
         const file = files[i];
         if (file.type === "image/jpeg" || file.type === "image/png") {
@@ -805,12 +807,10 @@ Using Sales Report and Product List Files:
             });
             // Now resize to 3000×3000
             const resizedDataURL = await resizeImage(dataURL, 3000, 3000);
-
             previewImages.push(resizedDataURL);
             photoNames.push(file.name);
             // Create stable ID
             photoIds.push('img-' + Date.now() + '-' + i);
-
             updatePrimaryPreview();
             updateStaticPreviewGrid();
             updateUploadedFilesList();
@@ -844,7 +844,10 @@ Using Sales Report and Product List Files:
           const previewBox = document.createElement("div");
           previewBox.className = "preview-box";
           previewBox.setAttribute("data-id", photoIds[i]);
-          previewBox.draggable = true;
+          // Modify dragstart to use custom variable:
+          previewBox.addEventListener("dragstart", e => {
+            draggedIndex = i;
+          });
           const img = document.createElement("img");
           img.src = previewImages[i];
           previewBox.appendChild(img);
@@ -869,6 +872,41 @@ Using Sales Report and Product List Files:
             showMetadata(i);
           });
           cell.appendChild(previewBox);
+          // ADD NEW NATIVE DRAG EVENT LISTENERS ON THE CELL:
+          cell.addEventListener("dragover", function(e) {
+            e.preventDefault();
+            if(cell.querySelector(".preview-box") != null) {
+              cell.classList.add("drag-over");
+            }
+          });
+          cell.addEventListener("dragleave", function(e) {
+            cell.classList.remove("drag-over");
+          });
+          cell.addEventListener("drop", function(e) {
+            e.preventDefault();
+            cell.classList.remove("drag-over");
+            let targetIndex = i;
+            if(cell.querySelector(".preview-box") == null) {
+              return;
+            }
+            if(draggedIndex === null) {
+              return;
+            }
+            if(draggedIndex === targetIndex) {
+              return;
+            }
+            const [movedImage] = previewImages.splice(draggedIndex, 1);
+            previewImages.splice(targetIndex, 0, movedImage);
+            const [movedName] = photoNames.splice(draggedIndex, 1);
+            photoNames.splice(targetIndex, 0, movedName);
+            const [movedMeta] = photoMeta.splice(draggedIndex, 1);
+            photoMeta.splice(targetIndex, 0, movedMeta);
+            const [movedId] = photoIds.splice(draggedIndex, 1);
+            photoIds.splice(targetIndex, 0, movedId);
+            updateStaticPreviewGrid();
+            updatePrimaryPreview();
+            draggedIndex = null;
+          });
           const metadataStatus = document.createElement("div");
           metadataStatus.className = "metadata-status";
           metadataStatus.id = "metadataStatus" + i;
@@ -988,23 +1026,6 @@ Using Sales Report and Product List Files:
       }
       updateStaticPreviewGrid();
       updateUploadedFilesList();
-
-      // Initialize HTML5Sortable on the grid container:
-      sortable('#previewGridStatic', {
-        items: '.preview-box',
-        onUpdate: function(e) {
-          const finalOrder = Array.from(document.querySelectorAll('#previewGridStatic .preview-box'))
-            .map(el => el.getAttribute('data-id'));
-          reorderArraysToMatch(finalOrder);
-          const previewBoxes = document.querySelectorAll('#previewGridStatic .preview-box');
-          previewBoxes.forEach((box, index) => {
-            const overlay = box.querySelector('.number-overlay');
-            if (overlay) {
-              overlay.textContent = (index + 1).toString();
-            }
-          });
-        }
-      });
     });
 
     async function exchangeCodeForToken(code) {
@@ -1026,25 +1047,6 @@ Using Sales Report and Product List Files:
         console.error("Error exchanging code:", error);
         M.toast({ html: "Error exchanging code for token" });
       }
-    }
-
-    // Reorder arrays to match the new order of stable IDs:
-    function reorderArraysToMatch(finalOrder) {
-      let newPreviewImages = [];
-      let newPhotoNames = [];
-      let newPhotoMeta = [];
-      let newIds = [];
-      finalOrder.forEach(stableId => {
-        const oldIndex = photoIds.indexOf(stableId);
-        newPreviewImages.push(previewImages[oldIndex]);
-        newPhotoNames.push(photoNames[oldIndex]);
-        newPhotoMeta.push(photoMeta[oldIndex]);
-        newIds.push(photoIds[oldIndex]);
-      });
-      previewImages = newPreviewImages;
-      photoNames = newPhotoNames;
-      photoMeta = newPhotoMeta;
-      photoIds = newIds;
     }
 
     // ----------------------------------------------------------------------
