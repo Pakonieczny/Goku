@@ -16,7 +16,7 @@
   >
   <!-- Include piexifjs for EXIF manipulation (optional, if needed) -->
   <script src="https://cdn.jsdelivr.net/npm/piexifjs@1.0.4/piexif.min.js"></script>
-  <!-- REPLACED: SortableJS with HTML5Sortable: -->
+  <!-- ADDED LINE FOR HTML5Sortable: -->
   <script src="https://cdn.jsdelivr.net/npm/html5sortable@0.9.21/dist/html5sortable.min.js"></script>
   <style>
     /* Basic layout */
@@ -1010,14 +1010,18 @@ Using Sales Report and Product List Files:
       // Initialize HTML5Sortable on the grid container:
       sortable('#previewGridStatic');
 
-      // On "sortupdate", reorder our in-memory arrays by stable ID:
+      // On "sortupdate", reorder our in-memory arrays by stable ID and update rank numbers
       document.getElementById('previewGridStatic').addEventListener('sortupdate', function(e) {
-        // Gather final ordering via data-id
         const finalOrder = Array.from(document.querySelectorAll('#previewGridStatic .preview-box'))
           .map(el => el.getAttribute('data-id'));
         reorderArraysToMatch(finalOrder);
-        // Re-build the preview grid
-        updateStaticPreviewGrid();
+        const previewBoxes = document.querySelectorAll('#previewGridStatic .preview-box');
+        previewBoxes.forEach((box, index) => {
+          const overlay = box.querySelector('.number-overlay');
+          if (overlay) {
+            overlay.textContent = (index + 1).toString();
+          }
+        });
       });
     });
 
@@ -1143,6 +1147,7 @@ Using Sales Report and Product List Files:
         const rankNumber = i + 1;
 
         try {
+          // Convert dataURL -> blob
           const res = await fetch(dataURL);
           const blob = await res.blob();
           const formData = new FormData();
@@ -1311,6 +1316,9 @@ Important: Return ONLY the description as plain text.`;
       }
     });
 
+    async function generateTagThrases() {
+      // (Function body unchanged)
+    }
     async function generateTagPhrases() {
       const question = document.getElementById("listingDescInput").value.trim();
       if (!question) {
