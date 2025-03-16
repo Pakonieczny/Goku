@@ -604,15 +604,15 @@ Using Sales Report and Product List Files:
     let listingsCSV = [];
 
     let photoNames = [];
-    let previewImages = []; // data URLs for display (3000×3000 resized)
-    let photoMeta = [];     // AI-generated metadata for alt_text
+    let previewImages = []; // data URLs for display (3000×3000 resized) for cells 1–7
+    let photoMeta = [];     // AI-generated metadata for alt_text for cells 1–7
     // ADDED GLOBAL VARIABLE FOR DRAGGING:
     let draggedIndex = null;
     let photoIds = [];
     // ADDED GLOBAL VARIABLE FOR CROP INDEX AND Cropper instance:
     let currentCropIndex = null;
     let cropper = null;
-    // ADDED GLOBAL VARIABLE FOR RESERVED PHOTOS (cells 8-10 reserved)
+    // ADDED GLOBAL VARIABLE FOR RESERVED PHOTOS (cells 8–10 reserved)
     let reservedPhotos = [];
     // NEW FUNCTIONS FOR RESERVED PHOTOS:
     function loadReservedPhotos() {
@@ -830,7 +830,7 @@ Using Sales Report and Product List Files:
       e.preventDefault(); e.stopPropagation();
       dropZone.style.borderColor = "#ccc";
       const files = e.dataTransfer.files;
-      const maxRemaining = 10 - previewImages.length;
+      const maxRemaining = 10 - previewImages.length - reservedPhotos.length;
       for (let i = 0; i < Math.min(files.length, maxRemaining); i++) {
         const file = files[i];
         if (file.type === "image/jpeg" || file.type === "image/png") {
@@ -904,22 +904,7 @@ Using Sales Report and Product List Files:
             numOverlay.className = "number-overlay";
             numOverlay.textContent = (i + 1).toString();
             previewBox.appendChild(numOverlay);
-            const cropBtn = document.createElement("button");
-            cropBtn.textContent = "Crop";
-            cropBtn.style.position = "absolute";
-            cropBtn.style.bottom = "2px";
-            cropBtn.style.right = "2px";
-            cropBtn.style.width = "20px";
-            cropBtn.style.height = "20px";
-            cropBtn.style.borderRadius = "50%";
-            cropBtn.style.backgroundColor = "green";
-            cropBtn.style.color = "white";
-            cropBtn.style.fontSize = "10px";
-            cropBtn.addEventListener("click", (ev) => {
-              ev.stopPropagation();
-              openCropModal(i);
-            });
-            previewBox.appendChild(cropBtn);
+            // REMOVED CROP BUTTON FOR RESERVED PHOTOS
             previewBox.addEventListener("click", () => {
               showMetadata(i);
             });
@@ -939,7 +924,6 @@ Using Sales Report and Product List Files:
             cell.classList.remove("drag-over");
             // New alternate approach for reserved cell drop:
             if(e.dataTransfer.files && e.dataTransfer.files.length > 0) {
-              // External file drop into reserved cell
               const file = e.dataTransfer.files[0];
               if(file.type === "image/jpeg" || file.type === "image/png") {
                 const reader = new FileReader();
@@ -1271,7 +1255,7 @@ Using Sales Report and Product List Files:
     });
 
     // ----------------------------------------------------------------------
-    // UPLOAD PHOTOS (includes alt_text from photoMeta) - REVERTED TO PRIOR FUNCTIONALITY
+    // UPLOAD PHOTOS (includes alt_text from photoMeta)
     // ----------------------------------------------------------------------
     document.getElementById("uploadPhotoBtn").addEventListener("click", async () => {
       const listingInput = document.getElementById("shopListings").value.trim();
@@ -1291,24 +1275,47 @@ Using Sales Report and Product List Files:
           return;
         }
       }
-      if (previewImages.length === 0) {
+      // Build an array of photos to upload for all 10 grid cells.
+      // For cells 0-6, use previewImages; for cells 7-9, use reservedPhotos.
+      let allPhotos = [];
+      for (let i = 0; i < 7; i++) {
+        if (previewImages[i]) {
+          allPhotos.push({
+            src: previewImages[i],
+            name: photoNames[i],
+            meta: photoMeta[i] || "",
+            rank: i + 1
+          });
+        }
+      }
+      for (let j = 0; j < 3; j++) {
+        if (reservedPhotos[j] && reservedPhotos[j].src) {
+          allPhotos.push({
+            src: reservedPhotos[j].src,
+            name: reservedPhotos[j].name,
+            meta: reservedPhotos[j].meta || "",
+            rank: 7 + j + 1
+          });
+        }
+      }
+      if (allPhotos.length === 0) {
         M.toast({ html: "No images to upload. Please drag and drop images first." });
         return;
       }
-      for (let i = 0; i < previewImages.length; i++) {
-        const dataURL = previewImages[i];
-        const altText = photoMeta[i] || "";
-        const rankNumber = i + 1;
+      for (let i = 0; i < allPhotos.length; i++) {
+        const dataURL = allPhotos[i].src;
+        const altText = allPhotos[i].meta;
+        const rankNumber = allPhotos[i].rank;
         try {
           const res = await fetch(dataURL);
           const blob = await res.blob();
           const formData = new FormData();
           formData.append("listingId", listingId);
           formData.append("token", accessToken);
-          formData.append("fileName", photoNames[i] || `uploaded_photo_${i}.jpg`);
+          formData.append("fileName", allPhotos[i].name || `uploaded_photo_${i}.jpg`);
           formData.append("rank", rankNumber);
           formData.append("alt_text", altText);
-          formData.append("file", blob, photoNames[i] || `uploaded_photo_${i}.jpg`);
+          formData.append("file", blob, allPhotos[i].name || `uploaded_photo_${i}.jpg`);
           const uploadUrl = `/.netlify/functions/imageUpload`;
           const response = await fetch(uploadUrl, {
             method: "POST",
@@ -1663,7 +1670,7 @@ Generate exactly 13 tag phrases (each ≤ 20 characters). Return as plain text.
     });
 
     // ----------------------------------------------------------------------
-    // NEW FUNCTIONS & MODIFICATIONS FOR RESERVED PHOTOS (cells 8-10)
+    // NEW FUNCTIONS & MODIFICATIONS FOR RESERVED PHOTOS (cells 8–10)
     // ----------------------------------------------------------------------
     function updateStaticPreviewGrid() {
       for (let i = 0; i < 10; i++) {
@@ -1696,22 +1703,7 @@ Generate exactly 13 tag phrases (each ≤ 20 characters). Return as plain text.
             numOverlay.className = "number-overlay";
             numOverlay.textContent = (i + 1).toString();
             previewBox.appendChild(numOverlay);
-            const cropBtn = document.createElement("button");
-            cropBtn.textContent = "Crop";
-            cropBtn.style.position = "absolute";
-            cropBtn.style.bottom = "2px";
-            cropBtn.style.right = "2px";
-            cropBtn.style.width = "20px";
-            cropBtn.style.height = "20px";
-            cropBtn.style.borderRadius = "50%";
-            cropBtn.style.backgroundColor = "green";
-            cropBtn.style.color = "white";
-            cropBtn.style.fontSize = "10px";
-            cropBtn.addEventListener("click", (ev) => {
-              ev.stopPropagation();
-              openCropModal(i);
-            });
-            previewBox.appendChild(cropBtn);
+            // DO NOT ADD CROP BUTTON FOR RESERVED PHOTOS
             previewBox.addEventListener("click", () => {
               showMetadata(i);
             });
@@ -1731,7 +1723,6 @@ Generate exactly 13 tag phrases (each ≤ 20 characters). Return as plain text.
             cell.classList.remove("drag-over");
             // New alternate approach for reserved cell drop:
             if(e.dataTransfer.files && e.dataTransfer.files.length > 0) {
-              // External file drop into reserved cell
               const file = e.dataTransfer.files[0];
               if(file.type === "image/jpeg" || file.type === "image/png") {
                 const reader = new FileReader();
@@ -1756,7 +1747,7 @@ Generate exactly 13 tag phrases (each ≤ 20 characters). Return as plain text.
                 reader.readAsDataURL(file);
               }
             } else {
-              // Handle internal drag drop between reserved cells
+              // Handle internal drag drop (swapping) between reserved cells
               let targetIndex = i;
               if(draggedIndex === null) {
                 return;
@@ -2063,7 +2054,7 @@ Generate exactly 13 tag phrases (each ≤ 20 characters). Return as plain text.
     });
 
     // ----------------------------------------------------------------------
-    // UPLOAD PHOTOS (includes alt_text from photoMeta) - REVERTED TO PRIOR FUNCTIONALITY
+    // UPLOAD PHOTOS (includes alt_text from photoMeta)
     // ----------------------------------------------------------------------
     document.getElementById("uploadPhotoBtn").addEventListener("click", async () => {
       const listingInput = document.getElementById("shopListings").value.trim();
@@ -2083,24 +2074,46 @@ Generate exactly 13 tag phrases (each ≤ 20 characters). Return as plain text.
           return;
         }
       }
-      if (previewImages.length === 0) {
+      // Build an array for all 10 grid cells:
+      let allPhotos = [];
+      for (let i = 0; i < 7; i++) {
+        if (previewImages[i]) {
+          allPhotos.push({
+            src: previewImages[i],
+            name: photoNames[i],
+            meta: photoMeta[i] || "",
+            rank: i + 1
+          });
+        }
+      }
+      for (let j = 0; j < 3; j++) {
+        if (reservedPhotos[j] && reservedPhotos[j].src) {
+          allPhotos.push({
+            src: reservedPhotos[j].src,
+            name: reservedPhotos[j].name,
+            meta: reservedPhotos[j].meta || "",
+            rank: 7 + j + 1
+          });
+        }
+      }
+      if (allPhotos.length === 0) {
         M.toast({ html: "No images to upload. Please drag and drop images first." });
         return;
       }
-      for (let i = 0; i < previewImages.length; i++) {
-        const dataURL = previewImages[i];
-        const altText = photoMeta[i] || "";
-        const rankNumber = i + 1;
+      for (let i = 0; i < allPhotos.length; i++) {
+        const dataURL = allPhotos[i].src;
+        const altText = allPhotos[i].meta;
+        const rankNumber = allPhotos[i].rank;
         try {
           const res = await fetch(dataURL);
           const blob = await res.blob();
           const formData = new FormData();
           formData.append("listingId", listingId);
           formData.append("token", accessToken);
-          formData.append("fileName", photoNames[i] || `uploaded_photo_${i}.jpg`);
+          formData.append("fileName", allPhotos[i].name || `uploaded_photo_${i}.jpg`);
           formData.append("rank", rankNumber);
           formData.append("alt_text", altText);
-          formData.append("file", blob, photoNames[i] || `uploaded_photo_${i}.jpg`);
+          formData.append("file", blob, allPhotos[i].name || `uploaded_photo_${i}.jpg`);
           const uploadUrl = `/.netlify/functions/imageUpload`;
           const response = await fetch(uploadUrl, {
             method: "POST",
