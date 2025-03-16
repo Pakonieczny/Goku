@@ -152,7 +152,6 @@
       position: relative; width: 100px; height: 132px; border: 2px solid #ccc;
       border-radius: 3px; display: flex; flex-direction: column;
       align-items: center; justify-content: center; font-size: 12px; color: #666;
-      /* We'll allow dropping onto the cells for reordering. */
     }
     .preview-box {
       position: relative; width: 100%; height: 100%;
@@ -832,13 +831,16 @@ Using Sales Report and Product List Files:
     function updateStaticPreviewGrid() {
       for (let i = 0; i < 10; i++) {
         const cell = document.getElementById("previewCell" + i);
-        cell.innerHTML = "";
-        // **Added** data-index attribute:
-        cell.setAttribute("data-index", i);
+        cell.innerHTML = "Empty";
 
+        // Only if there's an actual image for index i, we fill the cell
         if (i < previewImages.length) {
+          cell.innerHTML = "";
           const previewBox = document.createElement("div");
           previewBox.className = "preview-box";
+
+          // *** Make the previewBox draggable only if i < previewImages.length
+          previewBox.draggable = true;
 
           const img = document.createElement("img");
           img.src = previewImages[i];
@@ -876,8 +878,6 @@ Using Sales Report and Product List Files:
           metadataStatus.className = "metadata-status";
           metadataStatus.id = "metadataStatus" + i;
           cell.appendChild(metadataStatus);
-        } else {
-          cell.textContent = "Empty";
         }
       }
     }
@@ -1003,36 +1003,35 @@ Using Sales Report and Product List Files:
       updateStaticPreviewGrid();
       updateUploadedFilesList();
 
-      // ADDED LINES FOR SORTABLE INIT:
+      // Sortable init on the entire #previewGridStatic container:
       new Sortable(document.getElementById("previewGridStatic"), {
         animation: 150,
-        // REPLACED THE ENTIRE onEnd BLOCK:
-        onEnd: function(evt) {
-          // We'll gather the .preview-cell elements in their new DOM order:
-          const cells = document.querySelectorAll("#previewGridStatic .preview-cell");
-
-          // We'll build new arrays to match that new DOM order:
-          const newPreviewImages = [];
-          const newPhotoNames = [];
-          const newPhotoMeta = [];
-
-          cells.forEach(cell => {
-            // read the data-index from each cell
-            const originalIndex = parseInt(cell.getAttribute("data-index"), 10);
-            // If this cell currently corresponds to a real image array item:
-            if (!isNaN(originalIndex) && originalIndex < previewImages.length) {
-              newPreviewImages.push(previewImages[originalIndex]);
-              newPhotoNames.push(photoNames[originalIndex]);
-              newPhotoMeta.push(photoMeta[originalIndex]);
-            }
-          });
-
-          // Replace the old arrays in their new order:
-          previewImages = newPreviewImages;
-          photoNames = newPhotoNames;
-          photoMeta = newPhotoMeta;
-
-          // Re-run updateStaticPreviewGrid to refresh rank numbers:
+        onEnd: function (evt) {
+          // If the user tries to drop outside the # of actual images, revert:
+          if (evt.newIndex >= previewImages.length) {
+            // revert by resetting
+            this.sort([...Array(previewImages.length).keys()]);
+            return;
+          }
+          const oldIndex = evt.oldIndex;
+          const newIndex = evt.newIndex;
+          // If no actual move or invalid, do nothing:
+          if (
+            oldIndex === newIndex ||
+            oldIndex >= previewImages.length ||
+            newIndex >= previewImages.length
+          ) {
+            this.sort([...Array(previewImages.length).keys()]);
+            return;
+          }
+          // reorder arrays:
+          const [movedImage] = previewImages.splice(oldIndex, 1);
+          previewImages.splice(newIndex, 0, movedImage);
+          const [movedName] = photoNames.splice(oldIndex, 1);
+          photoNames.splice(newIndex, 0, movedName);
+          const [movedMeta] = photoMeta.splice(oldIndex, 1);
+          photoMeta.splice(newIndex, 0, movedMeta);
+          // Refresh grid & ranks:
           updateStaticPreviewGrid();
         }
       });
