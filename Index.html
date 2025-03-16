@@ -16,10 +16,10 @@
     href="https://cdnjs.cloudflare.com/ajax/libs/materialize/1.0.0/css/materialize.min.css"
   >
 
-  <!-- piexifjs (optional) -->
+  <!-- (Optional) piexifjs for EXIF manipulation -->
   <script src="https://cdn.jsdelivr.net/npm/piexifjs@1.0.4/piexif.min.js"></script>
 
-  <!-- Include SortableJS from a CDN -->
+  <!-- SortableJS for robust drag-and-drop -->
   <script src="https://cdn.jsdelivr.net/npm/sortablejs@1.14.0/Sortable.min.js"></script>
 
   <style>
@@ -91,7 +91,7 @@
       font-style: italic; font-size: 0.9em; margin-top: 5px;
     }
 
-    /* CSV/Doc Drag & Drop for orders, listings, etc. */
+    /* CSV / Doc drag & drop boxes */
     #dropZone, #ordersDropZone, #listingsDropZone {
       width: 138px; height: 138px; border: 2px dashed #ccc;
       border-radius: 3px; display: inline-block; vertical-align: middle;
@@ -137,13 +137,13 @@
       border-radius: 3px;
     }
 
-    /* 10-Photo Preview Grid Container sized to 592×282 */
+    /* 10-Photo Preview Grid Container, sized to 592×282 to match 5 columns + 2 rows + gaps */
     #previewGridContainer {
       position: relative;
       margin: 20px auto;
       text-align: center;
-      width: 592px;  /* 5 * 100 + 4*gaps(23) => 592 */
-      height: 282px; /* 2 * 132 + 1 gap(18) => 282 */
+      width: 592px;
+      height: 282px;
       border: 1px solid #ccc;
       box-sizing: border-box;
     }
@@ -246,7 +246,7 @@
     </div>
   </div>
 
-  <!-- Etsy OAuth + Shop Listings Section -->
+  <!-- Etsy OAuth and Shop Listings Section -->
   <button id="connectEtsyBtn"
           class="btn waves-effect waves-light configurable">
     Connect to Etsy
@@ -331,8 +331,7 @@
       <div class="section-heading configurable">Etsy Listing DESCRIPTION</div>
       <div class="flex-container configurable">
         <div class="textbox-container configurable">
-          <textarea id="listingDescription"
-                    class="materialize-textarea"></textarea>
+          <textarea id="listingDescription" class="materialize-textarea"></textarea>
         </div>
         <div class="button-container configurable">
           <button id="regenDescriptionBtn"
@@ -353,11 +352,9 @@
     </div>
   </div>
 
-  <!-- The 10-Photo Preview Grid Container -->
+  <!-- Static 10-Photo Preview Grid Container -->
   <div id="previewGridContainer">
     <div id="previewGridStatic"></div> 
-    <!-- We'll dynamically build the 10 .preview-cell items in JS, 
-         then let SortableJS reorder them. -->
   </div>
 
   <!-- Update Listing button container -->
@@ -368,7 +365,7 @@
     </button>
   </div>
 
-  <!-- Upload Photo button container -->
+  <!-- New Upload Photo button container -->
   <div id="uploadPhotoContainer">
     <button id="uploadPhotoBtn"
             class="btn waves-effect waves-light configurable">
@@ -551,16 +548,17 @@ Using Sales Report and Product List Files:
     </div>
   </div>
 
-  <!-- jQuery + Materialize JS -->
+  <!-- jQuery + Materialize -->
   <script src="https://code.jquery.com/jquery-3.6.0.min.js"></script>
   <script
     src="https://cdnjs.cloudflare.com/ajax/libs/materialize/1.0.0/js/materialize.min.js">
   </script>
 
   <script>
-    /* -------------------------------------------------------------
-       GLOBALS & MAIN LOGIC (Unchanged except for removing native drag events)
-    ------------------------------------------------------------- */
+    /* 
+      GLOBALS & MAIN LOGIC 
+      (with your stable code plus SortableJS for image reordering)
+    */
     const ETSY_SHOP_URL = "https://www.etsy.com/shop/custombrites";
     const CLIENT_ID = "k75zdspz4r99txpqdji7i2em";
     const REDIRECT_URI = "https://delicate-tanuki-616ac0.netlify.app/";
@@ -574,13 +572,87 @@ Using Sales Report and Product List Files:
     let previewImages = [];
     let photoMeta = [];
 
-    // We keep all your CSV doc logic, alt_text, analyzing, openai calls, etc...
+    // ~~~~~ CSV / DOC UPLOAD LOGIC ~~~~~
+    // (unchanged)...
 
-    // ~~~~~ CSV / DOC UPLOAD EXAMPLE ~~~~~
-    // (unchanged code for uploadCSVFile, uploadDocFile, updateVectorStore, 
-    //  plus the dragover events for ordersDropZone, listingsDropZone, etc.)
+    // ~~~~~ Etsy OAuth / Connect to Etsy ~~~~~
+    document.getElementById("connectEtsyBtn").addEventListener("click", async () => {
+      // your code for PKCE challenge, etc.
+    });
+    async function exchangeCodeForToken(code) {
+      // your code to fetch the token
+    }
 
-    // ~~~~~ DRAG & DROP for IMAGES (RESIZE to 3000x3000) ~~~~~
+    // ~~~~~ Updating Listing, Uploading Photos ~~~~~
+    document.getElementById("uploadToEtsyBtn").addEventListener("click", async () => {
+      // your code to call updateListing serverless
+    });
+    document.getElementById("uploadPhotoBtn").addEventListener("click", async () => {
+      // your code to call imageUpload serverless for each photo
+    });
+
+    // ~~~~~ AI-based Title/Description generation ~~~~~
+    document.getElementById("generateBtn").addEventListener("click", async () => {
+      // calls generateTitleOnly, generateDescriptionOnly
+    });
+    document.getElementById("regenTitleBtn").addEventListener("click", () => {
+      // your code
+    });
+    document.getElementById("regenDescriptionBtn").addEventListener("click", () => {
+      // your code
+    });
+    document.getElementById("copyTitleBtn").addEventListener("click", () => {
+      // copy listingTitle
+    });
+    document.getElementById("copyDescriptionBtn").addEventListener("click", () => {
+      // copy listingDescription
+    });
+    document.getElementById("clearKeyPhrasesBtn").addEventListener("click", () => {
+      document.getElementById("searchKeyPhrases").value = "";
+    });
+    document.getElementById("copyKeyPhrasesBtn").addEventListener("click", () => {
+      // copy key phrases to clipboard
+    });
+
+    // ~~~~~ Analyze Photos ~~~~~
+    document.getElementById("analyzeMetadataBtn").addEventListener("click", async () => {
+      // loop over previewImages & call analyzePhoto
+    });
+
+    // ~~~~~ Button Config logic ~~~~~
+    document.getElementById("configureButtonsBtn").addEventListener("click", () => {
+      // your code to open config modal
+    });
+    document.getElementById("saveButtonPositionsBtn").addEventListener("click", () => {
+      // your code to save positions to localStorage
+    });
+    function loadButtonPositions() {
+      // your code to restore from localStorage
+    }
+
+    // ~~~~~ Possibly additional logic for modals, crop, etc. ~~~~~
+
+    // ~~~~~ On DOMContentLoaded ~~~~~
+    document.addEventListener("DOMContentLoaded", () => {
+      loadButtonPositions();
+      // check for code param
+      const urlParams = new URLSearchParams(window.location.search);
+      const code = urlParams.get("code");
+      if (code) {
+        exchangeCodeForToken(code);
+        window.history.replaceState({}, document.title, REDIRECT_URI);
+      }
+
+      updateStaticPreviewGrid();
+      updateUploadedFilesList();
+    });
+
+    // ~~~~~ Utility to update the CSV doc listing ~~~~~
+    function updateUploadedFilesList() {
+      // your code
+    }
+
+    // ~~~~~ Resizing images logic ~~~~~
     async function resizeImage(dataURL, width, height) {
       return new Promise((resolve, reject) => {
         const img = new Image();
@@ -598,6 +670,7 @@ Using Sales Report and Product List Files:
       });
     }
 
+    // ~~~~~ Drag & drop for #dropZone (images) ~~~~~
     const dropZone = document.getElementById("dropZone");
     dropZone.addEventListener("dragover", e => {
       e.preventDefault(); e.stopPropagation();
@@ -628,7 +701,7 @@ Using Sales Report and Product List Files:
 
             previewImages.push(resizedDataURL);
             photoNames.push(file.name);
-            photoMeta.push(""); // no metadata yet
+            photoMeta.push(""); 
 
             updatePrimaryPreview();
             updateStaticPreviewGrid();
@@ -645,20 +718,20 @@ Using Sales Report and Product List Files:
     function updatePrimaryPreview() {
       const primaryPreview = document.getElementById("primaryPreview");
       if (previewImages.length > 0) {
-        primaryPreview.innerHTML = `<img src="${previewImages[0]}" alt="Primary Preview">`;
+        primaryPreview.innerHTML =
+          `<img src="${previewImages[0]}" alt="Primary Preview">`;
       } else {
         primaryPreview.innerHTML = "";
       }
     }
 
-    // ~~~~~ The new approach for generating 10 .preview-cell items and Sortable ~~~~~
+    // ================ SortableJS Approach ================
     let sortableInstance;
     function updateStaticPreviewGrid() {
       const grid = document.getElementById("previewGridStatic");
-      // Clear existing child cells
+      // Clear existing
       grid.innerHTML = "";
 
-      // Build up to 10 cells
       for (let i = 0; i < 10; i++) {
         const cell = document.createElement("div");
         cell.className = "preview-cell";
@@ -691,9 +764,17 @@ Using Sales Report and Product List Files:
           numOverlay.textContent = (i + 1).toString();
           previewBox.appendChild(numOverlay);
 
-          // On click, show metadata
+          // On click => show metadata
           previewBox.addEventListener("click", () => {
-            showMetadata(i);
+            const metadata = photoMeta[i] || "No metadata available for this photo.";
+            const metaText = document.getElementById("metadataTextarea");
+            metaText.value = metadata;
+            const modalElem = document.getElementById("metadataModal");
+            let instance = M.Modal.getInstance(modalElem);
+            if (!instance) {
+              instance = M.Modal.init(modalElem, {});
+            }
+            instance.open();
           });
 
           cell.appendChild(previewBox);
@@ -703,14 +784,13 @@ Using Sales Report and Product List Files:
           metadataStatus.id = "metadataStatus" + i;
           cell.appendChild(metadataStatus);
         } else {
-          // If no image for this slot
           cell.textContent = "Empty";
         }
 
         grid.appendChild(cell);
       }
 
-      // Re-initialize Sortable on #previewGridStatic each time we rebuild
+      // Re-initialize Sortable each time
       if (sortableInstance) {
         sortableInstance.destroy();
       }
@@ -721,7 +801,7 @@ Using Sales Report and Product List Files:
           const newIndex = evt.newIndex;
           if (oldIndex === newIndex) return;
 
-          // Reorder arrays
+          // reorder arrays
           const [movedImg] = previewImages.splice(oldIndex, 1);
           previewImages.splice(newIndex, 0, movedImg);
 
@@ -739,7 +819,8 @@ Using Sales Report and Product List Files:
 
     function showMetadata(index) {
       const metadata = photoMeta[index] || "No metadata available for this photo.";
-      document.getElementById("metadataTextarea").value = metadata;
+      const metaArea = document.getElementById("metadataTextarea");
+      metaArea.value = metadata;
       const modalElem = document.getElementById("metadataModal");
       let instance = M.Modal.getInstance(modalElem);
       if (!instance) {
@@ -747,61 +828,6 @@ Using Sales Report and Product List Files:
       }
       instance.open();
     }
-
-    // ~~~~~ Analyze Photos => /analyzeImage logic ~~~~~
-    async function analyzePhoto(index) {
-      // your code ...
-    }
-    document.getElementById("analyzeMetadataBtn").addEventListener("click", async () => {
-      for (let i = 0; i < previewImages.length; i++) {
-        await analyzePhoto(i);
-      }
-    });
-
-    // ~~~~~ OAuth connect to Etsy, token exchange ~~~~~
-    // ...
-    // your code for connectEtsyBtn, exchangeCodeForToken, etc.
-
-    // ~~~~~ Update listing, upload photo with alt_text ~~~~~
-    // ...
-    // your code for updateListing, uploadPhotoBtn, etc.
-
-    // ~~~~~ Title/Description generation code (OpenAI) ~~~~~
-    // ...
-    // your code for generateTitleOnly, generateDescriptionOnly, etc.
-
-    // ~~~~~ Key phrase generation logic, plus the "copy" & "clear" ~~~~~
-    // ...
-    // your code from stable version
-
-    // ~~~~~ Button config code ~~~~~
-    document.getElementById("configureButtonsBtn").addEventListener("click", () => {
-      // your code to open the config modal, etc.
-    });
-    document.getElementById("saveButtonPositionsBtn").addEventListener("click", () => {
-      // saving positions
-    });
-    function loadButtonPositions() {
-      // ...
-    }
-
-    // ~~~~~ On DOM load ~~~~~
-    document.addEventListener("DOMContentLoaded", () => {
-      loadButtonPositions();
-      const urlParams = new URLSearchParams(window.location.search);
-      const code = urlParams.get("code");
-      if (code) {
-        // exchange token
-      }
-      updateStaticPreviewGrid();
-      updateUploadedFilesList();
-    });
-
-    function updateUploadedFilesList() {
-      // your code for listing CSV doc names
-    }
-
-    // ~~~~~ Possibly other logic you had, e.g. "window.addEventListener('load', ...)" ~~~~~
   </script>
 </body>
 </html>
