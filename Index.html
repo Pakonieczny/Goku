@@ -16,10 +16,6 @@
   >
   <!-- Include piexifjs for EXIF manipulation (optional, if needed) -->
   <script src="https://cdn.jsdelivr.net/npm/piexifjs@1.0.4/piexif.min.js"></script>
-
-  <!-- STEP 1: Include SortableJS from a CDN -->
-  <script src="https://cdn.jsdelivr.net/npm/sortablejs@1.14.0/Sortable.min.js"></script>
-
   <style>
     /* Basic layout */
     html, body {
@@ -147,7 +143,6 @@
       max-width: 600px; text-align: center;
     }
     #previewGridStatic {
-      /* We'll rely on SortableJS to reorder these child cells in the DOM. */
       display: grid; grid-template-columns: repeat(5, 100px);
       grid-column-gap: 23px; grid-row-gap: 18px; margin: 0 auto;
     }
@@ -155,9 +150,11 @@
       position: relative; width: 100px; height: 132px; border: 2px solid #ccc;
       border-radius: 3px; display: flex; flex-direction: column;
       align-items: center; justify-content: center; font-size: 12px; color: #666;
+      /* We'll allow dropping onto the cells for reordering. */
     }
     .preview-box {
       position: relative; width: 100%; height: 100%;
+      /* We'll mark this draggable for reorder. */
     }
     .preview-box img {
       width: 100px; height: 100px; object-fit: cover;
@@ -357,10 +354,6 @@
 
   <!-- Static 10-Photo Preview Grid Container -->
   <div id="previewGridContainer">
-    <!-- 
-      We'll rely on SortableJS to reorder these child cells in the DOM. 
-      We'll remove any direct "dragover"/"drop" code on them. 
-    -->
     <div id="previewGridStatic">
       <div class="preview-cell" id="previewCell0">Empty</div>
       <div class="preview-cell" id="previewCell1">Empty</div>
@@ -573,108 +566,7 @@ Using Sales Report and Product List Files:
   </script>
 
   <script>
-    // 1) We'll store our images in arrays (photoNames, previewImages, photoMeta).
-    // 2) We'll remove any native 'dragover'/'drop' on the #previewCell
-    // 3) We init SortableJS on #previewGridStatic after DOM load
-    // 4) In onEnd, we reorder the arrays and re-call updateStaticPreviewGrid()
-
-    // If you had other code or logic (like analyzing, resizing, etc.), 
-    // keep it or place it here. Shown below is the minimal approach.
-
-    let photoNames = [];
-    let previewImages = [];
-    let photoMeta = [];
-
-    // On DOMContentLoaded, we init Sortable on #previewGridStatic:
-    document.addEventListener("DOMContentLoaded", function() {
-      // 1) Remove old "dragover"/"drop"/"dragstart" logic from each previewCell
-      //    (We no longer attach them in code.)
-
-      // 2) Initialize Sortable
-      new Sortable(document.getElementById("previewGridStatic"), {
-        animation: 150,
-        onEnd: function(evt) {
-          const oldIndex = evt.oldIndex;
-          const newIndex = evt.newIndex;
-          if (oldIndex === newIndex) return;
-
-          // reorder arrays
-          const [movedImg] = previewImages.splice(oldIndex, 1);
-          previewImages.splice(newIndex, 0, movedImg);
-
-          const [movedName] = photoNames.splice(oldIndex, 1);
-          photoNames.splice(newIndex, 0, movedName);
-
-          const [movedMeta] = photoMeta.splice(oldIndex, 1);
-          photoMeta.splice(newIndex, 0, movedMeta);
-
-          // Re-draw the grid:
-          updateStaticPreviewGrid();
-        }
-      });
-
-      // If you have existing code that sets up the preview images or calls 
-      // updateStaticPreviewGrid() at load, place it here. For example:
-      updateStaticPreviewGrid();
-    });
-
-    function updateStaticPreviewGrid() {
-      // We'll fill #previewCell0..#previewCell9 with the appropriate images
-      for (let i = 0; i < 10; i++) {
-        const cell = document.getElementById("previewCell" + i);
-        if (!cell) continue; // safety check
-
-        // Clear old content
-        cell.innerHTML = "";
-
-        if (i < previewImages.length) {
-          // Show an image
-          const previewBox = document.createElement("div");
-          previewBox.className = "preview-box";
-
-          const img = document.createElement("img");
-          img.src = previewImages[i];
-          previewBox.appendChild(img);
-
-          // Remove button
-          const removeBtn = document.createElement("div");
-          removeBtn.className = "remove-btn";
-          removeBtn.textContent = "X";
-          removeBtn.addEventListener("click", (e) => {
-            e.stopPropagation();
-            previewImages.splice(i, 1);
-            photoNames.splice(i, 1);
-            photoMeta.splice(i, 1);
-            updateStaticPreviewGrid();
-          });
-          previewBox.appendChild(removeBtn);
-
-          // Number overlay
-          const numOverlay = document.createElement("div");
-          numOverlay.className = "number-overlay";
-          numOverlay.textContent = (i + 1).toString();
-          previewBox.appendChild(numOverlay);
-
-          // On click => show metadata
-          previewBox.addEventListener("click", () => {
-            const metadata = photoMeta[i] || "No metadata available for this photo.";
-            const metaText = document.getElementById("metadataTextarea");
-            metaText.value = metadata;
-            const modalElem = document.getElementById("metadataModal");
-            let instance = M.Modal.getInstance(modalElem);
-            if (!instance) {
-              instance = M.Modal.init(modalElem, {});
-            }
-            instance.open();
-          });
-
-          cell.appendChild(previewBox);
-        } else {
-          // If we have no image for this slot
-          cell.textContent = "Empty";
-        }
-      }
-    }
+    // (You can insert any JS code or references here if needed)
   </script>
 </body>
 </html>
