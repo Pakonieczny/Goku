@@ -156,7 +156,6 @@
     }
     .preview-box {
       position: relative; width: 100%; height: 100%;
-      /* We'll mark this draggable for reorder. (REMOVED DRAG EVENT CODE) */
     }
     .preview-box img {
       width: 100px; height: 100px; object-fit: cover;
@@ -834,14 +833,12 @@ Using Sales Report and Product List Files:
       for (let i = 0; i < 10; i++) {
         const cell = document.getElementById("previewCell" + i);
         cell.innerHTML = "";
-
-        // REMOVED the old cell dragover & drop event listeners so Sortable can handle it:
+        // **Added** data-index attribute:
+        cell.setAttribute("data-index", i);
 
         if (i < previewImages.length) {
           const previewBox = document.createElement("div");
           previewBox.className = "preview-box";
-          // REMOVED `previewBox.draggable = true;`
-          // REMOVED old "dragstart" code
 
           const img = document.createElement("img");
           img.src = previewImages[i];
@@ -1009,32 +1006,35 @@ Using Sales Report and Product List Files:
       // ADDED LINES FOR SORTABLE INIT:
       new Sortable(document.getElementById("previewGridStatic"), {
         animation: 150,
+        // REPLACED THE ENTIRE onEnd BLOCK:
         onEnd: function(evt) {
-  const oldIndex = evt.oldIndex;
-  const newIndex = evt.newIndex;
+          // We'll gather the .preview-cell elements in their new DOM order:
+          const cells = document.querySelectorAll("#previewGridStatic .preview-cell");
 
-  // 1) If user drags past the total images (into an "empty" cell),
-  //    ignore or revert. (No array changes.)
-  if (oldIndex >= previewImages.length || newIndex >= previewImages.length) {
-    return;
-  }
+          // We'll build new arrays to match that new DOM order:
+          const newPreviewImages = [];
+          const newPhotoNames = [];
+          const newPhotoMeta = [];
 
-  // 2) If it's the same position, do nothing:
-  if (oldIndex === newIndex) return;
+          cells.forEach(cell => {
+            // read the data-index from each cell
+            const originalIndex = parseInt(cell.getAttribute("data-index"), 10);
+            // If this cell currently corresponds to a real image array item:
+            if (!isNaN(originalIndex) && originalIndex < previewImages.length) {
+              newPreviewImages.push(previewImages[originalIndex]);
+              newPhotoNames.push(photoNames[originalIndex]);
+              newPhotoMeta.push(photoMeta[originalIndex]);
+            }
+          });
 
-  // 3) Reorder each array:
-  const [movedImage] = previewImages.splice(oldIndex, 1);
-  previewImages.splice(newIndex, 0, movedImage);
+          // Replace the old arrays in their new order:
+          previewImages = newPreviewImages;
+          photoNames = newPhotoNames;
+          photoMeta = newPhotoMeta;
 
-  const [movedName] = photoNames.splice(oldIndex, 1);
-  photoNames.splice(newIndex, 0, movedName);
-
-  const [movedMeta] = photoMeta.splice(oldIndex, 1);
-  photoMeta.splice(newIndex, 0, movedMeta);
-
-  // 4) Rebuild the grid so the rank overlay updates:
-  updateStaticPreviewGrid();
-}
+          // Re-run updateStaticPreviewGrid to refresh rank numbers:
+          updateStaticPreviewGrid();
+        }
       });
     });
 
