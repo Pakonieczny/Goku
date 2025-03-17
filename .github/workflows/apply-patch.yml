@@ -1,7 +1,7 @@
 name: Apply Patch
 
 on:
-  workflow_dispatch:  # This allows you to manually trigger the workflow
+  workflow_dispatch:  # Allows you to manually trigger the workflow
 
 jobs:
   patch_job:
