@@ -618,6 +618,8 @@ Using Sales Report and Product List Files:
     let cropper = null;
     // ADDED GLOBAL VARIABLE FOR RESERVED PHOTOS (cells 8-10 reserved)
     let reservedPhotos = [];
+    // NEW FLAG TO ENSURE NON-RESERVED PHOTOS UPLOAD ONLY ONCE
+    let nonReservedUploaded = false;
 
     // NEW FUNCTIONS FOR RESERVED PHOTOS:
     function loadReservedPhotos() {
@@ -882,10 +884,10 @@ Using Sales Report and Product List Files:
       for (let i = 0; i < 10; i++) {
         const cell = document.getElementById("previewCell" + i);
         // For reserved photos (cells 7-9)
-        if (i >= 7) {
+        if(i >= 7) {
           let rIndex = i - 7;
           cell.innerHTML = "";
-          if (rIndex < reservedPhotos.length && reservedPhotos[rIndex].src) {
+          if(rIndex < reservedPhotos.length && reservedPhotos[rIndex].src) {
             const previewBox = document.createElement("div");
             previewBox.className = "preview-box";
             previewBox.setAttribute("data-id", reservedPhotos[rIndex].id);
@@ -910,6 +912,7 @@ Using Sales Report and Product List Files:
             numOverlay.className = "number-overlay";
             numOverlay.textContent = (i + 1).toString();
             previewBox.appendChild(numOverlay);
+            // Do NOT add Crop button for reserved photos
             previewBox.addEventListener("click", () => {
               showMetadata(i);
             });
@@ -928,9 +931,9 @@ Using Sales Report and Product List Files:
             e.preventDefault();
             cell.classList.remove("drag-over");
             // External drop: if file provided, add new reserved photo
-            if (e.dataTransfer.files && e.dataTransfer.files.length > 0) {
+            if(e.dataTransfer.files && e.dataTransfer.files.length > 0) {
               const file = e.dataTransfer.files[0];
-              if (file.type === "image/jpeg" || file.type === "image/png") {
+              if(file.type === "image/jpeg" || file.type === "image/png") {
                 const reader = new FileReader();
                 reader.onload = async function(ev) {
                   try {
@@ -953,10 +956,12 @@ Using Sales Report and Product List Files:
                 reader.readAsDataURL(file);
               }
             } else {
-              // Internal drop within reserved area: reorder reserved photos
+              // Internal drag-drop within reserved area: reorder reserved photos
               let targetIndex = i;
-              if (draggedIndex === null) return;
-              if (draggedIndex < 7 || draggedIndex === targetIndex) return;
+              if(draggedIndex === null) {
+                return;
+              }
+              if(draggedIndex < 7 || draggedIndex === targetIndex) return;
               let temp = reservedPhotos[draggedIndex - 7];
               reservedPhotos[draggedIndex - 7] = reservedPhotos[rIndex];
               reservedPhotos[rIndex] = temp;
@@ -978,7 +983,7 @@ Using Sales Report and Product List Files:
             previewBox.className = "preview-box";
             previewBox.setAttribute("data-id", photoIds[i]);
             previewBox.addEventListener("dragstart", e => {
-              if (i >= 7) return;
+              if(i >= 7) return;
               draggedIndex = i;
             });
             const img = document.createElement("img");
@@ -1032,9 +1037,16 @@ Using Sales Report and Product List Files:
               e.preventDefault();
               cell.classList.remove("drag-over");
               let targetIndex = i;
-              if (draggedIndex === null) return;
-              if (draggedIndex >= 7) return;
-              if (draggedIndex === targetIndex) return;
+              if(draggedIndex === null) {
+                return;
+              }
+              // Block drop if dragging from reserved area
+              if(draggedIndex >= 7) {
+                return;
+              }
+              if(draggedIndex === targetIndex) {
+                return;
+              }
               const [movedImage] = previewImages.splice(draggedIndex, 1);
               previewImages.splice(targetIndex, 0, movedImage);
               const [movedName] = photoNames.splice(draggedIndex, 1);
@@ -1244,6 +1256,11 @@ Using Sales Report and Product List Files:
     // UPLOAD PHOTOS (includes alt_text from photoMeta)
     // ----------------------------------------------------------------------
     document.getElementById("uploadPhotoBtn").addEventListener("click", async () => {
+      // New flag check to ensure non-reserved photos are uploaded only once
+      if(nonReservedUploaded){
+        M.toast({ html: "Non-reserved photos have already been uploaded." });
+        return;
+      }
       const listingInput = document.getElementById("shopListings").value.trim();
       if (!listingInput) {
         M.toast({ html: "Please provide a listing URL or ID in 'My Etsy Shop Listings'." });
@@ -1294,6 +1311,7 @@ Using Sales Report and Product List Files:
           M.toast({ html: `Exception uploading photo #${rankNumber}: ${e.message}` });
         }
       }
+      nonReservedUploaded = true;
     });
 
     // ----------------------------------------------------------------------
