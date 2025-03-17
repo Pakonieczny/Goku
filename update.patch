@@ -1,0 +1,26 @@
+diff --git a/Index.html b/Index.html
+index abcdef0..1234567 100644
+--- a/Index.html
++++ b/Index.html
+@@ // Global variables section (within your <script> tag)
+-    let currentCropIndex = null;
++    let currentCropIndex = null;
++    let nonReservedUploaded = false;
+@@ // Non-reserved photo upload handler (attached to uploadPhotoBtn)
+-document.getElementById("uploadPhotoBtn").addEventListener("click", async () => {
+-  // ... existing upload code for non‑reserved photos ...
+-  for (let i = 0; i < previewImages.length; i++) {
+-    // Upload logic for each photo
+-  }
+-});
++document.getElementById("uploadPhotoBtn").addEventListener("click", async () => {
++  if (nonReservedUploaded) {
++    M.toast({ html: "Non-reserved photos have already been uploaded." });
++    return;
++  }
++  // ... existing upload code for non‑reserved photos ...
++  for (let i = 0; i < previewImages.length; i++) {
++    // Upload logic for each photo
++  }
++  nonReservedUploaded = true;
++});
