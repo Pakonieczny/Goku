@@ -7,7 +7,6 @@ index 89abcdef..cdef0123 100644
 +    let photoIds = [];
 +    let nonReservedUploadedFlags = [];
 @@
-             // Create stable ID
 -            photoIds.push('img-' + Date.now() + '-' + i);
 +            photoIds.push('img-' + Date.now() + '-' + i);
 +            nonReservedUploadedFlags.push(false);
@@ -86,7 +85,7 @@ index 89abcdef..cdef0123 100644
 +    M.toast({ html: "No images to upload. Please drag and drop images first." });
 +    return;
 +  }
-+  // Iterate over each non‑reserved photo
++  // Iterate over non-reserved photos and only upload if flag is false
 +  for (let i = 0; i < previewImages.length; i++) {
 +    if (!nonReservedUploadedFlags[i]) {
 +      const dataURL = previewImages[i];
@@ -112,7 +111,6 @@ index 89abcdef..cdef0123 100644
 +        } else {
 +          M.toast({ html: `Photo #${rankNumber} uploaded with alt_text!` });
 +        }
-+        // Mark this photo as uploaded
 +        nonReservedUploadedFlags[i] = true;
 +      } catch (e) {
 +        console.error(`Exception uploading photo #${rankNumber}:`, e);
