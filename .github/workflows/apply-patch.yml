@@ -21,8 +21,11 @@ jobs:
           git add Index.html
           git commit -m "Automated patch applied" || echo "No changes to commit"
 
-      - name: Push changes
+      - name: Push changes using PAT
         env:
           PAT_TOKEN: ${{ secrets.PAT_TOKEN }}
         run: |
-          git push https://x-access-token:${PAT_TOKEN}@github.com/${{ github.repository }} HEAD:main
+          # Set remote URL to use the PAT
+          git remote set-url origin https://x-access-token:${PAT_TOKEN}@github.com/${{ github.repository }}.git
+          # Push changes to the main branch
+          git push origin HEAD:main
