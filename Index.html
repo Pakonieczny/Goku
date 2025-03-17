@@ -391,6 +391,10 @@
             class="btn waves-effect waves-light configurable">
       Upload Photo
     </button>
+    <button id="uploadReservedBtn"
+            class="btn waves-effect waves-light configurable">
+      Upload Reserved
+    </button>
   </div>
 
   <!-- Metadata Modal (for viewing metadata on click) -->
@@ -923,7 +927,7 @@ Using Sales Report and Product List Files:
           cell.addEventListener("drop", function(e) {
             e.preventDefault();
             cell.classList.remove("drag-over");
-            // For external file drop onto reserved cell
+            // New alternate approach for reserved cell drop:
             if(e.dataTransfer.files && e.dataTransfer.files.length > 0) {
               const file = e.dataTransfer.files[0];
               if(file.type === "image/jpeg" || file.type === "image/png") {
@@ -949,12 +953,11 @@ Using Sales Report and Product List Files:
                 reader.readAsDataURL(file);
               }
             } else {
-              // Internal drag-drop within reserved area only
               let targetIndex = i;
               if(draggedIndex === null) {
                 return;
               }
-              // Block drop if dragged from non-reserved area
+              // Block cross-zone drop: if dragged from non-reserved area, do nothing
               if(draggedIndex < 7) {
                 return;
               }
@@ -982,7 +985,7 @@ Using Sales Report and Product List Files:
             previewBox.className = "preview-box";
             previewBox.setAttribute("data-id", photoIds[i]);
             previewBox.addEventListener("dragstart", e => {
-              // Block drag-drop if dragging reserved photo from non-reserved area
+              // Block drag if the dragged item is reserved
               if(i >= 7) return;
               draggedIndex = i;
             });
@@ -1302,6 +1305,59 @@ Using Sales Report and Product List Files:
         } catch (e) {
           console.error(`Exception uploading photo #${rankNumber}:`, e);
           M.toast({ html: `Exception uploading photo #${rankNumber}: ${e.message}` });
+        }
+      }
+    });
+
+    // NEW UPLOAD RESERVED BUTTON FUNCTIONALITY
+    document.getElementById("uploadReservedBtn").addEventListener("click", async () => {
+      const listingInput = document.getElementById("shopListings").value.trim();
+      if (!listingInput) {
+        M.toast({ html: "Please provide a listing URL or ID in 'My Etsy Shop Listings'." });
+        return;
+      }
+      let listingId;
+      if (/^\d+$/.test(listingInput)) {
+        listingId = listingInput;
+      } else {
+        const match = listingInput.match(/\/listing\/(\d+)/);
+        if (match) {
+          listingId = match[1];
+        } else {
+          M.toast({ html: "Invalid listing URL or ID." });
+          return;
+        }
+      }
+      if (reservedPhotos.length === 0) {
+        M.toast({ html: "No reserved photos to upload. Please drag and drop reserved photos first." });
+        return;
+      }
+      for (let i = 0; i < reservedPhotos.length; i++) {
+        const photo = reservedPhotos[i];
+        const rankNumber = 8 + i;
+        try {
+          const res = await fetch(photo.src);
+          const blob = await res.blob();
+          const formData = new FormData();
+          formData.append("listingId", listingId);
+          formData.append("token", accessToken);
+          formData.append("fileName", photo.name || `reserved_photo_${i}.jpg`);
+          formData.append("rank", rankNumber);
+          formData.append("alt_text", photo.meta || "");
+          formData.append("file", blob, photo.name || `reserved_photo_${i}.jpg`);
+          const uploadUrl = `/.netlify/functions/imageUpload`;
+          const response = await fetch(uploadUrl, {
+            method: "POST",
+            body: formData
+          });
+          if (!response.ok) {
+            M.toast({ html: `Error uploading reserved photo #${rankNumber}: ` + response.status });
+          } else {
+            M.toast({ html: `Reserved photo #${rankNumber} uploaded with alt_text!` });
+          }
+        } catch (e) {
+          console.error(`Exception uploading reserved photo #${rankNumber}:`, e);
+          M.toast({ html: `Exception uploading reserved photo #${rankNumber}: ${e.message}` });
         }
       }
     });
@@ -1692,6 +1748,7 @@ Generate exactly 13 tag phrases (each ≤ 20 characters). Return as plain text.
           cell.addEventListener("drop", function(e) {
             e.preventDefault();
             cell.classList.remove("drag-over");
+            // For external file drop onto reserved cell
             if(e.dataTransfer.files && e.dataTransfer.files.length > 0) {
               const file = e.dataTransfer.files[0];
               if(file.type === "image/jpeg" || file.type === "image/png") {
@@ -1721,7 +1778,7 @@ Generate exactly 13 tag phrases (each ≤ 20 characters). Return as plain text.
               if(draggedIndex === null) {
                 return;
               }
-              // Block cross-zone drop: if dragged from non-reserved area, do nothing
+              // Block drop if dragging from non-reserved area
               if(draggedIndex < 7) {
                 return;
               }
@@ -2018,7 +2075,7 @@ Generate exactly 13 tag phrases (each ≤ 20 characters). Return as plain text.
     });
 
     // ----------------------------------------------------------------------
-    // UPLOAD PHOTOS (includes alt_text from photoMeta)
+    // UPLOAD PHOTOS (includes alt_text from photoMeta) - for non-reserved photos only
     // ----------------------------------------------------------------------
     document.getElementById("uploadPhotoBtn").addEventListener("click", async () => {
       const listingInput = document.getElementById("shopListings").value.trim();
@@ -2069,6 +2126,61 @@ Generate exactly 13 tag phrases (each ≤ 20 characters). Return as plain text.
         } catch (e) {
           console.error(`Exception uploading photo #${rankNumber}:`, e);
           M.toast({ html: `Exception uploading photo #${rankNumber}: ${e.message}` });
+        }
+      }
+    });
+
+    // ----------------------------------------------------------------------
+    // NEW UPLOAD RESERVED PHOTOS BUTTON FUNCTIONALITY
+    // ----------------------------------------------------------------------
+    document.getElementById("uploadReservedBtn").addEventListener("click", async () => {
+      const listingInput = document.getElementById("shopListings").value.trim();
+      if (!listingInput) {
+        M.toast({ html: "Please provide a listing URL or ID in 'My Etsy Shop Listings'." });
+        return;
+      }
+      let listingId;
+      if (/^\d+$/.test(listingInput)) {
+        listingId = listingInput;
+      } else {
+        const match = listingInput.match(/\/listing\/(\d+)/);
+        if (match) {
+          listingId = match[1];
+        } else {
+          M.toast({ html: "Invalid listing URL or ID." });
+          return;
+        }
+      }
+      if (reservedPhotos.length === 0) {
+        M.toast({ html: "No reserved photos to upload. Please drag and drop reserved photos first." });
+        return;
+      }
+      for (let i = 0; i < reservedPhotos.length; i++) {
+        const photo = reservedPhotos[i];
+        const rankNumber = 8 + i;
+        try {
+          const res = await fetch(photo.src);
+          const blob = await res.blob();
+          const formData = new FormData();
+          formData.append("listingId", listingId);
+          formData.append("token", accessToken);
+          formData.append("fileName", photo.name || `reserved_photo_${i}.jpg`);
+          formData.append("rank", rankNumber);
+          formData.append("alt_text", photo.meta || "");
+          formData.append("file", blob, photo.name || `reserved_photo_${i}.jpg`);
+          const uploadUrl = `/.netlify/functions/imageUpload`;
+          const response = await fetch(uploadUrl, {
+            method: "POST",
+            body: formData
+          });
+          if (!response.ok) {
+            M.toast({ html: `Error uploading reserved photo #${rankNumber}: ` + response.status });
+          } else {
+            M.toast({ html: `Reserved photo #${rankNumber} uploaded with alt_text!` });
+          }
+        } catch (e) {
+          console.error(`Exception uploading reserved photo #${rankNumber}:`, e);
+          M.toast({ html: `Exception uploading reserved photo #${rankNumber}: ${e.message}` });
         }
       }
     });
