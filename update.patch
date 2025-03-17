@@ -2,10 +2,14 @@ diff --git a/Index.html b/Index.html
 index 89abcdef..cdef0123 100644
 --- a/Index.html
 +++ b/Index.html
-@@
--    let photoIds = [];
-+    let photoIds = [];
-+    let nonReservedUploadedFlags = [];
+@@ -20,6 +20,7 @@ let photoMeta = [];     // AI-generated metadata for alt_text
+ // ADDED GLOBAL VARIABLE FOR DRAGGING:
+ let draggedIndex = null;
+ let photoIds = [];
++let nonReservedUploadedFlags = [];
+ // ADDED GLOBAL VARIABLE FOR CROP INDEX AND Cropper instance:
+ let currentCropIndex = null;
+ let cropper = null;
 @@
 -            photoIds.push('img-' + Date.now() + '-' + i);
 +            photoIds.push('img-' + Date.now() + '-' + i);
