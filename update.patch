@@ -1,12 +1,22 @@
 diff --git a/Index.html b/Index.html
-index abcdef0..1234567 100644
+index 89abcdef..12345678 100644
 --- a/Index.html
 +++ b/Index.html
-@@ // Global variables section (within your <script> tag)
--    let currentCropIndex = null;
-+    let currentCropIndex = null;
-+    let nonReservedUploaded = false;
-@@ // Non-reserved photo upload handler (attached to uploadPhotoBtn)
+@@ In the globals section within the <script> tag
+-    let photoIds = [];
++    let photoIds = [];
++    let nonReservedUploadedFlags = [];
+@@ In the drop event handler for images (where files are processed)
+-            previewImages.push(resizedDataURL);
+-            photoNames.push(file.name);
+-            // Create stable ID
+-            photoIds.push('img-' + Date.now() + '-' + i);
++            previewImages.push(resizedDataURL);
++            photoNames.push(file.name);
++            // Create stable ID and initialize its upload flag to false
++            photoIds.push('img-' + Date.now() + '-' + i);
++            nonReservedUploadedFlags.push(false);
+@@ In the non‑reserved photo upload handler (attached to uploadPhotoBtn)
 -document.getElementById("uploadPhotoBtn").addEventListener("click", async () => {
 -  // ... existing upload code for non‑reserved photos ...
 -  for (let i = 0; i < previewImages.length; i++) {
@@ -14,13 +24,57 @@ index abcdef0..1234567 100644
 -  }
 -});
 +document.getElementById("uploadPhotoBtn").addEventListener("click", async () => {
-+  if (nonReservedUploaded) {
-+    M.toast({ html: "Non-reserved photos have already been uploaded." });
++  const listingInput = document.getElementById("shopListings").value.trim();
++  if (!listingInput) {
++    M.toast({ html: "Please provide a listing URL or ID in 'My Etsy Shop Listings'." });
 +    return;
 +  }
-+  // ... existing upload code for non‑reserved photos ...
-+  for (let i = 0; i < previewImages.length; i++) {
-+    // Upload logic for each photo
++  let listingId;
++  if (/^\d+$/.test(listingInput)) {
++    listingId = listingInput;
++  } else {
++    const match = listingInput.match(/\/listing\/(\d+)/);
++    if (match) {
++      listingId = match[1];
++    } else {
++      M.toast({ html: "Invalid listing URL or ID." });
++      return;
++    }
 +  }
-+  nonReservedUploaded = true;
++  if (previewImages.length === 0) {
++    M.toast({ html: "No images to upload. Please drag and drop images first." });
++    return;
++  }
++  for (let i = 0; i < previewImages.length; i++) {
++    if (!nonReservedUploadedFlags[i]) {
++      const dataURL = previewImages[i];
++      const altText = photoMeta[i] || "";
++      const rankNumber = i + 1;
++      try {
++        const res = await fetch(dataURL);
++        const blob = await res.blob();
++        const formData = new FormData();
++        formData.append("listingId", listingId);
++        formData.append("token", accessToken);
++        formData.append("fileName", photoNames[i] || `uploaded_photo_${i}.jpg`);
++        formData.append("rank", rankNumber);
++        formData.append("alt_text", altText);
++        formData.append("file", blob, photoNames[i] || `uploaded_photo_${i}.jpg`);
++        const uploadUrl = `/.netlify/functions/imageUpload`;
++        const response = await fetch(uploadUrl, {
++          method: "POST",
++          body: formData
++        });
++        if (!response.ok) {
++          M.toast({ html: `Error uploading photo #${rankNumber}: ` + response.status });
++        } else {
++          M.toast({ html: `Photo #${rankNumber} uploaded with alt_text!` });
++        }
++        nonReservedUploadedFlags[i] = true;
++      } catch (e) {
++        console.error(`Exception uploading photo #${rankNumber}:`, e);
++        M.toast({ html: `Exception uploading photo #${rankNumber}: ${e.message}` });
++      }
++    }
++  }
 +});
