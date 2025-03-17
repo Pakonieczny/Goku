@@ -2,17 +2,38 @@ diff --git a/Index.html b/Index.html
 index 89abcdef..cdef0123 100644
 --- a/Index.html
 +++ b/Index.html
-@@ In the global variables section near where photoIds is declared
+@@
 -    let photoIds = [];
 +    let photoIds = [];
 +    let nonReservedUploadedFlags = [];
-@@ In the drop event handler for images (look for where a stable ID is created)
--            // Create stable ID
+@@
+             // Create stable ID
 -            photoIds.push('img-' + Date.now() + '-' + i);
-+            // Create stable ID and initialize upload flag to false
 +            photoIds.push('img-' + Date.now() + '-' + i);
 +            nonReservedUploadedFlags.push(false);
-@@ In the "uploadPhotoBtn" click handler (non‑reserved photo uploads)
+@@
+-document.getElementById("uploadPhotoBtn").addEventListener("click", async () => {
+-  const listingInput = document.getElementById("shopListings").value.trim();
+-  if (!listingInput) {
+-    M.toast({ html: "Please provide a listing URL or ID in 'My Etsy Shop Listings'." });
+-    return;
+-  }
+-  let listingId;
+-  if (/^\d+$/.test(listingInput)) {
+-    listingId = listingInput;
+-  } else {
+-    const match = listingInput.match(/\/listing\/(\d+)/);
+-    if (match) {
+-      listingId = match[1];
+-    } else {
+-      M.toast({ html: "Invalid listing URL or ID." });
+-      return;
+-    }
+-  }
+-  if (previewImages.length === 0) {
+-    M.toast({ html: "No images to upload. Please drag and drop images first." });
+-    return;
+-  }
 -  for (let i = 0; i < previewImages.length; i++) {
 -    const dataURL = previewImages[i];
 -    const altText = photoMeta[i] || "";
@@ -42,6 +63,30 @@ index 89abcdef..cdef0123 100644
 -      M.toast({ html: `Exception uploading photo #${rankNumber}: ${e.message}` });
 -    }
 -  }
+-});
++document.getElementById("uploadPhotoBtn").addEventListener("click", async () => {
++  const listingInput = document.getElementById("shopListings").value.trim();
++  if (!listingInput) {
++    M.toast({ html: "Please provide a listing URL or ID in 'My Etsy Shop Listings'." });
++    return;
++  }
++  let listingId;
++  if (/^\d+$/.test(listingInput)) {
++    listingId = listingInput;
++  } else {
++    const match = listingInput.match(/\/listing\/(\d+)/);
++    if (match) {
++      listingId = match[1];
++    } else {
++      M.toast({ html: "Invalid listing URL or ID." });
++      return;
++    }
++  }
++  if (previewImages.length === 0) {
++    M.toast({ html: "No images to upload. Please drag and drop images first." });
++    return;
++  }
++  // Iterate over each non‑reserved photo
 +  for (let i = 0; i < previewImages.length; i++) {
 +    if (!nonReservedUploadedFlags[i]) {
 +      const dataURL = previewImages[i];
@@ -67,6 +112,7 @@ index 89abcdef..cdef0123 100644
 +        } else {
 +          M.toast({ html: `Photo #${rankNumber} uploaded with alt_text!` });
 +        }
++        // Mark this photo as uploaded
 +        nonReservedUploadedFlags[i] = true;
 +      } catch (e) {
 +        console.error(`Exception uploading photo #${rankNumber}:`, e);
@@ -74,3 +120,4 @@ index 89abcdef..cdef0123 100644
 +      }
 +    }
 +  }
++});
