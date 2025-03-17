@@ -1,7 +1,7 @@
 name: Apply Patch
 
 on:
-  workflow_dispatch:
+  workflow_dispatch:  # Allows you to manually trigger the workflow
 
 jobs:
   patch_job:
@@ -24,8 +24,11 @@ jobs:
           git add Index.html
           git commit -m "Automated patch applied" || echo "No changes to commit"
 
+      - name: Pull remote changes (rebase)
+        run: |
+          git remote set-url origin https://x-access-token:${{ secrets.PAT_TOKEN }}@github.com/${{ github.repository }}.git
+          git pull --rebase origin main
+
       - name: Push changes using PAT
         run: |
-          # Ensure the remote URL is updated to use the PAT token
-          git remote set-url origin https://x-access-token:${{ secrets.PAT_TOKEN }}@github.com/${{ github.repository }}.git
           git push origin HEAD:main
