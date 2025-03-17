@@ -927,7 +927,7 @@ Using Sales Report and Product List Files:
           cell.addEventListener("drop", function(e) {
             e.preventDefault();
             cell.classList.remove("drag-over");
-            // For external file drop onto reserved cell
+            // New alternate approach for reserved cell drop:
             if(e.dataTransfer.files && e.dataTransfer.files.length > 0) {
               const file = e.dataTransfer.files[0];
               if(file.type === "image/jpeg" || file.type === "image/png") {
