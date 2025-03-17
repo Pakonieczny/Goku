@@ -2,21 +2,17 @@ diff --git a/Index.html b/Index.html
 index 89abcdef..12345678 100644
 --- a/Index.html
 +++ b/Index.html
-@@ -100,6 +100,7 @@
-     let photoIds = [];
+@@
+-    let photoIds = [];
++    let photoIds = [];
 +    let nonReservedUploadedFlags = [];
-     let currentCropIndex = null;
-     let cropper = null;
-     // ADDED GLOBAL VARIABLE FOR RESERVED PHOTOS (cells 8-10 reserved)
-@@ In the image drop event handler (where images are processed)
--            photoIds.push('img-' + Date.now() + '-' + i);
-+            photoIds.push('img-' + Date.now() + '-' + i);
+@@
+             photoIds.push('img-' + Date.now() + '-' + i);
 +            nonReservedUploadedFlags.push(false);
-@@ In the non‑reserved photo upload handler (attached to "uploadPhotoBtn")
+@@
 -document.getElementById("uploadPhotoBtn").addEventListener("click", async () => {
--  // existing upload logic for non‑reserved photos (looping through previewImages)
 -  for (let i = 0; i < previewImages.length; i++) {
--    // upload code for each photo...
+-    // Upload each photo (existing logic)
 -  }
 -});
 +document.getElementById("uploadPhotoBtn").addEventListener("click", async () => {
