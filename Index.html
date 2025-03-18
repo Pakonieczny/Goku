@@ -44,13 +44,13 @@
     .listing-desc-container input {
       width: 500px; height: 30px; border: 1px solid #000; padding: 5px;
     }
-
+    
     /* "User Provided Search Key Phrases" textarea */
     #searchKeyPhrases {
       resize: none; box-sizing: border-box; border: 1px solid grey;
     }
     #searchKeyPhrases[rows="14"] { height: auto; }
-
+    
     .flex-container { display: flex; gap: 10px; align-items: stretch; }
     .textbox-container { flex: 1; }
     .textbox-container textarea {
@@ -63,38 +63,32 @@
     }
     #listingTitle { min-height: 45px; }
     #listingDescInput { width: 500px; height: 30px; border: 1px solid #000; padding: 5px; }
-    #listingDescription {
-      min-height: 150px; width: 500px;
-    }
+    #listingDescription { min-height: 150px; width: 500px; }
     .section-heading {
       font-size: 1.2rem; font-weight: 500; margin-bottom: 5px;
       display: inline-block;
     }
     .count-text { font-style: italic; font-size: 0.9em; margin-top: 5px; }
-
-    /* Drag and Drop Boxes */
-    #dropZone, #ordersDropZone, #listingsDropZone {
-      width: 92px; height: 92px; border: 2px dashed #ccc;
+    
+    /* Drag and Drop Box: "Image Drop" */
+    #dropZone {
+      width: 120px; height: 120px; border: 2px dashed #ccc;
       border-radius: 3px; display: inline-block; vertical-align: middle;
-      text-align: center; line-height: 92px; position: relative;
+      text-align: center; line-height: 120px; position: relative;
     }
-    /* Orders container */
-    #ordersContainer { display: flex; flex-direction: column; }
-    /* Removed CSV Progress Bar styles */
-
-    /* File Drop Zones container */
-    #fileDropZonesContainer {
-      display: flex; gap: 10px; margin-left: 100px;
-    }
-    /* Make uploadedFilesList repositionable */
+    
+    /* File Drop Zones container - note: drop zones for orders/listings are removed */
+    #fileDropZonesContainer { display: none; }
+    
+    /* Make uploadedFilesList repositionable and use it for drag-drop */
     #uploadedFilesList {
       width: 300px; height: 125px; resize: none;
       box-sizing: border-box; border: 1px solid grey; margin-left: 85px;
       position: relative;
     }
-
-    /* Removed Photo Preview Box (#primaryPreview removed) */
-
+    
+    /* Removed Photo Preview (#primaryPreview removed) */
+    
     /* Static 10-Photo Preview Grid - increased by 20% */
     #previewGridContainer {
       position: relative; margin: 20px auto; width: auto;
@@ -126,64 +120,53 @@
       z-index: 999; border-radius: 3px;
     }
     /* Metadata status styles */
-    .metadata-status {
-      margin-top: 5px; text-align: center; font-size: 14px;
-      min-height: 20px;
-    }
+    .metadata-status { margin-top: 5px; text-align: center; font-size: 14px; min-height: 20px; }
     .metadata-progress { width: 90%; }
-
+    
     /* Container #13 */
     #container13 { position: relative; width: 250px; top: -150px; }
-
+    
     /* Components below search key phrases */
     #belowSearch { margin-top: -180px; margin-left: 10px; }
-
+    
     /* Etsy Listing TITLE container */
     .title-container { margin-top: -50px; }
-    #etsyListingTitleContainer {
-      position: relative; width: 1000px;
-    }
+    #etsyListingTitleContainer { position: relative; width: 1000px; }
     #etsyListingTitleContainer textarea { width: 1000px; }
-
+    
     /* Etsy Listing DESCRIPTION container */
     .description-container { margin-top: 0px; }
-    #etsyListingDescriptionContainer {
-      position: relative; width: 1000px;
-    }
+    #etsyListingDescriptionContainer { position: relative; width: 1000px; }
     #etsyListingDescriptionContainer textarea { width: 1000px; }
-
+    
     /* New container for "2. User Provided Search Key Phrases" */
     #userProvidedKeyPhrasesContainer { position: relative; top: 125px; left: 10px; }
+    
     /* Top buttons section */
     #topButtons { margin: 10px 0; }
+    
     /* Ensure etsyShopListingsContainer is repositionable */
-    #etsyShopListingsContainer {
-      position: relative; margin-top: 10px; margin-left: 10px;
-    }
-    /* Button styles */
+    #etsyShopListingsContainer { position: relative; margin-top: 10px; margin-left: 10px; }
+    
+    /* Button Styles */
     .regen-btn, .copy-btn { width: 125px; }
     .update-btn { background-color: #FFA500 !important; color: white !important; }
   </style>
 </head>
 <body>
-  <!-- Configure Buttons control -->
+  <!-- Configure Buttons control (this button is also included in the modal) -->
   <button id="configureButtonsBtn" class="btn waves-effect waves-light configurable">
     Configure Buttons
   </button>
   
-  <!-- Wrap Listing Description and File Drop Zones -->
+  <!-- Wrap Listing Description and Uploaded Files List (used for drag-drop) -->
   <div id="descriptionAndFileUploadContainer">
     <div class="listing-desc-container" id="listingDescContainer">
       <h5>Listing Description</h5>
       <input id="listingDescInput" type="text" placeholder="Enter your question here">
     </div>
-    <div id="fileDropZonesContainer">
-      <div id="ordersContainer">
-        <div id="ordersDropZone">Etsy Orders</div>
-      </div>
-      <div id="listingsDropZone">Etsy Listings</div>
-      <textarea id="uploadedFilesList" class="materialize-textarea" rows="2" placeholder="Uploaded .csv, .doc, .docx files will appear here"></textarea>
-    </div>
+    <!-- Instead of separate drop zones, use the uploadedFilesList area -->
+    <textarea id="uploadedFilesList" class="materialize-textarea" rows="2" placeholder="Uploaded .csv, .doc, .docx files will appear here"></textarea>
   </div>
   
   <!-- Etsy OAuth and Shop Listings Section with Top Buttons -->
@@ -191,11 +174,11 @@
     <button id="connectEtsyBtn" class="btn waves-effect waves-light configurable">
       Connect to Etsy
     </button>
-    <!-- Update Photos button (was Photo Upload) -->
+    <!-- Update Photos button -->
     <button id="photoUploadNewBtn" class="btn waves-effect waves-light configurable update-btn" style="margin-left: 10px;">
       Update Photos
     </button>
-    <!-- Update Info button (was Update Listing) -->
+    <!-- Update Info button -->
     <button id="uploadToEtsyBtn" class="btn waves-effect waves-light configurable update-btn" style="margin-left: 10px;">
       Update Info
     </button>
@@ -218,7 +201,7 @@
       Copy
     </button>
     <div id="dropZone" class="configurable">Image Drop</div>
-    <!-- Analyze Photos and Analyze Rules buttons are shown -->
+    <!-- Analyze Photos and Analyze Rules buttons -->
     <button id="analyzeMetadataBtn" class="btn waves-effect waves-light configurable">
       Analyze Photos
     </button>
@@ -456,7 +439,6 @@ Using Sales Report and Product List Files:
   <!-- Include jQuery and Materialize JS -->
   <script src="https://code.jquery.com/jquery-3.6.0.min.js"></script>
   <script src="https://cdnjs.cloudflare.com/ajax/libs/materialize/1.0.0/js/materialize.min.js"></script>
-  
   <script>
     // GLOBALS & MAIN LOGIC
     const ETSY_SHOP_URL = "https://www.etsy.com/shop/custombrites";
@@ -555,13 +537,13 @@ Using Sales Report and Product List Files:
         console.log("Vector store created:", await response.json());
       } catch (err) { console.error(err); }
     }
-  
-    const ordersDropZone = document.getElementById("ordersDropZone");
-    ordersDropZone.addEventListener("dragover", e => { e.preventDefault(); ordersDropZone.style.borderColor = "#000"; });
-    ordersDropZone.addEventListener("dragleave", e => { e.preventDefault(); ordersDropZone.style.borderColor = "#ccc"; });
-    ordersDropZone.addEventListener("drop", async e => {
+    // Attach drop event on the uploadedFilesList area for file uploads (replacing separate drop zones)
+    const uploadedFilesList = document.getElementById("uploadedFilesList");
+    uploadedFilesList.addEventListener("dragover", e => { e.preventDefault(); uploadedFilesList.style.borderColor = "#000"; });
+    uploadedFilesList.addEventListener("dragleave", e => { e.preventDefault(); uploadedFilesList.style.borderColor = "#ccc"; });
+    uploadedFilesList.addEventListener("drop", async e => {
       e.preventDefault();
-      ordersDropZone.style.borderColor = "#ccc";
+      uploadedFilesList.style.borderColor = "#ccc";
       const files = e.dataTransfer.files;
       for (let file of files) {
         if (/\.(csv|doc|docx)$/i.test(file.name)) {
@@ -574,29 +556,6 @@ Using Sales Report and Product List Files:
         } else { alert("Only .csv, .doc, and .docx files supported."); }
       }
     });
-  
-    const listingsDropZone = document.getElementById("listingsDropZone");
-    listingsDropZone.addEventListener("dragover", e => { e.preventDefault(); listingsDropZone.style.borderColor = "#000"; });
-    listingsDropZone.addEventListener("dragleave", e => { e.preventDefault(); listingsDropZone.style.borderColor = "#ccc"; });
-    listingsDropZone.addEventListener("drop", async e => {
-      e.preventDefault();
-      listingsDropZone.style.borderColor = "#ccc";
-      const files = e.dataTransfer.files;
-      for (let file of files) {
-        if (/\.(csv|doc|docx)$/i.test(file.name)) {
-          try {
-            const fileData = file.name.endsWith(".csv") ? await uploadCSVFile(file) : await uploadDocFile(file);
-            listingsCSV.push(fileData);
-            updateUploadedFilesList();
-            await updateVectorStore();
-          } catch (err) { console.error(err); }
-        } else { alert("Only .csv, .doc, and .docx files supported."); }
-      }
-    });
-    function updateUploadedFilesList() {
-      const list = [...soldOrdersCSV, ...listingsCSV].map(f => f.name).join("\n");
-      document.getElementById("uploadedFilesList").value = list;
-    }
   
     const dropZone = document.getElementById("dropZone");
     dropZone.addEventListener("dragover", e => { e.preventDefault(); dropZone.style.borderColor = "#000"; });
@@ -626,6 +585,7 @@ Using Sales Report and Product List Files:
         } else { M.toast({ html: "Only JPEG/PNG images supported." }); }
       }
     });
+  
     function updateStaticPreviewGrid() {
       for (let i = 0; i < 10; i++) {
         let cell = document.getElementById("previewCell" + i);
@@ -795,7 +755,8 @@ Using Sales Report and Product List Files:
       return text;
     }
     function base64urlEncode(buffer) {
-      return btoa(String.fromCharCode(...new Uint8Array(buffer))).replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, '');
+      return btoa(String.fromCharCode(...new Uint8Array(buffer)))
+        .replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, '');
     }
     async function generateCodeChallenge(codeVerifier) {
       let encoder = new TextEncoder();
@@ -863,7 +824,7 @@ You are ChatGPT using ${modelName}.
 Based on the inputs below, generate an Etsy Listing TITLE only.
 Input Context:
 Etsy Link: "${etsyLink}"
-Search Key Phrases: "${keyPhrases}"
+Search KeyPhrases: "${keyPhrases}"
 --- Rules for TITLE ---
 ${stripMarkdownJSON(rulesText)}
 Important: Return ONLY the title as plain text.`;
@@ -960,10 +921,14 @@ Generate exactly 13 tag phrases (each ≤ 20 characters). Return as plain text.
         document.getElementById("searchKeyPhrases").value = phrasesArray.join("\n");
       } catch (err) { console.error(err); M.toast({ html: "Error generating tag phrases: " + err.message }); }
     }
-    document.getElementById("generateBtn").addEventListener("click", async () => { await Promise.all([generateTitleOnly(), generateDescriptionOnly()]); });
+    document.getElementById("generateBtn").addEventListener("click", async () => {
+      await Promise.all([generateTitleOnly(), generateDescriptionOnly()]);
+    });
     document.getElementById("regenTitleBtn").addEventListener("click", generateTitleOnly);
     document.getElementById("regenDescriptionBtn").addEventListener("click", generateDescriptionOnly);
-    function updateTitleCount(text) { document.getElementById("titleCount").textContent = "Count: " + text.length; }
+    function updateTitleCount(text) {
+      document.getElementById("titleCount").textContent = "Count: " + text.length;
+    }
     document.getElementById("copyTitleBtn").addEventListener("click", () => {
       let text = document.getElementById("listingTitle").value;
       navigator.clipboard.writeText(text).catch(err => console.error("Copy error:", err));
@@ -977,7 +942,8 @@ Generate exactly 13 tag phrases (each ≤ 20 characters). Return as plain text.
       let lines = document.getElementById("searchKeyPhrases").value.split(/\n+/).map(l => l.trim()).filter(l => l !== "");
       navigator.clipboard.writeText(lines.join(", ")).catch(err => console.error("Error copying key phrases:", err));
     });
-    document.getElementById("listingDescInput").addEventListener("keydown", async (e) => {
+    // Change from keydown to keyup for listingDescInput to trigger generateTagPhrases
+    document.getElementById("listingDescInput").addEventListener("keyup", async (e) => {
       if (e.key === "Enter" && !e.shiftKey) { e.preventDefault(); await generateTagPhrases(); }
     });
     document.getElementById("configureButtonsBtn").addEventListener("click", () => {
@@ -986,13 +952,10 @@ Generate exactly 13 tag phrases (each ≤ 20 characters). Return as plain text.
       const selectors = [
         "#configureButtonsBtn",
         "#listingDescContainer",
-        "#ordersDropZone",
-        "#listingsDropZone",
+        "#uploadedFilesList",
         "#dropZone",
         "#previewGridContainer",
-        "#primaryPreview",
         "#container13",
-        "#uploadedFilesList",
         "#uploadToEtsyBtn",
         "#etsyShopListingsContainer",
         "#userProvidedKeyPhrasesContainer",
@@ -1040,13 +1003,10 @@ Generate exactly 13 tag phrases (each ≤ 20 characters). Return as plain text.
       const selectors = [
         "#configureButtonsBtn",
         "#listingDescContainer",
-        "#ordersDropZone",
-        "#listingsDropZone",
+        "#uploadedFilesList",
         "#dropZone",
         "#previewGridContainer",
-        "#primaryPreview",
         "#container13",
-        "#uploadedFilesList",
         "#uploadToEtsyBtn",
         "#etsyShopListingsContainer",
         "#userProvidedKeyPhrasesContainer",
@@ -1064,9 +1024,7 @@ Generate exactly 13 tag phrases (each ≤ 20 characters). Return as plain text.
       ].join(", ");
       let elements = document.querySelectorAll(selectors);
       let positions = {};
-      elements.forEach(el => {
-        positions[el.id] = { top: el.style.top || "0px", left: el.style.left || "0px" };
-      });
+      elements.forEach(el => { positions[el.id] = { top: el.style.top || "0px", left: el.style.left || "0px" }; });
       localStorage.setItem("buttonPositions", JSON.stringify(positions));
       M.toast({ html: "Button positions saved." });
     });
