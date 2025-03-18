@@ -459,7 +459,8 @@ Using Sales Report and Product List Files:
     // New function to update the UploadedFilesList textarea
     function updateUploadedFilesList() {
       const uploadedFilesListElem = document.getElementById('uploadedFilesList');
-      const fileNames = soldOrdersCSV.map(file => file.name || 'Unnamed File');
+      // Check both file.name and file.fileName for display
+      const fileNames = soldOrdersCSV.map(file => file.name || file.fileName || 'Unnamed File');
       uploadedFilesListElem.value = fileNames.join('\n');
     }
   
@@ -485,6 +486,7 @@ Using Sales Report and Product List Files:
         img.src = dataURL;
       });
     }
+    // Updated uploadCSVFile with fallbacks for fileName and id
     async function uploadCSVFile(file) {
       return new Promise((resolve, reject) => {
         const reader = new FileReader();
@@ -500,13 +502,18 @@ Using Sales Report and Product List Files:
               body: JSON.stringify(payload)
             });
             if (!response.ok) throw new Error("Upload failed with status " + response.status);
-            resolve(await response.json());
+            const fileData = await response.json();
+            // Ensure fileData has a name and id; fallback to file.name and a generated id if missing
+            fileData.name = fileData.name || file.name;
+            fileData.id = fileData.id || file.name || ('file-' + Date.now());
+            resolve(fileData);
           } catch (err) { reject(err); }
         };
         reader.onerror = reject;
         reader.readAsDataURL(file);
       });
     }
+    // Similarly update uploadDocFile
     async function uploadDocFile(file) {
       return new Promise((resolve, reject) => {
         const reader = new FileReader();
@@ -522,7 +529,10 @@ Using Sales Report and Product List Files:
               body: JSON.stringify(payload)
             });
             if (!response.ok) throw new Error("Upload failed with status " + response.status);
-            resolve(await response.json());
+            const fileData = await response.json();
+            fileData.name = fileData.name || file.name;
+            fileData.id = fileData.id || file.name || ('file-' + Date.now());
+            resolve(fileData);
           } catch (err) { reject(err); }
         };
         reader.onerror = reject;
