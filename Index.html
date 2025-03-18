@@ -10,9 +10,9 @@
   <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/materialize/1.0.0/css/materialize.min.css">
   <!-- Include piexifjs for EXIF manipulation (optional, if needed) -->
   <script src="https://cdn.jsdelivr.net/npm/piexifjs@1.0.4/piexif.min.js"></script>
-  <!-- ADDED LINE FOR SORTABLEJS: -->
+  <!-- SORTABLEJS -->
   <script src="https://cdn.jsdelivr.net/npm/sortablejs@1.14.0/Sortable.min.js"></script>
-  <!-- ADDED LINES FOR CROPPER.JS: -->
+  <!-- CROPPER.JS -->
   <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/cropperjs/1.5.13/cropper.min.css" />
   <script src="https://cdnjs.cloudflare.com/ajax/libs/cropperjs/1.5.13/cropper.min.js"></script>
   <style>
@@ -21,78 +21,52 @@
       margin: 0; padding: 0; width: 100vw;
       font-family: Arial, sans-serif;
     }
-    .container {
-      width: 100vw; padding: 10px; box-sizing: border-box;
-      text-align: left;
-    }
+    .container { width: 100vw; padding: 10px; box-sizing: border-box; text-align: left; }
     h5, label, p { text-align: left; }
     input, textarea { width: 100%; box-sizing: border-box; }
-    
-    /* Wrap Listing Description and File Drop Zones */
+
+    /* Listing Description container */
     #descriptionAndFileUploadContainer {
       display: flex; align-items: center;
     }
     .listing-desc-container {
       position: relative; display: inline-block; width: 500px;
     }
-    .listing-desc-container h5 {
-      margin: 0 0 10px 0; font-size: 1.2rem; font-weight: 500;
-    }
-    .listing-desc-container label.section-heading {
-      font-size: 1.2rem; font-weight: 500;
-    }
-    .listing-desc-container input {
-      width: 500px; height: 30px; border: 1px solid #000; padding: 5px;
-    }
-    
-    /* "User Provided Search Key Phrases" textarea */
-    #searchKeyPhrases {
-      resize: none; box-sizing: border-box; border: 1px solid grey;
-    }
+    .listing-desc-container h5 { margin: 0 0 10px 0; font-size: 1.2rem; font-weight: 500; }
+    .listing-desc-container input { width: 500px; height: 30px; border: 1px solid #000; padding: 5px; }
+
+    /* Search Key Phrases textarea */
+    #searchKeyPhrases { resize: none; box-sizing: border-box; border: 1px solid grey; }
     #searchKeyPhrases[rows="14"] { height: auto; }
-    
+
     .flex-container { display: flex; gap: 10px; align-items: stretch; }
     .textbox-container { flex: 1; }
-    .textbox-container textarea {
-      width: 100%; padding: 0.8rem; font-size: 1rem; line-height: 1.2;
-      resize: none; overflow: visible; box-sizing: border-box;
-    }
-    .button-container {
-      width: 200px; display: flex; flex-direction: column; gap: 10px;
-      align-self: flex-start;
-    }
+    .textbox-container textarea { width: 100%; padding: 0.8rem; font-size: 1rem; line-height: 1.2; resize: none; overflow: visible; }
+    .button-container { width: 200px; display: flex; flex-direction: column; gap: 10px; }
     #listingTitle { min-height: 45px; }
     #listingDescInput { width: 500px; height: 30px; border: 1px solid #000; padding: 5px; }
     #listingDescription { min-height: 150px; width: 500px; }
-    .section-heading {
-      font-size: 1.2rem; font-weight: 500; margin-bottom: 5px;
-      display: inline-block;
-    }
+    .section-heading { font-size: 1.2rem; font-weight: 500; margin-bottom: 5px; display: inline-block; }
     .count-text { font-style: italic; font-size: 0.9em; margin-top: 5px; }
-    
-    /* Drag and Drop Box: "Image Drop" */
+
+    /* Image Drop Box – set to 120x120 to match grid preview */
     #dropZone {
       width: 120px; height: 120px; border: 2px dashed #ccc;
-      border-radius: 3px; display: inline-block; vertical-align: middle;
-      text-align: center; line-height: 120px; position: relative;
+      border-radius: 3px; text-align: center; line-height: 120px; position: relative;
     }
     
-    /* Remove the separate drop zones for Etsy Orders/Listings */
+    /* Hide the old drop zone container */
     #fileDropZonesContainer { display: none; }
     
-    /* Make uploadedFilesList repositionable and used for file drop */
+    /* uploadedFilesList textarea used for file drop */
     #uploadedFilesList {
-      width: 300px; height: 125px; resize: none;
-      box-sizing: border-box; border: 1px solid grey; margin-left: 85px;
+      width: 300px; height: 125px; border: 1px solid grey; margin-left: 85px;
       position: relative;
     }
     
-    /* Removed Photo Preview Box (#primaryPreview removed) */
-    
-    /* Static 10-Photo Preview Grid - increased by 20% */
+    /* Static 10-Photo Grid – increased by 20% */
     #previewGridContainer {
-      position: relative; margin: 20px auto; width: auto;
-      max-width: 720px; text-align: center;
+      position: relative; margin: 20px auto; max-width: 720px; text-align: center;
     }
     #previewGridStatic {
       display: grid; grid-template-columns: repeat(5, 120px);
@@ -105,13 +79,13 @@
     }
     .preview-box { position: relative; width: 100%; height: 100%; }
     .preview-box img {
-      width: 120px; height: 120px; object-fit: cover;
-      border-radius: 3px; display: block;
+      width: 120px; height: 120px; object-fit: cover; border-radius: 3px;
+      display: block;
     }
     .remove-btn {
       position: absolute; top: -5px; left: -5px; width: 15px; height: 15px;
-      background-color: black; color: white; font-size: 10px;
-      text-align: center; cursor: pointer; z-index: 999; border-radius: 50%;
+      background-color: black; color: white; font-size: 10px; text-align: center;
+      cursor: pointer; z-index: 999; border-radius: 50%;
     }
     .number-overlay {
       position: absolute; top: 0; right: 0; width: 16px; height: 16px;
@@ -119,69 +93,59 @@
       align-items: center; justify-content: center; font-size: 10px;
       z-index: 999; border-radius: 3px;
     }
-    /* Metadata status styles */
     .metadata-status { margin-top: 5px; text-align: center; font-size: 14px; min-height: 20px; }
     .metadata-progress { width: 90%; }
-    
+
     /* Container #13 */
     #container13 { position: relative; width: 250px; top: -150px; }
-    
-    /* Components below search key phrases */
-    #belowSearch { margin-top: -180px; margin-left: 10px; }
-    
-    /* Etsy Listing TITLE container */
-    .title-container { margin-top: -50px; }
-    #etsyListingTitleContainer { position: relative; width: 1000px; }
-    #etsyListingTitleContainer textarea { width: 1000px; }
-    
-    /* Etsy Listing DESCRIPTION container */
-    .description-container { margin-top: 0px; }
-    #etsyListingDescriptionContainer { position: relative; width: 1000px; }
-    #etsyListingDescriptionContainer textarea { width: 1000px; }
-    
-    /* New container for "Search Key Phrases" */
+
+    /* Etsy Listing TITLE & DESCRIPTION containers – increased to 1000px */
+    #etsyListingTitleContainer, #etsyListingDescriptionContainer {
+      position: relative; width: 1000px;
+    }
+    #etsyListingTitleContainer textarea, #etsyListingDescriptionContainer textarea {
+      width: 1000px;
+    }
+
+    /* New container for Search Key Phrases */
     #userProvidedKeyPhrasesContainer { position: relative; top: 125px; left: 10px; }
-    
+
     /* Top buttons section */
     #topButtons { margin: 10px 0; }
-    /* Ensure etsyShopListingsContainer is repositionable */
     #etsyShopListingsContainer { position: relative; margin-top: 10px; margin-left: 10px; }
     
-    /* Button Styles */
+    /* Button styles */
     .regen-btn, .copy-btn { width: 125px; }
     .update-btn { background-color: #FFA500 !important; color: white !important; }
   </style>
 </head>
 <body>
-  <!-- Configure Buttons control (also available in modal) -->
+  <!-- Configure Buttons control -->
   <button id="configureButtonsBtn" class="btn waves-effect waves-light configurable">
     Configure Buttons
   </button>
   
-  <!-- Wrap Listing Description and Uploaded Files List (for file drop) -->
+  <!-- Listing Description and File Drop -->
   <div id="descriptionAndFileUploadContainer">
     <div class="listing-desc-container" id="listingDescContainer">
       <h5>Listing Description</h5>
       <input id="listingDescInput" type="text" placeholder="Enter your question here">
     </div>
-    <!-- Use uploadedFilesList area for file drop -->
+    <!-- Use uploadedFilesList for file drops -->
     <textarea id="uploadedFilesList" class="materialize-textarea" rows="2" placeholder="Uploaded .csv, .doc, .docx files will appear here"></textarea>
   </div>
   
-  <!-- Etsy OAuth and Shop Listings Section with Top Buttons -->
+  <!-- Etsy OAuth and Shop Listings -->
   <div id="topButtons">
     <button id="connectEtsyBtn" class="btn waves-effect waves-light configurable">
       Connect to Etsy
     </button>
-    <!-- Update Photos button -->
     <button id="photoUploadNewBtn" class="btn waves-effect waves-light configurable update-btn" style="margin-left: 10px;">
       Update Photos
     </button>
-    <!-- Update Info button -->
     <button id="uploadToEtsyBtn" class="btn waves-effect waves-light configurable update-btn" style="margin-left: 10px;">
       Update Info
     </button>
-    <!-- Etsy Shop Listings container -->
     <div id="etsyShopListingsContainer">
       <div class="section-heading configurable">Etsy Shop Listings</div>
       <div class="textbox-container configurable">
@@ -193,20 +157,11 @@
   <!-- Etsy Listing Generator UI -->
   <div class="phrases-header configurable" id="userProvidedKeyPhrasesContainer">
     <span class="section-heading configurable">Search Key Phrases</span>
-    <button id="clearKeyPhrasesBtn" class="btn-small waves-effect waves-light configurable">
-      Clear
-    </button>
-    <button id="copyKeyPhrasesBtn" class="btn-small waves-effect waves-light configurable copy-btn">
-      Copy
-    </button>
+    <button id="clearKeyPhrasesBtn" class="btn-small waves-effect waves-light configurable">Clear</button>
+    <button id="copyKeyPhrasesBtn" class="btn-small waves-effect waves-light configurable copy-btn">Copy</button>
     <div id="dropZone" class="configurable">Image Drop</div>
-    <!-- Analyze Photos and Analyze Rules buttons -->
-    <button id="analyzeMetadataBtn" class="btn waves-effect waves-light configurable">
-      Analyze Photos
-    </button>
-    <button id="showAnalyzeRulesBtn" class="btn waves-effect waves-light configurable" data-target="analyzeRulesModal" style="margin-top:25px;">
-      Analyze Rules
-    </button>
+    <button id="analyzeMetadataBtn" class="btn waves-effect waves-light configurable">Analyze Photos</button>
+    <button id="showAnalyzeRulesBtn" class="btn waves-effect waves-light configurable" data-target="analyzeRulesModal" style="margin-top:25px;">Analyze Rules</button>
   </div>
   <div id="container13" class="flex-container configurable">
     <div class="textbox-container configurable">
@@ -216,9 +171,7 @@
   
   <!-- Components below Search Key Phrases -->
   <div id="belowSearch">
-    <button id="generateBtn" class="btn waves-effect waves-light configurable">
-      Generate
-    </button>
+    <button id="generateBtn" class="btn waves-effect waves-light configurable">Generate</button>
     <!-- Etsy Listing TITLE container -->
     <div class="title-container" id="etsyListingTitleContainer" style="margin-top: -50px;">
       <div class="section-heading configurable">Etsy Listing TITLE</div>
@@ -227,16 +180,10 @@
           <textarea id="listingTitle" class="materialize-textarea" rows="2" style="width:1000px;"></textarea>
         </div>
         <div class="button-container configurable" style="margin-top: -60px;">
-          <button id="regenTitleBtn" class="btn-small waves-effect waves-light configurable regen-btn">
-            Re-Gen
-          </button>
-          <button id="copyTitleBtn" class="btn-small waves-effect waves-light configurable copy-btn">
-            <i class="material-icons">content_copy</i>
-          </button>
+          <button id="regenTitleBtn" class="btn-small waves-effect waves-light configurable regen-btn">Re-Gen</button>
+          <button id="copyTitleBtn" class="btn-small waves-effect waves-light configurable copy-btn"><i class="material-icons">content_copy</i></button>
         </div>
-        <button id="showTitleRulesBtn" class="btn waves-effect waves-light rules-button configurable" data-target="titleRulesModal">
-          Title Rules
-        </button>
+        <button id="showTitleRulesBtn" class="btn waves-effect waves-light rules-button configurable" data-target="titleRulesModal">Title Rules</button>
       </div>
       <p id="titleCount" class="count-text configurable">Count: 0</p>
     </div>
@@ -249,16 +196,10 @@
           <textarea id="listingDescription" class="materialize-textarea" style="width:1000px;"></textarea>
         </div>
         <div class="button-container configurable">
-          <button id="regenDescriptionBtn" class="btn-small waves-effect waves-light configurable regen-btn">
-            Re-Gen
-          </button>
-          <button id="copyDescriptionBtn" class="btn-small waves-effect waves-light configurable copy-btn">
-            <i class="material-icons">content_copy</i>
-          </button>
+          <button id="regenDescriptionBtn" class="btn-small waves-effect waves-light configurable regen-btn">Re-Gen</button>
+          <button id="copyDescriptionBtn" class="btn-small waves-effect waves-light configurable copy-btn"><i class="material-icons">content_copy</i></button>
         </div>
-        <button id="showDescriptionRulesBtn" class="btn waves-effect waves-light rules-button configurable" data-target="descriptionRulesModal">
-          Description Rules
-        </button>
+        <button id="showDescriptionRulesBtn" class="btn waves-effect waves-light rules-button configurable" data-target="descriptionRulesModal">Description Rules</button>
       </div>
     </div>
   </div>
@@ -279,16 +220,14 @@
     </div>
   </div>
   
-  <!-- Metadata Modal (for viewing metadata on click) -->
+  <!-- Metadata Modal -->
   <div id="metadataModal" class="modal">
     <div class="modal-content">
       <h4>Photo Metadata</h4>
       <textarea id="metadataTextarea" readonly style="width:100%; height:300px;"></textarea>
     </div>
     <div class="modal-footer">
-      <a href="#!" id="closeMetadataBtn" class="modal-close waves-effect waves-green btn">
-        Close
-      </a>
+      <a href="#!" id="closeMetadataBtn" class="modal-close waves-effect waves-green btn">Close</a>
     </div>
   </div>
   
@@ -298,9 +237,9 @@
       <h4>Photo Analysis Rules</h4>
       <textarea id="analyzeRulesTextarea" style="width:100%; height:300px;">
 Default Photo Analysis Rules:
-1. Use SEO-friendly descriptive long-tail key phrases without special characters, focus on describing the jewelry and charm pendant, also focus and tailor Key Phrases and description to appropriate client based on the type of jewelry.
-2. Emphasize charm details, focus image description on the type of jewelry and pendant description (what it is, occasion, metal, size, style).
-3. Focus solely on the jewelry details especially the charm description.
+1. Use SEO-friendly descriptive long-tail key phrases without special characters, focus on describing the jewelry and charm pendant, and tailor key phrases and description to the jewelry type.
+2. Emphasize charm details and focus on pendant description (what it is, occasion, metal, size, style).
+3. Focus solely on jewelry details.
 4. Ignore environment, model, and clothing.
 5. Organize into a short paragraph.
 6. Limit the description to 300 characters.
@@ -309,9 +248,7 @@ Default Photo Analysis Rules:
       </textarea>
     </div>
     <div class="modal-footer">
-      <a href="#!" id="updateAnalyzeRulesBtn" class="modal-close waves-effect waves-green btn">
-        Update
-      </a>
+      <a href="#!" id="updateAnalyzeRulesBtn" class="modal-close waves-effect waves-green btn">Update</a>
     </div>
   </div>
   
@@ -322,9 +259,9 @@ Default Photo Analysis Rules:
       <textarea id="titleRulesTextarea" style="width:100%; height:300px;">
 Title Structure & Formatting:
 - Create 5-7 SEO optimized long-tail key phrases (3-5 words each).
-- The title must begin with the product type (e.g., "Angel Earrings", "Daisy Necklace").
+- Title must begin with the product type (e.g., "Angel Earrings", "Daisy Necklace").
 - Ensure grammatical flow and no punctuation.
-- If the product is a charm/pendant, the first word should describe that type.
+- If a charm/pendant, the first word should describe it.
 - For necklaces, the second word must be "necklace"; for earrings, "Earring".
 
 Word Usage & Frequency:
@@ -336,7 +273,7 @@ Required Words:
 - "Charm" must appear exactly once.
 
 Use of "For":
-- "for" must appear at least twice in a grammatically correct manner.
+- "for" must appear at least twice grammatically.
 
 Title Length & Word Order:
 - Titles must be between 125 and 140 characters.
@@ -351,9 +288,7 @@ Prohibited Words:
       </textarea>
     </div>
     <div class="modal-footer">
-      <a href="#!" id="updateTitleRulesBtn" class="modal-close waves-effect waves-green btn">
-        Update
-      </a>
+      <a href="#!" id="updateTitleRulesBtn" class="modal-close waves-effect waves-green btn">Update</a>
     </div>
   </div>
   
@@ -363,7 +298,7 @@ Prohibited Words:
       <h4>Description Rules</h4>
       <textarea id="descriptionRulesTextarea" style="width:100%; height:300px;">
 Rules for Description:
-- Merge the key phrases with your output.
+- Merge key phrases with your output.
 - Modify the description to match the jewelry type.
 - Keep the output paragraph to 80 words.
 
@@ -378,9 +313,7 @@ Option 3:
       </textarea>
     </div>
     <div class="modal-footer">
-      <a href="#!" id="updateDescriptionRulesBtn" class="modal-close waves-effect waves-green btn">
-        Update
-      </a>
+      <a href="#!" id="updateDescriptionRulesBtn" class="modal-close waves-effect waves-green btn">Update</a>
     </div>
   </div>
   
@@ -401,9 +334,7 @@ Using Sales Report and Product List Files:
       </textarea>
     </div>
     <div class="modal-footer">
-      <a href="#!" id="updateKeywordRulesBtn" class="modal-close waves-effect waves-green btn">
-        Update
-      </a>
+      <a href="#!" id="updateKeywordRulesBtn" class="modal-close waves-effect waves-green btn">Update</a>
     </div>
   </div>
   
@@ -415,9 +346,7 @@ Using Sales Report and Product List Files:
       <textarea id="uploadedFilesListModal" class="materialize-textarea" rows="2" placeholder="Uploaded files will appear here"></textarea>
     </div>
     <div class="modal-footer">
-      <a href="#!" id="saveButtonPositionsBtn" class="modal-close waves-effect waves-green btn">
-        Save Positions
-      </a>
+      <a href="#!" id="saveButtonPositionsBtn" class="modal-close waves-effect waves-green btn">Save Positions</a>
     </div>
   </div>
   
@@ -536,18 +465,28 @@ Using Sales Report and Product List Files:
         console.log("Vector store created:", await response.json());
       } catch (err) { console.error(err); }
     }
-    // Enable file drop on uploadedFilesList
+    // Attach drop event on uploadedFilesList for .csv, .doc, .docx files
     const uploadedFilesList = document.getElementById("uploadedFilesList");
-    uploadedFilesList.addEventListener("dragover", e => { e.preventDefault(); e.stopPropagation(); uploadedFilesList.style.borderColor = "#000"; });
-    uploadedFilesList.addEventListener("dragleave", e => { e.preventDefault(); e.stopPropagation(); uploadedFilesList.style.borderColor = "#ccc"; });
+    uploadedFilesList.addEventListener("dragover", e => {
+      e.preventDefault();
+      e.stopPropagation();
+      uploadedFilesList.style.borderColor = "#000";
+    });
+    uploadedFilesList.addEventListener("dragleave", e => {
+      e.preventDefault();
+      e.stopPropagation();
+      uploadedFilesList.style.borderColor = "#ccc";
+    });
     uploadedFilesList.addEventListener("drop", async e => {
-      e.preventDefault(); e.stopPropagation(); 
+      e.preventDefault();
+      e.stopPropagation();
       uploadedFilesList.style.borderColor = "#ccc";
       const files = e.dataTransfer.files;
       for (let file of files) {
         if (/\.(csv|doc|docx)$/i.test(file.name)) {
           try {
             const fileData = file.name.endsWith(".csv") ? await uploadCSVFile(file) : await uploadDocFile(file);
+            // We add the file to soldOrdersCSV (adjust as needed if you wish to distinguish)
             soldOrdersCSV.push(fileData);
             updateUploadedFilesList();
             await updateVectorStore();
@@ -555,11 +494,13 @@ Using Sales Report and Product List Files:
         } else { alert("Only .csv, .doc, and .docx files supported."); }
       }
     });
+  
     const dropZone = document.getElementById("dropZone");
     dropZone.addEventListener("dragover", e => { e.preventDefault(); dropZone.style.borderColor = "#000"; });
     dropZone.addEventListener("dragleave", e => { e.preventDefault(); dropZone.style.borderColor = "#ccc"; });
     dropZone.addEventListener("drop", async e => {
-      e.preventDefault(); dropZone.style.borderColor = "#ccc";
+      e.preventDefault();
+      dropZone.style.borderColor = "#ccc";
       const files = e.dataTransfer.files;
       const maxRemaining = 10 - previewImages.length;
       for (let i = 0; i < Math.min(files.length, maxRemaining); i++) {
@@ -582,6 +523,7 @@ Using Sales Report and Product List Files:
         } else { M.toast({ html: "Only JPEG/PNG images supported." }); }
       }
     });
+  
     function updateStaticPreviewGrid() {
       for (let i = 0; i < 10; i++) {
         let cell = document.getElementById("previewCell" + i);
@@ -714,9 +656,7 @@ Using Sales Report and Product List Files:
       instance.open();
     }
     document.getElementById("analyzeMetadataBtn").addEventListener("click", async () => {
-      for (let i = 0; i < previewImages.length; i++) {
-        await analyzePhoto(i);
-      }
+      for (let i = 0; i < previewImages.length; i++) { await analyzePhoto(i); }
     });
     async function analyzePhoto(index) {
       let statusElem = document.getElementById("metadataStatus" + index);
@@ -749,9 +689,7 @@ Using Sales Report and Product List Files:
     function generateRandomString(length) {
       const possible = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789';
       let text = '';
-      for (let i = 0; i < length; i++) {
-        text += possible.charAt(Math.floor(Math.random() * possible.length));
-      }
+      for (let i = 0; i < length; i++) { text += possible.charAt(Math.floor(Math.random() * possible.length)); }
       return text;
     }
     function base64urlEncode(buffer) {
@@ -942,7 +880,7 @@ Generate exactly 13 tag phrases (each ≤ 20 characters). Return as plain text.
       let lines = document.getElementById("searchKeyPhrases").value.split(/\n+/).map(l => l.trim()).filter(l => l !== "");
       navigator.clipboard.writeText(lines.join(", ")).catch(err => console.error("Error copying key phrases:", err));
     });
-    // Use keydown (as in previous working version) for the listingDescInput Enter event
+    // Use keydown for the listingDescInput Enter event
     document.getElementById("listingDescInput").addEventListener("keydown", async (e) => {
       if (e.key === "Enter" && !e.shiftKey) {
         e.preventDefault();
