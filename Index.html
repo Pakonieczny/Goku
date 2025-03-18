@@ -456,6 +456,13 @@ Using Sales Report and Product List Files:
     let cropper = null;
     let reservedPhotos = [];
   
+    // New function to update the UploadedFilesList textarea
+    function updateUploadedFilesList() {
+      const uploadedFilesListElem = document.getElementById('uploadedFilesList');
+      const fileNames = soldOrdersCSV.map(file => file.name || 'Unnamed File');
+      uploadedFilesListElem.value = fileNames.join('\n');
+    }
+  
     function loadReservedPhotos() {
       const stored = localStorage.getItem("reservedPhotos");
       reservedPhotos = stored ? JSON.parse(stored) : [];
@@ -685,7 +692,7 @@ Using Sales Report and Product List Files:
             cell.addEventListener("dragleave", e => { cell.classList.remove("drag-over"); });
             cell.addEventListener("drop", e => {
               e.preventDefault(); cell.classList.remove("drag-over");
-              if (draggedIndex !== null && draggedIndex < 7 && draggedIndex !== i) {
+              if (draggedIndex !== null && draggedIndex !== i) {
                 const [movedImage] = previewImages.splice(draggedIndex, 1);
                 previewImages.splice(i, 0, movedImage);
                 const [movedName] = photoNames.splice(draggedIndex, 1);
