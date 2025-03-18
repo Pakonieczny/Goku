@@ -6,14 +6,8 @@
   <!-- Favicon -->
   <link rel="icon" type="image/png" href="assets/favicon.png">
   <!-- Import Google Material Icons and Materialize CSS -->
-  <link
-    href="https://fonts.googleapis.com/icon?family=Material+Icons"
-    rel="stylesheet"
-  >
-  <link
-    rel="stylesheet"
-    href="https://cdnjs.cloudflare.com/ajax/libs/materialize/1.0.0/css/materialize.min.css"
-  >
+  <link href="https://fonts.googleapis.com/icon?family=Material+Icons" rel="stylesheet">
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/materialize/1.0.0/css/materialize.min.css">
   <!-- Include piexifjs for EXIF manipulation (optional, if needed) -->
   <script src="https://cdn.jsdelivr.net/npm/piexifjs@1.0.4/piexif.min.js"></script>
   <!-- ADDED LINE FOR SORTABLEJS: -->
@@ -31,12 +25,9 @@
       width: 100vw; padding: 10px; box-sizing: border-box;
       text-align: left;
     }
-    h5, label, p {
-      text-align: left;
-    }
-    input, textarea {
-      width: 100%; box-sizing: border-box;
-    }
+    h5, label, p { text-align: left; }
+    input, textarea { width: 100%; box-sizing: border-box; }
+
     /* Wrap Listing Description and File Drop Zones */
     #descriptionAndFileUploadContainer {
       display: flex; align-items: center;
@@ -53,19 +44,15 @@
     .listing-desc-container input {
       width: 500px; height: 30px; border: 1px solid #000; padding: 5px;
     }
+
     /* "User Provided Search Key Phrases" textarea */
     #searchKeyPhrases {
       resize: none; box-sizing: border-box; border: 1px solid grey;
     }
-    #searchKeyPhrases[rows="14"] {
-      height: auto;
-    }
-    .flex-container {
-      display: flex; gap: 10px; align-items: stretch;
-    }
-    .textbox-container {
-      flex: 1;
-    }
+    #searchKeyPhrases[rows="14"] { height: auto; }
+
+    .flex-container { display: flex; gap: 10px; align-items: stretch; }
+    .textbox-container { flex: 1; }
     .textbox-container textarea {
       width: 100%; padding: 0.8rem; font-size: 1rem; line-height: 1.2;
       resize: none; overflow: visible; box-sizing: border-box;
@@ -74,34 +61,27 @@
       width: 200px; display: flex; flex-direction: column; gap: 10px;
       align-self: flex-start;
     }
-    #listingTitle {
-      min-height: 45px;
-    }
-    #listingDescInput {
-      width: 500px; height: 30px; border: 1px solid #000; padding: 5px;
-    }
+    #listingTitle { min-height: 45px; }
+    #listingDescInput { width: 500px; height: 30px; border: 1px solid #000; padding: 5px; }
     #listingDescription {
-      min-height: 150px;
-      width: 500px;
+      min-height: 150px; width: 500px;
     }
     .section-heading {
       font-size: 1.2rem; font-weight: 500; margin-bottom: 5px;
       display: inline-block;
     }
-    .count-text {
-      font-style: italic; font-size: 0.9em; margin-top: 5px;
-    }
+    .count-text { font-style: italic; font-size: 0.9em; margin-top: 5px; }
+
     /* Drag and Drop Boxes */
     #dropZone, #ordersDropZone, #listingsDropZone {
-      width: 138px; height: 138px; border: 2px dashed #ccc;
+      width: 92px; height: 92px; border: 2px dashed #ccc;
       border-radius: 3px; display: inline-block; vertical-align: middle;
-      text-align: center; line-height: 138px; position: relative;
+      text-align: center; line-height: 92px; position: relative;
     }
     /* Orders container */
-    #ordersContainer {
-      display: flex; flex-direction: column;
-    }
+    #ordersContainer { display: flex; flex-direction: column; }
     /* Removed CSV Progress Bar styles */
+
     /* File Drop Zones container */
     #fileDropZonesContainer {
       display: flex; gap: 10px; margin-left: 100px;
@@ -112,39 +92,26 @@
       box-sizing: border-box; border: 1px solid grey; margin-left: 85px;
       position: relative;
     }
-    /* Primary Preview – clickable for cropping */
-    #primaryPreview {
-      width: 138px; height: 138px; border: 1px solid #ccc;
-      border-radius: 3px; display: inline-block; vertical-align: middle;
-      position: relative; top: -250px; left: 285px;
-      text-align: center; overflow: hidden; cursor: pointer;
-    }
-    #primaryPreview:empty {
-      background: #fff;
-    }
-    #primaryPreview img {
-      width: 100%; height: 100%; object-fit: contain;
-      border-radius: 3px;
-    }
-    /* Static 10-Photo Preview Grid */
+
+    /* Removed Photo Preview Box (#primaryPreview removed) */
+
+    /* Static 10-Photo Preview Grid - increased by 20% */
     #previewGridContainer {
       position: relative; margin: 20px auto; width: auto;
-      max-width: 600px; text-align: center;
+      max-width: 720px; text-align: center;
     }
     #previewGridStatic {
-      display: grid; grid-template-columns: repeat(5, 100px);
-      grid-column-gap: 23px; grid-row-gap: 18px; margin: 0 auto;
+      display: grid; grid-template-columns: repeat(5, 120px);
+      grid-column-gap: 28px; grid-row-gap: 22px; margin: 0 auto;
     }
     .preview-cell {
-      position: relative; width: 100px; height: 132px; border: 2px solid #ccc;
+      position: relative; width: 120px; height: 158px; border: 2px solid #ccc;
       border-radius: 3px; display: flex; flex-direction: column;
       align-items: center; justify-content: center; font-size: 12px; color: #666;
     }
-    .preview-box {
-      position: relative; width: 100%; height: 100%;
-    }
+    .preview-box { position: relative; width: 100%; height: 100%; }
     .preview-box img {
-      width: 100px; height: 100px; object-fit: cover;
+      width: 120px; height: 120px; object-fit: cover;
       border-radius: 3px; display: block;
     }
     .remove-btn {
@@ -163,83 +130,50 @@
       margin-top: 5px; text-align: center; font-size: 14px;
       min-height: 20px;
     }
-    .metadata-progress {
-      width: 90%;
-    }
+    .metadata-progress { width: 90%; }
+
     /* Container #13 */
-    #container13 {
-      position: relative; width: 250px; top: -150px;
-    }
+    #container13 { position: relative; width: 250px; top: -150px; }
+
     /* Components below search key phrases */
-    #belowSearch {
-      margin-top: -180px; margin-left: 10px;
-    }
+    #belowSearch { margin-top: -180px; margin-left: 10px; }
+
     /* Etsy Listing TITLE container */
-    .title-container {
-      margin-top: -50px;
-    }
+    .title-container { margin-top: -50px; }
     #etsyListingTitleContainer {
-      position: relative;
-      width: 600px;
+      position: relative; width: 600px;
     }
-    /* Increase the text box length to fill the container */
-    #etsyListingTitleContainer textarea {
-      width: 600px;
-    }
+    #etsyListingTitleContainer textarea { width: 600px; }
+
     /* Etsy Listing DESCRIPTION container */
-    .description-container {
-      margin-top: 0px;
-    }
+    .description-container { margin-top: 0px; }
     #etsyListingDescriptionContainer {
-      position: relative;
-      width: 600px;
+      position: relative; width: 600px;
     }
-    /* Increase the text box length to fill the container */
-    #etsyListingDescriptionContainer textarea {
-      width: 600px;
-    }
-    #analyzeMetadataBtn {
-      margin-left: 50px;
-    }
-    #showAnalyzeRulesBtn {
-      margin-top: 25px;
-    }
+    #etsyListingDescriptionContainer textarea { width: 600px; }
+
     /* New container for "2. User Provided Search Key Phrases" */
     #userProvidedKeyPhrasesContainer {
-      position: relative;
-      top: 125px;
-      left: 10px;
+      position: relative; top: 125px; left: 10px;
     }
     /* Top buttons section */
-    #topButtons {
-      margin: 10px 0;
-    }
+    #topButtons { margin: 10px 0; }
     /* Ensure etsyShopListingsContainer is repositionable */
     #etsyShopListingsContainer {
-      position: relative;
-      margin-top: 10px;
-      margin-left: 10px;
+      position: relative; margin-top: 10px; margin-left: 10px;
     }
-    /* ADDED NEW STYLE FOR DRAG-OVER VISUAL FEEDBACK: */
-    .drag-over {
-      background-color: rgba(0, 0, 255, 0.2);
-    }
-    /* Style for re-gen buttons */
-    .regen-btn {
-      width: 75px;
-    }
-    /* Style for Update Photos and Update Info buttons */
-    .update-btn {
-      background-color: #FFA500 !important;
-      color: white !important;
-    }
+    /* Buttons */
+    .regen-btn { width: 75px; }
+    .copy-btn { width: 75px; }
+    /* Update Photos and Update Info buttons in subtle orange */
+    .update-btn { background-color: #FFA500 !important; color: white !important; }
+    /* Revert Configure Buttons button colour to default (remove update-btn) */
   </style>
 </head>
 
 <body>
   <!-- Configure Buttons control -->
-  <button id="configureButtonsBtn"
-          class="btn waves-effect waves-light configurable update-btn">
+  <button id="configureButtonsBtn" class="btn waves-effect waves-light configurable">
     Configure Buttons
   </button>
 
@@ -247,47 +181,35 @@
   <div id="descriptionAndFileUploadContainer">
     <div class="listing-desc-container" id="listingDescContainer">
       <h5>Listing Description</h5>
-      <input id="listingDescInput" type="text"
-             placeholder="Enter your question here">
+      <input id="listingDescInput" type="text" placeholder="Enter your question here">
     </div>
     <div id="fileDropZonesContainer">
       <div id="ordersContainer">
         <div id="ordersDropZone">Etsy Sold Orders</div>
       </div>
       <div id="listingsDropZone">Etsy Listings</div>
-      <textarea id="uploadedFilesList"
-                class="materialize-textarea" rows="2"
-                placeholder="Uploaded .csv, .doc, .docx files will appear here">
-      </textarea>
+      <textarea id="uploadedFilesList" class="materialize-textarea" rows="2" placeholder="Uploaded .csv, .doc, .docx files will appear here"></textarea>
     </div>
   </div>
 
   <!-- Etsy OAuth and Shop Listings Section with Top Buttons -->
   <div id="topButtons">
-    <button id="connectEtsyBtn"
-            class="btn waves-effect waves-light configurable">
+    <button id="connectEtsyBtn" class="btn waves-effect waves-light configurable">
       Connect to Etsy
     </button>
     <!-- Combined Photo Upload Button renamed to Update Photos -->
-    <button id="photoUploadNewBtn"
-            class="btn waves-effect waves-light configurable update-btn"
-            style="margin-left: 10px;">
+    <button id="photoUploadNewBtn" class="btn waves-effect waves-light configurable update-btn" style="margin-left: 10px;">
       Update Photos
     </button>
     <!-- Updated Update Listing Button renamed to Update Info -->
-    <button id="uploadToEtsyBtn"
-            class="btn waves-effect waves-light configurable update-btn"
-            style="margin-left: 10px;">
+    <button id="uploadToEtsyBtn" class="btn waves-effect waves-light configurable update-btn" style="margin-left: 10px;">
       Update Info
     </button>
-    <!-- My Etsy Shop Listings container -->
+    <!-- My Etsy Shop Listings container with multiline textbox -->
     <div id="etsyShopListingsContainer">
       <div class="section-heading configurable">My Etsy Shop Listings</div>
       <div class="textbox-container configurable">
-        <textarea id="shopListings"
-                  class="materialize-textarea"
-                  placeholder="Enter your listing URL or ID"
-                  style="width: 500px;"></textarea>
+        <textarea id="shopListings" class="materialize-textarea" rows="2" placeholder="Enter your listing URL or ID" style="width:500px;"></textarea>
       </div>
     </div>
   </div>
@@ -295,40 +217,30 @@
   <!-- Etsy Listing Generator UI -->
   <div class="phrases-header configurable" id="userProvidedKeyPhrasesContainer">
     <span class="section-heading configurable">2. User Provided Search Key Phrases</span>
-    <button id="clearKeyPhrasesBtn"
-            class="btn-small waves-effect waves-light configurable">
+    <button id="clearKeyPhrasesBtn" class="btn-small waves-effect waves-light configurable">
       Clear
     </button>
-    <button id="copyKeyPhrasesBtn"
-            class="btn-small waves-effect waves-light configurable">
+    <button id="copyKeyPhrasesBtn" class="btn-small waves-effect waves-light configurable copy-btn">
       Copy
     </button>
     <div id="dropZone" class="configurable">Drop Image Here</div>
-    <div id="primaryPreview" class="configurable"></div>
-    <button id="analyzeMetadataBtn"
-            class="btn waves-effect waves-light configurable">
+    <!-- Removed the Photo Preview box -->
+    <button id="analyzeMetadataBtn" class="btn waves-effect waves-light configurable">
       Analyze Photos
     </button>
-    <button id="showAnalyzeRulesBtn"
-            class="btn waves-effect waves-light configurable"
-            data-target="analyzeRulesModal"
-            style="margin-top:25px;">
+    <button id="showAnalyzeRulesBtn" class="btn waves-effect waves-light configurable" data-target="analyzeRulesModal" style="margin-top:25px;">
       Analyze Rules
     </button>
   </div>
   <div id="container13" class="flex-container configurable">
     <div class="textbox-container configurable">
-      <textarea id="searchKeyPhrases"
-                class="materialize-textarea"
-                rows="14">
-      </textarea>
+      <textarea id="searchKeyPhrases" class="materialize-textarea" rows="14"></textarea>
     </div>
   </div>
 
   <!-- Components below Search Key Phrases -->
   <div id="belowSearch">
-    <button id="generateBtn"
-            class="btn waves-effect waves-light configurable">
+    <button id="generateBtn" class="btn waves-effect waves-light configurable">
       Generate
     </button>
     <!-- Etsy Listing TITLE container -->
@@ -336,24 +248,17 @@
       <div class="section-heading configurable">Etsy Listing TITLE</div>
       <div class="flex-container configurable">
         <div class="textbox-container configurable">
-          <textarea id="listingTitle"
-                    class="materialize-textarea"
-                    rows="2"
-                    style="width:600px;"></textarea>
+          <textarea id="listingTitle" class="materialize-textarea" rows="2" style="width:600px;"></textarea>
         </div>
         <div class="button-container configurable" style="margin-top: -60px;">
-          <button id="regenTitleBtn"
-                  class="btn-small waves-effect waves-light configurable regen-btn">
+          <button id="regenTitleBtn" class="btn-small waves-effect waves-light configurable regen-btn">
             Re-Gen
           </button>
-          <button id="copyTitleBtn"
-                  class="btn-small waves-effect waves-light configurable">
+          <button id="copyTitleBtn" class="btn-small waves-effect waves-light configurable copy-btn">
             <i class="material-icons">content_copy</i>
           </button>
         </div>
-        <button id="showTitleRulesBtn"
-                class="btn waves-effect waves-light rules-button configurable"
-                data-target="titleRulesModal">
+        <button id="showTitleRulesBtn" class="btn waves-effect waves-light rules-button configurable" data-target="titleRulesModal">
           Title Rules
         </button>
       </div>
@@ -365,30 +270,24 @@
       <div class="section-heading configurable">Etsy Listing DESCRIPTION</div>
       <div class="flex-container configurable">
         <div class="textbox-container configurable">
-          <textarea id="listingDescription"
-                    class="materialize-textarea"
-                    style="width:600px;"></textarea>
+          <textarea id="listingDescription" class="materialize-textarea" style="width:600px;"></textarea>
         </div>
         <div class="button-container configurable">
-          <button id="regenDescriptionBtn"
-                  class="btn-small waves-effect waves-light configurable regen-btn">
+          <button id="regenDescriptionBtn" class="btn-small waves-effect waves-light configurable regen-btn">
             Re-Gen
           </button>
-          <button id="copyDescriptionBtn"
-                  class="btn-small waves-effect waves-light configurable">
+          <button id="copyDescriptionBtn" class="btn-small waves-effect waves-light configurable copy-btn">
             <i class="material-icons">content_copy</i>
           </button>
         </div>
-        <button id="showDescriptionRulesBtn"
-                class="btn waves-effect waves-light rules-button configurable"
-                data-target="descriptionRulesModal">
+        <button id="showDescriptionRulesBtn" class="btn waves-effect waves-light rules-button configurable" data-target="descriptionRulesModal">
           Description Rules
         </button>
       </div>
     </div>
   </div>
 
-  <!-- Static 10-Photo Preview Grid Container -->
+  <!-- Static 10-Photo Preview Grid Container increased by 20% -->
   <div id="previewGridContainer">
     <div id="previewGridStatic">
       <div class="preview-cell" id="previewCell0">Empty</div>
@@ -408,13 +307,10 @@
   <div id="metadataModal" class="modal">
     <div class="modal-content">
       <h4>Photo Metadata</h4>
-      <textarea id="metadataTextarea"
-                readonly style="width:100%; height:300px;">
-      </textarea>
+      <textarea id="metadataTextarea" readonly style="width:100%; height:300px;"></textarea>
     </div>
     <div class="modal-footer">
-      <a href="#!" id="closeMetadataBtn"
-         class="modal-close waves-effect waves-green btn">
+      <a href="#!" id="closeMetadataBtn" class="modal-close waves-effect waves-green btn">
         Close
       </a>
     </div>
@@ -437,8 +333,7 @@ Default Photo Analysis Rules:
       </textarea>
     </div>
     <div class="modal-footer">
-      <a href="#!" id="updateAnalyzeRulesBtn"
-         class="modal-close waves-effect waves-green btn">
+      <a href="#!" id="updateAnalyzeRulesBtn" class="modal-close waves-effect waves-green btn">
         Update
       </a>
     </div>
@@ -480,8 +375,7 @@ Prohibited Words:
       </textarea>
     </div>
     <div class="modal-footer">
-      <a href="#!" id="updateTitleRulesBtn"
-         class="modal-close waves-effect waves-green btn">
+      <a href="#!" id="updateTitleRulesBtn" class="modal-close waves-effect waves-green btn">
         Update
       </a>
     </div>
@@ -508,8 +402,7 @@ Option 3:
       </textarea>
     </div>
     <div class="modal-footer">
-      <a href="#!" id="updateDescriptionRulesBtn"
-         class="modal-close waves-effect waves-green btn">
+      <a href="#!" id="updateDescriptionRulesBtn" class="modal-close waves-effect waves-green btn">
         Update
       </a>
     </div>
@@ -532,8 +425,7 @@ Using Sales Report and Product List Files:
       </textarea>
     </div>
     <div class="modal-footer">
-      <a href="#!" id="updateKeywordRulesBtn"
-         class="modal-close waves-effect waves-green btn">
+      <a href="#!" id="updateKeywordRulesBtn" class="modal-close waves-effect waves-green btn">
         Update
       </a>
     </div>
@@ -544,14 +436,10 @@ Using Sales Report and Product List Files:
     <div class="modal-content">
       <h4>Configure Button Positions</h4>
       <div id="buttonConfigContainer"></div>
-      <textarea id="uploadedFilesListModal"
-                class="materialize-textarea" rows="2"
-                placeholder="Uploaded files will appear here">
-      </textarea>
+      <textarea id="uploadedFilesListModal" class="materialize-textarea" rows="2" placeholder="Uploaded files will appear here"></textarea>
     </div>
     <div class="modal-footer">
-      <a href="#!" id="saveButtonPositionsBtn"
-         class="modal-close waves-effect waves-green btn">
+      <a href="#!" id="saveButtonPositionsBtn" class="modal-close waves-effect waves-green btn">
         Save Positions
       </a>
     </div>
@@ -573,10 +461,7 @@ Using Sales Report and Product List Files:
 
   <!-- Include jQuery and Materialize JS -->
   <script src="https://code.jquery.com/jquery-3.6.0.min.js"></script>
-  <script
-    src="https://cdnjs.cloudflare.com/ajax/libs/materialize/1.0.0/js/materialize.min.js">
-  </script>
-
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/materialize/1.0.0/js/materialize.min.js"></script>
   <script>
     // ----------------------------------------------------
     // GLOBALS & MAIN LOGIC
@@ -586,10 +471,8 @@ Using Sales Report and Product List Files:
     const REDIRECT_URI = "https://delicate-tanuki-616ac0.netlify.app/";
     const modelName = "chatgpt-4o-latest";
     let accessToken;
-
     let soldOrdersCSV = [];
     let listingsCSV = [];
-
     let photoNames = [];
     let previewImages = []; // data URLs for display (3000×3000 resized)
     let photoMeta = [];     // AI-generated metadata for alt_text
@@ -601,16 +484,11 @@ Using Sales Report and Product List Files:
 
     function loadReservedPhotos() {
       const stored = localStorage.getItem("reservedPhotos");
-      if (stored) {
-        reservedPhotos = JSON.parse(stored);
-      } else {
-        reservedPhotos = [];
-      }
+      reservedPhotos = stored ? JSON.parse(stored) : [];
     }
     function saveReservedPhotos() {
       localStorage.setItem("reservedPhotos", JSON.stringify(reservedPhotos));
     }
-
     async function resizeImage(dataURL, width, height) {
       return new Promise((resolve, reject) => {
         const img = new Image();
@@ -620,8 +498,7 @@ Using Sales Report and Product List Files:
           canvas.height = height;
           const ctx = canvas.getContext("2d");
           ctx.drawImage(img, 0, 0, width, height);
-          const resizedDataURL = canvas.toDataURL("image/jpeg", 0.85);
-          resolve(resizedDataURL);
+          resolve(canvas.toDataURL("image/jpeg", 0.85));
         };
         img.onerror = reject;
         img.src = dataURL;
@@ -635,28 +512,20 @@ Using Sales Report and Product List Files:
             const dataURL = event.target.result;
             const base64Content = dataURL.split(",")[1];
             if (!base64Content) throw new Error("File content is empty.");
-            const payload = {
-              file: base64Content,
-              fileName: file.name,
-              purpose: "user_data"
-            };
+            const payload = { file: base64Content, fileName: file.name, purpose: "user_data" };
             const response = await fetch("/.netlify/functions/uploadFile", {
               method: "POST",
               headers: { "Content-Type": "application/json" },
               body: JSON.stringify(payload)
             });
             if (!response.ok) throw new Error("Upload failed with status " + response.status);
-            const responseData = await response.json();
-            resolve({ id: responseData.id, name: file.name });
-          } catch (err) {
-            reject(err);
-          }
+            resolve(await response.json());
+          } catch (err) { reject(err); }
         };
         reader.onerror = reject;
         reader.readAsDataURL(file);
       });
     }
-
     async function uploadDocFile(file) {
       return new Promise((resolve, reject) => {
         const reader = new FileReader();
@@ -665,148 +534,85 @@ Using Sales Report and Product List Files:
             const dataURL = event.target.result;
             const base64Content = dataURL.split(",")[1];
             if (!base64Content) throw new Error("File content is empty.");
-            const payload = {
-              file: base64Content,
-              fileName: file.name,
-              purpose: "user_data"
-            };
+            const payload = { file: base64Content, fileName: file.name, purpose: "user_data" };
             const response = await fetch("/.netlify/functions/uploadFile", {
               method: "POST",
               headers: { "Content-Type": "application/json" },
               body: JSON.stringify(payload)
             });
             if (!response.ok) throw new Error("Upload failed with status " + response.status);
-            const responseData = await response.json();
-            resolve({ id: responseData.id, name: file.name });
-          } catch (err) {
-            reject(err);
-          }
+            resolve(await response.json());
+          } catch (err) { reject(err); }
         };
         reader.onerror = reject;
         reader.readAsDataURL(file);
       });
     }
-
     async function updateVectorStore() {
       const allFileIds = [...soldOrdersCSV, ...listingsCSV].map(file => file.id);
-      if (allFileIds.length === 0) {
-        console.log("No supported files uploaded yet.");
-        return;
-      }
+      if (!allFileIds.length) return console.log("No supported files uploaded yet.");
       try {
         const vectorStorePayload = { name: "CSV Vector Store", file_ids: allFileIds };
-        const vectorStoreResponse = await fetch("/.netlify/functions/vectorStore", {
+        const response = await fetch("/.netlify/functions/vectorStore", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify(vectorStorePayload)
         });
-        if (!vectorStoreResponse.ok) {
-          const errorData = await vectorStoreResponse.json();
-          throw new Error("Error creating vector store: " + JSON.stringify(errorData));
-        }
-        const vectorStoreData = await vectorStoreResponse.json();
-        console.log("Vector store created:", vectorStoreData);
-      } catch (err) {
-        console.error("Error in updateVectorStore:", err);
-      }
+        if (!response.ok) throw new Error("Error creating vector store");
+        console.log("Vector store created:", await response.json());
+      } catch (err) { console.error(err); }
     }
-
     const ordersDropZone = document.getElementById("ordersDropZone");
-    ordersDropZone.addEventListener("dragover", e => {
-      e.preventDefault(); e.stopPropagation();
-      ordersDropZone.style.borderColor = "#000";
-    });
-    ordersDropZone.addEventListener("dragleave", e => {
-      e.preventDefault(); e.stopPropagation();
-      ordersDropZone.style.borderColor = "#ccc";
-    });
+    ordersDropZone.addEventListener("dragover", e => { e.preventDefault(); ordersDropZone.style.borderColor = "#000"; });
+    ordersDropZone.addEventListener("dragleave", e => { e.preventDefault(); ordersDropZone.style.borderColor = "#ccc"; });
     ordersDropZone.addEventListener("drop", async e => {
-      e.preventDefault(); e.stopPropagation();
+      e.preventDefault();
       ordersDropZone.style.borderColor = "#ccc";
       const files = e.dataTransfer.files;
-      for (let i = 0; i < files.length; i++) {
-        const file = files[i];
-        const fileName = file.name.toLowerCase();
-        if (fileName.endsWith(".csv") || fileName.endsWith(".doc") || fileName.endsWith(".docx")) {
+      for (let file of files) {
+        if (/\.(csv|doc|docx)$/i.test(file.name)) {
           try {
-            let fileData;
-            if (fileName.endsWith(".csv")) {
-              fileData = await uploadCSVFile(file);
-            } else {
-              fileData = await uploadDocFile(file);
-            }
+            const fileData = file.name.endsWith(".csv") ? await uploadCSVFile(file) : await uploadDocFile(file);
             soldOrdersCSV.push(fileData);
             updateUploadedFilesList();
             await updateVectorStore();
-          } catch (err) {
-            console.error("Error uploading file:", err);
-          }
-        } else {
-          alert("Only .csv, .doc, and .docx files are supported for Etsy Sold Orders.");
-        }
+          } catch (err) { console.error(err); }
+        } else { alert("Only .csv, .doc, and .docx files supported."); }
       }
     });
-
     const listingsDropZone = document.getElementById("listingsDropZone");
-    listingsDropZone.addEventListener("dragover", e => {
-      e.preventDefault(); e.stopPropagation();
-      listingsDropZone.style.borderColor = "#000";
-    });
-    listingsDropZone.addEventListener("dragleave", e => {
-      e.preventDefault(); e.stopPropagation();
-      listingsDropZone.style.borderColor = "#ccc";
-    });
+    listingsDropZone.addEventListener("dragover", e => { e.preventDefault(); listingsDropZone.style.borderColor = "#000"; });
+    listingsDropZone.addEventListener("dragleave", e => { e.preventDefault(); listingsDropZone.style.borderColor = "#ccc"; });
     listingsDropZone.addEventListener("drop", async e => {
-      e.preventDefault(); e.stopPropagation();
+      e.preventDefault();
       listingsDropZone.style.borderColor = "#ccc";
       const files = e.dataTransfer.files;
-      for (let i = 0; i < files.length; i++) {
-        const file = files[i];
-        const fileName = file.name.toLowerCase();
-        if (fileName.endsWith(".csv") || fileName.endsWith(".doc") || fileName.endsWith(".docx")) {
+      for (let file of files) {
+        if (/\.(csv|doc|docx)$/i.test(file.name)) {
           try {
-            let fileData;
-            if (fileName.endsWith(".csv")) {
-              fileData = await uploadCSVFile(file);
-            } else {
-              fileData = await uploadDocFile(file);
-            }
+            const fileData = file.name.endsWith(".csv") ? await uploadCSVFile(file) : await uploadDocFile(file);
             listingsCSV.push(fileData);
             updateUploadedFilesList();
             await updateVectorStore();
-          } catch (err) {
-            console.error("Error uploading file:", err);
-          }
-        } else {
-          alert("Only .csv, .doc, and .docx files are supported for Etsy Listings.");
-        }
+          } catch (err) { console.error(err); }
+        } else { alert("Only .csv, .doc, and .docx files supported."); }
       }
     });
-
     function updateUploadedFilesList() {
-      let fileList = [];
-      soldOrdersCSV.forEach(file => fileList.push(file.name));
-      listingsCSV.forEach(file => fileList.push(file.name));
-      document.getElementById("uploadedFilesList").value = fileList.join("\n");
+      const list = [...soldOrdersCSV, ...listingsCSV].map(f => f.name).join("\n");
+      document.getElementById("uploadedFilesList").value = list;
     }
-
     const dropZone = document.getElementById("dropZone");
-    dropZone.addEventListener("dragover", e => {
-      e.preventDefault(); e.stopPropagation();
-      dropZone.style.borderColor = "#000";
-    });
-    dropZone.addEventListener("dragleave", e => {
-      e.preventDefault(); e.stopPropagation();
-      dropZone.style.borderColor = "#ccc";
-    });
+    dropZone.addEventListener("dragover", e => { e.preventDefault(); dropZone.style.borderColor = "#000"; });
+    dropZone.addEventListener("dragleave", e => { e.preventDefault(); dropZone.style.borderColor = "#ccc"; });
     dropZone.addEventListener("drop", async e => {
-      e.preventDefault(); e.stopPropagation();
+      e.preventDefault();
       dropZone.style.borderColor = "#ccc";
       const files = e.dataTransfer.files;
       const maxRemaining = 10 - previewImages.length;
       for (let i = 0; i < Math.min(files.length, maxRemaining); i++) {
-        const file = files[i];
-        if (file.type === "image/jpeg" || file.type === "image/png") {
+        let file = files[i];
+        if (/image\/(jpeg|png)/.test(file.type)) {
           try {
             const dataURL = await new Promise((resolve, reject) => {
               const reader = new FileReader();
@@ -818,46 +624,27 @@ Using Sales Report and Product List Files:
             previewImages.push(resizedDataURL);
             photoNames.push(file.name);
             photoIds.push('img-' + Date.now() + '-' + i);
-            updatePrimaryPreview();
             updateStaticPreviewGrid();
             updateUploadedFilesList();
-          } catch (err) {
-            console.error("Error processing image:", err);
-          }
-        } else {
-          M.toast({ html: "Only JPEG/PNG images are supported." });
-        }
+          } catch (err) { console.error(err); }
+        } else { M.toast({ html: "Only JPEG/PNG images supported." }); }
       }
     });
-
-    function updatePrimaryPreview() {
-      const primaryPreview = document.getElementById("primaryPreview");
-      if (previewImages.length > 0) {
-        primaryPreview.innerHTML = `<img src="${previewImages[0]}" alt="Primary Preview">`;
-      } else if (reservedPhotos.length > 0 && reservedPhotos[0].src) {
-        primaryPreview.innerHTML = `<img src="${reservedPhotos[0].src}" alt="Primary Preview">`;
-      } else {
-        primaryPreview.innerHTML = "";
-      }
-    }
-
     function updateStaticPreviewGrid() {
       for (let i = 0; i < 10; i++) {
-        const cell = document.getElementById("previewCell" + i);
-        if(i >= 7) {
+        let cell = document.getElementById("previewCell" + i);
+        if (i >= 7) {
           let rIndex = i - 7;
           cell.innerHTML = "";
-          if(rIndex < reservedPhotos.length && reservedPhotos[rIndex].src) {
-            const previewBox = document.createElement("div");
+          if (rIndex < reservedPhotos.length && reservedPhotos[rIndex].src) {
+            let previewBox = document.createElement("div");
             previewBox.className = "preview-box";
             previewBox.setAttribute("data-id", reservedPhotos[rIndex].id);
-            previewBox.addEventListener("dragstart", e => {
-              draggedIndex = i;
-            });
-            const img = document.createElement("img");
+            previewBox.addEventListener("dragstart", e => { draggedIndex = i; });
+            let img = document.createElement("img");
             img.src = reservedPhotos[rIndex].src;
             previewBox.appendChild(img);
-            const removeBtn = document.createElement("div");
+            let removeBtn = document.createElement("div");
             removeBtn.className = "remove-btn";
             removeBtn.textContent = "X";
             removeBtn.addEventListener("click", ev => {
@@ -865,75 +652,38 @@ Using Sales Report and Product List Files:
               reservedPhotos.splice(rIndex, 1);
               saveReservedPhotos();
               updateStaticPreviewGrid();
-              updatePrimaryPreview();
             });
             previewBox.appendChild(removeBtn);
-            const numOverlay = document.createElement("div");
+            let numOverlay = document.createElement("div");
             numOverlay.className = "number-overlay";
             numOverlay.textContent = (i + 1).toString();
             previewBox.appendChild(numOverlay);
-            previewBox.addEventListener("click", () => {
-              showMetadata(i);
-            });
+            previewBox.addEventListener("click", () => { showMetadata(i); });
             cell.appendChild(previewBox);
-          } else {
-            cell.innerHTML = "Empty";
-          }
-          cell.addEventListener("dragover", function(e) {
-            e.preventDefault();
-            cell.classList.add("drag-over");
-          });
-          cell.addEventListener("dragleave", function(e) {
-            cell.classList.remove("drag-over");
-          });
-          cell.addEventListener("drop", function(e) {
-            e.preventDefault();
-            cell.classList.remove("drag-over");
-            if(e.dataTransfer.files && e.dataTransfer.files.length > 0) {
-              const file = e.dataTransfer.files[0];
-              if(file.type === "image/jpeg" || file.type === "image/png") {
+          } else { cell.innerHTML = "Empty"; }
+          cell.addEventListener("dragover", e => { e.preventDefault(); cell.classList.add("drag-over"); });
+          cell.addEventListener("dragleave", e => { cell.classList.remove("drag-over"); });
+          cell.addEventListener("drop", async e => {
+            e.preventDefault(); cell.classList.remove("drag-over");
+            if (e.dataTransfer.files && e.dataTransfer.files.length > 0) {
+              let file = e.dataTransfer.files[0];
+              if (/image\/(jpeg|png)/.test(file.type)) {
                 const reader = new FileReader();
-                reader.onload = async function(ev) {
+                reader.onload = async ev => {
                   try {
                     const dataURL = ev.target.result;
                     const resizedDataURL = await resizeImage(dataURL, 3000, 3000);
-                    let newReserved = {
-                      src: resizedDataURL,
-                      name: file.name,
-                      meta: "",
-                      id: 'img-' + Date.now()
-                    };
+                    let newReserved = { src: resizedDataURL, name: file.name, meta: "", id: 'img-' + Date.now() };
                     reservedPhotos[rIndex] = newReserved;
                     saveReservedPhotos();
                     updateStaticPreviewGrid();
-                    updatePrimaryPreview();
-                  } catch (err) {
-                    console.error("Error processing reserved file:", err);
-                  }
+                  } catch (err) { console.error(err); }
                 };
                 reader.readAsDataURL(file);
               }
-            } else {
-              let targetIndex = i;
-              if(draggedIndex === null) {
-                return;
-              }
-              if(draggedIndex < 7) {
-                return;
-              }
-              if(draggedIndex === targetIndex) {
-                return;
-              }
-              let temp = reservedPhotos[draggedIndex - 7];
-              reservedPhotos[draggedIndex - 7] = reservedPhotos[rIndex];
-              reservedPhotos[rIndex] = temp;
-              saveReservedPhotos();
-              updateStaticPreviewGrid();
-              updatePrimaryPreview();
-              draggedIndex = null;
             }
           });
-          const metadataStatus = document.createElement("div");
+          let metadataStatus = document.createElement("div");
           metadataStatus.className = "metadata-status";
           metadataStatus.id = "metadataStatus" + i;
           cell.appendChild(metadataStatus);
@@ -941,17 +691,14 @@ Using Sales Report and Product List Files:
           cell.innerHTML = "Empty";
           if (i < previewImages.length) {
             cell.innerHTML = "";
-            const previewBox = document.createElement("div");
+            let previewBox = document.createElement("div");
             previewBox.className = "preview-box";
             previewBox.setAttribute("data-id", photoIds[i]);
-            previewBox.addEventListener("dragstart", e => {
-              if(i >= 7) return;
-              draggedIndex = i;
-            });
-            const img = document.createElement("img");
+            previewBox.addEventListener("dragstart", e => { if (i < 7) draggedIndex = i; });
+            let img = document.createElement("img");
             img.src = previewImages[i];
             previewBox.appendChild(img);
-            const removeBtn = document.createElement("div");
+            let removeBtn = document.createElement("div");
             removeBtn.className = "remove-btn";
             removeBtn.textContent = "X";
             removeBtn.addEventListener("click", ev => {
@@ -961,14 +708,13 @@ Using Sales Report and Product List Files:
               photoMeta.splice(i, 1);
               photoIds.splice(i, 1);
               updateStaticPreviewGrid();
-              updatePrimaryPreview();
             });
             previewBox.appendChild(removeBtn);
-            const numOverlay = document.createElement("div");
+            let numOverlay = document.createElement("div");
             numOverlay.className = "number-overlay";
             numOverlay.textContent = (i + 1).toString();
             previewBox.appendChild(numOverlay);
-            const cropBtn = document.createElement("button");
+            let cropBtn = document.createElement("button");
             cropBtn.textContent = "Crop";
             cropBtn.style.position = "absolute";
             cropBtn.style.bottom = "2px";
@@ -979,48 +725,28 @@ Using Sales Report and Product List Files:
             cropBtn.style.backgroundColor = "green";
             cropBtn.style.color = "white";
             cropBtn.style.fontSize = "10px";
-            cropBtn.addEventListener("click", (ev) => {
-              ev.stopPropagation();
-              openCropModal(i);
-            });
+            cropBtn.addEventListener("click", ev => { ev.stopPropagation(); openCropModal(i); });
             previewBox.appendChild(cropBtn);
-            previewBox.addEventListener("click", () => {
-              showMetadata(i);
-            });
+            previewBox.addEventListener("click", () => { showMetadata(i); });
             cell.appendChild(previewBox);
-            cell.addEventListener("dragover", function(e) {
-              e.preventDefault();
-              cell.classList.add("drag-over");
-            });
-            cell.addEventListener("dragleave", function(e) {
-              cell.classList.remove("drag-over");
-            });
-            cell.addEventListener("drop", function(e) {
-              e.preventDefault();
-              cell.classList.remove("drag-over");
-              let targetIndex = i;
-              if(draggedIndex === null) {
-                return;
+            cell.addEventListener("dragover", e => { e.preventDefault(); cell.classList.add("drag-over"); });
+            cell.addEventListener("dragleave", e => { cell.classList.remove("drag-over"); });
+            cell.addEventListener("drop", e => {
+              e.preventDefault(); cell.classList.remove("drag-over");
+              if (draggedIndex !== null && draggedIndex < 7 && draggedIndex !== i) {
+                const [movedImage] = previewImages.splice(draggedIndex, 1);
+                previewImages.splice(i, 0, movedImage);
+                const [movedName] = photoNames.splice(draggedIndex, 1);
+                photoNames.splice(i, 0, movedName);
+                const [movedMeta] = photoMeta.splice(draggedIndex, 1);
+                photoMeta.splice(i, 0, movedMeta);
+                const [movedId] = photoIds.splice(draggedIndex, 1);
+                photoIds.splice(i, 0, movedId);
+                updateStaticPreviewGrid();
+                draggedIndex = null;
               }
-              if(draggedIndex >= 7) {
-                return;
-              }
-              if(draggedIndex === targetIndex) {
-                return;
-              }
-              const [movedImage] = previewImages.splice(draggedIndex, 1);
-              previewImages.splice(targetIndex, 0, movedImage);
-              const [movedName] = photoNames.splice(draggedIndex, 1);
-              photoNames.splice(targetIndex, 0, movedName);
-              const [movedMeta] = photoMeta.splice(draggedIndex, 1);
-              photoMeta.splice(targetIndex, 0, movedMeta);
-              const [movedId] = photoIds.splice(draggedIndex, 1);
-              photoIds.splice(targetIndex, 0, movedId);
-              updateStaticPreviewGrid();
-              updatePrimaryPreview();
-              draggedIndex = null;
             });
-            const metadataStatus = document.createElement("div");
+            let metadataStatus = document.createElement("div");
             metadataStatus.className = "metadata-status";
             metadataStatus.id = "metadataStatus" + i;
             cell.appendChild(metadataStatus);
@@ -1028,94 +754,66 @@ Using Sales Report and Product List Files:
         }
       }
     }
-
     function showMetadata(index) {
       const metadata = photoMeta[index] || "No metadata available for this photo.";
       document.getElementById("metadataTextarea").value = metadata;
-      const modalElem = document.getElementById("metadataModal");
-      let instance = M.Modal.getInstance(modalElem);
-      if (!instance) {
-        instance = M.Modal.init(modalElem, {});
-      }
+      let modalElem = document.getElementById("metadataModal");
+      let instance = M.Modal.getInstance(modalElem) || M.Modal.init(modalElem, {});
       instance.open();
     }
-
     document.getElementById("analyzeMetadataBtn").addEventListener("click", async () => {
-      for (let i = 0; i < previewImages.length; i++) {
-        await analyzePhoto(i);
-      }
+      for (let i = 0; i < previewImages.length; i++) { await analyzePhoto(i); }
     });
-
     async function analyzePhoto(index) {
-      const statusElem = document.getElementById("metadataStatus" + index);
+      let statusElem = document.getElementById("metadataStatus" + index);
       if (!statusElem) return;
       statusElem.innerHTML = "";
-      const progressBar = document.createElement("progress");
+      let progressBar = document.createElement("progress");
       progressBar.className = "metadata-progress";
       progressBar.max = 100;
       progressBar.value = 0;
       statusElem.appendChild(progressBar);
       let progress = 0;
-      const interval = setInterval(() => {
-        progress = Math.min(progress + 3, 60);
-        progressBar.value = progress;
-      }, 100);
+      let interval = setInterval(() => { progress = Math.min(progress + 3, 60); progressBar.value = progress; }, 100);
       try {
         const rulesText = document.getElementById("analyzeRulesTextarea").value || "";
         const dataURL = previewImages[index];
-        const blob = await (await fetch(dataURL)).blob();
-        const formData = new FormData();
+        let blob = await (await fetch(dataURL)).blob();
+        let formData = new FormData();
         formData.append("rules", rulesText);
         formData.append("imageFile", blob, photoNames[index] || `image_${index}.jpg`);
-        const resp = await fetch("/.netlify/functions/analyzeImage", {
-          method: "POST",
-          body: formData
-        });
+        let resp = await fetch("/.netlify/functions/analyzeImage", { method: "POST", body: formData });
         clearInterval(interval);
         progressBar.value = 80;
-        if (!resp.ok) {
-          const errData = await resp.text();
-          throw new Error(`analyzeImage error: ${resp.status} - ${errData}`);
-        }
-        const json = await resp.json();
+        if (!resp.ok) { let errData = await resp.text(); throw new Error(`analyzeImage error: ${resp.status} - ${errData}`); }
+        let json = await resp.json();
         photoMeta[index] = json.metadata || "No metadata returned.";
         progressBar.value = 100;
         statusElem.innerHTML = '<span style="color:green; font-size:16px;"><i class="material-icons">check_circle</i></span>';
-      } catch (err) {
-        clearInterval(interval);
-        statusElem.innerHTML = `<span style="color:red;">Error: ${err.message}</span>`;
-      }
+      } catch (err) { clearInterval(interval); statusElem.innerHTML = `<span style="color:red;">Error: ${err.message}</span>`; }
     }
-
     function generateRandomString(length) {
       const possible = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789';
       let text = '';
-      for (let i = 0; i < length; i++) {
-        text += possible.charAt(Math.floor(Math.random() * possible.length));
-      }
+      for (let i = 0; i < length; i++) { text += possible.charAt(Math.floor(Math.random() * possible.length)); }
       return text;
     }
-
     function base64urlEncode(buffer) {
-      return btoa(String.fromCharCode(...new Uint8Array(buffer)))
-        .replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, '');
+      return btoa(String.fromCharCode(...new Uint8Array(buffer))).replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, '');
     }
-
     async function generateCodeChallenge(codeVerifier) {
-      const encoder = new TextEncoder();
-      const data = encoder.encode(codeVerifier);
-      const digest = await crypto.subtle.digest("SHA-256", data);
+      let encoder = new TextEncoder();
+      let data = encoder.encode(codeVerifier);
+      let digest = await crypto.subtle.digest("SHA-256", data);
       return base64urlEncode(digest);
     }
-
     document.getElementById("connectEtsyBtn").addEventListener("click", async () => {
-      const state = "randomState123";
-      const scope = "listings_w listings_r";
-      const codeVerifier = generateRandomString(64);
+      let state = "randomState123";
+      let scope = "listings_w listings_r";
+      let codeVerifier = generateRandomString(64);
       localStorage.setItem("etsy_code_verifier", codeVerifier);
-      const codeChallenge = await generateCodeChallenge(codeVerifier);
-      const etsyAuthUrl =
-        `https://www.etsy.com/oauth/connect?response_type=code&client_id=${CLIENT_ID}` +
+      let codeChallenge = await generateCodeChallenge(codeVerifier);
+      let etsyAuthUrl = `https://www.etsy.com/oauth/connect?response_type=code&client_id=${CLIENT_ID}` +
         `&redirect_uri=${encodeURIComponent(REDIRECT_URI)}` +
         `&scope=${encodeURIComponent(scope)}` +
         `&state=${state}` +
@@ -1123,104 +821,54 @@ Using Sales Report and Product List Files:
         `&code_challenge_method=S256`;
       window.location.href = etsyAuthUrl;
     });
-
     document.addEventListener("DOMContentLoaded", () => {
       loadButtonPositions();
       loadReservedPhotos();
-      const urlParams = new URLSearchParams(window.location.search);
-      const code = urlParams.get("code");
-      if (code) {
-        exchangeCodeForToken(code);
-        window.history.replaceState({}, document.title, REDIRECT_URI);
-      }
+      let urlParams = new URLSearchParams(window.location.search);
+      let code = urlParams.get("code");
+      if (code) { exchangeCodeForToken(code); window.history.replaceState({}, document.title, REDIRECT_URI); }
       updateStaticPreviewGrid();
       updateUploadedFilesList();
     });
-
     async function exchangeCodeForToken(code) {
-      const codeVerifier = localStorage.getItem("etsy_code_verifier");
-      if (!codeVerifier) {
-        M.toast({ html: "No code verifier found. Please try connecting again." });
-        return;
-      }
+      let codeVerifier = localStorage.getItem("etsy_code_verifier");
+      if (!codeVerifier) { M.toast({ html: "No code verifier found. Please try connecting again." }); return; }
       try {
-        const response = await fetch(`/.netlify/functions/exchangeToken?code=${encodeURIComponent(code)}&code_verifier=${encodeURIComponent(codeVerifier)}`);
-        const tokenData = await response.json();
-        if (tokenData.access_token) {
-          accessToken = tokenData.access_token;
-          M.toast({ html: "Connected to Etsy!" });
-        } else {
-          M.toast({ html: "Error obtaining token: " + JSON.stringify(tokenData) });
-        }
-      } catch (error) {
-        console.error("Error exchanging code:", error);
-        M.toast({ html: "Error exchanging code for token" });
-      }
+        let response = await fetch(`/.netlify/functions/exchangeToken?code=${encodeURIComponent(code)}&code_verifier=${encodeURIComponent(codeVerifier)}`);
+        let tokenData = await response.json();
+        if (tokenData.access_token) { accessToken = tokenData.access_token; M.toast({ html: "Connected to Etsy!" }); }
+        else { M.toast({ html: "Error obtaining token: " + JSON.stringify(tokenData) }); }
+      } catch (error) { console.error(error); M.toast({ html: "Error exchanging code for token" }); }
     }
-
-    // ----------------------------------------------------------------------
-    // UPDATE LISTING
-    // ----------------------------------------------------------------------
     document.getElementById("uploadToEtsyBtn").addEventListener("click", async () => {
-      const listingInput = document.getElementById("shopListings").value.trim();
-      if (!listingInput) {
-        M.toast({ html: "Please provide a listing URL or ID in 'My Etsy Shop Listings'." });
-        return;
-      }
+      let listingInput = document.getElementById("shopListings").value.trim();
+      if (!listingInput) { M.toast({ html: "Please provide a listing URL or ID in 'My Etsy Shop Listings'." }); return; }
       let listingId;
-      if (/^\d+$/.test(listingInput)) {
-        listingId = listingInput;
-      } else {
-        const match = listingInput.match(/\/listing\/(\d+)/);
-        if (match) {
-          listingId = match[1];
-        } else {
-          M.toast({ html: "Invalid listing URL or ID." });
-          return;
-        }
-      }
-      const payload = {
+      if (/^\d+$/.test(listingInput)) { listingId = listingInput; }
+      else { let match = listingInput.match(/\/listing\/(\d+)/); listingId = match ? match[1] : null; }
+      if (!listingId) { M.toast({ html: "Invalid listing URL or ID." }); return; }
+      let payload = {
         title: document.getElementById("listingTitle").value,
         description: document.getElementById("listingDescription").value,
-        tags: document.getElementById("searchKeyPhrases").value
-          .split("\n").map(s => s.trim()).filter(s => s !== "")
+        tags: document.getElementById("searchKeyPhrases").value.split("\n").map(s => s.trim()).filter(s => s !== "")
       };
-      const updateUrl =
-        `/.netlify/functions/updateListing?listingId=${listingId}&token=${encodeURIComponent(accessToken)}`;
+      let updateUrl = `/.netlify/functions/updateListing?listingId=${listingId}&token=${encodeURIComponent(accessToken)}`;
       try {
-        const response = await fetch(updateUrl, {
+        let response = await fetch(updateUrl, {
           method: "PUT",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify(payload)
         });
-        if (!response.ok) {
-          const errorText = await response.text();
-          M.toast({ html: "Error updating listing: " + response.status + " - " + errorText });
-        } else {
-          M.toast({ html: "Listing updated successfully!" });
-        }
-      } catch (e) {
-        console.error("Exception in updateExistingListing:", e);
-        M.toast({ html: "Exception: " + e.message });
-      }
+        if (!response.ok) { let errorText = await response.text(); M.toast({ html: "Error updating listing: " + response.status + " - " + errorText }); }
+        else { M.toast({ html: "Listing updated successfully!" }); }
+      } catch (e) { console.error(e); M.toast({ html: "Exception: " + e.message }); }
     });
-
-    // ----------------------------------------------------------------------
-    // RULES & TITLE / DESCRIPTION GENERATION
-    // ----------------------------------------------------------------------
-    function stripMarkdownJSON(text) {
-      return text.replace(/^```json\s*/, "").replace(/\s*```$/, "").trim();
-    }
-
     async function generateTitleOnly() {
-      const etsyLink = ETSY_SHOP_URL;
-      const keyPhrases = document.getElementById("searchKeyPhrases").value.trim();
-      if (!keyPhrases) {
-        M.toast({ html: "Please provide the search key phrases." });
-        return;
-      }
-      const rulesText = document.getElementById("titleRulesTextarea").value;
-      const promptText = `
+      let etsyLink = ETSY_SHOP_URL;
+      let keyPhrases = document.getElementById("searchKeyPhrases").value.trim();
+      if (!keyPhrases) { M.toast({ html: "Please provide the search key phrases." }); return; }
+      let rulesText = document.getElementById("titleRulesTextarea").value;
+      let promptText = `
 You are ChatGPT using ${modelName}.
 Based on the inputs below, generate an Etsy Listing TITLE only.
 Input Context:
@@ -1230,7 +878,7 @@ Search Key Phrases: "${keyPhrases}"
 ${stripMarkdownJSON(rulesText)}
 Important: Return ONLY the title as plain text.`;
       document.getElementById("listingTitle").value = "Generating title...";
-      const payload = {
+      let payload = {
         model: modelName,
         messages: [
           { role: "system", content: "Return ONLY the title as plain text." },
@@ -1239,38 +887,30 @@ Important: Return ONLY the title as plain text.`;
         temperature: 0.7
       };
       try {
-        const data = await callOpenAI(payload);
+        let data = await callOpenAI(payload);
         if (data.choices && data.choices.length > 0) {
-          const output = stripMarkdownJSON(data.choices[0].message.content);
+          let output = stripMarkdownJSON(data.choices[0].message.content);
           document.getElementById("listingTitle").value = output || "No title generated.";
           updateTitleCount(output);
-        } else {
-          document.getElementById("listingTitle").value = "No title generated.";
-        }
-      } catch (error) {
-        document.getElementById("listingTitle").value = "Error: " + error;
-      }
+        } else { document.getElementById("listingTitle").value = "No title generated."; }
+      } catch (error) { document.getElementById("listingTitle").value = "Error: " + error; }
     }
-
     async function generateDescriptionOnly() {
-      const etsyLink = ETSY_SHOP_URL;
-      const keyPhrases = document.getElementById("searchKeyPhrases").value.trim();
-      if (!keyPhrases) {
-        M.toast({ html: "Please provide the search key phrases." });
-        return;
-      }
-      const rulesText = document.getElementById("descriptionRulesTextarea").value;
-      const promptText = `
+      let etsyLink = ETSY_SHOP_URL;
+      let keyPhrases = document.getElementById("searchKeyPhrases").value.trim();
+      if (!keyPhrases) { M.toast({ html: "Please provide the search key phrases." }); return; }
+      let rulesText = document.getElementById("descriptionRulesTextarea").value;
+      let promptText = `
 You are ChatGPT using ${modelName}.
 Based on the inputs below, generate an Etsy Listing DESCRIPTION only.
 Input Context:
 Etsy Link: "${etsyLink}"
-Search Key Phrases: "${keyPhrases}"
+Search KeyPhrases: "${keyPhrases}"
 --- Rules for DESCRIPTION ---
 ${stripMarkdownJSON(rulesText)}
 Important: Return ONLY the description as plain text.`;
       document.getElementById("listingDescription").value = "Generating description...";
-      const payload = {
+      let payload = {
         model: modelName,
         messages: [
           { role: "system", content: "Return ONLY the description as plain text." },
@@ -1279,51 +919,39 @@ Important: Return ONLY the description as plain text.`;
         temperature: 0.7
       };
       try {
-        const data = await callOpenAI(payload);
+        let data = await callOpenAI(payload);
         if (data.choices && data.choices.length > 0) {
-          const output = stripMarkdownJSON(data.choices[0].message.content);
+          let output = stripMarkdownJSON(data.choices[0].message.content);
           document.getElementById("listingDescription").value = output || "No description generated.";
-        } else {
-          document.getElementById("listingDescription").value = "No description generated.";
-        }
-      } catch (error) {
-        document.getElementById("listingDescription").value = "Error: " + error;
-      }
+        } else { document.getElementById("listingDescription").value = "No description generated."; }
+      } catch (error) { document.getElementById("listingDescription").value = "Error: " + error; }
     }
-
     async function callOpenAI(payload) {
-      const response = await fetch("/.netlify/functions/openaiProxy", {
+      let response = await fetch("/.netlify/functions/openaiProxy", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify(payload)
       });
       if (!response.ok) {
-        const errorData = await response.json();
-        throw new Error("API Error: " +
-          (errorData.error ? errorData.error.message : response.statusText));
+        let errorData = await response.json();
+        throw new Error("API Error: " + (errorData.error ? errorData.error.message : response.statusText));
       }
       return await response.json();
     }
-
     async function generateTagPhrases() {
-      const question = document.getElementById("listingDescInput").value.trim();
-      if (!question) {
-        M.toast({ html: "Please enter a question in the Listing Description." });
-        return;
-      }
-      const keywordRules = stripMarkdownJSON(document.getElementById("keywordRulesTextarea").value);
-      const extraText = "Emphasis on SEO and generating effective Etsy tag phrases.";
-      const prompt = `
+      let question = document.getElementById("listingDescInput").value.trim();
+      if (!question) { M.toast({ html: "Please enter a question in the Listing Description." }); return; }
+      let keywordRules = stripMarkdownJSON(document.getElementById("keywordRulesTextarea").value);
+      let extraText = "Emphasis on SEO and generating effective Etsy tag phrases.";
+      let prompt = `
 Listing Description (for emphasis): "${question}"
 ${extraText}
-
 Keyword Rules:
 ${keywordRules}
-
 Generate exactly 13 tag phrases (each ≤ 20 characters). Return as plain text.
 `;
       try {
-        const payload = {
+        let payload = {
           model: modelName,
           messages: [
             { role: "system", content: "Generate tag phrases according to the provided rules." },
@@ -1332,63 +960,41 @@ Generate exactly 13 tag phrases (each ≤ 20 characters). Return as plain text.
           temperature: 0.7,
           max_tokens: 500
         };
-        const data = await callOpenAI(payload);
+        let data = await callOpenAI(payload);
         let answer = data.choices[0].message.content;
-        // Process the response into an array of phrases
-        let phrasesArray = answer.split(/[\n,]+/)
-          .map(s => s.replace(/^\d+\.\s*/, "").trim())
-          .filter(p => p);
-        // Secondary check: ensure each phrase is ≤ 20 characters (including spaces)
-        const isValid = phrasesArray.every(p => p.length <= 20);
-        if (!isValid) {
+        let phrasesArray = answer.split(/[\n,]+/).map(s => s.replace(/^\d+\.\s*/, "").trim()).filter(p => p);
+        if (!phrasesArray.every(p => p.length <= 20)) {
           console.warn("One or more phrases exceeded 20 characters. Re-generating key phrases...");
           return await generateTagPhrases();
         }
         document.getElementById("searchKeyPhrases").value = phrasesArray.join("\n");
-      } catch (err) {
-        console.error("Error generating tag phrases:", err);
-        M.toast({ html: "Error generating tag phrases: " + err.message });
-      }
+      } catch (err) { console.error(err); M.toast({ html: "Error generating tag phrases: " + err.message }); }
     }
-
-    document.getElementById("generateBtn").addEventListener("click", async () => {
-      await Promise.all([generateTitleOnly(), generateDescriptionOnly()]);
-    });
+    document.getElementById("generateBtn").addEventListener("click", async () => { await Promise.all([generateTitleOnly(), generateDescriptionOnly()]); });
     document.getElementById("regenTitleBtn").addEventListener("click", generateTitleOnly);
     document.getElementById("regenDescriptionBtn").addEventListener("click", generateDescriptionOnly);
-
     function updateTitleCount(text) {
       document.getElementById("titleCount").textContent = "Count: " + text.length;
     }
-
     document.getElementById("copyTitleBtn").addEventListener("click", () => {
-      const text = document.getElementById("listingTitle").value;
+      let text = document.getElementById("listingTitle").value;
       navigator.clipboard.writeText(text).catch(err => console.error("Copy error:", err));
     });
     document.getElementById("copyDescriptionBtn").addEventListener("click", () => {
-      const text = document.getElementById("listingDescription").value;
+      let text = document.getElementById("listingDescription").value;
       navigator.clipboard.writeText(text).catch(err => console.error("Copy error:", err));
     });
-    document.getElementById("clearKeyPhrasesBtn").addEventListener("click", () => {
-      document.getElementById("searchKeyPhrases").value = "";
-    });
+    document.getElementById("clearKeyPhrasesBtn").addEventListener("click", () => { document.getElementById("searchKeyPhrases").value = ""; });
     document.getElementById("copyKeyPhrasesBtn").addEventListener("click", () => {
-      const lines = document.getElementById("searchKeyPhrases").value
-        .split(/\n+/).map(l => l.trim()).filter(l => l !== "");
-      navigator.clipboard.writeText(lines.join(", "))
-        .catch(err => console.error("Error copying key phrases:", err));
+      let lines = document.getElementById("searchKeyPhrases").value.split(/\n+/).map(l => l.trim()).filter(l => l !== "");
+      navigator.clipboard.writeText(lines.join(", ")).catch(err => console.error("Error copying key phrases:", err));
     });
     document.getElementById("listingDescInput").addEventListener("keydown", async (e) => {
-      if (e.key === "Enter" && !e.shiftKey) {
-        e.preventDefault();
-        await generateTagPhrases();
-      }
+      if (e.key === "Enter" && !e.shiftKey) { e.preventDefault(); await generateTagPhrases(); }
     });
-
     document.getElementById("configureButtonsBtn").addEventListener("click", () => {
-      const configContainer = document.getElementById("buttonConfigContainer");
+      let configContainer = document.getElementById("buttonConfigContainer");
       configContainer.innerHTML = "";
-      // Include all relevant elements in the selector list (including the Configure Buttons button)
       const selectors = [
         "#configureButtonsBtn",
         "#listingDescContainer",
@@ -1403,43 +1009,41 @@ Generate exactly 13 tag phrases (each ≤ 20 characters). Return as plain text.
         "#etsyShopListingsContainer",
         "#userProvidedKeyPhrasesContainer",
         "#etsyListingTitleContainer",
-        "#etsyListingDescriptionContainer"
+        "#etsyListingDescriptionContainer",
+        "#regenTitleBtn",
+        "#copyTitleBtn",
+        "#regenDescriptionBtn",
+        "#copyDescriptionBtn",
+        "#photoUploadNewBtn",
+        "#generateBtn",
+        "#connectEtsyBtn"
       ].join(", ");
-      const elements = document.querySelectorAll(selectors);
-      const table = document.createElement("table");
+      let elements = document.querySelectorAll(selectors);
+      let table = document.createElement("table");
       table.className = "striped";
-      const thead = document.createElement("thead");
+      let thead = document.createElement("thead");
       thead.innerHTML = "<tr><th>Element ID</th><th>Top (px)</th><th>Left (px)</th></tr>";
       table.appendChild(thead);
-      const tbody = document.createElement("tbody");
+      let tbody = document.createElement("tbody");
       elements.forEach(el => {
-        const id = el.id;
-        const computedStyle = window.getComputedStyle(el);
-        const currentTop = el.style.top || computedStyle.top || "0";
-        const currentLeft = el.style.left || computedStyle.left || "0";
-        const tr = document.createElement("tr");
-        tr.innerHTML = `
-          <td>${id}</td>
+        let id = el.id;
+        let computedStyle = window.getComputedStyle(el);
+        let currentTop = el.style.top || computedStyle.top || "0";
+        let currentLeft = el.style.left || computedStyle.left || "0";
+        let tr = document.createElement("tr");
+        tr.innerHTML = `<td>${id}</td>
           <td><input type="number" id="${id}_top" value="${parseInt(currentTop)||0}"></td>
-          <td><input type="number" id="${id}_left" value="${parseInt(currentLeft)||0}"></td>
-        `;
-        const topInput = tr.querySelector(`#${id}_top`);
-        const leftInput = tr.querySelector(`#${id}_left`);
-        topInput.addEventListener("input", () => {
-          el.style.top = topInput.value + "px";
-        });
-        leftInput.addEventListener("input", () => {
-          el.style.left = leftInput.value + "px";
-        });
+          <td><input type="number" id="${id}_left" value="${parseInt(currentLeft)||0}"></td>`;
+        let topInput = tr.querySelector(`#${id}_top`);
+        let leftInput = tr.querySelector(`#${id}_left`);
+        topInput.addEventListener("input", () => { el.style.top = topInput.value + "px"; });
+        leftInput.addEventListener("input", () => { el.style.left = leftInput.value + "px"; });
         tbody.appendChild(tr);
       });
       table.appendChild(tbody);
       configContainer.appendChild(table);
-      const modalElem = document.getElementById("buttonConfigModal");
-      let modalInstance = M.Modal.getInstance(modalElem);
-      if (!modalInstance) {
-        modalInstance = M.Modal.init(modalElem, { preventScrolling: false });
-      }
+      let modalElem = document.getElementById("buttonConfigModal");
+      let modalInstance = M.Modal.getInstance(modalElem) || M.Modal.init(modalElem, { preventScrolling: false });
       modalInstance.open();
     });
     document.getElementById("saveButtonPositionsBtn").addEventListener("click", () => {
@@ -1457,41 +1061,41 @@ Generate exactly 13 tag phrases (each ≤ 20 characters). Return as plain text.
         "#etsyShopListingsContainer",
         "#userProvidedKeyPhrasesContainer",
         "#etsyListingTitleContainer",
-        "#etsyListingDescriptionContainer"
+        "#etsyListingDescriptionContainer",
+        "#regenTitleBtn",
+        "#copyTitleBtn",
+        "#regenDescriptionBtn",
+        "#copyDescriptionBtn",
+        "#photoUploadNewBtn",
+        "#generateBtn",
+        "#connectEtsyBtn"
       ].join(", ");
-      const elements = document.querySelectorAll(selectors);
-      const positions = {};
+      let elements = document.querySelectorAll(selectors);
+      let positions = {};
       elements.forEach(el => {
-        positions[el.id] = {
-          top: el.style.top || "0px",
-          left: el.style.left || "0px"
-        };
+        positions[el.id] = { top: el.style.top || "0px", left: el.style.left || "0px" };
       });
       localStorage.setItem("buttonPositions", JSON.stringify(positions));
       M.toast({ html: "Button positions saved." });
     });
     function loadButtonPositions() {
-      const stored = localStorage.getItem("buttonPositions");
+      let stored = localStorage.getItem("buttonPositions");
       if (stored) {
-        const positions = JSON.parse(stored);
-        for (const id in positions) {
-          const el = document.getElementById(id);
-          if (el) {
-            el.style.top = positions[id].top;
-            el.style.left = positions[id].left;
-          }
+        let positions = JSON.parse(stored);
+        for (let id in positions) {
+          let el = document.getElementById(id);
+          if (el) { el.style.top = positions[id].top; el.style.left = positions[id].left; }
         }
       }
     }
     window.addEventListener("load", () => {
-      const container13 = document.getElementById("container13");
+      let container13 = document.getElementById("container13");
       container13.style.height = (container13.offsetHeight * 2.5) + "px";
     });
-
     function openCropModal(index) {
       currentCropIndex = index;
-      const cropModal = document.getElementById("photoCropModal");
-      const cropImage = document.getElementById("cropImage");
+      let cropModal = document.getElementById("photoCropModal");
+      let cropImage = document.getElementById("cropImage");
       cropImage.src = previewImages[index];
       cropImage.onload = function() {
         cropper = new Cropper(cropImage, {
@@ -1511,29 +1115,19 @@ Generate exactly 13 tag phrases (each ≤ 20 characters). Return as plain text.
           cropBoxResizable: true,
           dragMode: 'move',
           ready: function() {
-            const containerData = cropper.getContainerData();
-            const cropBoxData = cropper.getCropBoxData();
-            cropper.setCropBoxData({
-              left: (containerData.width - cropBoxData.width) / 2,
-              top: (containerData.height - cropBoxData.height) / 2
-            });
+            let containerData = cropper.getContainerData();
+            let cropBoxData = cropper.getCropBoxData();
+            cropper.setCropBoxData({ left: (containerData.width - cropBoxData.width) / 2, top: (containerData.height - cropBoxData.height) / 2 });
           }
         });
       };
-      let instance = M.Modal.getInstance(cropModal);
-      if (!instance) {
-        instance = M.Modal.init(cropModal, {});
-      }
+      let instance = M.Modal.getInstance(cropModal) || M.Modal.init(cropModal, {});
       instance.open();
     }
     document.getElementById("saveCropBtn").addEventListener("click", () => {
       if (cropper && currentCropIndex !== null) {
-        const croppedCanvas = cropper.getCroppedCanvas({
-          width: 3000,
-          height: 3000
-        });
+        let croppedCanvas = cropper.getCroppedCanvas({ width: 3000, height: 3000 });
         previewImages[currentCropIndex] = croppedCanvas.toDataURL("image/jpeg", 0.85);
-        updatePrimaryPreview();
         updateStaticPreviewGrid();
         cropper.destroy();
         cropper = null;
@@ -1542,131 +1136,70 @@ Generate exactly 13 tag phrases (each ≤ 20 characters). Return as plain text.
       }
     });
     document.getElementById("cancelCropBtn").addEventListener("click", () => {
-      if (cropper) {
-        cropper.destroy();
-        cropper = null;
-      }
+      if (cropper) { cropper.destroy(); cropper = null; }
       currentCropIndex = null;
       M.Modal.getInstance(document.getElementById("photoCropModal")).close();
     });
-
     async function uploadPhotos() {
-      const listingInput = document.getElementById("shopListings").value.trim();
-      if (!listingInput) {
-        M.toast({ html: "Please provide a listing URL or ID in 'My Etsy Shop Listings'." });
-        return;
-      }
-      let listingId;
-      if (/^\d+$/.test(listingInput)) {
-        listingId = listingInput;
-      } else {
-        const match = listingInput.match(/\/listing\/(\d+)/);
-        if (match) {
-          listingId = match[1];
-        } else {
-          M.toast({ html: "Invalid listing URL or ID." });
-          return;
-        }
-      }
-      if (previewImages.length === 0) {
-        M.toast({ html: "No images to upload. Please drag and drop images first." });
-        return;
-      }
+      let listingInput = document.getElementById("shopListings").value.trim();
+      if (!listingInput) { M.toast({ html: "Please provide a listing URL or ID in 'My Etsy Shop Listings'." }); return; }
+      let listingId = /^\d+$/.test(listingInput) ? listingInput : (listingInput.match(/\/listing\/(\d+)/) || [])[1];
+      if (!listingId) { M.toast({ html: "Invalid listing URL or ID." }); return; }
+      if (!previewImages.length) { M.toast({ html: "No images to upload. Please drag and drop images first." }); return; }
       for (let i = 0; i < previewImages.length; i++) {
-        const dataURL = previewImages[i];
-        const altText = photoMeta[i] || "";
-        const rankNumber = i + 1;
+        let dataURL = previewImages[i];
+        let altText = photoMeta[i] || "";
+        let rankNumber = i + 1;
         try {
-          const res = await fetch(dataURL);
-          const blob = await res.blob();
-          const formData = new FormData();
+          let res = await fetch(dataURL);
+          let blob = await res.blob();
+          let formData = new FormData();
           formData.append("listingId", listingId);
           formData.append("token", accessToken);
           formData.append("fileName", photoNames[i] || `uploaded_photo_${i}.jpg`);
           formData.append("rank", rankNumber);
           formData.append("alt_text", altText);
           formData.append("file", blob, photoNames[i] || `uploaded_photo_${i}.jpg`);
-          const uploadUrl = `/.netlify/functions/imageUpload`;
-          const response = await fetch(uploadUrl, {
-            method: "POST",
-            body: formData
-          });
-          if (!response.ok) {
-            M.toast({ html: `Error uploading photo #${rankNumber}: ` + response.status });
-          } else {
-            M.toast({ html: `Photo #${rankNumber} uploaded with alt_text!` });
-          }
-        } catch (e) {
-          console.error(`Exception uploading photo #${rankNumber}:`, e);
-          M.toast({ html: `Exception uploading photo #${rankNumber}: ${e.message}` });
-        }
+          let uploadUrl = `/.netlify/functions/imageUpload`;
+          let response = await fetch(uploadUrl, { method: "POST", body: formData });
+          if (!response.ok) { M.toast({ html: `Error uploading photo #${rankNumber}: ` + response.status }); }
+          else { M.toast({ html: `Photo #${rankNumber} uploaded with alt_text!` }); }
+        } catch (e) { console.error(e); M.toast({ html: `Exception uploading photo #${rankNumber}: ${e.message}` }); }
       }
     }
-
     async function uploadReservedPhotos() {
-      const listingInput = document.getElementById("shopListings").value.trim();
-      if (!listingInput) {
-        M.toast({ html: "Please provide a listing URL or ID in 'My Etsy Shop Listings'." });
-        return;
-      }
-      let listingId;
-      if (/^\d+$/.test(listingInput)) {
-        listingId = listingInput;
-      } else {
-        const match = listingInput.match(/\/listing\/(\d+)/);
-        if (match) {
-          listingId = match[1];
-        } else {
-          M.toast({ html: "Invalid listing URL or ID." });
-          return;
-        }
-      }
-      if (reservedPhotos.length === 0) {
-        M.toast({ html: "No reserved photos to upload." });
-        return;
-      }
+      let listingInput = document.getElementById("shopListings").value.trim();
+      if (!listingInput) { M.toast({ html: "Please provide a listing URL or ID in 'My Etsy Shop Listings'." }); return; }
+      let listingId = /^\d+$/.test(listingInput) ? listingInput : (listingInput.match(/\/listing\/(\d+)/) || [])[1];
+      if (!listingId) { M.toast({ html: "Invalid listing URL or ID." }); return; }
+      if (!reservedPhotos.length) { M.toast({ html: "No reserved photos to upload." }); return; }
       for (let i = 0; i < reservedPhotos.length; i++) {
-        const dataURL = reservedPhotos[i].src;
-        const altText = reservedPhotos[i].meta || "";
-        const rankNumber = i + 8;
+        let dataURL = reservedPhotos[i].src;
+        let altText = reservedPhotos[i].meta || "";
+        let rankNumber = i + 8;
         try {
-          const res = await fetch(dataURL);
-          const blob = await res.blob();
-          const formData = new FormData();
+          let res = await fetch(dataURL);
+          let blob = await res.blob();
+          let formData = new FormData();
           formData.append("listingId", listingId);
           formData.append("token", accessToken);
           formData.append("fileName", reservedPhotos[i].name || `reserved_photo_${i}.jpg`);
           formData.append("rank", rankNumber);
           formData.append("alt_text", altText);
           formData.append("file", blob, reservedPhotos[i].name || `reserved_photo_${i}.jpg`);
-          const uploadUrl = `/.netlify/functions/imageUpload`;
-          const response = await fetch(uploadUrl, {
-            method: "POST",
-            body: formData
-          });
-          if (!response.ok) {
-            M.toast({ html: `Error uploading reserved photo #${rankNumber}: ` + response.status });
-          } else {
-            M.toast({ html: `Reserved photo #${rankNumber} uploaded successfully!` });
-          }
-        } catch (e) {
-          console.error(`Exception uploading reserved photo #${rankNumber}:`, e);
-          M.toast({ html: `Exception uploading reserved photo #${rankNumber}: ${e.message}` });
-        }
+          let uploadUrl = `/.netlify/functions/imageUpload`;
+          let response = await fetch(uploadUrl, { method: "POST", body: formData });
+          if (!response.ok) { M.toast({ html: `Error uploading reserved photo #${rankNumber}: ` + response.status }); }
+          else { M.toast({ html: `Reserved photo #${rankNumber} uploaded successfully!` }); }
+        } catch (e) { console.error(e); M.toast({ html: `Exception uploading reserved photo #${rankNumber}: ${e.message}` }); }
       }
     }
-
     document.getElementById("photoUploadNewBtn").addEventListener("click", async () => {
-      const btn = document.getElementById("photoUploadNewBtn");
+      let btn = document.getElementById("photoUploadNewBtn");
       btn.disabled = true;
-      try {
-        await uploadPhotos();
-        await uploadReservedPhotos();
-      } catch (err) {
-        console.error("Error during photo upload process:", err);
-      } finally {
-        btn.disabled = false;
-      }
+      try { await uploadPhotos(); await uploadReservedPhotos(); }
+      catch (err) { console.error(err); }
+      finally { btn.disabled = false; }
     });
   </script>
 </body>
