@@ -208,17 +208,9 @@
       position: relative; top: 125px; left: 10px;
     }
 
-    /* Update Listing button container */
-    #uploadContainer {
-      position: fixed; bottom: 20px; left: 50%;
-      transform: translateX(-50%); display: inline-block;
-    }
-
-    /* Button Config Modal */
-    #buttonConfigModal .modal-content,
-    #photoCropModal .crop-container {
-      width: 100%;
-      height: 100%;
+    /* Positioning for top buttons */
+    #topButtons {
+      margin: 10px 0;
     }
     /* ADDED NEW STYLE FOR DRAG-OVER VISUAL FEEDBACK: */
     .drag-over {
@@ -256,23 +248,31 @@
     </div>
   </div>
 
-  <!-- Etsy OAuth and Shop Listings Section -->
-  <button id="connectEtsyBtn"
-          class="btn waves-effect waves-light configurable">
-    Connect to Etsy
-  </button>
-  <!-- Combined Photo Upload Button -->
-  <button id="photoUploadNewBtn"
-          class="btn waves-effect waves-light configurable"
-          style="margin-left: 10px;">
-    Photo Upload
-  </button>
-  <div style="margin-top: -180px; margin-left: 10px;">
-    <div class="section-heading configurable">My Etsy Shop Listings</div>
-    <div class="textbox-container configurable">
-      <textarea id="shopListings"
-                class="materialize-textarea"
-                placeholder="Enter your listing URL or ID"></textarea>
+  <!-- Etsy OAuth and Shop Listings Section with Top Buttons -->
+  <div id="topButtons">
+    <button id="connectEtsyBtn"
+            class="btn waves-effect waves-light configurable">
+      Connect to Etsy
+    </button>
+    <!-- Combined Photo Upload Button -->
+    <button id="photoUploadNewBtn"
+            class="btn waves-effect waves-light configurable"
+            style="margin-left: 10px;">
+      Photo Upload
+    </button>
+    <!-- Updated Update Listing Button (now positioned at the top) -->
+    <button id="uploadToEtsyBtn"
+            class="btn waves-effect waves-light configurable"
+            style="margin-left: 10px;">
+      Update Listing
+    </button>
+    <div style="margin-top: 10px; margin-left: 10px;">
+      <div class="section-heading configurable">My Etsy Shop Listings</div>
+      <div class="textbox-container configurable">
+        <textarea id="shopListings"
+                  class="materialize-textarea"
+                  placeholder="Enter your listing URL or ID"></textarea>
+      </div>
     </div>
   </div>
 
@@ -382,14 +382,6 @@
       <div class="preview-cell" id="previewCell8">Empty</div>
       <div class="preview-cell" id="previewCell9">Empty</div>
     </div>
-  </div>
-
-  <!-- Update Listing button container -->
-  <div id="uploadContainer">
-    <button id="uploadToEtsyBtn"
-            class="btn waves-effect waves-light configurable">
-      Update Listing
-    </button>
   </div>
 
   <!-- Metadata Modal (for viewing metadata on click) -->
@@ -1293,6 +1285,54 @@ Important: Return ONLY the description as plain text.`;
       return await response.json();
     }
 
+    async function generateTagPhrases() {
+      const question = document.getElementById("listingDescInput").value.trim();
+      if (!question) {
+        M.toast({ html: "Please enter a question in the Listing Description." });
+        return;
+      }
+      const keywordRules = stripMarkdownJSON(document.getElementById("keywordRulesTextarea").value);
+      const extraText = "Emphasis on SEO and generating effective Etsy tag phrases.";
+      const prompt = `
+Listing Description (for emphasis): "${question}"
+${extraText}
+
+Keyword Rules:
+${keywordRules}
+
+Generate exactly 13 tag phrases (each ≤ 20 characters). Return as plain text.
+`;
+      try {
+        const payload = {
+          model: modelName,
+          messages: [
+            { role: "system", content: "Generate tag phrases according to the provided rules." },
+            { role: "user", content: prompt }
+          ],
+          temperature: 0.7,
+          max_tokens: 500
+        };
+        const data = await callOpenAI(payload);
+        let answer = data.choices[0].message.content;
+        // Process the response into an array of phrases
+        let phrasesArray = answer.split(/[\n,]+/)
+          .map(s => s.replace(/^\d+\.\s*/, "").trim())
+          .filter(p => p);
+        // Secondary check: ensure each phrase is ≤ 20 characters (including spaces)
+        const isValid = phrasesArray.every(p => p.length <= 20);
+        if (!isValid) {
+          // If not valid, recursively call the function until a valid response is obtained.
+          console.warn("One or more phrases exceeded 20 characters. Re-generating key phrases...");
+          return await generateTagPhrases();
+        }
+        // If valid, set the textarea value
+        document.getElementById("searchKeyPhrases").value = phrasesArray.join("\n");
+      } catch (err) {
+        console.error("Error generating tag phrases:", err);
+        M.toast({ html: "Error generating tag phrases: " + err.message });
+      }
+    }
+
     document.getElementById("generateBtn").addEventListener("click", async () => {
       await Promise.all([generateTitleOnly(), generateDescriptionOnly()]);
     });
@@ -1326,45 +1366,6 @@ Important: Return ONLY the description as plain text.`;
         await generateTagPhrases();
       }
     });
-    async function generateTagPhrases() {
-      const question = document.getElementById("listingDescInput").value.trim();
-      if (!question) {
-        M.toast({ html: "Please enter a question in the Listing Description." });
-        return;
-      }
-      const keywordRules = stripMarkdownJSON(document.getElementById("keywordRulesTextarea").value);
-      const extraText = "Emphasis on SEO and generating effective Etsy tag phrases.";
-      const prompt = `
-Listing Description (for emphasis): "${question}"
-${extraText}
-
-Keyword Rules:
-${keywordRules}
-
-Generate exactly 13 tag phrases (each ≤ 20 characters). Return as plain text.
-`;
-      try {
-        const payload = {
-          model: modelName,
-          messages: [
-            { role: "system", content: "Generate tag phrases according to the provided rules." },
-            { role: "user", content: prompt }
-          ],
-          temperature: 0.7,
-          max_tokens: 500
-        };
-        const data = await callOpenAI(payload);
-        let answer = data.choices[0].message.content;
-        let phrases = answer.split(/[\n,]+/)
-          .map(s => s.replace(/^\d+\.\s*/, "").trim())
-          .filter(p => p)
-          .join("\n");
-        document.getElementById("searchKeyPhrases").value = phrases;
-      } catch (err) {
-        console.error("Error generating tag phrases:", err);
-        M.toast({ html: "Error generating tag phrases: " + err.message });
-      }
-    }
 
     document.getElementById("configureButtonsBtn").addEventListener("click", () => {
       const configContainer = document.getElementById("buttonConfigContainer");
