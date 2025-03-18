@@ -28,9 +28,10 @@
     h5, label, p { text-align: left; }
     input, textarea { width: 100%; box-sizing: border-box; }
     
-    /* Wrap Listing Description and File Drop Zones */
+    /* Wrap Listing Description and Uploaded Files List */
     #descriptionAndFileUploadContainer {
       display: flex; align-items: center;
+      gap: 10px; /* Use gap to space the items evenly */
     }
     .listing-desc-container {
       position: relative; display: inline-block; width: 500px;
@@ -70,24 +71,20 @@
     }
     .count-text { font-style: italic; font-size: 0.9em; margin-top: 5px; }
     
-    /* Drag and Drop Box for Images */
+    /* Drag and Drop Box for Images (Photo Grid width) */
     #dropZone {
-      /* Set width to match the photo grid width: 5*120 + 4*28 = 712px */
+      /* Calculated width: (5 * 120) + (4 * 28) = 712px */
       width: 712px; height: 120px; border: 2px dashed #ccc;
       border-radius: 3px; display: inline-block; vertical-align: middle;
       text-align: center; line-height: 120px; position: relative;
     }
     
-    /* Remove the separate drop zones for Etsy Orders/Listings */
-    #fileDropZonesContainer { display: none; }
-    
-    /* UploadedFilesList Text Area (File Drop Area) */
+    /* UploadedFilesList (File Drop Area) */
     #uploadedFilesList {
       /* Shrink width by 25% (from 300px to 225px) */
       width: 225px; height: 125px; resize: none;
       box-sizing: border-box; border: 1px solid grey;
-      /* Adjust margin for proper alignment */
-      margin-left: 10px;
+      /* Removed explicit margin to let the container gap handle spacing */
       position: relative;
       font-size: 0.875rem;
     }
@@ -152,8 +149,10 @@
     
     /* Button Styles */
     .regen-btn, .copy-btn { width: 125px; }
-    /* Also style rules buttons to have the same width */
+    /* Style the rules buttons (for Title and Description) to match Re-Gen buttons */
     .rules-button { width: 125px; }
+    /* Also add btn-small so they match the Re-Gen buttons' size */
+    .rules-button.btn-small { padding: 0 1rem; }
     .update-btn { background-color: #FFA500 !important; color: white !important; }
   </style>
 </head>
@@ -169,7 +168,7 @@
       <h5>Listing Description</h5>
       <input id="listingDescInput" type="text" placeholder="Enter your question here">
     </div>
-    <!-- Use uploadedFilesList area for file drop -->
+    <!-- Use the UploadedFilesList as the file drop area -->
     <textarea id="uploadedFilesList" class="materialize-textarea" rows="2" placeholder="Uploaded .csv, .doc, .docx files will appear here"></textarea>
   </div>
   
@@ -204,14 +203,13 @@
     <button id="copyKeyPhrasesBtn" class="btn-small waves-effect waves-light configurable copy-btn">
       Copy
     </button>
+    <!-- Revert Analyze Rules button to original -->
+    <button id="showAnalyzeRulesBtn" class="btn waves-effect waves-light configurable" data-target="analyzeRulesModal" style="margin-top:25px;">
+      Analyze Rules
+    </button>
     <div id="dropZone" class="configurable">Image Drop</div>
-    <!-- Analyze Photos and Analyze Rules buttons -->
     <button id="analyzeMetadataBtn" class="btn waves-effect waves-light configurable">
       Analyze Photos
-    </button>
-    <!-- Renamed Description Rules Button -->
-    <button id="showDescriptionRulesBtn" class="btn waves-effect waves-light rules-button configurable">
-      D. Rules
     </button>
   </div>
   <div id="container13" class="flex-container configurable">
@@ -240,8 +238,8 @@
             <i class="material-icons">content_copy</i>
           </button>
         </div>
-        <!-- Renamed Title Rules Button -->
-        <button id="showTitleRulesBtn" class="btn waves-effect waves-light rules-button configurable" data-target="titleRulesModal">
+        <!-- Title Rules button re‑sized to match Re‑Gen buttons -->
+        <button id="showTitleRulesBtn" class="btn-small waves-effect waves-light rules-button configurable" data-target="titleRulesModal">
           T. Rules
         </button>
       </div>
@@ -263,7 +261,8 @@
             <i class="material-icons">content_copy</i>
           </button>
         </div>
-        <button id="showDescriptionRulesBtn" class="btn waves-effect waves-light rules-button configurable">
+        <!-- Description Rules button re‑sized to match Re‑Gen buttons -->
+        <button id="showDescriptionRulesBtn" class="btn-small waves-effect waves-light rules-button configurable">
           D. Rules
         </button>
       </div>
@@ -468,10 +467,9 @@ Using Sales Report and Product List Files:
     let cropper = null;
     let reservedPhotos = [];
   
-    // New function to update the UploadedFilesList textarea
+    // Update the UploadedFilesList text area
     function updateUploadedFilesList() {
       const uploadedFilesListElem = document.getElementById('uploadedFilesList');
-      // Check both file.name and file.fileName for display
       const fileNames = soldOrdersCSV.map(file => file.name || file.fileName || 'Unnamed File');
       uploadedFilesListElem.value = fileNames.join('\n');
     }
@@ -515,7 +513,6 @@ Using Sales Report and Product List Files:
             });
             if (!response.ok) throw new Error("Upload failed with status " + response.status);
             const fileData = await response.json();
-            // Ensure fileData has a name and id; fallback to file.name and a generated id if missing
             fileData.name = fileData.name || file.name;
             fileData.id = fileData.id || file.name || ('file-' + Date.now());
             resolve(fileData);
@@ -525,7 +522,6 @@ Using Sales Report and Product List Files:
         reader.readAsDataURL(file);
       });
     }
-    // Similarly update uploadDocFile
     async function uploadDocFile(file) {
       return new Promise((resolve, reject) => {
         const reader = new FileReader();
@@ -565,7 +561,6 @@ Using Sales Report and Product List Files:
         console.log("Vector store created:", await response.json());
       } catch (err) { console.error(err); }
     }
-    // Enable file drop on uploadedFilesList
     const uploadedFilesList = document.getElementById("uploadedFilesList");
     uploadedFilesList.addEventListener("dragover", e => { e.preventDefault(); e.stopPropagation(); uploadedFilesList.style.borderColor = "#000"; });
     uploadedFilesList.addEventListener("dragleave", e => { e.preventDefault(); e.stopPropagation(); uploadedFilesList.style.borderColor = "#ccc"; });
@@ -919,7 +914,6 @@ Important: Return ONLY the description as plain text.`;
       return await response.json();
     }
     async function generateTagPhrases() {
-      // Retrieve the question from the Listing Description input
       let question = document.getElementById("listingDescInput").value.trim();
       if (!question) { M.toast({ html: "Please enter a question in the Listing Description." }); return; }
       let keywordRules = stripMarkdownJSON(document.getElementById("keywordRulesTextarea").value);
