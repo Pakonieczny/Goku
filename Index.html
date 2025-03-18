@@ -86,8 +86,18 @@
       width: 225px; height: 125px; resize: none; box-sizing: border-box;
       border: 1px solid grey; margin-left: 85px; position: relative;
       font-size: 0.875rem;
-      /* Ensure the full box is recognized as droppable */
-      z-index: 9999;
+      /* Lower the z-index so all modals appear above it */
+      z-index: 10;
+    }
+    
+    /* Ensure modals appear above everything else */
+    .modal {
+      /* Force a higher z-index than #uploadedFilesList */
+      z-index: 9999 !important;
+    }
+    /* Also ensure the Materialize modal overlay is on top */
+    .modal-overlay {
+      z-index: 9998 !important;
     }
     
     /* Static 10-Photo Preview Grid - increased by 20% */
@@ -463,6 +473,86 @@ Using Sales Report and Product List Files:
     let cropper = null;
     let reservedPhotos = [];
   
+    // Hard-coded text to append to every generated description before sending to Etsy
+    // (Note the leading newline so it appears on a new line after user’s content)
+    const appendedDescriptionText = `
+
+• We use the Highest Quality materials from the US and Italy.
+• Your purchase will come packaged and ready for gift giving!
+
+M A K E S · A · P E R F E C T · G I F T : )
+
+· · · · · · · · · · · · · · · · · · · · · · · · ·
+
+D E T A I L S
+
+• 13.4mm x 8.7mm Flying DragonFly
+• 14K Gold Filled, 14K Rose Gold Filled, Sterling Silver = Pendant + Chain
+• Available necklace lengths are 14 - 20 inches 
+
+------------------------------------
+
+P E R S O N A L I Z E • Y O U R • O R D E R
+
+Need to make your chain longer? Please click on the link below for a custom chain length.
+https://www.etsy.com/ca/listing/770835682/custom-longer-chain-length-add-on-to?ref=listing_published_alert
+
+Not sure exactly what size to order? Fine tune the fit with an extender!
+https://www.etsy.com/listing/628970499/add-on-an-extender-to-your-jewelry?ga_search_query=add%2Bon&ref=shop_items_search_2&frs=1
+
+-----------------------------------
+
+S I M I L A R •  I T E M S
+• If you liked this piece here's a few links to some similar items! These pieces are either alike in style or will look amazing paired together! Happy Shopping and don't forget each piece is completely customizable :)
+
+Tiny Gold Bar Necklace 
+https://www.etsy.com/listing/196984758/tiny-horizontal-gold-bar-necklace-14k
+
+Initial Disc Necklace 
+https://www.etsy.com/listing/182232792/single-initial-necklace-gold-filled
+
+Vertical Gold Bar Necklace
+https://www.etsy.com/listing/247277919/vertical-engraved-bar-necklace-name-bar
+
+Silver Bar Necklace
+https://www.etsy.com/listing/184233228/bar-necklace-personalized-bar-nameplate
+
+------------------------------------
+
+P A C K A G I N G
+• Your purchase will come beautifully packaged. If you are ordering for a gift and would like each piece to be packaged separately please let me know. 
+
+• If this purchase is a gift, and you would like us to include a handwritten message, leave a note in the "gift message" box at checkout.
+
+------------------------------------
+
+E X P E D I T E D • S H I P P I N G
+You will be able to choose faster shipping options in the drop down menu when you check out. Ship times do NOT include production times (1-3 business days). However, if you select expedited shipping, we will try to get your order done faster.
+
+------------------------------------
+
+E X P L O R E • O U R • S H O P
+Don't forget to check out the rest of our shop! We specialize in making handmade custom jewelry for every occasion. We take pride in making sure each order is made exactly to the customers specifications. We love collaborating with our customers to create  special and unique pieces for themselves and their loved ones. Please don't hesitate to contact us with any questions you have.  
+
+http://custombrites.etsy.com
+
+-----------------------------------
+
+C H E C K • U S • O U T
+Make sure you follow us on all our social media platforms to get a behind the scenes look, special promo codes, and some daily inspiration :) 
+
+Instagram: https://www.instagram.com/britesjewelry
+Facebook: https://www.facebook.com/britesjewelry
+Pinterest Page : https://www.pinterest.com/britesjewelry
+
+------------------------------------
+
+S H O P  • P O L I C I E S
+Check out our shop polices page for more details about all our polices and please don't hesitate to contact us with any questions you have! Happy Shopping :)
+
+https://www.etsy.com/shop/CustomBrites/policy
+`;
+
     // New function to update the UploadedFilesList textarea
     function updateUploadedFilesList() {
       const uploadedFilesListElem = document.getElementById('uploadedFilesList');
@@ -881,6 +971,11 @@ Using Sales Report and Product List Files:
         M.toast({ html: "Error exchanging code for token" });
       }
     }
+    
+    /* ----------------------------------------------------------------------------
+       IMPORTANT: 
+       Before sending the description to Etsy, we add the extra appendedDescriptionText.
+       ---------------------------------------------------------------------------*/
     document.getElementById("uploadToEtsyBtn").addEventListener("click", async () => {
       let listingInput = document.getElementById("shopListings").value.trim();
       if (!listingInput) {
@@ -894,11 +989,19 @@ Using Sales Report and Product List Files:
         M.toast({ html: "Invalid listing URL or ID." });
         return;
       }
+      
+      // Grab the user’s generated description
+      let userDescription = document.getElementById("listingDescription").value || "";
+      // Append the extra text
+      let finalDescription = userDescription + appendedDescriptionText;
+      
       let payload = {
         title: document.getElementById("listingTitle").value,
-        description: document.getElementById("listingDescription").value,
+        // Use finalDescription instead of the raw user description
+        description: finalDescription,
         tags: document.getElementById("searchKeyPhrases").value.split("\n").map(s => s.trim()).filter(s => s !== "")
       };
+      
       let updateUrl = `/.netlify/functions/updateListing?listingId=${listingId}&token=${encodeURIComponent(accessToken)}`;
       try {
         let response = await fetch(updateUrl, {
@@ -917,6 +1020,7 @@ Using Sales Report and Product List Files:
         M.toast({ html: "Exception: " + e.message });
       }
     });
+    
     async function generateTitleOnly() {
       let etsyLink = ETSY_SHOP_URL;
       let keyPhrases = document.getElementById("searchKeyPhrases").value.trim();
