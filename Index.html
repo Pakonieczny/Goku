@@ -70,7 +70,7 @@
     }
     .count-text { font-style: italic; font-size: 0.9em; margin-top: 5px; }
     
-    /* Drag and Drop Box: "Image Drop" */
+    /* Drag and Drop Box for Images */
     #dropZone {
       /* Set width to match the photo grid width: 5*120 + 4*28 = 712px */
       width: 712px; height: 120px; border: 2px dashed #ccc;
@@ -81,18 +81,18 @@
     /* Remove the separate drop zones for Etsy Orders/Listings */
     #fileDropZonesContainer { display: none; }
     
-    /* Make uploadedFilesList repositionable and used for file drop */
+    /* UploadedFilesList Text Area (File Drop Area) */
     #uploadedFilesList {
-      /* Shrink width by 25% (from 300px to 225px) and reduce text size */
+      /* Shrink width by 25% (from 300px to 225px) */
       width: 225px; height: 125px; resize: none;
-      box-sizing: border-box; border: 1px solid grey; margin-left: 85px;
+      box-sizing: border-box; border: 1px solid grey;
+      /* Adjust margin for proper alignment */
+      margin-left: 10px;
       position: relative;
       font-size: 0.875rem;
     }
     
-    /* Removed Photo Preview Box (#primaryPreview removed) */
-    
-    /* Static 10-Photo Preview Grid - increased by 20% */
+    /* Static 10-Photo Preview Grid */
     #previewGridContainer {
       position: relative; margin: 20px auto; width: auto;
       max-width: 720px; text-align: center;
@@ -152,6 +152,8 @@
     
     /* Button Styles */
     .regen-btn, .copy-btn { width: 125px; }
+    /* Also style rules buttons to have the same width */
+    .rules-button { width: 125px; }
     .update-btn { background-color: #FFA500 !important; color: white !important; }
   </style>
 </head>
@@ -207,8 +209,9 @@
     <button id="analyzeMetadataBtn" class="btn waves-effect waves-light configurable">
       Analyze Photos
     </button>
-    <button id="showAnalyzeRulesBtn" class="btn waves-effect waves-light configurable" data-target="analyzeRulesModal" style="margin-top:25px;">
-      Analyze Rules
+    <!-- Renamed Description Rules Button -->
+    <button id="showDescriptionRulesBtn" class="btn waves-effect waves-light rules-button configurable">
+      D. Rules
     </button>
   </div>
   <div id="container13" class="flex-container configurable">
@@ -237,8 +240,9 @@
             <i class="material-icons">content_copy</i>
           </button>
         </div>
+        <!-- Renamed Title Rules Button -->
         <button id="showTitleRulesBtn" class="btn waves-effect waves-light rules-button configurable" data-target="titleRulesModal">
-          Title Rules
+          T. Rules
         </button>
       </div>
       <p id="titleCount" class="count-text configurable">Count: 0</p>
@@ -259,14 +263,14 @@
             <i class="material-icons">content_copy</i>
           </button>
         </div>
-        <button id="showDescriptionRulesBtn" class="btn waves-effect waves-light rules-button configurable" data-target="descriptionRulesModal">
-          Description Rules
+        <button id="showDescriptionRulesBtn" class="btn waves-effect waves-light rules-button configurable">
+          D. Rules
         </button>
       </div>
     </div>
   </div>
   
-  <!-- Static 10-Photo Preview Grid Container (increased by 20%) -->
+  <!-- Static 10-Photo Preview Grid Container -->
   <div id="previewGridContainer">
     <div id="previewGridStatic">
       <div class="preview-cell" id="previewCell0">Empty</div>
