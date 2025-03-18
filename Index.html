@@ -141,42 +141,36 @@
     /* Etsy Listing TITLE container */
     .title-container { margin-top: -50px; }
     #etsyListingTitleContainer {
-      position: relative; width: 600px;
+      position: relative; width: 1000px;
     }
-    #etsyListingTitleContainer textarea { width: 600px; }
+    #etsyListingTitleContainer textarea { width: 1000px; }
 
     /* Etsy Listing DESCRIPTION container */
     .description-container { margin-top: 0px; }
     #etsyListingDescriptionContainer {
-      position: relative; width: 600px;
+      position: relative; width: 1000px;
     }
-    #etsyListingDescriptionContainer textarea { width: 600px; }
+    #etsyListingDescriptionContainer textarea { width: 1000px; }
 
     /* New container for "2. User Provided Search Key Phrases" */
-    #userProvidedKeyPhrasesContainer {
-      position: relative; top: 125px; left: 10px;
-    }
+    #userProvidedKeyPhrasesContainer { position: relative; top: 125px; left: 10px; }
     /* Top buttons section */
     #topButtons { margin: 10px 0; }
     /* Ensure etsyShopListingsContainer is repositionable */
     #etsyShopListingsContainer {
       position: relative; margin-top: 10px; margin-left: 10px;
     }
-    /* Buttons */
-    .regen-btn { width: 75px; }
-    .copy-btn { width: 75px; }
-    /* Update Photos and Update Info buttons in subtle orange */
+    /* Button styles */
+    .regen-btn, .copy-btn { width: 125px; }
     .update-btn { background-color: #FFA500 !important; color: white !important; }
-    /* Revert Configure Buttons button colour to default (remove update-btn) */
   </style>
 </head>
-
 <body>
   <!-- Configure Buttons control -->
   <button id="configureButtonsBtn" class="btn waves-effect waves-light configurable">
     Configure Buttons
   </button>
-
+  
   <!-- Wrap Listing Description and File Drop Zones -->
   <div id="descriptionAndFileUploadContainer">
     <div class="listing-desc-container" id="listingDescContainer">
@@ -185,23 +179,23 @@
     </div>
     <div id="fileDropZonesContainer">
       <div id="ordersContainer">
-        <div id="ordersDropZone">Etsy Sold Orders</div>
+        <div id="ordersDropZone">Etsy Orders</div>
       </div>
       <div id="listingsDropZone">Etsy Listings</div>
       <textarea id="uploadedFilesList" class="materialize-textarea" rows="2" placeholder="Uploaded .csv, .doc, .docx files will appear here"></textarea>
     </div>
   </div>
-
+  
   <!-- Etsy OAuth and Shop Listings Section with Top Buttons -->
   <div id="topButtons">
     <button id="connectEtsyBtn" class="btn waves-effect waves-light configurable">
       Connect to Etsy
     </button>
-    <!-- Combined Photo Upload Button renamed to Update Photos -->
+    <!-- Update Photos button (was Photo Upload) -->
     <button id="photoUploadNewBtn" class="btn waves-effect waves-light configurable update-btn" style="margin-left: 10px;">
       Update Photos
     </button>
-    <!-- Updated Update Listing Button renamed to Update Info -->
+    <!-- Update Info button (was Update Listing) -->
     <button id="uploadToEtsyBtn" class="btn waves-effect waves-light configurable update-btn" style="margin-left: 10px;">
       Update Info
     </button>
@@ -213,7 +207,7 @@
       </div>
     </div>
   </div>
-
+  
   <!-- Etsy Listing Generator UI -->
   <div class="phrases-header configurable" id="userProvidedKeyPhrasesContainer">
     <span class="section-heading configurable">2. User Provided Search Key Phrases</span>
@@ -223,8 +217,8 @@
     <button id="copyKeyPhrasesBtn" class="btn-small waves-effect waves-light configurable copy-btn">
       Copy
     </button>
-    <div id="dropZone" class="configurable">Drop Image Here</div>
-    <!-- Removed the Photo Preview box -->
+    <div id="dropZone" class="configurable">Image Drop</div>
+    <!-- Analyze Photos and Analyze Rules buttons are shown -->
     <button id="analyzeMetadataBtn" class="btn waves-effect waves-light configurable">
       Analyze Photos
     </button>
@@ -237,7 +231,7 @@
       <textarea id="searchKeyPhrases" class="materialize-textarea" rows="14"></textarea>
     </div>
   </div>
-
+  
   <!-- Components below Search Key Phrases -->
   <div id="belowSearch">
     <button id="generateBtn" class="btn waves-effect waves-light configurable">
@@ -248,7 +242,7 @@
       <div class="section-heading configurable">Etsy Listing TITLE</div>
       <div class="flex-container configurable">
         <div class="textbox-container configurable">
-          <textarea id="listingTitle" class="materialize-textarea" rows="2" style="width:600px;"></textarea>
+          <textarea id="listingTitle" class="materialize-textarea" rows="2" style="width:1000px;"></textarea>
         </div>
         <div class="button-container configurable" style="margin-top: -60px;">
           <button id="regenTitleBtn" class="btn-small waves-effect waves-light configurable regen-btn">
@@ -264,13 +258,13 @@
       </div>
       <p id="titleCount" class="count-text configurable">Count: 0</p>
     </div>
-
+    
     <!-- Etsy Listing DESCRIPTION container -->
     <div class="description-container" id="etsyListingDescriptionContainer" style="margin-top: 0px;">
       <div class="section-heading configurable">Etsy Listing DESCRIPTION</div>
       <div class="flex-container configurable">
         <div class="textbox-container configurable">
-          <textarea id="listingDescription" class="materialize-textarea" style="width:600px;"></textarea>
+          <textarea id="listingDescription" class="materialize-textarea" style="width:1000px;"></textarea>
         </div>
         <div class="button-container configurable">
           <button id="regenDescriptionBtn" class="btn-small waves-effect waves-light configurable regen-btn">
@@ -286,8 +280,8 @@
       </div>
     </div>
   </div>
-
-  <!-- Static 10-Photo Preview Grid Container increased by 20% -->
+  
+  <!-- Static 10-Photo Preview Grid Container (increased size by 20%) -->
   <div id="previewGridContainer">
     <div id="previewGridStatic">
       <div class="preview-cell" id="previewCell0">Empty</div>
@@ -302,7 +296,7 @@
       <div class="preview-cell" id="previewCell9">Empty</div>
     </div>
   </div>
-
+  
   <!-- Metadata Modal (for viewing metadata on click) -->
   <div id="metadataModal" class="modal">
     <div class="modal-content">
@@ -315,16 +309,16 @@
       </a>
     </div>
   </div>
-
+  
   <!-- Analyze Rules Modal -->
   <div id="analyzeRulesModal" class="modal">
     <div class="modal-content">
       <h4>Photo Analysis Rules</h4>
       <textarea id="analyzeRulesTextarea" style="width:100%; height:300px;">
 Default Photo Analysis Rules:
-1. Use SEO-friendly descriptive long-tail key phrases without special characters, focus on describing the jewelry and charm pendant, also focus and tailor Key Phrases and description to appropriate client based based on the type of jewelry.
-2. Emphasize charm details, focus image description on the type of jewelry and pendant description(what it is, occasion, metal, size, style).
-3. Focus solely on the jewelry details especially the charm description
+1. Use SEO-friendly descriptive long-tail key phrases without special characters, focus on describing the jewelry and charm pendant, also focus and tailor Key Phrases and description to appropriate client based on the type of jewelry.
+2. Emphasize charm details, focus image description on the type of jewelry and pendant description (what it is, occasion, metal, size, style).
+3. Focus solely on the jewelry details especially the charm description.
 4. Ignore environment, model, and clothing.
 5. Organize into a short paragraph.
 6. Limit the description to 300 characters.
@@ -338,7 +332,7 @@ Default Photo Analysis Rules:
       </a>
     </div>
   </div>
-
+  
   <!-- Title Rules Modal -->
   <div id="titleRulesModal" class="modal">
     <div class="modal-content">
@@ -380,7 +374,7 @@ Prohibited Words:
       </a>
     </div>
   </div>
-
+  
   <!-- Description Rules Modal -->
   <div id="descriptionRulesModal" class="modal">
     <div class="modal-content">
@@ -407,7 +401,7 @@ Option 3:
       </a>
     </div>
   </div>
-
+  
   <!-- Keyword Rules Modal -->
   <div id="keywordRulesModal" class="modal">
     <div class="modal-content">
@@ -430,7 +424,7 @@ Using Sales Report and Product List Files:
       </a>
     </div>
   </div>
-
+  
   <!-- Button Config Modal -->
   <div id="buttonConfigModal" class="modal">
     <div class="modal-content">
@@ -444,7 +438,7 @@ Using Sales Report and Product List Files:
       </a>
     </div>
   </div>
-
+  
   <!-- Crop Modal -->
   <div id="photoCropModal" class="modal" style="width:650px; height:650px;">
     <div class="crop-container" style="position: relative; width: 100%; height: 100%;">
@@ -458,14 +452,13 @@ Using Sales Report and Product List Files:
       </div>
     </div>
   </div>
-
+  
   <!-- Include jQuery and Materialize JS -->
   <script src="https://code.jquery.com/jquery-3.6.0.min.js"></script>
   <script src="https://cdnjs.cloudflare.com/ajax/libs/materialize/1.0.0/js/materialize.min.js"></script>
+  
   <script>
-    // ----------------------------------------------------
     // GLOBALS & MAIN LOGIC
-    // ----------------------------------------------------
     const ETSY_SHOP_URL = "https://www.etsy.com/shop/custombrites";
     const CLIENT_ID = "k75zdspz4r99txpqdji7i2em";
     const REDIRECT_URI = "https://delicate-tanuki-616ac0.netlify.app/";
@@ -474,14 +467,14 @@ Using Sales Report and Product List Files:
     let soldOrdersCSV = [];
     let listingsCSV = [];
     let photoNames = [];
-    let previewImages = []; // data URLs for display (3000×3000 resized)
-    let photoMeta = [];     // AI-generated metadata for alt_text
+    let previewImages = []; // data URLs for display
+    let photoMeta = [];     // AI-generated metadata
     let draggedIndex = null;
     let photoIds = [];
     let currentCropIndex = null;
     let cropper = null;
     let reservedPhotos = [];
-
+  
     function loadReservedPhotos() {
       const stored = localStorage.getItem("reservedPhotos");
       reservedPhotos = stored ? JSON.parse(stored) : [];
@@ -562,6 +555,7 @@ Using Sales Report and Product List Files:
         console.log("Vector store created:", await response.json());
       } catch (err) { console.error(err); }
     }
+  
     const ordersDropZone = document.getElementById("ordersDropZone");
     ordersDropZone.addEventListener("dragover", e => { e.preventDefault(); ordersDropZone.style.borderColor = "#000"; });
     ordersDropZone.addEventListener("dragleave", e => { e.preventDefault(); ordersDropZone.style.borderColor = "#ccc"; });
@@ -580,6 +574,7 @@ Using Sales Report and Product List Files:
         } else { alert("Only .csv, .doc, and .docx files supported."); }
       }
     });
+  
     const listingsDropZone = document.getElementById("listingsDropZone");
     listingsDropZone.addEventListener("dragover", e => { e.preventDefault(); listingsDropZone.style.borderColor = "#000"; });
     listingsDropZone.addEventListener("dragleave", e => { e.preventDefault(); listingsDropZone.style.borderColor = "#ccc"; });
@@ -602,6 +597,7 @@ Using Sales Report and Product List Files:
       const list = [...soldOrdersCSV, ...listingsCSV].map(f => f.name).join("\n");
       document.getElementById("uploadedFilesList").value = list;
     }
+  
     const dropZone = document.getElementById("dropZone");
     dropZone.addEventListener("dragover", e => { e.preventDefault(); dropZone.style.borderColor = "#000"; });
     dropZone.addEventListener("dragleave", e => { e.preventDefault(); dropZone.style.borderColor = "#ccc"; });
@@ -843,9 +839,7 @@ Using Sales Report and Product List Files:
     document.getElementById("uploadToEtsyBtn").addEventListener("click", async () => {
       let listingInput = document.getElementById("shopListings").value.trim();
       if (!listingInput) { M.toast({ html: "Please provide a listing URL or ID in 'My Etsy Shop Listings'." }); return; }
-      let listingId;
-      if (/^\d+$/.test(listingInput)) { listingId = listingInput; }
-      else { let match = listingInput.match(/\/listing\/(\d+)/); listingId = match ? match[1] : null; }
+      let listingId = /^\d+$/.test(listingInput) ? listingInput : (listingInput.match(/\/listing\/(\d+)/) || [])[1];
       if (!listingId) { M.toast({ html: "Invalid listing URL or ID." }); return; }
       let payload = {
         title: document.getElementById("listingTitle").value,
@@ -854,11 +848,7 @@ Using Sales Report and Product List Files:
       };
       let updateUrl = `/.netlify/functions/updateListing?listingId=${listingId}&token=${encodeURIComponent(accessToken)}`;
       try {
-        let response = await fetch(updateUrl, {
-          method: "PUT",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify(payload)
-        });
+        let response = await fetch(updateUrl, { method: "PUT", headers: { "Content-Type": "application/json" }, body: JSON.stringify(payload) });
         if (!response.ok) { let errorText = await response.text(); M.toast({ html: "Error updating listing: " + response.status + " - " + errorText }); }
         else { M.toast({ html: "Listing updated successfully!" }); }
       } catch (e) { console.error(e); M.toast({ html: "Exception: " + e.message }); }
@@ -973,9 +963,7 @@ Generate exactly 13 tag phrases (each ≤ 20 characters). Return as plain text.
     document.getElementById("generateBtn").addEventListener("click", async () => { await Promise.all([generateTitleOnly(), generateDescriptionOnly()]); });
     document.getElementById("regenTitleBtn").addEventListener("click", generateTitleOnly);
     document.getElementById("regenDescriptionBtn").addEventListener("click", generateDescriptionOnly);
-    function updateTitleCount(text) {
-      document.getElementById("titleCount").textContent = "Count: " + text.length;
-    }
+    function updateTitleCount(text) { document.getElementById("titleCount").textContent = "Count: " + text.length; }
     document.getElementById("copyTitleBtn").addEventListener("click", () => {
       let text = document.getElementById("listingTitle").value;
       navigator.clipboard.writeText(text).catch(err => console.error("Copy error:", err));
@@ -1016,7 +1004,9 @@ Generate exactly 13 tag phrases (each ≤ 20 characters). Return as plain text.
         "#copyDescriptionBtn",
         "#photoUploadNewBtn",
         "#generateBtn",
-        "#connectEtsyBtn"
+        "#connectEtsyBtn",
+        "#analyzeMetadataBtn",
+        "#showAnalyzeRulesBtn"
       ].join(", ");
       let elements = document.querySelectorAll(selectors);
       let table = document.createElement("table");
@@ -1068,7 +1058,9 @@ Generate exactly 13 tag phrases (each ≤ 20 characters). Return as plain text.
         "#copyDescriptionBtn",
         "#photoUploadNewBtn",
         "#generateBtn",
-        "#connectEtsyBtn"
+        "#connectEtsyBtn",
+        "#analyzeMetadataBtn",
+        "#showAnalyzeRulesBtn"
       ].join(", ");
       let elements = document.querySelectorAll(selectors);
       let positions = {};
