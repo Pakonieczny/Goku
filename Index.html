@@ -84,6 +84,7 @@
     }
     #listingDescription {
       min-height: 150px;
+      width: 500px; /* Ensure same width as listingDescContainer */
     }
     .section-heading {
       font-size: 1.2rem; font-weight: 500; margin-bottom: 5px;
@@ -103,21 +104,8 @@
     #ordersContainer {
       display: flex; flex-direction: column;
     }
-    /* CSV Progress Bar */
-    #csvProgressBar {
-      width: 100%; height: 20px; border: 1px solid blue;
-      background-color: #e0f0ff; margin-top: 5px;
-      -webkit-appearance: none; appearance: none;
-    }
-    #csvProgressBar::-webkit-progress-bar {
-      background-color: #e0f0ff; border: 1px solid blue;
-    }
-    #csvProgressBar::-webkit-progress-value {
-      background-color: blue;
-    }
-    #csvProgressContainer {
-      margin-left: 85px;
-    }
+    /* Removed CSV Progress Bar styles */
+
     /* File Drop Zones container */
     #fileDropZonesContainer {
       display: flex; gap: 10px; margin-left: 100px;
@@ -192,11 +180,22 @@
     #belowSearch {
       margin-top: -180px; margin-left: 10px;
     }
+    /* Add id for Etsy Listing TITLE container */
     .title-container {
       margin-top: -50px;
     }
+    #etsyListingTitleContainer {
+      position: relative;
+      /* You can adjust margins or width here as needed */
+      width: 500px;
+    }
+    /* Add id for Etsy Listing DESCRIPTION container */
     .description-container {
       margin-top: 0px;
+    }
+    #etsyListingDescriptionContainer {
+      position: relative;
+      width: 500px;
     }
     #analyzeMetadataBtn {
       margin-left: 50px;
@@ -244,9 +243,6 @@
     <div id="fileDropZonesContainer">
       <div id="ordersContainer">
         <div id="ordersDropZone">Etsy Sold Orders</div>
-        <div id="csvProgressContainer">
-          <progress id="csvProgressBar" max="100" value="0"></progress>
-        </div>
       </div>
       <div id="listingsDropZone">Etsy Listings</div>
       <textarea id="uploadedFilesList"
@@ -274,13 +270,14 @@
             style="margin-left: 10px;">
       Update Listing
     </button>
-    <!-- My Etsy Shop Listings container (added id for configuration) -->
+    <!-- My Etsy Shop Listings container (adjusted width to 500px) -->
     <div id="etsyShopListingsContainer">
       <div class="section-heading configurable">My Etsy Shop Listings</div>
       <div class="textbox-container configurable">
         <textarea id="shopListings"
                   class="materialize-textarea"
-                  placeholder="Enter your listing URL or ID"></textarea>
+                  placeholder="Enter your listing URL or ID"
+                  style="width: 500px;"></textarea>
       </div>
     </div>
   </div>
@@ -324,7 +321,8 @@
             class="btn waves-effect waves-light configurable">
       Generate
     </button>
-    <div class="title-container" style="margin-top: -50px;">
+    <!-- Etsy Listing TITLE container (added id for configuration) -->
+    <div class="title-container" id="etsyListingTitleContainer" style="margin-top: -50px;">
       <div class="section-heading configurable">Etsy Listing TITLE</div>
       <div class="flex-container configurable">
         <div class="textbox-container configurable">
@@ -351,7 +349,8 @@
       <p id="titleCount" class="count-text configurable">Count: 0</p>
     </div>
 
-    <div class="description-container" style="margin-top: 0px;">
+    <!-- Etsy Listing DESCRIPTION container (added id for configuration) -->
+    <div class="description-container" id="etsyListingDescriptionContainer" style="margin-top: 0px;">
       <div class="section-heading configurable">Etsy Listing DESCRIPTION</div>
       <div class="flex-container configurable">
         <div class="textbox-container configurable">
@@ -1376,21 +1375,22 @@ Generate exactly 13 tag phrases (each ≤ 20 characters). Return as plain text.
     document.getElementById("configureButtonsBtn").addEventListener("click", () => {
       const configContainer = document.getElementById("buttonConfigContainer");
       configContainer.innerHTML = "";
-      // Include the new elements in the selector list
+      // Include all relevant elements in the selector list
       const selectors = [
         "button:not(#configureButtonsBtn)",
         "#listingDescContainer",
         "#ordersDropZone",
         "#listingsDropZone",
         "#dropZone",
-        "#csvProgressContainer",
         "#previewGridContainer",
         "#primaryPreview",
         "#container13",
         "#uploadedFilesList",
         "#uploadToEtsyBtn",
         "#etsyShopListingsContainer",
-        "#userProvidedKeyPhrasesContainer"
+        "#userProvidedKeyPhrasesContainer",
+        "#etsyListingTitleContainer",
+        "#etsyListingDescriptionContainer"
       ].join(", ");
       const elements = document.querySelectorAll(selectors);
       const table = document.createElement("table");
@@ -1436,14 +1436,15 @@ Generate exactly 13 tag phrases (each ≤ 20 characters). Return as plain text.
         "#ordersDropZone",
         "#listingsDropZone",
         "#dropZone",
-        "#csvProgressContainer",
         "#previewGridContainer",
         "#primaryPreview",
         "#container13",
         "#uploadedFilesList",
         "#uploadToEtsyBtn",
         "#etsyShopListingsContainer",
-        "#userProvidedKeyPhrasesContainer"
+        "#userProvidedKeyPhrasesContainer",
+        "#etsyListingTitleContainer",
+        "#etsyListingDescriptionContainer"
       ].join(", ");
       const elements = document.querySelectorAll(selectors);
       const positions = {};
