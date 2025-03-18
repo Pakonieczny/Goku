@@ -27,7 +27,7 @@
     }
     h5, label, p { text-align: left; }
     input, textarea { width: 100%; box-sizing: border-box; }
-
+    
     /* Wrap Listing Description and File Drop Zones */
     #descriptionAndFileUploadContainer {
       display: flex; align-items: center;
@@ -77,17 +77,17 @@
       text-align: center; line-height: 120px; position: relative;
     }
     
-    /* File Drop Zones container - note: drop zones for orders/listings are removed */
+    /* Remove the separate drop zones for Etsy Orders/Listings */
     #fileDropZonesContainer { display: none; }
     
-    /* Make uploadedFilesList repositionable and use it for drag-drop */
+    /* Make uploadedFilesList repositionable and used for file drop */
     #uploadedFilesList {
       width: 300px; height: 125px; resize: none;
       box-sizing: border-box; border: 1px solid grey; margin-left: 85px;
       position: relative;
     }
     
-    /* Removed Photo Preview (#primaryPreview removed) */
+    /* Removed Photo Preview Box (#primaryPreview removed) */
     
     /* Static 10-Photo Preview Grid - increased by 20% */
     #previewGridContainer {
@@ -139,12 +139,11 @@
     #etsyListingDescriptionContainer { position: relative; width: 1000px; }
     #etsyListingDescriptionContainer textarea { width: 1000px; }
     
-    /* New container for "2. User Provided Search Key Phrases" */
+    /* New container for "Search Key Phrases" */
     #userProvidedKeyPhrasesContainer { position: relative; top: 125px; left: 10px; }
     
     /* Top buttons section */
     #topButtons { margin: 10px 0; }
-    
     /* Ensure etsyShopListingsContainer is repositionable */
     #etsyShopListingsContainer { position: relative; margin-top: 10px; margin-left: 10px; }
     
@@ -154,18 +153,18 @@
   </style>
 </head>
 <body>
-  <!-- Configure Buttons control (this button is also included in the modal) -->
+  <!-- Configure Buttons control (also available in modal) -->
   <button id="configureButtonsBtn" class="btn waves-effect waves-light configurable">
     Configure Buttons
   </button>
   
-  <!-- Wrap Listing Description and Uploaded Files List (used for drag-drop) -->
+  <!-- Wrap Listing Description and Uploaded Files List (for file drop) -->
   <div id="descriptionAndFileUploadContainer">
     <div class="listing-desc-container" id="listingDescContainer">
       <h5>Listing Description</h5>
       <input id="listingDescInput" type="text" placeholder="Enter your question here">
     </div>
-    <!-- Instead of separate drop zones, use the uploadedFilesList area -->
+    <!-- Use uploadedFilesList area for file drop -->
     <textarea id="uploadedFilesList" class="materialize-textarea" rows="2" placeholder="Uploaded .csv, .doc, .docx files will appear here"></textarea>
   </div>
   
@@ -182,9 +181,9 @@
     <button id="uploadToEtsyBtn" class="btn waves-effect waves-light configurable update-btn" style="margin-left: 10px;">
       Update Info
     </button>
-    <!-- My Etsy Shop Listings container with multiline textbox -->
+    <!-- Etsy Shop Listings container -->
     <div id="etsyShopListingsContainer">
-      <div class="section-heading configurable">My Etsy Shop Listings</div>
+      <div class="section-heading configurable">Etsy Shop Listings</div>
       <div class="textbox-container configurable">
         <textarea id="shopListings" class="materialize-textarea" rows="2" placeholder="Enter your listing URL or ID" style="width:500px;"></textarea>
       </div>
@@ -193,7 +192,7 @@
   
   <!-- Etsy Listing Generator UI -->
   <div class="phrases-header configurable" id="userProvidedKeyPhrasesContainer">
-    <span class="section-heading configurable">2. User Provided Search Key Phrases</span>
+    <span class="section-heading configurable">Search Key Phrases</span>
     <button id="clearKeyPhrasesBtn" class="btn-small waves-effect waves-light configurable">
       Clear
     </button>
@@ -264,7 +263,7 @@
     </div>
   </div>
   
-  <!-- Static 10-Photo Preview Grid Container (increased size by 20%) -->
+  <!-- Static 10-Photo Preview Grid Container (increased by 20%) -->
   <div id="previewGridContainer">
     <div id="previewGridStatic">
       <div class="preview-cell" id="previewCell0">Empty</div>
@@ -537,12 +536,12 @@ Using Sales Report and Product List Files:
         console.log("Vector store created:", await response.json());
       } catch (err) { console.error(err); }
     }
-    // Attach drop event on the uploadedFilesList area for file uploads (replacing separate drop zones)
+    // Enable file drop on uploadedFilesList
     const uploadedFilesList = document.getElementById("uploadedFilesList");
-    uploadedFilesList.addEventListener("dragover", e => { e.preventDefault(); uploadedFilesList.style.borderColor = "#000"; });
-    uploadedFilesList.addEventListener("dragleave", e => { e.preventDefault(); uploadedFilesList.style.borderColor = "#ccc"; });
+    uploadedFilesList.addEventListener("dragover", e => { e.preventDefault(); e.stopPropagation(); uploadedFilesList.style.borderColor = "#000"; });
+    uploadedFilesList.addEventListener("dragleave", e => { e.preventDefault(); e.stopPropagation(); uploadedFilesList.style.borderColor = "#ccc"; });
     uploadedFilesList.addEventListener("drop", async e => {
-      e.preventDefault();
+      e.preventDefault(); e.stopPropagation(); 
       uploadedFilesList.style.borderColor = "#ccc";
       const files = e.dataTransfer.files;
       for (let file of files) {
@@ -556,13 +555,11 @@ Using Sales Report and Product List Files:
         } else { alert("Only .csv, .doc, and .docx files supported."); }
       }
     });
-  
     const dropZone = document.getElementById("dropZone");
     dropZone.addEventListener("dragover", e => { e.preventDefault(); dropZone.style.borderColor = "#000"; });
     dropZone.addEventListener("dragleave", e => { e.preventDefault(); dropZone.style.borderColor = "#ccc"; });
     dropZone.addEventListener("drop", async e => {
-      e.preventDefault();
-      dropZone.style.borderColor = "#ccc";
+      e.preventDefault(); dropZone.style.borderColor = "#ccc";
       const files = e.dataTransfer.files;
       const maxRemaining = 10 - previewImages.length;
       for (let i = 0; i < Math.min(files.length, maxRemaining); i++) {
@@ -585,7 +582,6 @@ Using Sales Report and Product List Files:
         } else { M.toast({ html: "Only JPEG/PNG images supported." }); }
       }
     });
-  
     function updateStaticPreviewGrid() {
       for (let i = 0; i < 10; i++) {
         let cell = document.getElementById("previewCell" + i);
@@ -718,7 +714,9 @@ Using Sales Report and Product List Files:
       instance.open();
     }
     document.getElementById("analyzeMetadataBtn").addEventListener("click", async () => {
-      for (let i = 0; i < previewImages.length; i++) { await analyzePhoto(i); }
+      for (let i = 0; i < previewImages.length; i++) {
+        await analyzePhoto(i);
+      }
     });
     async function analyzePhoto(index) {
       let statusElem = document.getElementById("metadataStatus" + index);
@@ -751,7 +749,9 @@ Using Sales Report and Product List Files:
     function generateRandomString(length) {
       const possible = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789';
       let text = '';
-      for (let i = 0; i < length; i++) { text += possible.charAt(Math.floor(Math.random() * possible.length)); }
+      for (let i = 0; i < length; i++) {
+        text += possible.charAt(Math.floor(Math.random() * possible.length));
+      }
       return text;
     }
     function base64urlEncode(buffer) {
@@ -799,7 +799,7 @@ Using Sales Report and Product List Files:
     }
     document.getElementById("uploadToEtsyBtn").addEventListener("click", async () => {
       let listingInput = document.getElementById("shopListings").value.trim();
-      if (!listingInput) { M.toast({ html: "Please provide a listing URL or ID in 'My Etsy Shop Listings'." }); return; }
+      if (!listingInput) { M.toast({ html: "Please provide a listing URL or ID in 'Etsy Shop Listings'." }); return; }
       let listingId = /^\d+$/.test(listingInput) ? listingInput : (listingInput.match(/\/listing\/(\d+)/) || [])[1];
       if (!listingId) { M.toast({ html: "Invalid listing URL or ID." }); return; }
       let payload = {
@@ -942,9 +942,12 @@ Generate exactly 13 tag phrases (each ≤ 20 characters). Return as plain text.
       let lines = document.getElementById("searchKeyPhrases").value.split(/\n+/).map(l => l.trim()).filter(l => l !== "");
       navigator.clipboard.writeText(lines.join(", ")).catch(err => console.error("Error copying key phrases:", err));
     });
-    // Change from keydown to keyup for listingDescInput to trigger generateTagPhrases
-    document.getElementById("listingDescInput").addEventListener("keyup", async (e) => {
-      if (e.key === "Enter" && !e.shiftKey) { e.preventDefault(); await generateTagPhrases(); }
+    // Use keydown (as in previous working version) for the listingDescInput Enter event
+    document.getElementById("listingDescInput").addEventListener("keydown", async (e) => {
+      if (e.key === "Enter" && !e.shiftKey) {
+        e.preventDefault();
+        await generateTagPhrases();
+      }
     });
     document.getElementById("configureButtonsBtn").addEventListener("click", () => {
       let configContainer = document.getElementById("buttonConfigContainer");
@@ -1092,7 +1095,7 @@ Generate exactly 13 tag phrases (each ≤ 20 characters). Return as plain text.
     });
     async function uploadPhotos() {
       let listingInput = document.getElementById("shopListings").value.trim();
-      if (!listingInput) { M.toast({ html: "Please provide a listing URL or ID in 'My Etsy Shop Listings'." }); return; }
+      if (!listingInput) { M.toast({ html: "Please provide a listing URL or ID in 'Etsy Shop Listings'." }); return; }
       let listingId = /^\d+$/.test(listingInput) ? listingInput : (listingInput.match(/\/listing\/(\d+)/) || [])[1];
       if (!listingId) { M.toast({ html: "Invalid listing URL or ID." }); return; }
       if (!previewImages.length) { M.toast({ html: "No images to upload. Please drag and drop images first." }); return; }
@@ -1119,7 +1122,7 @@ Generate exactly 13 tag phrases (each ≤ 20 characters). Return as plain text.
     }
     async function uploadReservedPhotos() {
       let listingInput = document.getElementById("shopListings").value.trim();
-      if (!listingInput) { M.toast({ html: "Please provide a listing URL or ID in 'My Etsy Shop Listings'." }); return; }
+      if (!listingInput) { M.toast({ html: "Please provide a listing URL or ID in 'Etsy Shop Listings'." }); return; }
       let listingId = /^\d+$/.test(listingInput) ? listingInput : (listingInput.match(/\/listing\/(\d+)/) || [])[1];
       if (!listingId) { M.toast({ html: "Invalid listing URL or ID." }); return; }
       if (!reservedPhotos.length) { M.toast({ html: "No reserved photos to upload." }); return; }
