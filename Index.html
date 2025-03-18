@@ -439,6 +439,11 @@ Using Sales Report and Product List Files:
   <script src="https://code.jquery.com/jquery-3.6.0.min.js"></script>
   <script src="https://cdnjs.cloudflare.com/ajax/libs/materialize/1.0.0/js/materialize.min.js"></script>
   <script>
+    // Helper function to strip markdown or JSON formatting (currently a passthrough)
+    function stripMarkdownJSON(text) {
+      return text;
+    }
+    
     // GLOBALS & MAIN LOGIC
     const ETSY_SHOP_URL = "https://www.etsy.com/shop/custombrites";
     const CLIENT_ID = "k75zdspz4r99txpqdji7i2em";
@@ -907,6 +912,7 @@ Important: Return ONLY the description as plain text.`;
       return await response.json();
     }
     async function generateTagPhrases() {
+      // Retrieve the question from the Listing Description input
       let question = document.getElementById("listingDescInput").value.trim();
       if (!question) { M.toast({ html: "Please enter a question in the Listing Description." }); return; }
       let keywordRules = stripMarkdownJSON(document.getElementById("keywordRulesTextarea").value);
@@ -938,6 +944,15 @@ Generate exactly 13 tag phrases (each ≤ 20 characters). Return as plain text.
         document.getElementById("searchKeyPhrases").value = phrasesArray.join("\n");
       } catch (err) { console.error(err); M.toast({ html: "Error generating tag phrases: " + err.message }); }
     }
+    
+    // Event listener for Enter key on the Listing Description input
+    document.getElementById("listingDescInput").addEventListener("keydown", async (e) => {
+      if (e.key === "Enter" && !e.shiftKey) {
+        e.preventDefault();
+        await generateTagPhrases();
+      }
+    });
+    
     document.getElementById("generateBtn").addEventListener("click", async () => {
       await Promise.all([generateTitleOnly(), generateDescriptionOnly()]);
     });
@@ -958,13 +973,6 @@ Generate exactly 13 tag phrases (each ≤ 20 characters). Return as plain text.
     document.getElementById("copyKeyPhrasesBtn").addEventListener("click", () => {
       let lines = document.getElementById("searchKeyPhrases").value.split(/\n+/).map(l => l.trim()).filter(l => l !== "");
       navigator.clipboard.writeText(lines.join(", ")).catch(err => console.error("Error copying key phrases:", err));
-    });
-    // Use keydown (as in previous working version) for the listingDescInput Enter event
-    document.getElementById("listingDescInput").addEventListener("keydown", async (e) => {
-      if (e.key === "Enter" && !e.shiftKey) {
-        e.preventDefault();
-        await generateTagPhrases();
-      }
     });
     document.getElementById("configureButtonsBtn").addEventListener("click", () => {
       let configContainer = document.getElementById("buttonConfigContainer");
