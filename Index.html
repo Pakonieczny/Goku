@@ -10,9 +10,9 @@
   <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/materialize/1.0.0/css/materialize.min.css">
   <!-- Include piexifjs for EXIF manipulation (optional, if needed) -->
   <script src="https://cdn.jsdelivr.net/npm/piexifjs@1.0.4/piexif.min.js"></script>
-  <!-- ADDED LINE FOR SORTABLEJS: -->
+  <!-- SORTABLEJS -->
   <script src="https://cdn.jsdelivr.net/npm/sortablejs@1.14.0/Sortable.min.js"></script>
-  <!-- ADDED LINES FOR CROPPER.JS: -->
+  <!-- CROPPER.JS -->
   <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/cropperjs/1.5.13/cropper.min.css" />
   <script src="https://cdnjs.cloudflare.com/ajax/libs/cropperjs/1.5.13/cropper.min.js"></script>
   <style>
@@ -28,10 +28,10 @@
     h5, label, p { text-align: left; }
     input, textarea { width: 100%; box-sizing: border-box; }
     
-    /* Wrap Listing Description and Uploaded Files List */
+    /* Container for Listing Description and File Drop Area */
     #descriptionAndFileUploadContainer {
       display: flex; align-items: center;
-      gap: 10px; /* Use gap to space the items evenly */
+      gap: 10px;
     }
     .listing-desc-container {
       position: relative; display: inline-block; width: 500px;
@@ -39,54 +39,22 @@
     .listing-desc-container h5 {
       margin: 0 0 10px 0; font-size: 1.2rem; font-weight: 500;
     }
-    .listing-desc-container label.section-heading {
-      font-size: 1.2rem; font-weight: 500;
-    }
     .listing-desc-container input {
       width: 500px; height: 30px; border: 1px solid #000; padding: 5px;
     }
     
-    /* "User Provided Search Key Phrases" textarea */
-    #searchKeyPhrases {
-      resize: none; box-sizing: border-box; border: 1px solid grey;
-    }
-    #searchKeyPhrases[rows="14"] { height: auto; }
-    
-    .flex-container { display: flex; gap: 10px; align-items: stretch; }
-    .textbox-container { flex: 1; }
-    .textbox-container textarea {
-      width: 100%; padding: 0.8rem; font-size: 1rem; line-height: 1.2;
-      resize: none; overflow: visible; box-sizing: border-box;
-    }
-    .button-container {
-      width: 200px; display: flex; flex-direction: column; gap: 10px;
-      align-self: flex-start;
-    }
-    #listingTitle { min-height: 45px; }
-    #listingDescInput { width: 500px; height: 30px; border: 1px solid #000; padding: 5px; }
-    #listingDescription { min-height: 150px; width: 500px; }
-    .section-heading {
-      font-size: 1.2rem; font-weight: 500; margin-bottom: 5px;
-      display: inline-block;
-    }
-    .count-text { font-style: italic; font-size: 0.9em; margin-top: 5px; }
-    
-    /* Drag and Drop Box for Images (Photo Grid width) */
-    #dropZone {
-      /* Calculated width: (5 * 120) + (4 * 28) = 712px */
-      width: 712px; height: 120px; border: 2px dashed #ccc;
-      border-radius: 3px; display: inline-block; vertical-align: middle;
-      text-align: center; line-height: 120px; position: relative;
-    }
-    
-    /* UploadedFilesList (File Drop Area) */
+    /* UploadedFilesList text area (reverted to original) */
     #uploadedFilesList {
-      /* Shrink width by 25% (from 300px to 225px) */
-      width: 225px; height: 125px; resize: none;
-      box-sizing: border-box; border: 1px solid grey;
-      /* Removed explicit margin to let the container gap handle spacing */
+      width: 300px; height: 125px; resize: none;
+      box-sizing: border-box; border: 1px solid grey; margin-left: 85px;
       position: relative;
-      font-size: 0.875rem;
+    }
+    
+    /* Wrapper for the UploadedFilesList drop listener – doubling vertical height */
+    #uploadedFilesListWrapper {
+      height: 250px;
+      display: flex;
+      align-items: center;
     }
     
     /* Static 10-Photo Preview Grid */
@@ -119,73 +87,55 @@
       align-items: center; justify-content: center; font-size: 10px;
       z-index: 999; border-radius: 3px;
     }
-    /* Metadata status styles */
     .metadata-status { margin-top: 5px; text-align: center; font-size: 14px; min-height: 20px; }
     .metadata-progress { width: 90%; }
     
-    /* Container #13 */
+    /* Other containers remain as originally defined */
     #container13 { position: relative; width: 250px; top: -150px; }
-    
-    /* Components below search key phrases */
     #belowSearch { margin-top: -180px; margin-left: 10px; }
-    
-    /* Etsy Listing TITLE container */
     .title-container { margin-top: -50px; }
     #etsyListingTitleContainer { position: relative; width: 1000px; }
     #etsyListingTitleContainer textarea { width: 1000px; }
-    
-    /* Etsy Listing DESCRIPTION container */
     .description-container { margin-top: 0px; }
     #etsyListingDescriptionContainer { position: relative; width: 1000px; }
     #etsyListingDescriptionContainer textarea { width: 1000px; }
-    
-    /* New container for "Search Key Phrases" */
     #userProvidedKeyPhrasesContainer { position: relative; top: 125px; left: 10px; }
-    
-    /* Top buttons section */
     #topButtons { margin: 10px 0; }
-    /* Ensure etsyShopListingsContainer is repositionable */
     #etsyShopListingsContainer { position: relative; margin-top: 10px; margin-left: 10px; }
-    
-    /* Button Styles */
+    .button-container { width: 200px; display: flex; flex-direction: column; gap: 10px; align-self: flex-start; }
     .regen-btn, .copy-btn { width: 125px; }
-    /* Style the rules buttons (for Title and Description) to match Re-Gen buttons */
-    .rules-button { width: 125px; }
-    /* Also add btn-small so they match the Re-Gen buttons' size */
-    .rules-button.btn-small { padding: 0 1rem; }
     .update-btn { background-color: #FFA500 !important; color: white !important; }
   </style>
 </head>
 <body>
-  <!-- Configure Buttons control (also available in modal) -->
+  <!-- Configure Buttons control -->
   <button id="configureButtonsBtn" class="btn waves-effect waves-light configurable">
     Configure Buttons
   </button>
   
-  <!-- Wrap Listing Description and Uploaded Files List (for file drop) -->
+  <!-- Listing Description and Uploaded Files List -->
   <div id="descriptionAndFileUploadContainer">
     <div class="listing-desc-container" id="listingDescContainer">
       <h5>Listing Description</h5>
       <input id="listingDescInput" type="text" placeholder="Enter your question here">
     </div>
-    <!-- Use the UploadedFilesList as the file drop area -->
-    <textarea id="uploadedFilesList" class="materialize-textarea" rows="2" placeholder="Uploaded .csv, .doc, .docx files will appear here"></textarea>
+    <!-- Wrap the UploadedFilesList text area in a wrapper for drop events -->
+    <div id="uploadedFilesListWrapper">
+      <textarea id="uploadedFilesList" class="materialize-textarea" rows="2" placeholder="Uploaded .csv, .doc, .docx files will appear here"></textarea>
+    </div>
   </div>
   
-  <!-- Etsy OAuth and Shop Listings Section with Top Buttons -->
+  <!-- Etsy OAuth and Shop Listings Section -->
   <div id="topButtons">
     <button id="connectEtsyBtn" class="btn waves-effect waves-light configurable">
       Connect to Etsy
     </button>
-    <!-- Update Photos button -->
     <button id="photoUploadNewBtn" class="btn waves-effect waves-light configurable update-btn" style="margin-left: 10px;">
       Update Photos
     </button>
-    <!-- Update Info button -->
     <button id="uploadToEtsyBtn" class="btn waves-effect waves-light configurable update-btn" style="margin-left: 10px;">
       Update Info
     </button>
-    <!-- Etsy Shop Listings container -->
     <div id="etsyShopListingsContainer">
       <div class="section-heading configurable">Etsy Shop Listings</div>
       <div class="textbox-container configurable">
@@ -203,7 +153,7 @@
     <button id="copyKeyPhrasesBtn" class="btn-small waves-effect waves-light configurable copy-btn">
       Copy
     </button>
-    <!-- Revert Analyze Rules button to original -->
+    <!-- Revert Analyze Rules button to its original text -->
     <button id="showAnalyzeRulesBtn" class="btn waves-effect waves-light configurable" data-target="analyzeRulesModal" style="margin-top:25px;">
       Analyze Rules
     </button>
@@ -223,7 +173,7 @@
     <button id="generateBtn" class="btn waves-effect waves-light configurable">
       Generate
     </button>
-    <!-- Etsy Listing TITLE container -->
+    <!-- Etsy Listing TITLE container (removed Rules button) -->
     <div class="title-container" id="etsyListingTitleContainer" style="margin-top: -50px;">
       <div class="section-heading configurable">Etsy Listing TITLE</div>
       <div class="flex-container configurable">
@@ -238,15 +188,11 @@
             <i class="material-icons">content_copy</i>
           </button>
         </div>
-        <!-- Title Rules button re‑sized to match Re‑Gen buttons -->
-        <button id="showTitleRulesBtn" class="btn-small waves-effect waves-light rules-button configurable" data-target="titleRulesModal">
-          T. Rules
-        </button>
       </div>
       <p id="titleCount" class="count-text configurable">Count: 0</p>
     </div>
     
-    <!-- Etsy Listing DESCRIPTION container -->
+    <!-- Etsy Listing DESCRIPTION container (removed Rules button) -->
     <div class="description-container" id="etsyListingDescriptionContainer" style="margin-top: 0px;">
       <div class="section-heading configurable">Etsy Listing DESCRIPTION</div>
       <div class="flex-container configurable">
@@ -261,15 +207,11 @@
             <i class="material-icons">content_copy</i>
           </button>
         </div>
-        <!-- Description Rules button re‑sized to match Re‑Gen buttons -->
-        <button id="showDescriptionRulesBtn" class="btn-small waves-effect waves-light rules-button configurable">
-          D. Rules
-        </button>
       </div>
     </div>
   </div>
   
-  <!-- Static 10-Photo Preview Grid Container -->
+  <!-- Static 10-Photo Preview Grid -->
   <div id="previewGridContainer">
     <div id="previewGridStatic">
       <div class="preview-cell" id="previewCell0">Empty</div>
@@ -285,7 +227,7 @@
     </div>
   </div>
   
-  <!-- Metadata Modal (for viewing metadata on click) -->
+  <!-- Metadata Modal -->
   <div id="metadataModal" class="modal">
     <div class="modal-content">
       <h4>Photo Metadata</h4>
@@ -298,7 +240,7 @@
     </div>
   </div>
   
-  <!-- Analyze Rules Modal -->
+  <!-- Analyze Rules Modal (remains unchanged) -->
   <div id="analyzeRulesModal" class="modal">
     <div class="modal-content">
       <h4>Photo Analysis Rules</h4>
@@ -316,75 +258,6 @@ Default Photo Analysis Rules:
     </div>
     <div class="modal-footer">
       <a href="#!" id="updateAnalyzeRulesBtn" class="modal-close waves-effect waves-green btn">
-        Update
-      </a>
-    </div>
-  </div>
-  
-  <!-- Title Rules Modal -->
-  <div id="titleRulesModal" class="modal">
-    <div class="modal-content">
-      <h4>Title Rules</h4>
-      <textarea id="titleRulesTextarea" style="width:100%; height:300px;">
-Title Structure & Formatting:
-- Create 5-7 SEO optimized long-tail key phrases (3-5 words each).
-- The title must begin with the product type (e.g., "Angel Earrings", "Daisy Necklace").
-- Ensure grammatical flow and no punctuation.
-- If the product is a charm/pendant, the first word should describe that type.
-- For necklaces, the second word must be "necklace"; for earrings, "Earring".
-
-Word Usage & Frequency:
-- No word may appear more than three times.
-- "earrings" must be plural and follow a noun.
-- "stud" may only appear in approved phrases and must precede "earrings".
-
-Required Words:
-- "Charm" must appear exactly once.
-
-Use of "For":
-- "for" must appear at least twice in a grammatically correct manner.
-
-Title Length & Word Order:
-- Titles must be between 125 and 140 characters.
-- Adjectives must follow nouns.
-- Avoid plurals for "stud" and "animal"; use plurals for "hoops" and "earrings" correctly.
-
-SEO Optimization:
-- The title’s word order should form at least eight natural SEO phrases.
-
-Prohibited Words:
-- Exclude: "accessories", "unique", "simple", "minimalist", "whimsical", "cute", "filled", "gold filled", "silver", "solid gold", "gold vermeil", "rosegold", "14k", "handmade", "quirky", "delicate", "accessory", "for", "dangle", "gold plated", "jewelry", "custom", "celestial", "design", "lightweight".
-      </textarea>
-    </div>
-    <div class="modal-footer">
-      <a href="#!" id="updateTitleRulesBtn" class="modal-close waves-effect waves-green btn">
-        Update
-      </a>
-    </div>
-  </div>
-  
-  <!-- Description Rules Modal -->
-  <div id="descriptionRulesModal" class="modal">
-    <div class="modal-content">
-      <h4>Description Rules</h4>
-      <textarea id="descriptionRulesTextarea" style="width:100%; height:300px;">
-Rules for Description:
-- Merge the key phrases with your output.
-- Modify the description to match the jewelry type.
-- Keep the output paragraph to 80 words.
-
-Option 1:
-"This stunning gold Playing Card Charm is the perfect gift for her, featuring an intricately designed Ace of Spades charm. Ideal for jewelry lovers, this pendant is perfect for personalized pieces."
-
-Option 2:
-"This playful Allosaurus charm is the perfect add-on for charm necklaces or huggie hoops. It adds a whimsical touch to any collection, making it a delightful gift."
-
-Option 3:
-"This charming gold Alligator Necklace is a delightful gift for animal lovers. Featuring a beautifully designed crocodile pendant, it adds a unique touch to any collection."
-      </textarea>
-    </div>
-    <div class="modal-footer">
-      <a href="#!" id="updateDescriptionRulesBtn" class="modal-close waves-effect waves-green btn">
         Update
       </a>
     </div>
@@ -466,14 +339,14 @@ Using Sales Report and Product List Files:
     let currentCropIndex = null;
     let cropper = null;
     let reservedPhotos = [];
-  
+    
     // Update the UploadedFilesList text area
     function updateUploadedFilesList() {
       const uploadedFilesListElem = document.getElementById('uploadedFilesList');
       const fileNames = soldOrdersCSV.map(file => file.name || file.fileName || 'Unnamed File');
       uploadedFilesListElem.value = fileNames.join('\n');
     }
-  
+    
     function loadReservedPhotos() {
       const stored = localStorage.getItem("reservedPhotos");
       reservedPhotos = stored ? JSON.parse(stored) : [];
@@ -496,7 +369,6 @@ Using Sales Report and Product List Files:
         img.src = dataURL;
       });
     }
-    // Updated uploadCSVFile with fallbacks for fileName and id
     async function uploadCSVFile(file) {
       return new Promise((resolve, reject) => {
         const reader = new FileReader();
@@ -561,12 +433,14 @@ Using Sales Report and Product List Files:
         console.log("Vector store created:", await response.json());
       } catch (err) { console.error(err); }
     }
-    const uploadedFilesList = document.getElementById("uploadedFilesList");
-    uploadedFilesList.addEventListener("dragover", e => { e.preventDefault(); e.stopPropagation(); uploadedFilesList.style.borderColor = "#000"; });
-    uploadedFilesList.addEventListener("dragleave", e => { e.preventDefault(); e.stopPropagation(); uploadedFilesList.style.borderColor = "#ccc"; });
-    uploadedFilesList.addEventListener("drop", async e => {
-      e.preventDefault(); e.stopPropagation(); 
-      uploadedFilesList.style.borderColor = "#ccc";
+    
+    // Attach drag & drop events to the wrapper instead of the text area
+    const uploadedFilesListWrapper = document.getElementById("uploadedFilesListWrapper");
+    uploadedFilesListWrapper.addEventListener("dragover", e => { e.preventDefault(); e.stopPropagation(); uploadedFilesListWrapper.style.borderColor = "#000"; });
+    uploadedFilesListWrapper.addEventListener("dragleave", e => { e.preventDefault(); e.stopPropagation(); uploadedFilesListWrapper.style.borderColor = "#ccc"; });
+    uploadedFilesListWrapper.addEventListener("drop", async e => {
+      e.preventDefault(); e.stopPropagation();
+      uploadedFilesListWrapper.style.borderColor = "#ccc";
       const files = e.dataTransfer.files;
       for (let file of files) {
         if (/\.(csv|doc|docx)$/i.test(file.name)) {
@@ -579,6 +453,7 @@ Using Sales Report and Product List Files:
         } else { alert("Only .csv, .doc, and .docx files supported."); }
       }
     });
+    
     const dropZone = document.getElementById("dropZone");
     dropZone.addEventListener("dragover", e => { e.preventDefault(); dropZone.style.borderColor = "#000"; });
     dropZone.addEventListener("dragleave", e => { e.preventDefault(); dropZone.style.borderColor = "#ccc"; });
@@ -606,6 +481,7 @@ Using Sales Report and Product List Files:
         } else { M.toast({ html: "Only JPEG/PNG images supported." }); }
       }
     });
+    
     function updateStaticPreviewGrid() {
       for (let i = 0; i < 10; i++) {
         let cell = document.getElementById("previewCell" + i);
