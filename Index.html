@@ -490,6 +490,10 @@ Using Sales Report and Product List Files:
     // We'll store up to 250 10-digit listing IDs in a queue
     let listingQueue = [];
 
+    // Track when photos & info updates are done for the "current" listing
+    let photoUpdateComplete = false;
+    let infoUpdateComplete = false;
+
     // Hard-coded text to append to every generated description before sending to Etsy
     const appendedDescriptionText = `
 
@@ -569,7 +573,8 @@ Check out our shop polices page for more details about all our polices and pleas
 https://www.etsy.com/shop/CustomBrites/policy
 `;
     
-    // Parse up to 250 unique, 10-digit listing IDs
+    // ------------------ Utility & Queue Helpers -------------------
+
     function parseListingNumbers(rawInput) {
       let parts = rawInput.split(",");
       let cleaned = parts
@@ -579,13 +584,14 @@ https://www.etsy.com/shop/CustomBrites/policy
       let finalList = unique.slice(0, 250); // limit to 250
       return finalList;
     }
-    // Display how many remain in the queue
     function updateListingQueueCount() {
       const countBox = document.getElementById("listingQueueCount");
       countBox.textContent = listingQueue.length;
     }
-    // Load the next listing ID from the queue into the text box
     function loadNextListingInQueue() {
+      // Reset flags
+      photoUpdateComplete = false;
+      infoUpdateComplete = false;
       if (listingQueue.length > 0) {
         document.getElementById("shopListings").value = listingQueue[0];
       } else {
@@ -593,22 +599,27 @@ https://www.etsy.com/shop/CustomBrites/policy
       }
       updateListingQueueCount();
     }
-    // Called after a successful listing update or photo update
-    function afterSuccessfulListingUpdate() {
-      // remove the first element
+    // Called once BOTH photos & info updates have completed for the current listing
+    function afterBothUpdates() {
+      // Shift the queue & load next listing
       listingQueue.shift();
-      // load the next
       loadNextListingInQueue();
     }
-  
-    // New function to update the UploadedFilesList textarea
+    // Each time a photo or info update completes successfully, we check if both are done
+    function checkIfBothUpdatesComplete() {
+      if (photoUpdateComplete && infoUpdateComplete) {
+        afterBothUpdates();
+      }
+    }
+
+    // -------------- Page Initialization & File Handling --------------
+
     function updateUploadedFilesList() {
       const uploadedFilesListElem = document.getElementById('uploadedFilesList');
-      // Check both file.name and file.fileName for display
       const fileNames = soldOrdersCSV.map(file => file.name || file.fileName || 'Unnamed File');
       uploadedFilesListElem.value = fileNames.join('\n');
     }
-  
+
     function loadReservedPhotos() {
       const stored = localStorage.getItem("reservedPhotos");
       reservedPhotos = stored ? JSON.parse(stored) : [];
@@ -616,6 +627,7 @@ https://www.etsy.com/shop/CustomBrites/policy
     function saveReservedPhotos() {
       localStorage.setItem("reservedPhotos", JSON.stringify(reservedPhotos));
     }
+
     async function resizeImage(dataURL, width, height) {
       return new Promise((resolve, reject) => {
         const img = new Image();
@@ -631,7 +643,6 @@ https://www.etsy.com/shop/CustomBrites/policy
         img.src = dataURL;
       });
     }
-    // Updated uploadCSVFile with fallbacks for fileName and id
     async function uploadCSVFile(file) {
       return new Promise((resolve, reject) => {
         const reader = new FileReader();
@@ -648,7 +659,6 @@ https://www.etsy.com/shop/CustomBrites/policy
             });
             if (!response.ok) throw new Error("Upload failed with status " + response.status);
             const fileData = await response.json();
-            // Ensure fileData has a name and id; fallback to file.name and a generated id if missing
             fileData.name = fileData.name || file.name;
             fileData.id = fileData.id || file.name || ('file-' + Date.now());
             resolve(fileData);
@@ -658,7 +668,6 @@ https://www.etsy.com/shop/CustomBrites/policy
         reader.readAsDataURL(file);
       });
     }
-    // Similarly update uploadDocFile
     async function uploadDocFile(file) {
       return new Promise((resolve, reject) => {
         const reader = new FileReader();
@@ -698,7 +707,6 @@ https://www.etsy.com/shop/CustomBrites/policy
         console.log("Vector store created:", await response.json());
       } catch (err) { console.error(err); }
     }
-    // Enable file drop on uploadedFilesList
     const uploadedFilesList = document.getElementById("uploadedFilesList");
     uploadedFilesList.addEventListener("dragover", e => {
       e.preventDefault(); e.stopPropagation();
@@ -761,6 +769,8 @@ https://www.etsy.com/shop/CustomBrites/policy
         }
       }
     });
+
+    // ------------------ Photo Preview Logic ------------------
     function updateStaticPreviewGrid() {
       for (let i = 0; i < 10; i++) {
         let cell = document.getElementById("previewCell" + i);
@@ -771,9 +781,7 @@ https://www.etsy.com/shop/CustomBrites/policy
             let previewBox = document.createElement("div");
             previewBox.className = "preview-box";
             previewBox.setAttribute("data-id", reservedPhotos[rIndex].id);
-            previewBox.addEventListener("dragstart", e => {
-              draggedIndex = i;
-            });
+            previewBox.addEventListener("dragstart", e => { draggedIndex = i; });
             let img = document.createElement("img");
             img.src = reservedPhotos[rIndex].src;
             previewBox.appendChild(img);
@@ -835,9 +843,7 @@ https://www.etsy.com/shop/CustomBrites/policy
             let previewBox = document.createElement("div");
             previewBox.className = "preview-box";
             previewBox.setAttribute("data-id", photoIds[i]);
-            previewBox.addEventListener("dragstart", e => {
-              if (i < 7) draggedIndex = i;
-            });
+            previewBox.addEventListener("dragstart", e => { if (i < 7) draggedIndex = i; });
             let img = document.createElement("img");
             img.src = previewImages[i];
             previewBox.appendChild(img);
@@ -955,6 +961,8 @@ https://www.etsy.com/shop/CustomBrites/policy
         statusElem.innerHTML = `<span style="color:red;">Error: ${err.message}</span>`;
       }
     }
+
+    // -------------- OAuth & Startup ---------------
     function generateRandomString(length) {
       const possible = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789';
       let text = '';
@@ -998,7 +1006,6 @@ https://www.etsy.com/shop/CustomBrites/policy
       }
       updateStaticPreviewGrid();
       updateUploadedFilesList();
-      // Listen for changes in shopListings to load the queue
       document.getElementById("shopListings").addEventListener("change", () => {
         let rawInput = document.getElementById("shopListings").value;
         listingQueue = parseListingNumbers(rawInput);
@@ -1025,11 +1032,9 @@ https://www.etsy.com/shop/CustomBrites/policy
         M.toast({ html: "Error exchanging code for token" });
       }
     }
-    
-    /* ----------------------------------------------------------------------------
-       1) We combine user’s description + appendedDescriptionText 
-       2) Then we remove the current listing from queue on success
-       ---------------------------------------------------------------------------*/
+
+    // -------------- Info & Photo Updates --------------
+    // We only shift the queue after BOTH updatePhoto + updateInfo are successful
     document.getElementById("uploadToEtsyBtn").addEventListener("click", async () => {
       let listingInput = document.getElementById("shopListings").value.trim();
       if (!listingInput) {
@@ -1045,7 +1050,7 @@ https://www.etsy.com/shop/CustomBrites/policy
       }
       
       let userDescription = document.getElementById("listingDescription").value || "";
-      let finalDescription = userDescription + appendedDescriptionText; // add extra lines
+      let finalDescription = userDescription + appendedDescriptionText; 
       
       let payload = {
         title: document.getElementById("listingTitle").value,
@@ -1064,25 +1069,32 @@ https://www.etsy.com/shop/CustomBrites/policy
           let errorText = await response.text();
           M.toast({ html: "Error updating listing: " + response.status + " - " + errorText });
         } else {
-          M.toast({ html: "Listing updated successfully!" });
-          // Remove from queue on success
-          afterSuccessfulListingUpdate();
+          M.toast({ html: "Listing info updated successfully!" });
+          // Mark that info update is complete
+          infoUpdateComplete = true;
+          checkIfBothUpdatesComplete();
         }
       } catch (e) {
         console.error(e);
         M.toast({ html: "Exception: " + e.message });
       }
     });
-    
-    // The photo upload button also triggers afterSuccessfulListingUpdate on success
+
     document.getElementById("photoUploadNewBtn").addEventListener("click", async () => {
+      let listingInput = document.getElementById("shopListings").value.trim();
+      if (!listingInput) {
+        M.toast({ html: "Please provide a listing URL or ID in 'Etsy Shop Listings'." });
+        return;
+      }
       let btn = document.getElementById("photoUploadNewBtn");
       btn.disabled = true;
       try {
         await uploadPhotos();
         await uploadReservedPhotos();
         M.toast({ html: "Photos updated successfully!" });
-        afterSuccessfulListingUpdate();
+        // Mark that photo update is complete
+        photoUpdateComplete = true;
+        checkIfBothUpdatesComplete();
       } catch (err) {
         console.error(err);
       } finally {
@@ -1090,9 +1102,7 @@ https://www.etsy.com/shop/CustomBrites/policy
       }
     });
 
-    /* ---------------------------------------------------------------------------
-       Incorporate the CSV data from vector store into the prompt for Key Phrases
-       --------------------------------------------------------------------------*/
+    // -------------- Generate Key Phrases Using CSV Context --------------
     async function generateTagPhrases() {
       let question = document.getElementById("listingDescInput").value.trim();
       if (!question) {
@@ -1102,17 +1112,17 @@ https://www.etsy.com/shop/CustomBrites/policy
       let keywordRules = stripMarkdownJSON(document.getElementById("keywordRulesTextarea").value);
       let extraText = "Emphasis on SEO and generating effective Etsy tag phrases.";
       
-      // 1) Retrieve relevant context from vector store (based on user question)
+      // 1) Retrieve relevant CSV context
       let retrievedContext = "";
       try {
         let resp = await fetch("/.netlify/functions/queryVectorStore", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ query: question, topK: 5 }) // topK = how many relevant chunks
+          body: JSON.stringify({ query: question, topK: 5 })
         });
         if (resp.ok) {
           let data = await resp.json();
-          retrievedContext = data?.data || ""; // adjust if your server returns data differently
+          retrievedContext = data?.data || "";
         } else {
           console.warn("Could not retrieve CSV context from vector store.");
         }
@@ -1120,7 +1130,6 @@ https://www.etsy.com/shop/CustomBrites/policy
         console.error("Error retrieving CSV context:", err);
       }
       
-      // 2) Combine that CSV-based context with user rules & question
       let prompt = `
 Here is some relevant data from our CSV files:
 ${retrievedContext}
@@ -1150,10 +1159,8 @@ Generate exactly 13 SEO key phrases (each ≤ 20 characters). Return as plain te
           .split(/[\n,]+/)
           .map(s => s.replace(/^\d+\.\s*/, "").trim())
           .filter(p => p);
-        // If any phrase is > 20 chars, we could re-gen or slice. 
-        // For now we just log a warning:
         if (!phrasesArray.every(p => p.length <= 20)) {
-          console.warn("One or more phrases exceeded 20 characters. (CSV data might push them longer!)");
+          console.warn("One or more phrases exceeded 20 characters.");
         }
         document.getElementById("searchKeyPhrases").value = phrasesArray.join("\n");
       } catch (err) {
@@ -1161,20 +1168,19 @@ Generate exactly 13 SEO key phrases (each ≤ 20 characters). Return as plain te
         M.toast({ html: "Error generating tag phrases: " + err.message });
       }
     }
-
-    // Event listener for Enter key on the Listing Description input
+    // Fire generateTagPhrases() on Enter
     document.getElementById("listingDescInput").addEventListener("keydown", async (e) => {
       if (e.key === "Enter" && !e.shiftKey) {
         e.preventDefault();
         await generateTagPhrases();
       }
     });
-    
+
+    // -------------- Title & Description Gen --------------
     document.getElementById("generateBtn").addEventListener("click", async () => {
       await Promise.all([generateTitleOnly(), generateDescriptionOnly()]);
     });
     
-    // Title & Description Generation (unchanged except for referencing callOpenAI)
     async function generateTitleOnly() {
       let etsyLink = ETSY_SHOP_URL;
       let keyPhrases = document.getElementById("searchKeyPhrases").value.trim();
@@ -1282,6 +1288,8 @@ Important: Return ONLY the description as plain text.`;
       let lines = document.getElementById("searchKeyPhrases").value.split(/\n+/).map(l => l.trim()).filter(l => l !== "");
       navigator.clipboard.writeText(lines.join(", ")).catch(err => console.error("Error copying key phrases:", err));
     });
+
+    // -------------- Configure Buttons Modal --------------
     document.getElementById("configureButtonsBtn").addEventListener("click", () => {
       let configContainer = document.getElementById("buttonConfigContainer");
       configContainer.innerHTML = "";
@@ -1390,6 +1398,8 @@ Important: Return ONLY the description as plain text.`;
       let container13 = document.getElementById("container13");
       container13.style.height = (container13.offsetHeight * 2.5) + "px";
     });
+
+    // -------------- Crop Modal --------------
     function openCropModal(index) {
       currentCropIndex = index;
       let cropModal = document.getElementById("photoCropModal");
@@ -1444,10 +1454,15 @@ Important: Return ONLY the description as plain text.`;
       currentCropIndex = null;
       M.Modal.getInstance(document.getElementById("photoCropModal")).close();
     });
+
     async function uploadPhotos() {
       let listingInput = document.getElementById("shopListings").value.trim();
       if (!listingInput) {
         M.toast({ html: "Please provide a listing URL or ID in 'Etsy Shop Listings'." });
+        return;
+      }
+      if (!previewImages.length) {
+        M.toast({ html: "No images to upload. Please drag and drop images first." });
         return;
       }
       let listingId = /^\d+$/.test(listingInput)
@@ -1455,10 +1470,6 @@ Important: Return ONLY the description as plain text.`;
         : (listingInput.match(/\/listing\/(\d+)/) || [])[1];
       if (!listingId) {
         M.toast({ html: "Invalid listing URL or ID." });
-        return;
-      }
-      if (!previewImages.length) {
-        M.toast({ html: "No images to upload. Please drag and drop images first." });
         return;
       }
       for (let i = 0; i < previewImages.length; i++) {
@@ -1494,15 +1505,15 @@ Important: Return ONLY the description as plain text.`;
         M.toast({ html: "Please provide a listing URL or ID in 'Etsy Shop Listings'." });
         return;
       }
+      if (!reservedPhotos.length) {
+        M.toast({ html: "No reserved photos to upload." });
+        return;
+      }
       let listingId = /^\d+$/.test(listingInput)
         ? listingInput
         : (listingInput.match(/\/listing\/(\d+)/) || [])[1];
       if (!listingId) {
         M.toast({ html: "Invalid listing URL or ID." });
-        return;
-      }
-      if (!reservedPhotos.length) {
-        M.toast({ html: "No reserved photos to upload." });
         return;
       }
       for (let i = 0; i < reservedPhotos.length; i++) {
