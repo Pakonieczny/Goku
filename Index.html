@@ -86,16 +86,13 @@
       width: 225px; height: 125px; resize: none; box-sizing: border-box;
       border: 1px solid grey; margin-left: 85px; position: relative;
       font-size: 0.875rem;
-      /* Lower the z-index so all modals appear above it */
+      /* Lower the z-index so modals appear above it */
       z-index: 10;
     }
-    
     /* Ensure modals appear above everything else */
     .modal {
-      /* Force a higher z-index than #uploadedFilesList */
       z-index: 9999 !important;
     }
-    /* Also ensure the Materialize modal overlay is on top */
     .modal-overlay {
       z-index: 9998 !important;
     }
@@ -157,6 +154,18 @@
     #topButtons { margin: 10px 0; }
     #etsyShopListingsContainer { position: relative; margin-top: 10px; margin-left: 10px; }
     
+    /* A small 25×25 box for queue count */
+    #listingQueueCount {
+      width: 25px; 
+      height: 25px; 
+      border: 1px solid #000; 
+      display: inline-flex; 
+      align-items: center; 
+      justify-content: center; 
+      font-weight: bold;
+      margin-left: 5px; 
+    }
+    
     /* Button Styles */
     .regen-btn, .copy-btn { width: 125px; }
     .update-btn { background-color: #FFA500 !important; color: white !important; }
@@ -193,9 +202,14 @@
     </button>
     <!-- Etsy Shop Listings container -->
     <div id="etsyShopListingsContainer">
-      <div class="section-heading configurable">Etsy Shop Listings</div>
+      <!-- Title + queue count box -->
+      <div class="section-heading configurable">
+        Etsy Shop Listings
+        <span id="listingQueueCount">0</span>
+      </div>
       <div class="textbox-container configurable">
-        <textarea id="shopListings" class="materialize-textarea" rows="2" placeholder="Enter your listing URL or ID" style="width:500px;"></textarea>
+        <textarea id="shopListings" class="materialize-textarea" rows="2" 
+          placeholder="Enter up to 250 comma-separated 10-digit listing IDs" style="width:500px;"></textarea>
       </div>
     </div>
   </div>
@@ -472,9 +486,11 @@ Using Sales Report and Product List Files:
     let currentCropIndex = null;
     let cropper = null;
     let reservedPhotos = [];
-  
+    
+    // We'll store up to 250 10-digit listing IDs in a queue
+    let listingQueue = [];
+
     // Hard-coded text to append to every generated description before sending to Etsy
-    // (Note the leading newline so it appears on a new line after user’s content)
     const appendedDescriptionText = `
 
 • We use the Highest Quality materials from the US and Italy.
@@ -552,7 +568,39 @@ Check out our shop polices page for more details about all our polices and pleas
 
 https://www.etsy.com/shop/CustomBrites/policy
 `;
-
+    
+    // Parse up to 250 unique, 10-digit listing IDs
+    function parseListingNumbers(rawInput) {
+      let parts = rawInput.split(",");
+      let cleaned = parts
+        .map(p => p.trim())
+        .filter(p => /^\d{10}$/.test(p)); // only keep valid 10-digit
+      let unique = Array.from(new Set(cleaned)); // remove duplicates
+      let finalList = unique.slice(0, 250); // limit to 250
+      return finalList;
+    }
+    // Display how many remain in the queue
+    function updateListingQueueCount() {
+      const countBox = document.getElementById("listingQueueCount");
+      countBox.textContent = listingQueue.length;
+    }
+    // Load the next listing ID from the queue into the text box
+    function loadNextListingInQueue() {
+      if (listingQueue.length > 0) {
+        document.getElementById("shopListings").value = listingQueue[0];
+      } else {
+        document.getElementById("shopListings").value = "";
+      }
+      updateListingQueueCount();
+    }
+    // Called after a successful listing update or photo update
+    function afterSuccessfulListingUpdate() {
+      // remove the first element
+      listingQueue.shift();
+      // load the next
+      loadNextListingInQueue();
+    }
+  
     // New function to update the UploadedFilesList textarea
     function updateUploadedFilesList() {
       const uploadedFilesListElem = document.getElementById('uploadedFilesList');
@@ -950,6 +998,12 @@ https://www.etsy.com/shop/CustomBrites/policy
       }
       updateStaticPreviewGrid();
       updateUploadedFilesList();
+      // Listen for changes in shopListings to load the queue
+      document.getElementById("shopListings").addEventListener("change", () => {
+        let rawInput = document.getElementById("shopListings").value;
+        listingQueue = parseListingNumbers(rawInput);
+        loadNextListingInQueue();
+      });
     });
     async function exchangeCodeForToken(code) {
       let codeVerifier = localStorage.getItem("etsy_code_verifier");
@@ -973,8 +1027,8 @@ https://www.etsy.com/shop/CustomBrites/policy
     }
     
     /* ----------------------------------------------------------------------------
-       IMPORTANT: 
-       Before sending the description to Etsy, we add the extra appendedDescriptionText.
+       1) We combine user’s description + appendedDescriptionText 
+       2) Then we remove the current listing from queue on success
        ---------------------------------------------------------------------------*/
     document.getElementById("uploadToEtsyBtn").addEventListener("click", async () => {
       let listingInput = document.getElementById("shopListings").value.trim();
@@ -990,14 +1044,11 @@ https://www.etsy.com/shop/CustomBrites/policy
         return;
       }
       
-      // Grab the user’s generated description
       let userDescription = document.getElementById("listingDescription").value || "";
-      // Append the extra text
-      let finalDescription = userDescription + appendedDescriptionText;
+      let finalDescription = userDescription + appendedDescriptionText; // add extra lines
       
       let payload = {
         title: document.getElementById("listingTitle").value,
-        // Use finalDescription instead of the raw user description
         description: finalDescription,
         tags: document.getElementById("searchKeyPhrases").value.split("\n").map(s => s.trim()).filter(s => s !== "")
       };
@@ -1014,6 +1065,8 @@ https://www.etsy.com/shop/CustomBrites/policy
           M.toast({ html: "Error updating listing: " + response.status + " - " + errorText });
         } else {
           M.toast({ html: "Listing updated successfully!" });
+          // Remove from queue on success
+          afterSuccessfulListingUpdate();
         }
       } catch (e) {
         console.error(e);
@@ -1021,6 +1074,107 @@ https://www.etsy.com/shop/CustomBrites/policy
       }
     });
     
+    // The photo upload button also triggers afterSuccessfulListingUpdate on success
+    document.getElementById("photoUploadNewBtn").addEventListener("click", async () => {
+      let btn = document.getElementById("photoUploadNewBtn");
+      btn.disabled = true;
+      try {
+        await uploadPhotos();
+        await uploadReservedPhotos();
+        M.toast({ html: "Photos updated successfully!" });
+        afterSuccessfulListingUpdate();
+      } catch (err) {
+        console.error(err);
+      } finally {
+        btn.disabled = false;
+      }
+    });
+
+    /* ---------------------------------------------------------------------------
+       Incorporate the CSV data from vector store into the prompt for Key Phrases
+       --------------------------------------------------------------------------*/
+    async function generateTagPhrases() {
+      let question = document.getElementById("listingDescInput").value.trim();
+      if (!question) {
+        M.toast({ html: "Please enter a question in the Listing Description." });
+        return;
+      }
+      let keywordRules = stripMarkdownJSON(document.getElementById("keywordRulesTextarea").value);
+      let extraText = "Emphasis on SEO and generating effective Etsy tag phrases.";
+      
+      // 1) Retrieve relevant context from vector store (based on user question)
+      let retrievedContext = "";
+      try {
+        let resp = await fetch("/.netlify/functions/queryVectorStore", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ query: question, topK: 5 }) // topK = how many relevant chunks
+        });
+        if (resp.ok) {
+          let data = await resp.json();
+          retrievedContext = data?.data || ""; // adjust if your server returns data differently
+        } else {
+          console.warn("Could not retrieve CSV context from vector store.");
+        }
+      } catch (err) {
+        console.error("Error retrieving CSV context:", err);
+      }
+      
+      // 2) Combine that CSV-based context with user rules & question
+      let prompt = `
+Here is some relevant data from our CSV files:
+${retrievedContext}
+
+Listing Description (for emphasis): "${question}"
+${extraText}
+
+Keyword Rules:
+${keywordRules}
+
+Generate exactly 13 SEO key phrases (each ≤ 20 characters). Return as plain text.
+      `;
+      
+      try {
+        let payload = {
+          model: modelName,
+          messages: [
+            { role: "system", content: "Use the CSV context above to generate more accurate key phrases." },
+            { role: "user", content: prompt }
+          ],
+          temperature: 0.7,
+          max_tokens: 500
+        };
+        let data = await callOpenAI(payload);
+        let answer = data.choices[0].message.content || "";
+        let phrasesArray = answer
+          .split(/[\n,]+/)
+          .map(s => s.replace(/^\d+\.\s*/, "").trim())
+          .filter(p => p);
+        // If any phrase is > 20 chars, we could re-gen or slice. 
+        // For now we just log a warning:
+        if (!phrasesArray.every(p => p.length <= 20)) {
+          console.warn("One or more phrases exceeded 20 characters. (CSV data might push them longer!)");
+        }
+        document.getElementById("searchKeyPhrases").value = phrasesArray.join("\n");
+      } catch (err) {
+        console.error(err);
+        M.toast({ html: "Error generating tag phrases: " + err.message });
+      }
+    }
+
+    // Event listener for Enter key on the Listing Description input
+    document.getElementById("listingDescInput").addEventListener("keydown", async (e) => {
+      if (e.key === "Enter" && !e.shiftKey) {
+        e.preventDefault();
+        await generateTagPhrases();
+      }
+    });
+    
+    document.getElementById("generateBtn").addEventListener("click", async () => {
+      await Promise.all([generateTitleOnly(), generateDescriptionOnly()]);
+    });
+    
+    // Title & Description Generation (unchanged except for referencing callOpenAI)
     async function generateTitleOnly() {
       let etsyLink = ETSY_SHOP_URL;
       let keyPhrases = document.getElementById("searchKeyPhrases").value.trim();
@@ -1110,59 +1264,6 @@ Important: Return ONLY the description as plain text.`;
       }
       return await response.json();
     }
-    async function generateTagPhrases() {
-      // Retrieve the question from the Listing Description input
-      let question = document.getElementById("listingDescInput").value.trim();
-      if (!question) {
-        M.toast({ html: "Please enter a question in the Listing Description." });
-        return;
-      }
-      let keywordRules = stripMarkdownJSON(document.getElementById("keywordRulesTextarea").value);
-      let extraText = "Emphasis on SEO and generating effective Etsy tag phrases.";
-      let prompt = `
-Listing Description (for emphasis): "${question}"
-${extraText}
-Keyword Rules:
-${keywordRules}
-Generate exactly 13 tag phrases (each ≤ 20 characters). Return as plain text.
-`;
-      try {
-        let payload = {
-          model: modelName,
-          messages: [
-            { role: "system", content: "Generate tag phrases according to the provided rules." },
-            { role: "user", content: prompt }
-          ],
-          temperature: 0.7,
-          max_tokens: 500
-        };
-        let data = await callOpenAI(payload);
-        let answer = data.choices[0].message.content;
-        let phrasesArray = answer.split(/[\n,]+/).map(s => s.replace(/^\d+\.\s*/, "").trim()).filter(p => p);
-        if (!phrasesArray.every(p => p.length <= 20)) {
-          console.warn("One or more phrases exceeded 20 characters. Re-generating key phrases...");
-          return await generateTagPhrases();
-        }
-        document.getElementById("searchKeyPhrases").value = phrasesArray.join("\n");
-      } catch (err) {
-        console.error(err);
-        M.toast({ html: "Error generating tag phrases: " + err.message });
-      }
-    }
-    
-    // Event listener for Enter key on the Listing Description input
-    document.getElementById("listingDescInput").addEventListener("keydown", async (e) => {
-      if (e.key === "Enter" && !e.shiftKey) {
-        e.preventDefault();
-        await generateTagPhrases();
-      }
-    });
-    
-    document.getElementById("generateBtn").addEventListener("click", async () => {
-      await Promise.all([generateTitleOnly(), generateDescriptionOnly()]);
-    });
-    document.getElementById("regenTitleBtn").addEventListener("click", generateTitleOnly);
-    document.getElementById("regenDescriptionBtn").addEventListener("click", generateDescriptionOnly);
     function updateTitleCount(text) {
       document.getElementById("titleCount").textContent = "Count: " + text.length;
     }
@@ -1431,18 +1532,6 @@ Generate exactly 13 tag phrases (each ≤ 20 characters). Return as plain text.
         }
       }
     }
-    document.getElementById("photoUploadNewBtn").addEventListener("click", async () => {
-      let btn = document.getElementById("photoUploadNewBtn");
-      btn.disabled = true;
-      try {
-        await uploadPhotos();
-        await uploadReservedPhotos();
-      } catch (err) {
-        console.error(err);
-      } finally {
-        btn.disabled = false;
-      }
-    });
   </script>
 </body>
 </html>
