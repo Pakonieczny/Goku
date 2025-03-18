@@ -155,11 +155,9 @@
       position: relative; width: 100px; height: 132px; border: 2px solid #ccc;
       border-radius: 3px; display: flex; flex-direction: column;
       align-items: center; justify-content: center; font-size: 12px; color: #666;
-      /* We'll allow dropping onto the cells for reordering. */
     }
     .preview-box {
       position: relative; width: 100%; height: 100%;
-      /* We'll mark this draggable for reorder. */
     }
     .preview-box img {
       width: 100px; height: 100px; object-fit: cover;
@@ -210,14 +208,17 @@
       position: relative; top: 125px; left: 10px;
     }
 
-    /* Update Listing and Upload Photo button containers */
+    /* Update Listing button container */
     #uploadContainer {
       position: fixed; bottom: 20px; left: 50%;
       transform: translateX(-50%); display: inline-block;
     }
-    #uploadPhotoContainer {
-      position: fixed; bottom: 20px;
-      left: calc(50% + 120px); display: inline-block;
+
+    /* Button Config Modal */
+    #buttonConfigModal .modal-content,
+    #photoCropModal .crop-container {
+      width: 100%;
+      height: 100%;
     }
     /* ADDED NEW STYLE FOR DRAG-OVER VISUAL FEEDBACK: */
     .drag-over {
@@ -260,7 +261,7 @@
           class="btn waves-effect waves-light configurable">
     Connect to Etsy
   </button>
-  <!-- New Photo Upload Button inserted 10px to the right -->
+  <!-- Combined Photo Upload Button -->
   <button id="photoUploadNewBtn"
           class="btn waves-effect waves-light configurable"
           style="margin-left: 10px;">
@@ -388,18 +389,6 @@
     <button id="uploadToEtsyBtn"
             class="btn waves-effect waves-light configurable">
       Update Listing
-    </button>
-  </div>
-
-  <!-- New Upload Photo button container -->
-  <div id="uploadPhotoContainer">
-    <button id="uploadPhotoBtn"
-            class="btn waves-effect waves-light configurable">
-      Upload Photo
-    </button>
-    <button id="uploadReservedBtn"
-            class="btn waves-effect waves-light configurable">
-      Upload Reserved
     </button>
   </div>
 
@@ -557,30 +546,6 @@ Using Sales Report and Product List Files:
   </div>
 
   <!-- Crop Modal -->
-  <!-- COMMENTED OUT OLD CROP MODAL -->
-  <!--
-  <div id="photoCropModal" class="modal">
-    <div class="crop-container">
-      <h4 style="text-align:center; margin: 0 0 10px 0;">Crop Photo</h4>
-      <div class="img-container">
-        <img id="cropImage" src="" alt="Crop Image">
-      </div>
-      <div class="controls">
-        <label for="zoomSlider">Zoom:</label>
-        <input type="range" id="zoomSlider" min="0.1" max="3" step="0.01" value="1">
-      </div>
-      <div style="text-align:center; margin-top:10px;">
-        <button id="saveCropBtn" class="btn waves-effect waves-light">Save</button>
-        <button id="cancelCropBtn"
-                class="btn waves-effect waves-light"
-                style="background-color:#f44336; margin-left:10px;">
-          Cancel
-        </button>
-      </div>
-    </div>
-  </div>
-  -->
-  <!-- NEW CROP MODAL USING Cropper.js -->
   <div id="photoCropModal" class="modal" style="width:650px; height:650px;">
     <div class="crop-container" style="position: relative; width: 100%; height: 100%;">
       <h4 style="text-align:center; margin: 0 0 10px 0;">Crop Photo</h4>
@@ -616,16 +581,12 @@ Using Sales Report and Product List Files:
     let photoNames = [];
     let previewImages = []; // data URLs for display (3000×3000 resized)
     let photoMeta = [];     // AI-generated metadata for alt_text
-    // ADDED GLOBAL VARIABLE FOR DRAGGING:
     let draggedIndex = null;
     let photoIds = [];
-    // ADDED GLOBAL VARIABLE FOR CROP INDEX AND Cropper instance:
     let currentCropIndex = null;
     let cropper = null;
-    // ADDED GLOBAL VARIABLE FOR RESERVED PHOTOS (cells 8-10 reserved)
     let reservedPhotos = [];
 
-    // NEW FUNCTIONS FOR RESERVED PHOTOS:
     function loadReservedPhotos() {
       const stored = localStorage.getItem("reservedPhotos");
       if (stored) {
@@ -638,9 +599,6 @@ Using Sales Report and Product List Files:
       localStorage.setItem("reservedPhotos", JSON.stringify(reservedPhotos));
     }
 
-    // -------------------------------------------
-    // IMAGE RESIZE UTILITY (3000×3000)
-    // -------------------------------------------
     async function resizeImage(dataURL, width, height) {
       return new Promise((resolve, reject) => {
         const img = new Image();
@@ -650,7 +608,6 @@ Using Sales Report and Product List Files:
           canvas.height = height;
           const ctx = canvas.getContext("2d");
           ctx.drawImage(img, 0, 0, width, height);
-          // convert to a JPEG with ~85% quality
           const resizedDataURL = canvas.toDataURL("image/jpeg", 0.85);
           resolve(resizedDataURL);
         };
@@ -658,9 +615,6 @@ Using Sales Report and Product List Files:
         img.src = dataURL;
       });
     }
-    // -------------------------------------------
-    // DRAG & DROP FOR CSV / DOC (ORDERS, LISTINGS)
-    // -------------------------------------------
     async function uploadCSVFile(file) {
       return new Promise((resolve, reject) => {
         const reader = new FileReader();
@@ -824,9 +778,6 @@ Using Sales Report and Product List Files:
       document.getElementById("uploadedFilesList").value = fileList.join("\n");
     }
 
-    // -------------------------------------------
-    // DRAG & DROP IMAGES (Now Resizing to 3000×3000)
-    // -------------------------------------------
     const dropZone = document.getElementById("dropZone");
     dropZone.addEventListener("dragover", e => {
       e.preventDefault(); e.stopPropagation();
@@ -851,11 +802,9 @@ Using Sales Report and Product List Files:
               reader.onerror = reject;
               reader.readAsDataURL(file);
             });
-            // Now resize to 3000×3000
             const resizedDataURL = await resizeImage(dataURL, 3000, 3000);
             previewImages.push(resizedDataURL);
             photoNames.push(file.name);
-            // Create stable ID
             photoIds.push('img-' + Date.now() + '-' + i);
             updatePrimaryPreview();
             updateStaticPreviewGrid();
@@ -880,9 +829,6 @@ Using Sales Report and Product List Files:
       }
     }
 
-    // ----------------------------------------------------------------------
-    // REORDER LOGIC in updateStaticPreviewGrid()
-    // ----------------------------------------------------------------------
     function updateStaticPreviewGrid() {
       for (let i = 0; i < 10; i++) {
         const cell = document.getElementById("previewCell" + i);
@@ -914,7 +860,6 @@ Using Sales Report and Product List Files:
             numOverlay.className = "number-overlay";
             numOverlay.textContent = (i + 1).toString();
             previewBox.appendChild(numOverlay);
-            // Do NOT add Crop button for reserved photos
             previewBox.addEventListener("click", () => {
               showMetadata(i);
             });
@@ -932,7 +877,6 @@ Using Sales Report and Product List Files:
           cell.addEventListener("drop", function(e) {
             e.preventDefault();
             cell.classList.remove("drag-over");
-            // For external file drop onto reserved cell
             if(e.dataTransfer.files && e.dataTransfer.files.length > 0) {
               const file = e.dataTransfer.files[0];
               if(file.type === "image/jpeg" || file.type === "image/png") {
@@ -958,12 +902,10 @@ Using Sales Report and Product List Files:
                 reader.readAsDataURL(file);
               }
             } else {
-              // Internal drag-drop within reserved area only
               let targetIndex = i;
               if(draggedIndex === null) {
                 return;
               }
-              // Block drop if dragged from non-reserved area
               if(draggedIndex < 7) {
                 return;
               }
@@ -991,7 +933,6 @@ Using Sales Report and Product List Files:
             previewBox.className = "preview-box";
             previewBox.setAttribute("data-id", photoIds[i]);
             previewBox.addEventListener("dragstart", e => {
-              // Block drag if the dragged item is reserved
               if(i >= 7) return;
               draggedIndex = i;
             });
@@ -1049,7 +990,6 @@ Using Sales Report and Product List Files:
               if(draggedIndex === null) {
                 return;
               }
-              // Block drop if dragging from reserved area
               if(draggedIndex >= 7) {
                 return;
               }
@@ -1088,9 +1028,6 @@ Using Sales Report and Product List Files:
       instance.open();
     }
 
-    // ----------------------------------------------------------------------
-    // ANALYZE PHOTOS => calls /analyzeImage
-    // ----------------------------------------------------------------------
     document.getElementById("analyzeMetadataBtn").addEventListener("click", async () => {
       for (let i = 0; i < previewImages.length; i++) {
         await analyzePhoto(i);
@@ -1138,9 +1075,6 @@ Using Sales Report and Product List Files:
       }
     }
 
-    // ----------------------------------------------------------------------
-    // OAUTH CONNECT (Etsy)
-    // ----------------------------------------------------------------------
     function generateRandomString(length) {
       const possible = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789';
       let text = '';
@@ -1369,7 +1303,6 @@ Important: Return ONLY the description as plain text.`;
       document.getElementById("titleCount").textContent = "Count: " + text.length;
     }
 
-    // Copy to clipboard
     document.getElementById("copyTitleBtn").addEventListener("click", () => {
       const text = document.getElementById("listingTitle").value;
       navigator.clipboard.writeText(text).catch(err => console.error("Copy error:", err));
@@ -1387,7 +1320,6 @@ Important: Return ONLY the description as plain text.`;
       navigator.clipboard.writeText(lines.join(", "))
         .catch(err => console.error("Error copying key phrases:", err));
     });
-    // Key phrase generation from "listingDescInput" if needed
     document.getElementById("listingDescInput").addEventListener("keydown", async (e) => {
       if (e.key === "Enter" && !e.shiftKey) {
         e.preventDefault();
@@ -1433,9 +1365,7 @@ Generate exactly 13 tag phrases (each ≤ 20 characters). Return as plain text.
         M.toast({ html: "Error generating tag phrases: " + err.message });
       }
     }
-    // ----------------------------------------------------------------------
-    // BUTTON CONFIG
-    // ----------------------------------------------------------------------
+
     document.getElementById("configureButtonsBtn").addEventListener("click", () => {
       const configContainer = document.getElementById("buttonConfigContainer");
       configContainer.innerHTML = "";
@@ -1530,7 +1460,6 @@ Generate exactly 13 tag phrases (each ≤ 20 characters). Return as plain text.
       container13.style.height = (container13.offsetHeight * 2.5) + "px";
     });
 
-    // NEW FUNCTIONS FOR CROPPING WITH Cropper.js:
     function openCropModal(index) {
       currentCropIndex = index;
       const cropModal = document.getElementById("photoCropModal");
@@ -1593,459 +1522,6 @@ Generate exactly 13 tag phrases (each ≤ 20 characters). Return as plain text.
       M.Modal.getInstance(document.getElementById("photoCropModal")).close();
     });
 
-    // ----------------------------------------------------------------------
-    // NEW FUNCTIONS & MODIFICATIONS FOR RESERVED PHOTOS (cells 8-10)
-    // ----------------------------------------------------------------------
-    function updateStaticPreviewGrid() {
-      for (let i = 0; i < 10; i++) {
-        const cell = document.getElementById("previewCell" + i);
-        if(i >= 7) {
-          let rIndex = i - 7;
-          cell.innerHTML = "";
-          if(rIndex < reservedPhotos.length && reservedPhotos[rIndex].src) {
-            const previewBox = document.createElement("div");
-            previewBox.className = "preview-box";
-            previewBox.setAttribute("data-id", reservedPhotos[rIndex].id);
-            previewBox.addEventListener("dragstart", e => {
-              draggedIndex = i;
-            });
-            const img = document.createElement("img");
-            img.src = reservedPhotos[rIndex].src;
-            previewBox.appendChild(img);
-            const removeBtn = document.createElement("div");
-            removeBtn.className = "remove-btn";
-            removeBtn.textContent = "X";
-            removeBtn.addEventListener("click", ev => {
-              ev.stopPropagation();
-              reservedPhotos.splice(rIndex, 1);
-              saveReservedPhotos();
-              updateStaticPreviewGrid();
-              updatePrimaryPreview();
-            });
-            previewBox.appendChild(removeBtn);
-            const numOverlay = document.createElement("div");
-            numOverlay.className = "number-overlay";
-            numOverlay.textContent = (i + 1).toString();
-            previewBox.appendChild(numOverlay);
-            // Do NOT add Crop button for reserved photos
-            previewBox.addEventListener("click", () => {
-              showMetadata(i);
-            });
-            cell.appendChild(previewBox);
-          } else {
-            cell.innerHTML = "Empty";
-          }
-          cell.addEventListener("dragover", function(e) {
-            e.preventDefault();
-            cell.classList.add("drag-over");
-          });
-          cell.addEventListener("dragleave", function(e) {
-            cell.classList.remove("drag-over");
-          });
-          cell.addEventListener("drop", function(e) {
-            e.preventDefault();
-            cell.classList.remove("drag-over");
-            // New alternate approach for reserved cell drop:
-            if(e.dataTransfer.files && e.dataTransfer.files.length > 0) {
-              const file = e.dataTransfer.files[0];
-              if(file.type === "image/jpeg" || file.type === "image/png") {
-                const reader = new FileReader();
-                reader.onload = async function(ev) {
-                  try {
-                    const dataURL = ev.target.result;
-                    const resizedDataURL = await resizeImage(dataURL, 3000, 3000);
-                    let newReserved = {
-                      src: resizedDataURL,
-                      name: file.name,
-                      meta: "",
-                      id: 'img-' + Date.now()
-                    };
-                    reservedPhotos[rIndex] = newReserved;
-                    saveReservedPhotos();
-                    updateStaticPreviewGrid();
-                    updatePrimaryPreview();
-                  } catch (err) {
-                    console.error("Error processing reserved file:", err);
-                  }
-                };
-                reader.readAsDataURL(file);
-              }
-            } else {
-              // Internal drag-drop within reserved area only
-              let targetIndex = i;
-              if(draggedIndex === null) {
-                return;
-              }
-              // Block drop if dragged from non-reserved area
-              if(draggedIndex < 7) {
-                return;
-              }
-              if(draggedIndex === targetIndex) {
-                return;
-              }
-              let temp = reservedPhotos[draggedIndex - 7];
-              reservedPhotos[draggedIndex - 7] = reservedPhotos[rIndex];
-              reservedPhotos[rIndex] = temp;
-              saveReservedPhotos();
-              updateStaticPreviewGrid();
-              updatePrimaryPreview();
-              draggedIndex = null;
-            }
-          });
-          const metadataStatus = document.createElement("div");
-          metadataStatus.className = "metadata-status";
-          metadataStatus.id = "metadataStatus" + i;
-          cell.appendChild(metadataStatus);
-        } else {
-          cell.innerHTML = "Empty";
-          if (i < previewImages.length) {
-            cell.innerHTML = "";
-            const previewBox = document.createElement("div");
-            previewBox.className = "preview-box";
-            previewBox.setAttribute("data-id", photoIds[i]);
-            previewBox.addEventListener("dragstart", e => {
-              // Block drag if the dragged item is reserved
-              if(i >= 7) return;
-              draggedIndex = i;
-            });
-            const img = document.createElement("img");
-            img.src = previewImages[i];
-            previewBox.appendChild(img);
-            const removeBtn = document.createElement("div");
-            removeBtn.className = "remove-btn";
-            removeBtn.textContent = "X";
-            removeBtn.addEventListener("click", ev => {
-              ev.stopPropagation();
-              previewImages.splice(i, 1);
-              photoNames.splice(i, 1);
-              photoMeta.splice(i, 1);
-              photoIds.splice(i, 1);
-              updateStaticPreviewGrid();
-              updatePrimaryPreview();
-            });
-            previewBox.appendChild(removeBtn);
-            const numOverlay = document.createElement("div");
-            numOverlay.className = "number-overlay";
-            numOverlay.textContent = (i + 1).toString();
-            previewBox.appendChild(numOverlay);
-            const cropBtn = document.createElement("button");
-            cropBtn.textContent = "Crop";
-            cropBtn.style.position = "absolute";
-            cropBtn.style.bottom = "2px";
-            cropBtn.style.right = "2px";
-            cropBtn.style.width = "20px";
-            cropBtn.style.height = "20px";
-            cropBtn.style.borderRadius = "50%";
-            cropBtn.style.backgroundColor = "green";
-            cropBtn.style.color = "white";
-            cropBtn.style.fontSize = "10px";
-            cropBtn.addEventListener("click", (ev) => {
-              ev.stopPropagation();
-              openCropModal(i);
-            });
-            previewBox.appendChild(cropBtn);
-            previewBox.addEventListener("click", () => {
-              showMetadata(i);
-            });
-            cell.appendChild(previewBox);
-            cell.addEventListener("dragover", function(e) {
-              e.preventDefault();
-              cell.classList.add("drag-over");
-            });
-            cell.addEventListener("dragleave", function(e) {
-              cell.classList.remove("drag-over");
-            });
-            cell.addEventListener("drop", function(e) {
-              e.preventDefault();
-              cell.classList.remove("drag-over");
-              let targetIndex = i;
-              if(draggedIndex === null) {
-                return;
-              }
-              // Block drop if dragging from reserved area
-              if(draggedIndex >= 7) {
-                return;
-              }
-              if(draggedIndex === targetIndex) {
-                return;
-              }
-              const [movedImage] = previewImages.splice(draggedIndex, 1);
-              previewImages.splice(targetIndex, 0, movedImage);
-              const [movedName] = photoNames.splice(draggedIndex, 1);
-              photoNames.splice(targetIndex, 0, movedName);
-              const [movedMeta] = photoMeta.splice(draggedIndex, 1);
-              photoMeta.splice(targetIndex, 0, movedMeta);
-              const [movedId] = photoIds.splice(draggedIndex, 1);
-              photoIds.splice(targetIndex, 0, movedId);
-              updateStaticPreviewGrid();
-              updatePrimaryPreview();
-              draggedIndex = null;
-            });
-            const metadataStatus = document.createElement("div");
-            metadataStatus.className = "metadata-status";
-            metadataStatus.id = "metadataStatus" + i;
-            cell.appendChild(metadataStatus);
-          }
-        }
-      }
-    }
-
-    function showMetadata(index) {
-      const metadata = photoMeta[index] || "No metadata available for this photo.";
-      document.getElementById("metadataTextarea").value = metadata;
-      const modalElem = document.getElementById("metadataModal");
-      let instance = M.Modal.getInstance(modalElem);
-      if (!instance) {
-        instance = M.Modal.init(modalElem, {});
-      }
-      instance.open();
-    }
-
-    // ----------------------------------------------------------------------
-    // ANALYZE PHOTOS => calls /analyzeImage
-    // ----------------------------------------------------------------------
-    document.getElementById("analyzeMetadataBtn").addEventListener("click", async () => {
-      for (let i = 0; i < previewImages.length; i++) {
-        await analyzePhoto(i);
-      }
-    });
-
-    async function analyzePhoto(index) {
-      const statusElem = document.getElementById("metadataStatus" + index);
-      if (!statusElem) return;
-      statusElem.innerHTML = "";
-      const progressBar = document.createElement("progress");
-      progressBar.className = "metadata-progress";
-      progressBar.max = 100;
-      progressBar.value = 0;
-      statusElem.appendChild(progressBar);
-      let progress = 0;
-      const interval = setInterval(() => {
-        progress = Math.min(progress + 3, 60);
-        progressBar.value = progress;
-      }, 100);
-      try {
-        const rulesText = document.getElementById("analyzeRulesTextarea").value || "";
-        const dataURL = previewImages[index];
-        const blob = await (await fetch(dataURL)).blob();
-        const formData = new FormData();
-        formData.append("rules", rulesText);
-        formData.append("imageFile", blob, photoNames[index] || `image_${index}.jpg`);
-        const resp = await fetch("/.netlify/functions/analyzeImage", {
-          method: "POST",
-          body: formData
-        });
-        clearInterval(interval);
-        progressBar.value = 80;
-        if (!resp.ok) {
-          const errData = await resp.text();
-          throw new Error(`analyzeImage error: ${resp.status} - ${errData}`);
-        }
-        const json = await resp.json();
-        photoMeta[index] = json.metadata || "No metadata returned.";
-        progressBar.value = 100;
-        statusElem.innerHTML = '<span style="color:green; font-size:16px;"><i class="material-icons">check_circle</i></span>';
-      } catch (err) {
-        clearInterval(interval);
-        statusElem.innerHTML = `<span style="color:red;">Error: ${err.message}</span>`;
-      }
-    }
-
-    // ----------------------------------------------------------------------
-    // OAUTH CONNECT (Etsy)
-    // ----------------------------------------------------------------------
-    function generateRandomString(length) {
-      const possible = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789';
-      let text = '';
-      for (let i = 0; i < length; i++) {
-        text += possible.charAt(Math.floor(Math.random() * possible.length));
-      }
-      return text;
-    }
-
-    function base64urlEncode(buffer) {
-      return btoa(String.fromCharCode(...new Uint8Array(buffer)))
-        .replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, '');
-    }
-
-    async function generateCodeChallenge(codeVerifier) {
-      const encoder = new TextEncoder();
-      const data = encoder.encode(codeVerifier);
-      const digest = await crypto.subtle.digest("SHA-256", data);
-      return base64urlEncode(digest);
-    }
-
-    document.getElementById("connectEtsyBtn").addEventListener("click", async () => {
-      const state = "randomState123";
-      const scope = "listings_w listings_r";
-      const codeVerifier = generateRandomString(64);
-      localStorage.setItem("etsy_code_verifier", codeVerifier);
-      const codeChallenge = await generateCodeChallenge(codeVerifier);
-      const etsyAuthUrl =
-        `https://www.etsy.com/oauth/connect?response_type=code&client_id=${CLIENT_ID}` +
-        `&redirect_uri=${encodeURIComponent(REDIRECT_URI)}` +
-        `&scope=${encodeURIComponent(scope)}` +
-        `&state=${state}` +
-        `&code_challenge=${encodeURIComponent(codeChallenge)}` +
-        `&code_challenge_method=S256`;
-      window.location.href = etsyAuthUrl;
-    });
-
-    document.addEventListener("DOMContentLoaded", () => {
-      loadButtonPositions();
-      loadReservedPhotos();
-      const urlParams = new URLSearchParams(window.location.search);
-      const code = urlParams.get("code");
-      if (code) {
-        exchangeCodeForToken(code);
-        window.history.replaceState({}, document.title, REDIRECT_URI);
-      }
-      updateStaticPreviewGrid();
-      updateUploadedFilesList();
-    });
-
-    async function exchangeCodeForToken(code) {
-      const codeVerifier = localStorage.getItem("etsy_code_verifier");
-      if (!codeVerifier) {
-        M.toast({ html: "No code verifier found. Please try connecting again." });
-        return;
-      }
-      try {
-        const response = await fetch(`/.netlify/functions/exchangeToken?code=${encodeURIComponent(code)}&code_verifier=${encodeURIComponent(codeVerifier)}`);
-        const tokenData = await response.json();
-        if (tokenData.access_token) {
-          accessToken = tokenData.access_token;
-          M.toast({ html: "Connected to Etsy!" });
-        } else {
-          M.toast({ html: "Error obtaining token: " + JSON.stringify(tokenData) });
-        }
-      } catch (error) {
-        console.error("Error exchanging code:", error);
-        M.toast({ html: "Error exchanging code for token" });
-      }
-    }
-
-    // ----------------------------------------------------------------------
-    // UPLOAD PHOTOS (includes alt_text from photoMeta)
-    // ----------------------------------------------------------------------
-    document.getElementById("uploadPhotoBtn").addEventListener("click", async () => {
-      const listingInput = document.getElementById("shopListings").value.trim();
-      if (!listingInput) {
-        M.toast({ html: "Please provide a listing URL or ID in 'My Etsy Shop Listings'." });
-        return;
-      }
-      let listingId;
-      if (/^\d+$/.test(listingInput)) {
-        listingId = listingInput;
-      } else {
-        const match = listingInput.match(/\/listing\/(\d+)/);
-        if (match) {
-          listingId = match[1];
-        } else {
-          M.toast({ html: "Invalid listing URL or ID." });
-          return;
-        }
-      }
-      if (previewImages.length === 0) {
-        M.toast({ html: "No images to upload. Please drag and drop images first." });
-        return;
-      }
-      for (let i = 0; i < previewImages.length; i++) {
-        const dataURL = previewImages[i];
-        const altText = photoMeta[i] || "";
-        const rankNumber = i + 1;
-        try {
-          const res = await fetch(dataURL);
-          const blob = await res.blob();
-          const formData = new FormData();
-          formData.append("listingId", listingId);
-          formData.append("token", accessToken);
-          formData.append("fileName", photoNames[i] || `uploaded_photo_${i}.jpg`);
-          formData.append("rank", rankNumber);
-          formData.append("alt_text", altText);
-          formData.append("file", blob, photoNames[i] || `uploaded_photo_${i}.jpg`);
-          const uploadUrl = `/.netlify/functions/imageUpload`;
-          const response = await fetch(uploadUrl, {
-            method: "POST",
-            body: formData
-          });
-          if (!response.ok) {
-            M.toast({ html: `Error uploading photo #${rankNumber}: ` + response.status });
-          } else {
-            M.toast({ html: `Photo #${rankNumber} uploaded with alt_text!` });
-          }
-        } catch (e) {
-          console.error(`Exception uploading photo #${rankNumber}:`, e);
-          M.toast({ html: `Exception uploading photo #${rankNumber}: ${e.message}` });
-        }
-      }
-    });
-
-    // NEW EVENT LISTENER FOR "Upload Reserved" BUTTON
-    if (!window.uploadReservedBtnBound) {
-      document.getElementById("uploadReservedBtn").addEventListener("click", async () => {
-        // Ensure we have a listing ID
-        const listingInput = document.getElementById("shopListings").value.trim();
-        if (!listingInput) {
-          M.toast({ html: "Please provide a listing URL or ID in 'My Etsy Shop Listings'." });
-          return;
-        }
-        let listingId;
-        if (/^\d+$/.test(listingInput)) {
-          listingId = listingInput;
-        } else {
-          const match = listingInput.match(/\/listing\/(\d+)/);
-          if (match) {
-            listingId = match[1];
-          } else {
-            M.toast({ html: "Invalid listing URL or ID." });
-            return;
-          }
-        }
-        // Check if we have any reserved photos to upload
-        if (reservedPhotos.length === 0) {
-          M.toast({ html: "No reserved photos to upload." });
-          return;
-        }
-        // Iterate over the reservedPhotos array and upload each
-        for (let i = 0; i < reservedPhotos.length; i++) {
-          const dataURL = reservedPhotos[i].src;
-          const altText = reservedPhotos[i].meta || "";
-          const rankNumber = i + 8; // Reserved photos have ranks 8, 9, and 10
-          try {
-            const res = await fetch(dataURL);
-            const blob = await res.blob();
-            const formData = new FormData();
-            formData.append("listingId", listingId);
-            formData.append("token", accessToken);
-            formData.append("fileName", reservedPhotos[i].name || `reserved_photo_${i}.jpg`);
-            formData.append("rank", rankNumber);
-            formData.append("alt_text", altText);
-            formData.append("file", blob, reservedPhotos[i].name || `reserved_photo_${i}.jpg`);
-            const uploadUrl = `/.netlify/functions/imageUpload`;
-            const response = await fetch(uploadUrl, {
-              method: "POST",
-              body: formData
-            });
-            if (!response.ok) {
-              M.toast({ html: `Error uploading reserved photo #${rankNumber}: ` + response.status });
-            } else {
-              M.toast({ html: `Reserved photo #${rankNumber} uploaded successfully!` });
-            }
-          } catch (e) {
-            console.error(`Exception uploading reserved photo #${rankNumber}:`, e);
-            M.toast({ html: `Exception uploading reserved photo #${rankNumber}: ${e.message}` });
-          }
-        }
-      });
-      window.uploadReservedBtnBound = true;
-    }
-
-    // ----------------------------------------------------------------------
-    // NEW PHOTO UPLOAD BATCH FUNCTIONALITY
-    // ----------------------------------------------------------------------
-    // This function wraps the existing Upload Photo and Upload Reserved functionality
-    // and ensures they run sequentially.
     async function uploadPhotos() {
       const listingInput = document.getElementById("shopListings").value.trim();
       if (!listingInput) {
@@ -2124,7 +1600,7 @@ Generate exactly 13 tag phrases (each ≤ 20 characters). Return as plain text.
       for (let i = 0; i < reservedPhotos.length; i++) {
         const dataURL = reservedPhotos[i].src;
         const altText = reservedPhotos[i].meta || "";
-        const rankNumber = i + 8; // Reserved photos have ranks 8, 9, and 10
+        const rankNumber = i + 8;
         try {
           const res = await fetch(dataURL);
           const blob = await res.blob();
@@ -2152,7 +1628,6 @@ Generate exactly 13 tag phrases (each ≤ 20 characters). Return as plain text.
       }
     }
 
-    // New sequential batch process for Photo Upload button
     document.getElementById("photoUploadNewBtn").addEventListener("click", async () => {
       const btn = document.getElementById("photoUploadNewBtn");
       btn.disabled = true;
@@ -2165,10 +1640,6 @@ Generate exactly 13 tag phrases (each ≤ 20 characters). Return as plain text.
         btn.disabled = false;
       }
     });
-
-    // ----------------------------------------------------------------------
-    // END OF SCRIPT
-    // ----------------------------------------------------------------------
   </script>
 </body>
 </html>
