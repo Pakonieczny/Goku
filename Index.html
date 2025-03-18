@@ -214,6 +214,12 @@
     #topButtons {
       margin: 10px 0;
     }
+    /* Ensure etsyShopListingsContainer is repositionable */
+    #etsyShopListingsContainer {
+      position: relative;
+      margin-top: 10px;
+      margin-left: 10px;
+    }
     /* ADDED NEW STYLE FOR DRAG-OVER VISUAL FEEDBACK: */
     .drag-over {
       background-color: rgba(0, 0, 255, 0.2);
@@ -269,7 +275,7 @@
       Update Listing
     </button>
     <!-- My Etsy Shop Listings container (added id for configuration) -->
-    <div id="etsyShopListingsContainer" style="margin-top: 10px; margin-left: 10px;">
+    <div id="etsyShopListingsContainer">
       <div class="section-heading configurable">My Etsy Shop Listings</div>
       <div class="textbox-container configurable">
         <textarea id="shopListings"
@@ -1370,6 +1376,7 @@ Generate exactly 13 tag phrases (each ≤ 20 characters). Return as plain text.
     document.getElementById("configureButtonsBtn").addEventListener("click", () => {
       const configContainer = document.getElementById("buttonConfigContainer");
       configContainer.innerHTML = "";
+      // Include the new elements in the selector list
       const selectors = [
         "button:not(#configureButtonsBtn)",
         "#listingDescContainer",
