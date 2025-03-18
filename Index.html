@@ -204,11 +204,13 @@
     #showAnalyzeRulesBtn {
       margin-top: 25px;
     }
-    .phrases-header {
-      position: relative; top: 125px; left: 10px;
+    /* New container for "2. User Provided Search Key Phrases" */
+    #userProvidedKeyPhrasesContainer {
+      position: relative;
+      top: 125px;
+      left: 10px;
     }
-
-    /* Positioning for top buttons */
+    /* Top buttons section */
     #topButtons {
       margin: 10px 0;
     }
@@ -260,13 +262,14 @@
             style="margin-left: 10px;">
       Photo Upload
     </button>
-    <!-- Updated Update Listing Button (now positioned at the top) -->
+    <!-- Updated Update Listing Button (positioned at the top) -->
     <button id="uploadToEtsyBtn"
             class="btn waves-effect waves-light configurable"
             style="margin-left: 10px;">
       Update Listing
     </button>
-    <div style="margin-top: 10px; margin-left: 10px;">
+    <!-- My Etsy Shop Listings container (added id for configuration) -->
+    <div id="etsyShopListingsContainer" style="margin-top: 10px; margin-left: 10px;">
       <div class="section-heading configurable">My Etsy Shop Listings</div>
       <div class="textbox-container configurable">
         <textarea id="shopListings"
@@ -277,8 +280,7 @@
   </div>
 
   <!-- Etsy Listing Generator UI -->
-  <div class="phrases-header configurable"
-       style="position: relative; top: 125px; left: 10px;">
+  <div class="phrases-header configurable" id="userProvidedKeyPhrasesContainer">
     <span class="section-heading configurable">2. User Provided Search Key Phrases</span>
     <button id="clearKeyPhrasesBtn"
             class="btn-small waves-effect waves-light configurable">
@@ -1321,11 +1323,9 @@ Generate exactly 13 tag phrases (each ≤ 20 characters). Return as plain text.
         // Secondary check: ensure each phrase is ≤ 20 characters (including spaces)
         const isValid = phrasesArray.every(p => p.length <= 20);
         if (!isValid) {
-          // If not valid, recursively call the function until a valid response is obtained.
           console.warn("One or more phrases exceeded 20 characters. Re-generating key phrases...");
           return await generateTagPhrases();
         }
-        // If valid, set the textarea value
         document.getElementById("searchKeyPhrases").value = phrasesArray.join("\n");
       } catch (err) {
         console.error("Error generating tag phrases:", err);
@@ -1380,7 +1380,10 @@ Generate exactly 13 tag phrases (each ≤ 20 characters). Return as plain text.
         "#previewGridContainer",
         "#primaryPreview",
         "#container13",
-        "#uploadedFilesList"
+        "#uploadedFilesList",
+        "#uploadToEtsyBtn",
+        "#etsyShopListingsContainer",
+        "#userProvidedKeyPhrasesContainer"
       ].join(", ");
       const elements = document.querySelectorAll(selectors);
       const table = document.createElement("table");
@@ -1430,7 +1433,10 @@ Generate exactly 13 tag phrases (each ≤ 20 characters). Return as plain text.
         "#previewGridContainer",
         "#primaryPreview",
         "#container13",
-        "#uploadedFilesList"
+        "#uploadedFilesList",
+        "#uploadToEtsyBtn",
+        "#etsyShopListingsContainer",
+        "#userProvidedKeyPhrasesContainer"
       ].join(", ");
       const elements = document.querySelectorAll(selectors);
       const positions = {};
