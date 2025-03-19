@@ -693,8 +693,6 @@ https://www.etsy.com/shop/CustomBrites/policy
         reader.readAsDataURL(file);
       });
     }
-
-    // UPDATED: store_id capturing
     async function updateVectorStore() {
       const allFileIds = [...soldOrdersCSV, ...listingsCSV].map(file => file.id);
       if (!allFileIds.length) return console.log("No supported files uploaded yet.");
@@ -1117,25 +1115,17 @@ https://www.etsy.com/shop/CustomBrites/policy
     });
 
     // -------------- Generate Key Phrases Using CSV Context --------------
-    async function generateTagPhrases() {
-      let question = document.getElementById("listingDescInput").value.trim();
-      if (!question) {
-        M.toast({ html: "Please enter a question in the Listing Description." });
-        return;
-      }
-      let keywordRules = stripMarkdownJSON(document.getElementById("keywordRulesTextarea").value);
-      let extraText = "Emphasis on SEO and generating effective Etsy tag phrases.";
 
-      // RETRIEVE store_id from localStorage
+    // Helper: calls OpenAI to get 13 phrases at once, with context
+    async function getInitialPhrases(question, keywordRules) {
       let store_id = localStorage.getItem("vectorStoreId");
       if (!store_id) {
         console.warn("No store_id found in localStorage. CSV context may not be loaded!");
       }
 
-      // 1) Retrieve relevant CSV context
+      // Step 1) retrieve relevant CSV context
       let retrievedContext = "";
       try {
-        // UPDATED: we now call the same Netlify function with action="query" & pass store_id
         let resp = await fetch("/.netlify/functions/vectorStore", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
@@ -1146,7 +1136,6 @@ https://www.etsy.com/shop/CustomBrites/policy
             topK: 5
           })
         });
-
         if (resp.ok) {
           let data = await resp.json();
           retrievedContext = data?.data || "";
@@ -1156,45 +1145,150 @@ https://www.etsy.com/shop/CustomBrites/policy
       } catch (err) {
         console.error("Error retrieving CSV context:", err);
       }
-      
+
       let prompt = `
 Here is some relevant data from our CSV files:
 ${retrievedContext}
 
 Listing Description (for emphasis): "${question}"
-${extraText}
+Emphasis on SEO and generating effective Etsy tag phrases.
 
 Keyword Rules:
 ${keywordRules}
 
 Generate exactly 13 SEO key phrases (each ≤ 20 characters). Return as plain text.
       `;
-      
-      try {
+
+      let payload = {
+        model: modelName,
+        messages: [
+          { role: "system", content: "Use the CSV context above to generate more accurate key phrases." },
+          { role: "user", content: prompt }
+        ],
+        temperature: 0.7,
+        max_tokens: 500
+      };
+      let data = await callOpenAI(payload);
+      let answer = data.choices[0].message.content || "";
+      // parse into array
+      let phrasesArray = answer
+        .split(/[\n,]+/)
+        .map(s => s.replace(/^\d+\.\s*/, "").trim())
+        .filter(p => p);
+
+      return phrasesArray;
+    }
+
+    // NEW HELPER: re-generate ONE phrase if it’s >20 characters
+    async function regenerateSinglePhrase(question, keywordRules, currentValid, maxAttempts = 5) {
+      /*
+         'currentValid' is an array of all the other 12 valid phrases
+         so we can avoid conflicts or duplicates if we want. 
+         For simplicity, we’ll just keep the same rules. 
+         We’ll rely on GPT to produce something new but also ≤ 20 chars.
+      */
+      for (let attempt = 1; attempt <= maxAttempts; attempt++) {
+        let store_id = localStorage.getItem("vectorStoreId");
+        let retrievedContext = "";
+        try {
+          // optional: re-fetch context for each single phrase
+          let resp = await fetch("/.netlify/functions/vectorStore", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({
+              action: "query",
+              store_id,
+              query: question,
+              topK: 5
+            })
+          });
+          if (resp.ok) {
+            let data = await resp.json();
+            retrievedContext = data?.data || "";
+          }
+        } catch (err) {
+          console.warn("Could not retrieve CSV context for single phrase regeneration:", err);
+        }
+
+        let prompt = `
+We have 12 valid phrases:
+${currentValid.join(", ")}
+
+Now produce ONE new phrase (≤20 chars) that satisfies the same rules:
+
+Here is some relevant data from our CSV:
+${retrievedContext}
+
+Keyword Rules:
+${keywordRules}
+Return only one phrase in plain text.
+        `;
+
         let payload = {
           model: modelName,
           messages: [
-            { role: "system", content: "Use the CSV context above to generate more accurate key phrases." },
+            { role: "system", content: "Generate a single phrase, up to 20 characters." },
             { role: "user", content: prompt }
           ],
           temperature: 0.7,
-          max_tokens: 500
+          max_tokens: 150
         };
+
         let data = await callOpenAI(payload);
         let answer = data.choices[0].message.content || "";
-        let phrasesArray = answer
-          .split(/[\n,]+/)
-          .map(s => s.replace(/^\d+\.\s*/, "").trim())
-          .filter(p => p);
-        if (!phrasesArray.every(p => p.length <= 20)) {
-          console.warn("One or more phrases exceeded 20 characters.");
+        let candidate = answer.trim()
+          .replace(/^\d+\.\s*/, "")
+          .split("\n")[0] // just in case GPT returns multiple lines
+          .trim();
+
+        // Check length
+        if (candidate.length <= 20) {
+          return candidate;
         }
+        console.warn(`Attempt ${attempt}: Single phrase too long => "${candidate}"`);
+      }
+      throw new Error("Failed to generate a single phrase under 20 chars after multiple attempts.");
+    }
+
+    // MAIN function for generating tag phrases
+    async function generateTagPhrases() {
+      let question = document.getElementById("listingDescInput").value.trim();
+      if (!question) {
+        M.toast({ html: "Please enter a question in the Listing Description." });
+        return;
+      }
+      let keywordRules = stripMarkdownJSON(document.getElementById("keywordRulesTextarea").value);
+
+      try {
+        // 1) get all 13 phrases in a single pass
+        let phrasesArray = await getInitialPhrases(question, keywordRules);
+
+        // 2) Validate each phrase. If any exceed 20 chars, re-generate them individually:
+        for (let i = 0; i < phrasesArray.length; i++) {
+          if (phrasesArray[i].length > 20) {
+            // pass the other 12 valid phrases so we can reference them in the prompt
+            let otherValid = phrasesArray.filter((_, idx) => idx !== i && phrasesArray[idx].length <= 20);
+            let newPhrase = await regenerateSinglePhrase(question, keywordRules, otherValid);
+            // replace the invalid phrase
+            phrasesArray[i] = newPhrase;
+          }
+        }
+
+        // final sanity check: if anything is STILL >20 chars, throw error
+        if (phrasesArray.some(p => p.length > 20)) {
+          throw new Error("Could not fix some phrases under 20 chars. Please try again.");
+        }
+
+        // 3) Done
         document.getElementById("searchKeyPhrases").value = phrasesArray.join("\n");
+        M.toast({ html: "Tag Phrases generated successfully!" });
+
       } catch (err) {
         console.error(err);
-        M.toast({ html: "Error generating tag phrases: " + err.message });
+        M.toast({ html: "Error generating valid tag phrases: " + err.message });
       }
     }
+
     // Fire generateTagPhrases() on Enter
     document.getElementById("listingDescInput").addEventListener("keydown", async (e) => {
       if (e.key === "Enter" && !e.shiftKey) {
@@ -1285,6 +1379,8 @@ Important: Return ONLY the description as plain text.`;
         document.getElementById("listingDescription").value = "Error: " + error;
       }
     }
+
+    // Calls OpenAI via your netlify function
     async function callOpenAI(payload) {
       let response = await fetch("/.netlify/functions/openaiProxy", {
         method: "POST",
