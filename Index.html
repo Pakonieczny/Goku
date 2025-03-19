@@ -457,39 +457,16 @@ Using Sales Report and Product List Files:
   <script src="https://code.jquery.com/jquery-3.6.0.min.js"></script>
   <script src="https://cdnjs.cloudflare.com/ajax/libs/materialize/1.0.0/js/materialize.min.js"></script>
   
+  <!-- Load new metadataHandler module -->
+  <script src="metadataHandler.js"></script>
+
   <script>
     // Helper function to strip markdown or JSON formatting (currently a passthrough)
     function stripMarkdownJSON(text) {
       return text;
     }
 
-    /*
-      NEW: Remove/replace any characters outside the Latin-1 range,
-      so btoa() won't throw an error when piexifjs inserts EXIF data.
-    */
-    function safeForExif(str) {
-      // Drop any characters whose charCode > 255
-      return str.replace(/[^\x00-\xFF]/g, "");
-    }
-
-    /*
-      UPDATED: Helper to embed alt text into JPEG EXIF using piexifjs.
-      We store the sanitized text in the "ImageDescription" field (0th IFD).
-    */
-    function embedAltTextInDataURL(originalDataURL, altText) {
-      let exifObj = piexif.load(originalDataURL);
-
-      // Clean up any unicode outside Latin-1
-      let safeText = safeForExif(altText);
-
-      // Put the sanitized text into the EXIF ImageDescription
-      exifObj["0th"][piexif.ImageIFD.ImageDescription] = safeText;
-
-      let exifBytes = piexif.dump(exifObj);
-      let newDataURL = piexif.insert(exifBytes, originalDataURL);
-      return newDataURL;
-    }
-
+    // Global variables
     const ETSY_SHOP_URL = "https://www.etsy.com/shop/custombrites";
     const CLIENT_ID = "k75zdspz4r99txpqdji7i2em";
     const REDIRECT_URI = "https://delicate-tanuki-616ac0.netlify.app/";
@@ -510,7 +487,6 @@ Using Sales Report and Product List Files:
     let infoUpdateComplete = false;
 
     const appendedDescriptionText = `
-
 • We use the Highest Quality materials from the US and Italy.
 • Your purchase will come packaged and ready for gift giving!
 
@@ -1174,198 +1150,6 @@ https://www.etsy.com/shop/CustomBrites/policy
       return new Blob([u8arr], { type: mime });
     }
 
-    /*
-      UPDATED: We embed the GPT metadata in EXIF, but we also
-      sanitize it first with safeForExif() to avoid btoa() errors.
-    */
-    document.getElementById("analyzeMetadataBtn").addEventListener("click", async () => {
-      if (!previewImages.length) {
-        M.toast({ html: "No images available to analyze." });
-        return;
-      }
-      const dataUrl = previewImages[0];
-      const blob = dataURLtoBlob(dataUrl);
-      const formData = new FormData();
-      formData.append("imageFile", blob, "analyzed_photo.jpg");
-      formData.append("rules", "Analyze the image and extract SEO-friendly metadata.");
-      try {
-        const response = await fetch("/.netlify/functions/analyzeImage", {
-          method: "POST",
-          body: formData
-        });
-        if (!response.ok) {
-          const errorText = await response.text();
-          M.toast({ html: "Error analyzing photo: " + errorText });
-          return;
-        }
-        const result = await response.json();
-        const metadata = result.metadata || "No metadata returned.";
-
-        // Embed the alt text in the EXIF, removing problematic characters
-        let updatedDataURL = embedAltTextInDataURL(previewImages[0], metadata);
-        // Replace the original data URL with the new one that has EXIF
-        previewImages[0] = updatedDataURL;
-
-        // Also store the text in the photoMeta array if you want to pass it to Etsy alt text
-        photoMeta[0] = metadata;
-
-        // Show it in the popup, for user reference
-        document.getElementById("metadataTextarea").value = metadata;
-        const metadataModalElem = document.getElementById("metadataModal");
-        let metadataModalInstance = M.Modal.getInstance(metadataModalElem);
-        if (!metadataModalInstance) {
-          metadataModalInstance = M.Modal.init(metadataModalElem);
-        }
-        metadataModalInstance.open();
-
-        M.toast({ html: "Alt text embedded into photo #1 EXIF (Latin-1 safe)!" });
-      } catch (error) {
-        console.error("Error in analyze photo:", error);
-        M.toast({ html: "Exception: " + error.message });
-      }
-    });
-
-    async function regenerateSinglePhrase(question, keywordRules, currentValid, maxAttempts = 5) {
-      for (let attempt = 1; attempt <= maxAttempts; attempt++) {
-        let store_id = localStorage.getItem("vectorStoreId");
-        let retrievedContext = "";
-        try {
-          let resp = await fetch("/.netlify/functions/vectorStore", {
-            method: "POST",
-            headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({
-              action: "query",
-              store_id,
-              query: question,
-              topK: 5
-            })
-          });
-          if (resp.ok) {
-            let data = await resp.json();
-            retrievedContext = data?.data || "";
-          }
-        } catch (err) {
-          console.warn("Could not retrieve CSV context for single phrase regeneration:", err);
-        }
-        let prompt = `
-We have 12 valid phrases:
-${currentValid.join(", ")}
-
-Now produce ONE new phrase (≤20 chars) that satisfies the same rules:
-
-Here is some relevant data from our CSV:
-${retrievedContext}
-
-Keyword Rules:
-${keywordRules}
-Return only one phrase in plain text.
-        `;
-        let payload = {
-          model: modelName,
-          messages: [
-            { role: "system", content: "Generate a single phrase, up to 20 characters." },
-            { role: "user", content: prompt }
-          ],
-          temperature: 0.7,
-          max_tokens: 150
-        };
-        let data = await callOpenAI(payload);
-        let answer = data.choices[0].message.content || "";
-        let candidate = answer.trim()
-          .replace(/^\d+\.\s*/, "")
-          .split("\n")[0]
-          .trim();
-        if (candidate.length <= 20) {
-          return candidate;
-        }
-        console.warn(`Attempt ${attempt}: Single phrase too long => "${candidate}"`);
-      }
-      throw new Error("Failed to generate a single phrase under 20 chars after multiple attempts.");
-    }
-
-    async function getInitialPhrases(question, keywordRules) {
-      let store_id = localStorage.getItem("vectorStoreId");
-      if (!store_id) {
-        console.warn("No store_id found in localStorage. CSV context may not be loaded!");
-      }
-      let retrievedContext = "";
-      try {
-        let resp = await fetch("/.netlify/functions/vectorStore", {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({
-            action: "query",
-            store_id,
-            query: question,
-            topK: 5
-          })
-        });
-        if (resp.ok) {
-          let data = await resp.json();
-          retrievedContext = data?.data || "";
-        } else {
-          console.warn("Could not retrieve CSV context from vector store. HTTP status:", resp.status);
-        }
-      } catch (err) {
-        console.error("Error retrieving CSV context:", err);
-      }
-      let prompt = `
-Here is some relevant data from our CSV files:
-${retrievedContext}
-
-Listing Description (for emphasis): "${question}"
-Emphasis on SEO and generating effective Etsy tag phrases.
-
-Keyword Rules:
-${keywordRules}
-
-Generate exactly 13 SEO key phrases (each ≤ 20 characters). Return as plain text.
-      `;
-      let payload = {
-        model: modelName,
-        messages: [
-          { role: "system", content: "Use the CSV context above to generate more accurate key phrases." },
-          { role: "user", content: prompt }
-        ],
-        temperature: 0.7,
-        max_tokens: 500
-      };
-      let data = await callOpenAI(payload);
-      let answer = data.choices[0].message.content || "";
-      let phrasesArray = answer
-        .split(/[\n,]+/)
-        .map(s => s.replace(/^\d+\.\s*/, "").trim())
-        .filter(p => p);
-      return phrasesArray;
-    }
-
-    async function generateTagPhrases() {
-      let question = document.getElementById("listingDescInput").value.trim();
-      if (!question) {
-        M.toast({ html: "Please enter a question in the Listing Description." });
-        return;
-      }
-      let keywordRules = stripMarkdownJSON(document.getElementById("keywordRulesTextarea").value);
-      try {
-        let phrasesArray = await getInitialPhrases(question, keywordRules);
-        for (let i = 0; i < phrasesArray.length; i++) {
-          if (phrasesArray[i].length > 20) {
-            let otherValid = phrasesArray.filter((_, idx) => idx !== i && phrasesArray[idx].length <= 20);
-            let newPhrase = await regenerateSinglePhrase(question, keywordRules, otherValid);
-            phrasesArray[i] = newPhrase;
-          }
-        }
-        if (phrasesArray.some(p => p.length > 20)) {
-          throw new Error("Could not fix some phrases under 20 chars. Please try again.");
-        }
-        document.getElementById("searchKeyPhrases").value = phrasesArray.join("\n");
-        M.toast({ html: "Tag Phrases generated successfully!" });
-      } catch (err) {
-        console.error(err);
-        M.toast({ html: "Error generating valid tag phrases: " + err.message });
-      }
-    }
-
     document.getElementById("listingDescInput").addEventListener("keydown", async (e) => {
       if (e.key === "Enter" && !e.shiftKey) {
         e.preventDefault();
@@ -1746,6 +1530,160 @@ Important: Return ONLY the description as plain text.`;
           M.toast({ html: `Exception uploading reserved photo #${rankNumber}: ${e.message}` });
         }
       }
+    }
+
+    // Updated event listener for analyzing metadata using metadataHandler module
+    document.getElementById("analyzeMetadataBtn").addEventListener("click", async () => {
+      // Analyze and embed metadata into the first image (index 0)
+      await metadataHandler.analyzeAndEmbedMetadata(0);
+      // Open the metadata modal to display the result
+      const metadataModalElem = document.getElementById("metadataModal");
+      let metadataModalInstance = M.Modal.getInstance(metadataModalElem);
+      if (!metadataModalInstance) {
+        metadataModalInstance = M.Modal.init(metadataModalElem);
+      }
+      metadataModalInstance.open();
+    });
+
+    async function generateTagPhrases() {
+      let question = document.getElementById("listingDescInput").value.trim();
+      if (!question) {
+        M.toast({ html: "Please enter a question in the Listing Description." });
+        return;
+      }
+      let keywordRules = stripMarkdownJSON(document.getElementById("keywordRulesTextarea").value);
+      try {
+        let phrasesArray = await getInitialPhrases(question, keywordRules);
+        for (let i = 0; i < phrasesArray.length; i++) {
+          if (phrasesArray[i].length > 20) {
+            let otherValid = phrasesArray.filter((_, idx) => idx !== i && phrasesArray[idx].length <= 20);
+            let newPhrase = await regenerateSinglePhrase(question, keywordRules, otherValid);
+            phrasesArray[i] = newPhrase;
+          }
+        }
+        if (phrasesArray.some(p => p.length > 20)) {
+          throw new Error("Could not fix some phrases under 20 chars. Please try again.");
+        }
+        document.getElementById("searchKeyPhrases").value = phrasesArray.join("\n");
+        M.toast({ html: "Tag Phrases generated successfully!" });
+      } catch (err) {
+        console.error(err);
+        M.toast({ html: "Error generating valid tag phrases: " + err.message });
+      }
+    }
+
+    async function getInitialPhrases(question, keywordRules) {
+      let store_id = localStorage.getItem("vectorStoreId");
+      if (!store_id) {
+        console.warn("No store_id found in localStorage. CSV context may not be loaded!");
+      }
+      let retrievedContext = "";
+      try {
+        let resp = await fetch("/.netlify/functions/vectorStore", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            action: "query",
+            store_id,
+            query: question,
+            topK: 5
+          })
+        });
+        if (resp.ok) {
+          let data = await resp.json();
+          retrievedContext = data?.data || "";
+        } else {
+          console.warn("Could not retrieve CSV context from vector store. HTTP status:", resp.status);
+        }
+      } catch (err) {
+        console.error("Error retrieving CSV context:", err);
+      }
+      let prompt = `
+Here is some relevant data from our CSV files:
+${retrievedContext}
+
+Listing Description (for emphasis): "${question}"
+Emphasis on SEO and generating effective Etsy tag phrases.
+
+Keyword Rules:
+${keywordRules}
+
+Generate exactly 13 SEO key phrases (each ≤ 20 characters). Return as plain text.
+      `;
+      let payload = {
+        model: modelName,
+        messages: [
+          { role: "system", content: "Use the CSV context above to generate more accurate key phrases." },
+          { role: "user", content: prompt }
+        ],
+        temperature: 0.7,
+        max_tokens: 500
+      };
+      let data = await callOpenAI(payload);
+      let answer = data.choices[0].message.content || "";
+      let phrasesArray = answer
+        .split(/[\n,]+/)
+        .map(s => s.replace(/^\d+\.\s*/, "").trim())
+        .filter(p => p);
+      return phrasesArray;
+    }
+
+    async function regenerateSinglePhrase(question, keywordRules, currentValid, maxAttempts = 5) {
+      for (let attempt = 1; attempt <= maxAttempts; attempt++) {
+        let store_id = localStorage.getItem("vectorStoreId");
+        let retrievedContext = "";
+        try {
+          let resp = await fetch("/.netlify/functions/vectorStore", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({
+              action: "query",
+              store_id,
+              query: question,
+              topK: 5
+            })
+          });
+          if (resp.ok) {
+            let data = await resp.json();
+            retrievedContext = data?.data || "";
+          }
+        } catch (err) {
+          console.warn("Could not retrieve CSV context for single phrase regeneration:", err);
+        }
+        let prompt = `
+We have 12 valid phrases:
+${currentValid.join(", ")}
+
+Now produce ONE new phrase (≤20 chars) that satisfies the same rules:
+
+Here is some relevant data from our CSV:
+${retrievedContext}
+
+Keyword Rules:
+${keywordRules}
+Return only one phrase in plain text.
+        `;
+        let payload = {
+          model: modelName,
+          messages: [
+            { role: "system", content: "Generate a single phrase, up to 20 characters." },
+            { role: "user", content: prompt }
+          ],
+          temperature: 0.7,
+          max_tokens: 150
+        };
+        let data = await callOpenAI(payload);
+        let answerText = data.choices[0].message.content || "";
+        let candidate = answerText.trim()
+          .replace(/^\d+\.\s*/, "")
+          .split("\n")[0]
+          .trim();
+        if (candidate.length <= 20) {
+          return candidate;
+        }
+        console.warn(`Attempt ${attempt}: Single phrase too long => "${candidate}"`);
+      }
+      throw new Error("Failed to generate a single phrase under 20 chars after multiple attempts.");
     }
   </script>
 </body>

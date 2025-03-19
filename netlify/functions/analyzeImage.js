@@ -1,22 +1,12 @@
 // /netlify/functions/analyzeImage.js
+//
+// Note: This function now strictly handles the analysis of the image and returns metadata.
+// The embedding of metadata into the image's EXIF is handled on the client side by metadataHandler.js.
 
 const formidable = require("formidable");
 const { Readable } = require("stream");
 const fs = require("fs");
 const fetch = require("node-fetch");
-
-/**
- * This serverless function:
- *  - Receives a multipart/form-data POST:
- *      "imageFile" => the actual binary file
- *      "rules" => optional text instructions from the user
- *  - Converts the uploaded file to base64
- *  - Passes it to a GPT-4 vision endpoint in "image_url" format.
- * 
- * Requirements:
- *  - OPENAI_API_KEY in your environment
- *  - Access to a GPT-4 model with vision
- */
 
 exports.handler = async function(event, context) {
   try {
@@ -80,7 +70,6 @@ exports.handler = async function(event, context) {
           {
             type: "image_url",
             image_url: {
-              // "detail": "high", // optionally set "low"/"high"/"auto"
               url: `data:${mimeType};base64,${base64Image}`
             }
           }
