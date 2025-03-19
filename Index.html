@@ -169,11 +169,6 @@
     /* Button Styles */
     .regen-btn, .copy-btn { width: 125px; }
     .update-btn { background-color: #FFA500 !important; color: white !important; }
-
-    /* NEW: Highlight drop target */
-    .drag-over {
-      border: 2px dashed #2196f3;
-    }
   </style>
 </head>
 <body>
@@ -841,25 +836,79 @@ https://www.etsy.com/shop/CustomBrites/policy
     function updateStaticPreviewGrid() {
       for (let i = 0; i < 10; i++) {
         let cell = document.getElementById("previewCell" + i);
-        cell.innerHTML = "Empty";
-
-        if (i < 7) {
-          // Standard 7-Photo logic
+        if (i >= 7) {
+          let rIndex = i - 7;
+          cell.innerHTML = "";
+          if (rIndex < reservedPhotos.length && reservedPhotos[rIndex].src) {
+            let previewBox = document.createElement("div");
+            previewBox.className = "preview-box";
+            previewBox.setAttribute("data-id", reservedPhotos[rIndex].id);
+            previewBox.addEventListener("dragstart", e => { draggedIndex = i; });
+            let img = document.createElement("img");
+            img.src = reservedPhotos[rIndex].src;
+            previewBox.appendChild(img);
+            let removeBtn = document.createElement("div");
+            removeBtn.className = "remove-btn";
+            removeBtn.textContent = "X";
+            removeBtn.addEventListener("click", ev => {
+              ev.stopPropagation();
+              reservedPhotos.splice(rIndex, 1);
+              saveReservedPhotos();
+              updateStaticPreviewGrid();
+            });
+            previewBox.appendChild(removeBtn);
+            let numOverlay = document.createElement("div");
+            numOverlay.className = "number-overlay";
+            numOverlay.textContent = (i + 1).toString();
+            previewBox.appendChild(numOverlay);
+            previewBox.addEventListener("click", () => { showMetadata(i); });
+            cell.appendChild(previewBox);
+          } else {
+            cell.innerHTML = "Empty";
+          }
+          cell.addEventListener("dragover", e => {
+            e.preventDefault();
+            cell.classList.add("drag-over");
+          });
+          cell.addEventListener("dragleave", e => {
+            cell.classList.remove("drag-over");
+          });
+          cell.addEventListener("drop", async e => {
+            e.preventDefault();
+            cell.classList.remove("drag-over");
+            if (e.dataTransfer.files && e.dataTransfer.files.length > 0) {
+              let file = e.dataTransfer.files[0];
+              if (/image\/(jpeg|png)/.test(file.type)) {
+                const reader = new FileReader();
+                reader.onload = async ev => {
+                  try {
+                    const dataURL = ev.target.result;
+                    const resizedDataURL = await resizeImage(dataURL, 3000, 3000);
+                    let newReserved = { src: resizedDataURL, name: file.name, meta: "", id: 'img-' + Date.now() };
+                    reservedPhotos[rIndex] = newReserved;
+                    saveReservedPhotos();
+                    updateStaticPreviewGrid();
+                  } catch (err) { console.error(err); }
+                };
+                reader.readAsDataURL(file);
+              }
+            }
+          });
+          let metadataStatus = document.createElement("div");
+          metadataStatus.className = "metadata-status";
+          metadataStatus.id = "metadataStatus" + i;
+          cell.appendChild(metadataStatus);
+        } else {
+          cell.innerHTML = "Empty";
           if (i < previewImages.length) {
             cell.innerHTML = "";
             let previewBox = document.createElement("div");
             previewBox.className = "preview-box";
             previewBox.setAttribute("data-id", photoIds[i]);
-            // Make it draggable
-            previewBox.setAttribute("draggable", "true");
-            previewBox.addEventListener("dragstart", e => {
-              draggedIndex = i;
-            });
-
+            previewBox.addEventListener("dragstart", e => { if (i < 7) draggedIndex = i; });
             let img = document.createElement("img");
             img.src = previewImages[i];
             previewBox.appendChild(img);
-
             let removeBtn = document.createElement("div");
             removeBtn.className = "remove-btn";
             removeBtn.textContent = "X";
@@ -872,12 +921,10 @@ https://www.etsy.com/shop/CustomBrites/policy
               updateStaticPreviewGrid();
             });
             previewBox.appendChild(removeBtn);
-
             let numOverlay = document.createElement("div");
             numOverlay.className = "number-overlay";
             numOverlay.textContent = (i + 1).toString();
             previewBox.appendChild(numOverlay);
-
             let cropBtn = document.createElement("button");
             cropBtn.textContent = "Crop";
             cropBtn.style.position = "absolute";
@@ -894,13 +941,8 @@ https://www.etsy.com/shop/CustomBrites/policy
               openCropModal(i);
             });
             previewBox.appendChild(cropBtn);
-
-            previewBox.addEventListener("click", () => {
-              showMetadata(i);
-            });
+            previewBox.addEventListener("click", () => { showMetadata(i); });
             cell.appendChild(previewBox);
-
-            // DnD listeners
             cell.addEventListener("dragover", e => {
               e.preventDefault();
               cell.classList.add("drag-over");
@@ -924,124 +966,11 @@ https://www.etsy.com/shop/CustomBrites/policy
                 draggedIndex = null;
               }
             });
-
             let metadataStatus = document.createElement("div");
             metadataStatus.className = "metadata-status";
             metadataStatus.id = "metadataStatus" + i;
             cell.appendChild(metadataStatus);
           }
-        } else {
-          // Reserved 3-Photo logic
-          let rIndex = i - 7;
-          if (rIndex < reservedPhotos.length && reservedPhotos[rIndex].src) {
-            cell.innerHTML = "";
-            let previewBox = document.createElement("div");
-            previewBox.className = "preview-box";
-            previewBox.setAttribute("data-id", reservedPhotos[rIndex].id);
-            
-            // Make the reserved cell draggable too
-            previewBox.setAttribute("draggable", "true");
-            previewBox.addEventListener("dragstart", e => {
-              draggedIndex = i;
-            });
-
-            let img = document.createElement("img");
-            img.src = reservedPhotos[rIndex].src;
-            previewBox.appendChild(img);
-
-            let removeBtn = document.createElement("div");
-            removeBtn.className = "remove-btn";
-            removeBtn.textContent = "X";
-            removeBtn.addEventListener("click", ev => {
-              ev.stopPropagation();
-              reservedPhotos.splice(rIndex, 1);
-              saveReservedPhotos();
-              updateStaticPreviewGrid();
-            });
-            previewBox.appendChild(removeBtn);
-
-            let numOverlay = document.createElement("div");
-            numOverlay.className = "number-overlay";
-            numOverlay.textContent = (i + 1).toString();
-            previewBox.appendChild(numOverlay);
-
-            previewBox.addEventListener("click", () => {
-              showMetadata(i);
-            });
-            cell.appendChild(previewBox);
-
-          } else {
-            cell.innerHTML = "Empty";
-          }
-          // Attach the DnD listeners on the cell so we see .drag-over
-          cell.addEventListener("dragover", e => {
-            e.preventDefault();
-            cell.classList.add("drag-over");
-          });
-          cell.addEventListener("dragleave", e => {
-            cell.classList.remove("drag-over");
-          });
-          cell.addEventListener("drop", async e => {
-            e.preventDefault();
-            cell.classList.remove("drag-over");
-            // If a file is dragged in, handle it:
-            if (e.dataTransfer.files && e.dataTransfer.files.length > 0) {
-              let file = e.dataTransfer.files[0];
-              if (/image\/(jpeg|png)/.test(file.type)) {
-                const reader = new FileReader();
-                reader.onload = async ev => {
-                  try {
-                    const dataURL = ev.target.result;
-                    const resizedDataURL = await resizeImage(dataURL, 3000, 3000);
-                    let newReserved = {
-                      src: resizedDataURL,
-                      name: file.name,
-                      meta: "",
-                      id: 'img-' + Date.now()
-                    };
-                    reservedPhotos[rIndex] = newReserved;
-                    saveReservedPhotos();
-                    updateStaticPreviewGrid();
-                  } catch (err) {
-                    console.error(err);
-                  }
-                };
-                reader.readAsDataURL(file);
-              }
-            } else if (draggedIndex !== null && draggedIndex !== i) {
-              // If rearranging from an existing cell
-              if (draggedIndex < 7) {
-                // Coming from previewImages array
-                const [movedImage] = previewImages.splice(draggedIndex, 1);
-                const [movedName] = photoNames.splice(draggedIndex, 1);
-                const [movedMeta] = photoMeta.splice(draggedIndex, 1);
-                const [movedId] = photoIds.splice(draggedIndex, 1);
-
-                // Put that data in reservedPhotos[rIndex]
-                let newReserved = {
-                  src: movedImage,
-                  name: movedName,
-                  meta: movedMeta || "",
-                  id: movedId
-                };
-                reservedPhotos[rIndex] = newReserved;
-                saveReservedPhotos();
-              } else {
-                // Coming from another reserved slot
-                let oldRIndex = draggedIndex - 7;
-                const [moved] = reservedPhotos.splice(oldRIndex, 1);
-                reservedPhotos[rIndex] = moved;
-                saveReservedPhotos();
-              }
-              updateStaticPreviewGrid();
-              draggedIndex = null;
-            }
-          });
-
-          let metadataStatus = document.createElement("div");
-          metadataStatus.className = "metadata-status";
-          metadataStatus.id = "metadataStatus" + i;
-          cell.appendChild(metadataStatus);
         }
       }
     }
