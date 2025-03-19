@@ -223,6 +223,7 @@
       Copy
     </button>
     <div id="dropZone" class="configurable">Image Drop</div>
+    <!-- When "Analyze Photos" is pressed, the metadata will be batch processed without opening the modal -->
     <button id="analyzeMetadataBtn" class="btn waves-effect waves-light configurable">
       Analyze Photos
     </button>
@@ -297,7 +298,7 @@
     </div>
   </div>
   
-  <!-- Metadata Modal -->
+  <!-- Metadata Modal (for individual photo clicks) -->
   <div id="metadataModal" class="modal">
     <div class="modal-content">
       <h4>Photo Metadata</h4>
@@ -466,7 +467,7 @@ Using Sales Report and Product List Files:
       return text;
     }
 
-    // Global variables attached to window so they are accessible in metadataHandler.js
+    // Global variables attached to window for access in metadataHandler.js
     window.ETSY_SHOP_URL = "https://www.etsy.com/shop/custombrites";
     window.CLIENT_ID = "k75zdspz4r99txpqdji7i2em";
     window.REDIRECT_URI = "https://delicate-tanuki-616ac0.netlify.app/";
@@ -475,8 +476,8 @@ Using Sales Report and Product List Files:
     window.soldOrdersCSV = [];
     window.listingsCSV = [];
     window.photoNames = [];
-    window.previewImages = [];   // Changed from let to window.previewImages
-    window.photoMeta = [];       // Changed from let to window.photoMeta
+    window.previewImages = [];   // Global array for non-reserved photos
+    window.photoMeta = [];       // Global array for metadata of non-reserved photos
     window.draggedIndex = null;
     window.photoIds = [];
     window.currentCropIndex = null;
@@ -489,37 +490,17 @@ Using Sales Report and Product List Files:
     window.appendedDescriptionText = `
 • We use the Highest Quality materials from the US and Italy.
 • Your purchase will come packaged and ready for gift giving!
-
-M A K E S · A · P E R F E C T · G I F T : )
-
-• D E T A I L S
-• 13.4mm x 8.7mm Flying DragonFly
-• 14K Gold Filled, 14K Rose Gold Filled, Sterling Silver = Pendant + Chain
-• Available necklace lengths are 14 - 20 inches 
-
-• P E R S O N A L I Z E • Y O U R • O R D E R
-Need to make your chain longer? Visit our custom chain length link.
-------------------------------------
-• S I M I L A R • I T E M S
-Tiny Gold Bar Necklace, Initial Disc Necklace, Vertical Gold Bar Necklace, Silver Bar Necklace
-------------------------------------
-• P A C K A G I N G
-Your purchase comes beautifully packaged.
-------------------------------------
-• E X P E D I T E D • S H I P P I N G
-Choose expedited shipping at checkout.
-------------------------------------
-• E X P L O R E • O U R • S H O P
-http://custombrites.etsy.com
-------------------------------------
-• C H E C K • U S • O U T
-Follow us on Instagram, Facebook, Pinterest.
-------------------------------------
-• S H O P  • P O L I C I E S
-Visit our shop policies page.
+• D E T A I L S: 13.4mm x 8.7mm Flying DragonFly, 14K Gold Filled, 14K Rose Gold Filled, Sterling Silver = Pendant + Chain.
+• P E R S O N A L I Z E: Custom chain length available.
+• S I M I L A R: Tiny Gold Bar Necklace, Initial Disc Necklace, Vertical Gold Bar Necklace, Silver Bar Necklace.
+• P A C K A G I N G: Beautiful packaging.
+• E X P E D I T E D: Faster shipping available.
+• E X P L O R E: http://custombrites.etsy.com
+• C H E C K: Follow us on social media.
+• S H O P  • P O L I C I E S: Check our policies.
 `;
 
-    // Helper function to show metadata in a modal
+    // Helper function to show metadata in a modal (for individual photo clicks)
     function showMetadata(index) {
       const metadata = (window.photoMeta && window.photoMeta[index]) ? window.photoMeta[index] : "No metadata available.";
       document.getElementById("metadataTextarea").value = metadata;
@@ -567,8 +548,7 @@ Visit our shop policies page.
     function parseListingNumbers(rawInput) {
       let parts = rawInput.split(",");
       let cleaned = parts.map(p => p.trim()).filter(p => /^\d{10}$/.test(p));
-      let unique = Array.from(new Set(cleaned));
-      return unique.slice(0, 250);
+      return Array.from(new Set(cleaned)).slice(0, 250);
     }
     function updateListingQueueCount() {
       const countBox = document.getElementById("listingQueueCount");
@@ -784,6 +764,7 @@ Visit our shop policies page.
               openCropModal(i);
             });
             previewBox.appendChild(cropBtn);
+            // Clicking a photo opens the metadata modal.
             previewBox.addEventListener("click", () => { showMetadata(i); });
             cell.appendChild(previewBox);
             let metadataStatus = document.createElement("div");
@@ -1457,14 +1438,17 @@ Important: Return ONLY the description as plain text.`;
       }
     }
 
-    // Event listener for analyzing metadata using metadataHandler module
+    // Updated event listener for "Analyze Photos" button:
+    // Batch process metadata for all non-reserved photos (indices 0 to 6) without opening the modal.
     document.getElementById("analyzeMetadataBtn").addEventListener("click", async () => {
-      // Analyze and embed metadata into the first image (index 0)
-      await metadataHandler.analyzeAndEmbedMetadata(0);
-      // Open the metadata modal to display the result
-      let modalElem = document.getElementById("metadataModal");
-      let modalInstance = M.Modal.getInstance(modalElem) || M.Modal.init(modalElem);
-      modalInstance.open();
+      const tasks = [];
+      const count = Math.min(7, window.previewImages.length);
+      for (let i = 0; i < count; i++) {
+        tasks.push(metadataHandler.analyzeAndEmbedMetadata(i));
+      }
+      await Promise.all(tasks);
+      M.toast({ html: `Metadata processed for ${count} photos.` });
+      // Do not automatically open the modal here.
     });
 
     async function generateTagPhrases() {
