@@ -572,61 +572,8 @@ Check out our shop polices page for more details about all our polices and pleas
 
 https://www.etsy.com/shop/CustomBrites/policy
 `;
-
-    /* 
-      NEW: Function to persist data to localStorage before redirecting to Etsy OAuth
-    */
-    function persistDataBeforeRedirect() {
-      try {
-        localStorage.setItem("soldOrdersCSV", JSON.stringify(soldOrdersCSV));
-        localStorage.setItem("listingsCSV", JSON.stringify(listingsCSV));
-        
-        // Also store the user-typed text in "Etsy Shop Listings"
-        const listingsInputValue = document.getElementById("shopListings").value || "";
-        localStorage.setItem("shopListingsText", listingsInputValue);
-        
-        // Save the queue itself
-        localStorage.setItem("listingQueue", JSON.stringify(listingQueue));
-        
-        // If you want to store other data, e.g. images, you can add more lines here.
-        // e.g. localStorage.setItem("previewImages", JSON.stringify(previewImages));
-      } catch (err) {
-        console.error("Error persisting data before redirect:", err);
-      }
-    }
-
-    /* 
-      NEW: Function to restore data from localStorage after returning from OAuth
-    */
-    function restoreDataAfterRedirect() {
-      try {
-        let soCSV = localStorage.getItem("soldOrdersCSV");
-        if (soCSV) {
-          soldOrdersCSV = JSON.parse(soCSV);
-        }
-
-        let liCSV = localStorage.getItem("listingsCSV");
-        if (liCSV) {
-          listingsCSV = JSON.parse(liCSV);
-        }
-
-        let storedShopListingsText = localStorage.getItem("shopListingsText");
-        if (storedShopListingsText) {
-          document.getElementById("shopListings").value = storedShopListingsText;
-        }
-
-        let storedQueue = localStorage.getItem("listingQueue");
-        if (storedQueue) {
-          listingQueue = JSON.parse(storedQueue);
-        }
-        // re-parse the shopListings text in case user typed new IDs previously
-        loadNextListingInQueue();
-      } catch (err) {
-        console.error("Error restoring data after redirect:", err);
-      }
-    }
     
-    // -------------- Utility & Queue Helpers -------------------
+    // ------------------ Utility & Queue Helpers -------------------
 
     function parseListingNumbers(rawInput) {
       let parts = rawInput.split(",");
@@ -642,6 +589,7 @@ https://www.etsy.com/shop/CustomBrites/policy
       countBox.textContent = listingQueue.length;
     }
     function loadNextListingInQueue() {
+      // Reset flags
       photoUpdateComplete = false;
       infoUpdateComplete = false;
       if (listingQueue.length > 0) {
@@ -651,11 +599,13 @@ https://www.etsy.com/shop/CustomBrites/policy
       }
       updateListingQueueCount();
     }
+    // Called once BOTH photos & info updates have completed for the current listing
     function afterBothUpdates() {
       // Shift the queue & load next listing
       listingQueue.shift();
       loadNextListingInQueue();
     }
+    // Each time a photo or info update completes successfully, we check if both are done
     function checkIfBothUpdatesComplete() {
       if (photoUpdateComplete && infoUpdateComplete) {
         afterBothUpdates();
@@ -1043,17 +993,12 @@ https://www.etsy.com/shop/CustomBrites/policy
       let digest = await crypto.subtle.digest("SHA-256", data);
       return base64urlEncode(digest);
     }
-
-    // UPDATED: first persist data, then do the usual OAuth
     document.getElementById("connectEtsyBtn").addEventListener("click", async () => {
-      persistDataBeforeRedirect(); // <--- NEW: save CSV & queue, then redirect
-
       let state = "randomState123";
       let scope = "listings_w listings_r";
       let codeVerifier = generateRandomString(64);
       localStorage.setItem("etsy_code_verifier", codeVerifier);
       let codeChallenge = await generateCodeChallenge(codeVerifier);
-      
       let etsyAuthUrl = `https://www.etsy.com/oauth/connect?response_type=code&client_id=${CLIENT_ID}` +
         `&redirect_uri=${encodeURIComponent(REDIRECT_URI)}` +
         `&scope=${encodeURIComponent(scope)}` +
@@ -1062,14 +1007,9 @@ https://www.etsy.com/shop/CustomBrites/policy
         `&code_challenge_method=S256`;
       window.location.href = etsyAuthUrl;
     });
-
     document.addEventListener("DOMContentLoaded", () => {
       loadButtonPositions();
       loadReservedPhotos();
-      
-      // NEW: restore any data we saved in localStorage (CSV arrays, listing queue, etc.)
-      restoreDataAfterRedirect();
-      
       let urlParams = new URLSearchParams(window.location.search);
       let code = urlParams.get("code");
       if (code) {
@@ -1078,7 +1018,6 @@ https://www.etsy.com/shop/CustomBrites/policy
       }
       updateStaticPreviewGrid();
       updateUploadedFilesList();
-      
       document.getElementById("shopListings").addEventListener("change", () => {
         let rawInput = document.getElementById("shopListings").value;
         listingQueue = parseListingNumbers(rawInput);
@@ -1107,6 +1046,7 @@ https://www.etsy.com/shop/CustomBrites/policy
     }
 
     // -------------- Info & Photo Updates --------------
+    // We only shift the queue after BOTH updatePhoto + updateInfo are successful
     document.getElementById("uploadToEtsyBtn").addEventListener("click", async () => {
       let listingInput = document.getElementById("shopListings").value.trim();
       if (!listingInput) {
@@ -1142,6 +1082,7 @@ https://www.etsy.com/shop/CustomBrites/policy
           M.toast({ html: "Error updating listing: " + response.status + " - " + errorText });
         } else {
           M.toast({ html: "Listing info updated successfully!" });
+          // Mark that info update is complete
           infoUpdateComplete = true;
           checkIfBothUpdatesComplete();
         }
@@ -1163,6 +1104,7 @@ https://www.etsy.com/shop/CustomBrites/policy
         await uploadPhotos();
         await uploadReservedPhotos();
         M.toast({ html: "Photos updated successfully!" });
+        // Mark that photo update is complete
         photoUpdateComplete = true;
         checkIfBothUpdatesComplete();
       } catch (err) {
@@ -1174,76 +1116,14 @@ https://www.etsy.com/shop/CustomBrites/policy
 
     // -------------- Generate Key Phrases Using CSV Context --------------
 
-    // Single-phrase regeneration if we find >20 chars
-    async function regenerateSinglePhrase(question, keywordRules, currentValid, maxAttempts = 5) {
-      for (let attempt = 1; attempt <= maxAttempts; attempt++) {
-        let store_id = localStorage.getItem("vectorStoreId");
-        let retrievedContext = "";
-        try {
-          let resp = await fetch("/.netlify/functions/vectorStore", {
-            method: "POST",
-            headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({
-              action: "query",
-              store_id,
-              query: question,
-              topK: 5
-            })
-          });
-          if (resp.ok) {
-            let data = await resp.json();
-            retrievedContext = data?.data || "";
-          }
-        } catch (err) {
-          console.warn("Could not retrieve CSV context for single phrase regeneration:", err);
-        }
-
-        let prompt = `
-We have 12 valid phrases:
-${currentValid.join(", ")}
-
-Now produce ONE new phrase (≤20 chars) that satisfies the same rules:
-
-Here is some relevant data from our CSV:
-${retrievedContext}
-
-Keyword Rules:
-${keywordRules}
-Return only one phrase in plain text.
-        `;
-
-        let payload = {
-          model: modelName,
-          messages: [
-            { role: "system", content: "Generate a single phrase, up to 20 characters." },
-            { role: "user", content: prompt }
-          ],
-          temperature: 0.7,
-          max_tokens: 150
-        };
-
-        let data = await callOpenAI(payload);
-        let answer = data.choices[0].message.content || "";
-        let candidate = answer.trim()
-          .replace(/^\d+\.\s*/, "")
-          .split("\n")[0]
-          .trim();
-
-        if (candidate.length <= 20) {
-          return candidate;
-        }
-        console.warn(`Attempt ${attempt}: Single phrase too long => "${candidate}"`);
-      }
-      throw new Error("Failed to generate a single phrase under 20 chars after multiple attempts.");
-    }
-
-    // Grab all 13 phrases at once
+    // Helper: calls OpenAI to get 13 phrases at once, with context
     async function getInitialPhrases(question, keywordRules) {
       let store_id = localStorage.getItem("vectorStoreId");
       if (!store_id) {
         console.warn("No store_id found in localStorage. CSV context may not be loaded!");
       }
 
+      // Step 1) retrieve relevant CSV context
       let retrievedContext = "";
       try {
         let resp = await fetch("/.netlify/functions/vectorStore", {
@@ -1290,6 +1170,7 @@ Generate exactly 13 SEO key phrases (each ≤ 20 characters). Return as plain te
       };
       let data = await callOpenAI(payload);
       let answer = data.choices[0].message.content || "";
+      // parse into array
       let phrasesArray = answer
         .split(/[\n,]+/)
         .map(s => s.replace(/^\d+\.\s*/, "").trim())
@@ -1298,6 +1179,78 @@ Generate exactly 13 SEO key phrases (each ≤ 20 characters). Return as plain te
       return phrasesArray;
     }
 
+    // NEW HELPER: re-generate ONE phrase if it’s >20 characters
+    async function regenerateSinglePhrase(question, keywordRules, currentValid, maxAttempts = 5) {
+      /*
+         'currentValid' is an array of all the other 12 valid phrases
+         so we can avoid conflicts or duplicates if we want. 
+         For simplicity, we’ll just keep the same rules. 
+         We’ll rely on GPT to produce something new but also ≤ 20 chars.
+      */
+      for (let attempt = 1; attempt <= maxAttempts; attempt++) {
+        let store_id = localStorage.getItem("vectorStoreId");
+        let retrievedContext = "";
+        try {
+          // optional: re-fetch context for each single phrase
+          let resp = await fetch("/.netlify/functions/vectorStore", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({
+              action: "query",
+              store_id,
+              query: question,
+              topK: 5
+            })
+          });
+          if (resp.ok) {
+            let data = await resp.json();
+            retrievedContext = data?.data || "";
+          }
+        } catch (err) {
+          console.warn("Could not retrieve CSV context for single phrase regeneration:", err);
+        }
+
+        let prompt = `
+We have 12 valid phrases:
+${currentValid.join(", ")}
+
+Now produce ONE new phrase (≤20 chars) that satisfies the same rules:
+
+Here is some relevant data from our CSV:
+${retrievedContext}
+
+Keyword Rules:
+${keywordRules}
+Return only one phrase in plain text.
+        `;
+
+        let payload = {
+          model: modelName,
+          messages: [
+            { role: "system", content: "Generate a single phrase, up to 20 characters." },
+            { role: "user", content: prompt }
+          ],
+          temperature: 0.7,
+          max_tokens: 150
+        };
+
+        let data = await callOpenAI(payload);
+        let answer = data.choices[0].message.content || "";
+        let candidate = answer.trim()
+          .replace(/^\d+\.\s*/, "")
+          .split("\n")[0] // just in case GPT returns multiple lines
+          .trim();
+
+        // Check length
+        if (candidate.length <= 20) {
+          return candidate;
+        }
+        console.warn(`Attempt ${attempt}: Single phrase too long => "${candidate}"`);
+      }
+      throw new Error("Failed to generate a single phrase under 20 chars after multiple attempts.");
+    }
+
+    // MAIN function for generating tag phrases
     async function generateTagPhrases() {
       let question = document.getElementById("listingDescInput").value.trim();
       if (!question) {
@@ -1307,23 +1260,26 @@ Generate exactly 13 SEO key phrases (each ≤ 20 characters). Return as plain te
       let keywordRules = stripMarkdownJSON(document.getElementById("keywordRulesTextarea").value);
 
       try {
-        // Step 1: get all 13 phrases in a single pass
+        // 1) get all 13 phrases in a single pass
         let phrasesArray = await getInitialPhrases(question, keywordRules);
 
-        // Step 2: if any exceed 20 chars, re-generate individually
+        // 2) Validate each phrase. If any exceed 20 chars, re-generate them individually:
         for (let i = 0; i < phrasesArray.length; i++) {
           if (phrasesArray[i].length > 20) {
+            // pass the other 12 valid phrases so we can reference them in the prompt
             let otherValid = phrasesArray.filter((_, idx) => idx !== i && phrasesArray[idx].length <= 20);
             let newPhrase = await regenerateSinglePhrase(question, keywordRules, otherValid);
+            // replace the invalid phrase
             phrasesArray[i] = newPhrase;
           }
         }
 
-        // final check
+        // final sanity check: if anything is STILL >20 chars, throw error
         if (phrasesArray.some(p => p.length > 20)) {
           throw new Error("Could not fix some phrases under 20 chars. Please try again.");
         }
 
+        // 3) Done
         document.getElementById("searchKeyPhrases").value = phrasesArray.join("\n");
         M.toast({ html: "Tag Phrases generated successfully!" });
 
@@ -1333,6 +1289,7 @@ Generate exactly 13 SEO key phrases (each ≤ 20 characters). Return as plain te
       }
     }
 
+    // Fire generateTagPhrases() on Enter
     document.getElementById("listingDescInput").addEventListener("keydown", async (e) => {
       if (e.key === "Enter" && !e.shiftKey) {
         e.preventDefault();
