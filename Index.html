@@ -464,21 +464,28 @@ Using Sales Report and Product List Files:
     }
 
     /*
-      NEW: Helper to embed alt text into JPEG EXIF using piexifjs.
-      We'll store the generated text in the "ImageDescription" field (in the 0th IFD).
-      This physically modifies the base64-encoded JPEG so it carries the alt text.
+      NEW: Remove/replace any characters outside the Latin-1 range,
+      so btoa() won't throw an error when piexifjs inserts EXIF data.
+    */
+    function safeForExif(str) {
+      // Drop any characters whose charCode > 255
+      return str.replace(/[^\x00-\xFF]/g, "");
+    }
+
+    /*
+      UPDATED: Helper to embed alt text into JPEG EXIF using piexifjs.
+      We store the sanitized text in the "ImageDescription" field (0th IFD).
     */
     function embedAltTextInDataURL(originalDataURL, altText) {
-      // Load existing EXIF data
       let exifObj = piexif.load(originalDataURL);
 
-      // Set the ImageDescription tag (common place for alt text)
-      exifObj["0th"][piexif.ImageIFD.ImageDescription] = altText;
+      // Clean up any unicode outside Latin-1
+      let safeText = safeForExif(altText);
 
-      // Convert updated EXIF data to binary
+      // Put the sanitized text into the EXIF ImageDescription
+      exifObj["0th"][piexif.ImageIFD.ImageDescription] = safeText;
+
       let exifBytes = piexif.dump(exifObj);
-
-      // Insert into the original base64 JPEG
       let newDataURL = piexif.insert(exifBytes, originalDataURL);
       return newDataURL;
     }
@@ -1168,8 +1175,8 @@ https://www.etsy.com/shop/CustomBrites/policy
     }
 
     /*
-      UPDATED: We embed the GPT metadata in EXIF, so the file physically
-      carries the text in the ImageDescription field.
+      UPDATED: We embed the GPT metadata in EXIF, but we also
+      sanitize it first with safeForExif() to avoid btoa() errors.
     */
     document.getElementById("analyzeMetadataBtn").addEventListener("click", async () => {
       if (!previewImages.length) {
@@ -1194,15 +1201,15 @@ https://www.etsy.com/shop/CustomBrites/policy
         const result = await response.json();
         const metadata = result.metadata || "No metadata returned.";
 
-        // Embed the alt text in the first photo's EXIF
+        // Embed the alt text in the EXIF, removing problematic characters
         let updatedDataURL = embedAltTextInDataURL(previewImages[0], metadata);
         // Replace the original data URL with the new one that has EXIF
         previewImages[0] = updatedDataURL;
 
-        // Also store the text in the photoMeta array if we want to pass it to Etsy as well
+        // Also store the text in the photoMeta array if you want to pass it to Etsy alt text
         photoMeta[0] = metadata;
 
-        // Show the user in a modal (optional)
+        // Show it in the popup, for user reference
         document.getElementById("metadataTextarea").value = metadata;
         const metadataModalElem = document.getElementById("metadataModal");
         let metadataModalInstance = M.Modal.getInstance(metadataModalElem);
@@ -1211,7 +1218,7 @@ https://www.etsy.com/shop/CustomBrites/policy
         }
         metadataModalInstance.open();
 
-        M.toast({ html: "Alt text embedded into photo #1 EXIF!" });
+        M.toast({ html: "Alt text embedded into photo #1 EXIF (Latin-1 safe)!" });
       } catch (error) {
         console.error("Error in analyze photo:", error);
         M.toast({ html: "Exception: " + error.message });
