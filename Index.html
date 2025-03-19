@@ -8,11 +8,11 @@
   <!-- Import Google Material Icons and Materialize CSS -->
   <link href="https://fonts.googleapis.com/icon?family=Material+Icons" rel="stylesheet">
   <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/materialize/1.0.0/css/materialize.min.css">
-  <!-- Include piexifjs for EXIF manipulation -->
+  <!-- Include piexifjs for EXIF manipulation (optional, if needed) -->
   <script src="https://cdn.jsdelivr.net/npm/piexifjs@1.0.4/piexif.min.js"></script>
-  <!-- SortableJS -->
+  <!-- ADDED LINE FOR SORTABLEJS: -->
   <script src="https://cdn.jsdelivr.net/npm/sortablejs@1.14.0/Sortable.min.js"></script>
-  <!-- CropperJS -->
+  <!-- ADDED LINES FOR CROPPER.JS: -->
   <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/cropperjs/1.5.13/cropper.min.css" />
   <script src="https://cdnjs.cloudflare.com/ajax/libs/cropperjs/1.5.13/cropper.min.js"></script>
   <style>
@@ -28,56 +28,109 @@
     h5, label, p { text-align: left; }
     input, textarea { width: 100%; box-sizing: border-box; }
     
-    /* Listing description & file drop */
-    #descriptionAndFileUploadContainer { display: flex; align-items: center; }
-    .listing-desc-container { position: relative; display: inline-block; width: 500px; }
-    .listing-desc-container h5 { margin: 0 0 10px 0; font-size: 1.2rem; font-weight: 500; }
-    .listing-desc-container input { width: 500px; height: 30px; border: 1px solid #000; padding: 5px; }
+    /* Wrap Listing Description and File Drop Zones */
+    #descriptionAndFileUploadContainer {
+      display: flex; align-items: center;
+    }
+    .listing-desc-container {
+      position: relative; display: inline-block; width: 500px;
+    }
+    .listing-desc-container h5 {
+      margin: 0 0 10px 0; font-size: 1.2rem; font-weight: 500;
+    }
+    .listing-desc-container label.section-heading {
+      font-size: 1.2rem; font-weight: 500;
+    }
+    .listing-desc-container input {
+      width: 500px; height: 30px; border: 1px solid #000; padding: 5px;
+    }
     
-    /* Search key phrases textarea */
-    #searchKeyPhrases { resize: none; box-sizing: border-box; border: 1px solid grey; }
+    /* "User Provided Search Key Phrases" textarea */
+    #searchKeyPhrases {
+      resize: none; box-sizing: border-box; border: 1px solid grey;
+    }
     #searchKeyPhrases[rows="14"] { height: auto; }
     
     .flex-container { display: flex; gap: 10px; align-items: stretch; }
     .textbox-container { flex: 1; }
-    .textbox-container textarea { width: 100%; padding: 0.8rem; font-size: 1rem; line-height: 1.2; resize: none; overflow: visible; box-sizing: border-box; }
-    .button-container { width: 200px; display: flex; flex-direction: column; gap: 10px; align-self: flex-start; }
+    .textbox-container textarea {
+      width: 100%; padding: 0.8rem; font-size: 1rem; line-height: 1.2;
+      resize: none; overflow: visible; box-sizing: border-box;
+    }
+    .button-container {
+      width: 200px; display: flex; flex-direction: column; gap: 10px;
+      align-self: flex-start;
+    }
     #listingTitle { min-height: 45px; }
     #listingDescInput { width: 500px; height: 30px; border: 1px solid #000; padding: 5px; }
     #listingDescription { min-height: 150px; width: 500px; }
-    .section-heading { font-size: 1.2rem; font-weight: 500; margin-bottom: 5px; display: inline-block; }
+    .section-heading {
+      font-size: 1.2rem; font-weight: 500; margin-bottom: 5px;
+      display: inline-block;
+    }
     .count-text { font-style: italic; font-size: 0.9em; margin-top: 5px; }
     
-    /* Image Drop */
+    /* Drag and Drop Box: "Image Drop" */
     #dropZone {
+      /* Set width to match the photo grid width: 5*120 + 4*28 = 712px */
       width: 712px; height: 120px; border: 2px dashed #ccc;
       border-radius: 3px; display: inline-block; vertical-align: middle;
       text-align: center; line-height: 120px; position: relative;
     }
+    
+    /* Remove the separate drop zones for Etsy Orders/Listings */
+    #fileDropZonesContainer { display: none; }
+    
+    /* Make uploadedFilesList repositionable and used for file drop */
     #uploadedFilesList {
       width: 225px; height: 125px; resize: none; box-sizing: border-box;
       border: 1px solid grey; margin-left: 85px; position: relative;
-      font-size: 0.875rem; z-index: 10;
+      font-size: 0.875rem;
+      /* Lower the z-index so modals appear above it */
+      z-index: 10;
     }
-    .modal { z-index: 9999 !important; }
-    .modal-overlay { z-index: 9998 !important; }
+    /* Ensure modals appear above everything else */
+    .modal {
+      z-index: 9999 !important;
+    }
+    .modal-overlay {
+      z-index: 9998 !important;
+    }
     
-    /* Photo Preview Grid */
+    /* Static 10-Photo Preview Grid - increased by 20% */
+    /* Increase z-index to ensure it's above neighboring containers */
     #previewGridContainer {
-      position: relative; margin: 20px auto; width: auto;
-      max-width: 720px; text-align: center; z-index: 2000;
+      position: relative; 
+      margin: 20px auto; 
+      width: auto;
+      max-width: 720px; 
+      text-align: center;
+      z-index: 2000; /* raised so it can catch drag events */
     }
     #previewGridStatic {
-      display: grid; grid-template-columns: repeat(5, 120px);
-      grid-column-gap: 28px; grid-row-gap: 22px; margin: 0 auto;
+      display: grid; 
+      grid-template-columns: repeat(5, 120px);
+      grid-column-gap: 28px; 
+      grid-row-gap: 22px; 
+      margin: 0 auto;
     }
     .preview-cell {
-      position: relative; width: 120px; height: 158px;
-      border: 2px solid #ccc; border-radius: 3px;
-      display: flex; flex-direction: column; align-items: center;
-      justify-content: center; font-size: 12px; color: #666; overflow: hidden;
+      position: relative; 
+      width: 120px; 
+      height: 158px; 
+      border: 2px solid #ccc;
+      border-radius: 3px; 
+      display: flex; 
+      flex-direction: column;
+      align-items: center; 
+      justify-content: center; 
+      font-size: 12px; 
+      color: #666;
     }
-    .preview-cell.reserved { z-index: 2500; }
+    /* Mark the last three cells as "reserved" with higher z-index */
+    .preview-cell.reserved {
+      z-index: 2500; /* ensures these are on top */
+    }
     .preview-box { position: relative; width: 100%; height: 100%; }
     .preview-box img {
       width: 120px; height: 120px; object-fit: cover;
@@ -94,67 +147,115 @@
       align-items: center; justify-content: center; font-size: 10px;
       z-index: 999; border-radius: 3px;
     }
-    /* Metadata-status is now used solely for the green checkmark */
-    .metadata-status { margin-top: 4px; text-align: center; }
-    .metadata-check { color: green; font-size: 14px; }
+    /* Metadata status styles */
+    .metadata-status { margin-top: 5px; text-align: center; font-size: 14px; min-height: 20px; }
+    .metadata-progress { width: 90%; }
     
-    /* Other containers */
+    /* Container #13 */
     #container13 { position: relative; width: 250px; top: -150px; }
+    
+    /* Components below search key phrases */
     #belowSearch { margin-top: -180px; margin-left: 10px; }
+    
+    /* Etsy Listing TITLE container */
     .title-container { margin-top: -50px; }
     #etsyListingTitleContainer { position: relative; width: 1000px; }
     #etsyListingTitleContainer textarea { width: 1000px; }
+    
+    /* Etsy Listing DESCRIPTION container */
     .description-container { margin-top: 0px; }
     #etsyListingDescriptionContainer { position: relative; width: 1000px; }
     #etsyListingDescriptionContainer textarea { width: 1000px; }
+    
+    /* New container for "Search Key Phrases" */
     #userProvidedKeyPhrasesContainer { position: relative; top: 125px; left: 10px; }
+    
+    /* Top buttons section */
     #topButtons { margin: 10px 0; }
     #etsyShopListingsContainer { position: relative; margin-top: 10px; margin-left: 10px; }
+    
+    /* A small 25×25 box for queue count */
     #listingQueueCount {
-      width: 25px; height: 25px; border: 1px solid #000;
-      display: inline-flex; align-items: center; justify-content: center;
-      font-weight: bold; margin-left: 5px;
+      width: 25px; 
+      height: 25px; 
+      border: 1px solid #000; 
+      display: inline-flex; 
+      align-items: center; 
+      justify-content: center; 
+      font-weight: bold;
+      margin-left: 5px; 
     }
+    
+    /* Button Styles */
     .regen-btn, .copy-btn { width: 125px; }
     .update-btn { background-color: #FFA500 !important; color: white !important; }
-    .drag-over { border: 2px dashed #2196f3 !important; }
+
+    /* NEW: Highlight drop target */
+    .drag-over {
+      border: 2px dashed #2196f3 !important;
+    }
   </style>
 </head>
 <body>
-  <!-- Configure Buttons control -->
-  <button id="configureButtonsBtn" class="btn waves-effect waves-light configurable">Configure Buttons</button>
+  <!-- Configure Buttons control (also available in modal) -->
+  <button id="configureButtonsBtn" class="btn waves-effect waves-light configurable">
+    Configure Buttons
+  </button>
   
-  <!-- Listing Description and File Drop -->
+  <!-- Wrap Listing Description and Uploaded Files List (for file drop) -->
   <div id="descriptionAndFileUploadContainer">
     <div class="listing-desc-container" id="listingDescContainer">
       <h5>Listing Description</h5>
       <input id="listingDescInput" type="text" placeholder="Enter your question here">
     </div>
+    <!-- Use uploadedFilesList area for file drop -->
     <textarea id="uploadedFilesList" class="materialize-textarea" rows="2" placeholder="Uploaded .csv, .doc, .docx files will appear here"></textarea>
   </div>
   
-  <!-- Etsy OAuth and Shop Listings Section -->
+  <!-- Etsy OAuth and Shop Listings Section with Top Buttons -->
   <div id="topButtons">
-    <button id="connectEtsyBtn" class="btn waves-effect waves-light configurable">Connect to Etsy</button>
-    <button id="photoUploadNewBtn" class="btn waves-effect waves-light configurable update-btn" style="margin-left: 10px;">Update Photos</button>
-    <button id="uploadToEtsyBtn" class="btn waves-effect waves-light configurable update-btn" style="margin-left: 10px;">Update Info</button>
+    <button id="connectEtsyBtn" class="btn waves-effect waves-light configurable">
+      Connect to Etsy
+    </button>
+    <!-- Update Photos button -->
+    <button id="photoUploadNewBtn" class="btn waves-effect waves-light configurable update-btn" style="margin-left: 10px;">
+      Update Photos
+    </button>
+    <!-- Update Info button -->
+    <button id="uploadToEtsyBtn" class="btn waves-effect waves-light configurable update-btn" style="margin-left: 10px;">
+      Update Info
+    </button>
+    <!-- Etsy Shop Listings container -->
     <div id="etsyShopListingsContainer">
-      <div class="section-heading configurable">Etsy Shop Listings <span id="listingQueueCount">0</span></div>
+      <!-- Title + queue count box -->
+      <div class="section-heading configurable">
+        Etsy Shop Listings
+        <span id="listingQueueCount">0</span>
+      </div>
       <div class="textbox-container configurable">
-        <textarea id="shopListings" class="materialize-textarea" rows="2" placeholder="Enter up to 250 comma-separated 10-digit listing IDs" style="width:500px;"></textarea>
+        <textarea id="shopListings" class="materialize-textarea" rows="2" 
+          placeholder="Enter up to 250 comma-separated 10-digit listing IDs" style="width:500px;"></textarea>
       </div>
     </div>
   </div>
   
   <!-- Etsy Listing Generator UI -->
-  <div id="userProvidedKeyPhrasesContainer" class="phrases-header configurable">
+  <div class="phrases-header configurable" id="userProvidedKeyPhrasesContainer">
     <span class="section-heading configurable">Search Key Phrases</span>
-    <button id="clearKeyPhrasesBtn" class="btn-small waves-effect waves-light configurable">Clear</button>
-    <button id="copyKeyPhrasesBtn" class="btn-small waves-effect waves-light configurable copy-btn">Copy</button>
+    <button id="clearKeyPhrasesBtn" class="btn-small waves-effect waves-light configurable">
+      Clear
+    </button>
+    <button id="copyKeyPhrasesBtn" class="btn-small waves-effect waves-light configurable copy-btn">
+      Copy
+    </button>
     <div id="dropZone" class="configurable">Image Drop</div>
-    <!-- Analyze Photos button (now only triggers embedding alt-text) -->
-    <button id="analyzeMetadataBtn" class="btn waves-effect waves-light configurable">Analyze Photos</button>
-    <button id="showAnalyzeRulesBtn" class="btn waves-effect waves-light configurable" data-target="analyzeRulesModal" style="margin-top:25px;">Analyze Rules</button>
+    <!-- Analyze Photos and Analyze Rules buttons -->
+    <button id="analyzeMetadataBtn" class="btn waves-effect waves-light configurable">
+      Analyze Photos
+    </button>
+    <button id="showAnalyzeRulesBtn" class="btn waves-effect waves-light configurable" data-target="analyzeRulesModal" style="margin-top:25px;">
+      Analyze Rules
+    </button>
   </div>
   <div id="container13" class="flex-container configurable">
     <div class="textbox-container configurable">
@@ -164,40 +265,56 @@
   
   <!-- Components below Search Key Phrases -->
   <div id="belowSearch">
-    <button id="generateBtn" class="btn waves-effect waves-light configurable">Generate</button>
+    <button id="generateBtn" class="btn waves-effect waves-light configurable">
+      Generate
+    </button>
     <!-- Etsy Listing TITLE container -->
-    <div id="etsyListingTitleContainer" class="title-container" style="margin-top: -50px;">
+    <div class="title-container" id="etsyListingTitleContainer" style="margin-top: -50px;">
       <div class="section-heading configurable">Etsy Listing TITLE</div>
       <div class="flex-container configurable">
         <div class="textbox-container configurable">
           <textarea id="listingTitle" class="materialize-textarea" rows="2" style="width:1000px;"></textarea>
         </div>
         <div class="button-container configurable" style="margin-top: -60px;">
-          <button id="regenTitleBtn" class="btn-small waves-effect waves-light configurable regen-btn">Re-Gen</button>
-          <button id="copyTitleBtn" class="btn-small waves-effect waves-light configurable copy-btn"><i class="material-icons">content_copy</i></button>
+          <button id="regenTitleBtn" class="btn-small waves-effect waves-light configurable regen-btn">
+            Re-Gen
+          </button>
+          <button id="copyTitleBtn" class="btn-small waves-effect waves-light configurable copy-btn">
+            <i class="material-icons">content_copy</i>
+          </button>
         </div>
-        <button id="showTitleRulesBtn" class="btn waves-effect waves-light rules-button configurable" data-target="titleRulesModal" style="display:none;">Title Rules</button>
+        <!-- Hide the Title Rules button -->
+        <button id="showTitleRulesBtn" class="btn waves-effect waves-light rules-button configurable" data-target="titleRulesModal" style="display:none;">
+          Title Rules
+        </button>
       </div>
       <p id="titleCount" class="count-text configurable">Count: 0</p>
     </div>
     
     <!-- Etsy Listing DESCRIPTION container -->
-    <div id="etsyListingDescriptionContainer" class="description-container" style="margin-top: 0px;">
+    <div class="description-container" id="etsyListingDescriptionContainer" style="margin-top: 0px;">
       <div class="section-heading configurable">Etsy Listing DESCRIPTION</div>
       <div class="flex-container configurable">
         <div class="textbox-container configurable">
           <textarea id="listingDescription" class="materialize-textarea" style="width:1000px;"></textarea>
         </div>
         <div class="button-container configurable">
-          <button id="regenDescriptionBtn" class="btn-small waves-effect waves-light configurable regen-btn">Re-Gen</button>
-          <button id="copyDescriptionBtn" class="btn-small waves-effect waves-light configurable copy-btn"><i class="material-icons">content_copy</i></button>
+          <button id="regenDescriptionBtn" class="btn-small waves-effect waves-light configurable regen-btn">
+            Re-Gen
+          </button>
+          <button id="copyDescriptionBtn" class="btn-small waves-effect waves-light configurable copy-btn">
+            <i class="material-icons">content_copy</i>
+          </button>
         </div>
-        <button id="showDescriptionRulesBtn" class="btn waves-effect waves-light rules-button configurable" data-target="descriptionRulesModal" style="display:none;">Description Rules</button>
+        <!-- Hide the Description Rules button -->
+        <button id="showDescriptionRulesBtn" class="btn waves-effect waves-light rules-button configurable" data-target="descriptionRulesModal" style="display:none;">
+          Description Rules
+        </button>
       </div>
     </div>
   </div>
   
-  <!-- Static 10-Photo Preview Grid -->
+  <!-- Static 10-Photo Preview Grid Container (increased by 20%) -->
   <div id="previewGridContainer">
     <div id="previewGridStatic">
       <div class="preview-cell" id="previewCell0">Empty</div>
@@ -207,9 +324,23 @@
       <div class="preview-cell" id="previewCell4">Empty</div>
       <div class="preview-cell" id="previewCell5">Empty</div>
       <div class="preview-cell" id="previewCell6">Empty</div>
+      <!-- Last 3 reserved cells have "reserved" class so they stay on top -->
       <div class="preview-cell reserved" id="previewCell7">Empty</div>
       <div class="preview-cell reserved" id="previewCell8">Empty</div>
       <div class="preview-cell reserved" id="previewCell9">Empty</div>
+    </div>
+  </div>
+  
+  <!-- Metadata Modal (for viewing metadata on click) -->
+  <div id="metadataModal" class="modal">
+    <div class="modal-content">
+      <h4>Photo Metadata</h4>
+      <textarea id="metadataTextarea" readonly style="width:100%; height:300px;"></textarea>
+    </div>
+    <div class="modal-footer">
+      <a href="#!" id="closeMetadataBtn" class="modal-close waves-effect waves-green btn">
+        Close
+      </a>
     </div>
   </div>
   
@@ -219,16 +350,20 @@
       <h4>Photo Analysis Rules</h4>
       <textarea id="analyzeRulesTextarea" style="width:100%; height:300px;">
 Default Photo Analysis Rules:
-1. Use SEO-friendly descriptive long-tail key phrases without special characters.
-2. Emphasize jewelry details (e.g., charm description) only.
-3. Organize into a short paragraph.
-4. Limit the description to 300 characters.
-5. Do not mention earrings unless specified.
-6. Do not mix necklace and earring descriptions.
+1. Use SEO-friendly descriptive long-tail key phrases without special characters, focus on describing the jewelry and charm pendant, also focus and tailor Key Phrases and description to appropriate client based on the type of jewelry.
+2. Emphasize charm details, focus image description on the type of jewelry and pendant description (what it is, occasion, metal, size, style).
+3. Focus solely on the jewelry details especially the charm description.
+4. Ignore environment, model, and clothing.
+5. Organize into a short paragraph.
+6. Limit the description to 300 characters.
+7. Do not mention earrings unless explicitly identified.
+8. Do not mix necklace and earring descriptions.
       </textarea>
     </div>
     <div class="modal-footer">
-      <a href="#!" id="updateAnalyzeRulesBtn" class="modal-close waves-effect waves-green btn">Update</a>
+      <a href="#!" id="updateAnalyzeRulesBtn" class="modal-close waves-effect waves-green btn">
+        Update
+      </a>
     </div>
   </div>
   
@@ -239,12 +374,38 @@ Default Photo Analysis Rules:
       <textarea id="titleRulesTextarea" style="width:100%; height:300px;">
 Title Structure & Formatting:
 - Create 5-7 SEO optimized long-tail key phrases (3-5 words each).
-- Title must begin with product type.
-- Return only the title as plain text.
+- The title must begin with the product type (e.g., "Angel Earrings", "Daisy Necklace").
+- Ensure grammatical flow and no punctuation.
+- If the product is a charm/pendant, the first word should describe that type.
+- For necklaces, the second word must be "necklace"; for earrings, "Earring".
+
+Word Usage & Frequency:
+- No word may appear more than three times.
+- "earrings" must be plural and follow a noun.
+- "stud" may only appear in approved phrases and must precede "earrings".
+
+Required Words:
+- "Charm" must appear exactly once.
+
+Use of "For":
+- "for" must appear at least twice in a grammatically correct manner.
+
+Title Length & Word Order:
+- Titles must be between 125 and 140 characters.
+- Adjectives must follow nouns.
+- Avoid plurals for "stud" and "animal"; use plurals for "hoops" and "earrings" correctly.
+
+SEO Optimization:
+- The title’s word order should form at least eight natural SEO phrases.
+
+Prohibited Words:
+- Exclude: "accessories", "unique", "simple", "minimalist", "whimsical", "cute", "filled", "gold filled", "silver", "solid gold", "gold vermeil", "rosegold", "14k", "handmade", "quirky", "delicate", "accessory", "for", "dangle", "gold plated", "jewelry", "custom", "celestial", "design", "lightweight".
       </textarea>
     </div>
     <div class="modal-footer">
-      <a href="#!" id="updateTitleRulesBtn" class="modal-close waves-effect waves-green btn">Update</a>
+      <a href="#!" id="updateTitleRulesBtn" class="modal-close waves-effect waves-green btn">
+        Update
+      </a>
     </div>
   </div>
   
@@ -254,14 +415,24 @@ Title Structure & Formatting:
       <h4>Description Rules</h4>
       <textarea id="descriptionRulesTextarea" style="width:100%; height:300px;">
 Rules for Description:
-- Merge key phrases with your output.
-- Keep output paragraph under 200 characters.
-Example:
-"Discover the beauty of our delicate gold key pendant necklace, perfect for adding a touch of elegance to any outfit. Ideal for everyday wear or special occasions."
+- Merge the key phrases with your output.
+- Modify the description to match the jewelry type.
+- Keep the output paragraph to 80 words.
+
+Option 1:
+"This stunning gold Playing Card Charm is the perfect gift for her, featuring an intricately designed Ace of Spades charm. Ideal for jewelry lovers, this pendant is perfect for personalized pieces."
+
+Option 2:
+"This playful Allosaurus charm is the perfect add-on for charm necklaces or huggie hoops. It adds a whimsical touch to any collection, making it a delightful gift."
+
+Option 3:
+"This charming gold Alligator Necklace is a delightful gift for animal lovers. Featuring a beautifully designed crocodile pendant, it adds a unique touch to any collection."
       </textarea>
     </div>
     <div class="modal-footer">
-      <a href="#!" id="updateDescriptionRulesBtn" class="modal-close waves-effect waves-green btn">Update</a>
+      <a href="#!" id="updateDescriptionRulesBtn" class="modal-close waves-effect waves-green btn">
+        Update
+      </a>
     </div>
   </div>
   
@@ -270,13 +441,21 @@ Example:
     <div class="modal-content">
       <h4>Keyword Rules</h4>
       <textarea id="keywordRulesTextarea" style="width:100%; height:300px;">
-Using Sales Report Files:
-- Generate exactly 13 SEO key phrases, each ≤ 20 characters.
-- Include "Gift for Her" and ensure "Charm" appears at least once.
+Using Sales Report and Product List Files:
+- Extrapolate the best tag phrases based on performance.
+- Focus on key terms like "Necklace", "Earrings", "Studs", "Hoops".
+- Emphasize sales success; higher performing listings have more valuable keywords.
+- Generate exactly 13 tag phrases, each ≤ 20 characters.
+- Include "Gift for Her".
+- "Charm" must appear at least once in a multi-word phrase (max 4 times total).
+- "Necklace" appears no more than 3 times, "Gift" no more than 3 times, "Lover" no more than 2 times.
+- Exclude: "Gift for Him", "Statement Piece", "Unique", "Spiritual Gift", "Outdoor Style", "accessories", "simple", "minimalist", "whimsical", "cute", "filled", "gold filled", "silver", "solid gold", "gold vermeil", "rosegold", "14k", "handmade", "quirky", "delicate", "accessory", "for", "dangle", "gold plated", "jewelry", "custom", "celestial", "design", "lightweight", "Fine Chain Necklace", "Small", "Large", "Nice", "Long", "Dark", "Short", "and", "but", "light", "heavy", "Wanderlust", "Theme", "Minimal Chain Gift", "Tiny Pendant Chain", "Charm Look", "Charm Wear", "Chain Necklace", "Small Pendant Chain", "Everyday"
       </textarea>
     </div>
     <div class="modal-footer">
-      <a href="#!" id="updateKeywordRulesBtn" class="modal-close waves-effect waves-green btn">Update</a>
+      <a href="#!" id="updateKeywordRulesBtn" class="modal-close waves-effect waves-green btn">
+        Update
+      </a>
     </div>
   </div>
   
@@ -288,7 +467,9 @@ Using Sales Report Files:
       <textarea id="uploadedFilesListModal" class="materialize-textarea" rows="2" placeholder="Uploaded files will appear here"></textarea>
     </div>
     <div class="modal-footer">
-      <a href="#!" id="saveButtonPositionsBtn" class="modal-close waves-effect waves-green btn">Save Positions</a>
+      <a href="#!" id="saveButtonPositionsBtn" class="modal-close waves-effect waves-green btn">
+        Save Positions
+      </a>
     </div>
   </div>
   
@@ -311,10 +492,12 @@ Using Sales Report Files:
   <script src="https://cdnjs.cloudflare.com/ajax/libs/materialize/1.0.0/js/materialize.min.js"></script>
   
   <script>
-    // Helper function (pass-through)
-    function stripMarkdownJSON(text) { return text; }
+    // Helper function to strip markdown or JSON formatting (currently a passthrough)
+    function stripMarkdownJSON(text) {
+      return text;
+    }
     
-    // GLOBALS
+    // GLOBALS & MAIN LOGIC
     const ETSY_SHOP_URL = "https://www.etsy.com/shop/custombrites";
     const CLIENT_ID = "k75zdspz4r99txpqdji7i2em";
     const REDIRECT_URI = "https://delicate-tanuki-616ac0.netlify.app/";
@@ -323,115 +506,364 @@ Using Sales Report Files:
     let soldOrdersCSV = [];
     let listingsCSV = [];
     let photoNames = [];
-    let previewImages = []; // Data URLs for display
-    // Store metadata per photo { title, description, keywords }
-    let photoMeta = [];
+    let previewImages = []; // data URLs for display
+    let photoMeta = [];     // AI-generated metadata
     let draggedIndex = null;
     let photoIds = [];
     let currentCropIndex = null;
     let cropper = null;
     let reservedPhotos = [];
+    
+    // We'll store up to 250 10-digit listing IDs in a queue
     let listingQueue = [];
+
+    // Track when photos & info updates are done for the "current" listing
     let photoUpdateComplete = false;
     let infoUpdateComplete = false;
-    
-    const appendedDescriptionText = `...`; // (Your appended text remains unchanged)
-    
-    // Persist and restore functions...
+
+    // Hard-coded text to append to every generated description before sending to Etsy
+    const appendedDescriptionText = `
+
+• We use the Highest Quality materials from the US and Italy.
+• Your purchase will come packaged and ready for gift giving!
+
+M A K E S · A · P E R F E C T · G I F T : )
+
+· · · · · · · · · · · · · · · · · · · · · · · ·
+
+D E T A I L S
+
+• 13.4mm x 8.7mm Flying DragonFly
+• 14K Gold Filled, 14K Rose Gold Filled, Sterling Silver = Pendant + Chain
+• Available necklace lengths are 14 - 20 inches 
+
+------------------------------------
+
+P E R S O N A L I Z E • Y O U R • O R D E R
+
+Need to make your chain longer? Please click on the link below for a custom chain length.
+https://www.etsy.com/ca/listing/770835682/custom-longer-chain-length-add-on-to?ref=listing_published_alert
+
+Not sure exactly what size to order? Fine tune the fit with an extender!
+https://www.etsy.com/listing/628970499/add-on-an-extender-to-your-jewelry?ga_search_query=add%2Bon&ref=shop_items_search_2&frs=1
+
+------------------------------------
+
+S I M I L A R •  I T E M S
+• If you liked this piece here's a few links to some similar items! These pieces are either alike in style or will look amazing paired together! Happy Shopping and don't forget each piece is completely customizable :)
+
+Tiny Gold Bar Necklace 
+https://www.etsy.com/listing/196984758/tiny-horizontal-gold-bar-necklace-14k
+
+Initial Disc Necklace 
+https://www.etsy.com/listing/182232792/single-initial-necklace-gold-filled
+
+Vertical Gold Bar Necklace
+https://www.etsy.com/listing/247277919/vertical-engraved-bar-necklace-name-bar
+
+Silver Bar Necklace
+https://www.etsy.com/listing/184233228/bar-necklace-personalized-bar-nameplate
+
+------------------------------------
+
+P A C K A G I N G
+• Your purchase will come beautifully packaged. If you are ordering for a gift and would like each piece to be packaged separately please let me know. 
+
+• If this purchase is a gift, and you would like us to include a handwritten message, leave a note in the "gift message" box at checkout.
+
+------------------------------------
+
+E X P E D I T E D • S H I P P I N G
+You will be able to choose faster shipping options in the drop down menu when you check out. Ship times do NOT include production times (1-3 business days). However, if you select expedited shipping, we will try to get your order done faster.
+
+------------------------------------
+
+E X P L O R E • O U R • S H O P
+Don't forget to check out the rest of our shop! We specialize in making handmade custom jewelry for every occasion. We take pride in making sure each order is made exactly to the customers specifications. We love collaborating with our customers to create  special and unique pieces for themselves and their loved ones. Please don't hesitate to contact us with any questions you have.  
+
+http://custombrites.etsy.com
+
+------------------------------------
+
+C H E C K • U S • O U T
+Make sure you follow us on all our social media platforms to get a behind the scenes look, special promo codes, and some daily inspiration :) 
+
+Instagram: https://www.instagram.com/britesjewelry
+Facebook: https://www.facebook.com/britesjewelry
+Pinterest Page : https://www.pinterest.com/britesjewelry
+
+------------------------------------
+
+S H O P  • P O L I C I E S
+Check out our shop polices page for more details about all our polices and please don't hesitate to contact us with any questions you have! Happy Shopping :)
+
+https://www.etsy.com/shop/CustomBrites/policy
+`;
+
+    /* 
+      NEW: Function to persist data to localStorage before redirecting to Etsy OAuth
+    */
     function persistDataBeforeRedirect() {
       try {
         localStorage.setItem("soldOrdersCSV", JSON.stringify(soldOrdersCSV));
         localStorage.setItem("listingsCSV", JSON.stringify(listingsCSV));
-        localStorage.setItem("shopListingsText", document.getElementById("shopListings").value || "");
+        
+        // Also store the user-typed text in "Etsy Shop Listings"
+        const listingsInputValue = document.getElementById("shopListings").value || "";
+        localStorage.setItem("shopListingsText", listingsInputValue);
+        
+        // Save the queue itself
         localStorage.setItem("listingQueue", JSON.stringify(listingQueue));
-      } catch (err) { console.error("Error persisting data:", err); }
+        
+      } catch (err) {
+        console.error("Error persisting data before redirect:", err);
+      }
     }
+
+    /* 
+      NEW: Function to restore data from localStorage after returning from OAuth
+    */
     function restoreDataAfterRedirect() {
       try {
         let soCSV = localStorage.getItem("soldOrdersCSV");
-        if (soCSV) soldOrdersCSV = JSON.parse(soCSV);
+        if (soCSV) {
+          soldOrdersCSV = JSON.parse(soCSV);
+        }
+
         let liCSV = localStorage.getItem("listingsCSV");
-        if (liCSV) listingsCSV = JSON.parse(liCSV);
-        let shopText = localStorage.getItem("shopListingsText");
-        if (shopText) document.getElementById("shopListings").value = shopText;
+        if (liCSV) {
+          listingsCSV = JSON.parse(liCSV);
+        }
+
+        let storedShopListingsText = localStorage.getItem("shopListingsText");
+        if (storedShopListingsText) {
+          document.getElementById("shopListings").value = storedShopListingsText;
+        }
+
         let storedQueue = localStorage.getItem("listingQueue");
-        if (storedQueue) listingQueue = JSON.parse(storedQueue);
+        if (storedQueue) {
+          listingQueue = JSON.parse(storedQueue);
+        }
+        // re-parse the shopListings text in case user typed new IDs previously
         loadNextListingInQueue();
-      } catch (err) { console.error("Restore error:", err); }
+      } catch (err) {
+        console.error("Error restoring data after redirect:", err);
+      }
     }
     
-    // Utility & Queue Helpers
+    // -------------- Utility & Queue Helpers -------------------
+
     function parseListingNumbers(rawInput) {
       let parts = rawInput.split(",");
-      let cleaned = parts.map(p => p.trim()).filter(p => /^\d{10}$/.test(p));
-      return Array.from(new Set(cleaned)).slice(0,250);
+      let cleaned = parts
+        .map(p => p.trim())
+        .filter(p => /^\d{10}$/.test(p)); // only keep valid 10-digit
+      let unique = Array.from(new Set(cleaned)); // remove duplicates
+      let finalList = unique.slice(0, 250); // limit to 250
+      return finalList;
     }
     function updateListingQueueCount() {
-      document.getElementById("listingQueueCount").textContent = listingQueue.length;
+      const countBox = document.getElementById("listingQueueCount");
+      countBox.textContent = listingQueue.length;
     }
     function loadNextListingInQueue() {
-      photoUpdateComplete = false; infoUpdateComplete = false;
-      document.getElementById("shopListings").value = listingQueue.length ? listingQueue[0] : "";
+      photoUpdateComplete = false;
+      infoUpdateComplete = false;
+      if (listingQueue.length > 0) {
+        document.getElementById("shopListings").value = listingQueue[0];
+      } else {
+        document.getElementById("shopListings").value = "";
+      }
       updateListingQueueCount();
     }
-    function afterBothUpdates() { listingQueue.shift(); loadNextListingInQueue(); }
-    function checkIfBothUpdatesComplete() { if (photoUpdateComplete && infoUpdateComplete) afterBothUpdates(); }
-    
-    // Page Initialization & File Handling functions (unchanged)
-    function updateUploadedFilesList() { /* ... */ }
-    function loadReservedPhotos() { const stored = localStorage.getItem("reservedPhotos"); reservedPhotos = stored ? JSON.parse(stored) : []; }
-    function saveReservedPhotos() { localStorage.setItem("reservedPhotos", JSON.stringify(reservedPhotos)); }
-    async function resizeImage(dataURL, width, height) { /* ... */ }
-    async function uploadCSVFile(file) { /* ... */ }
-    async function uploadDocFile(file) { /* ... */ }
-    async function updateVectorStore() { /* ... */ }
-    
+    function afterBothUpdates() {
+      // Shift the queue & load next listing
+      listingQueue.shift();
+      loadNextListingInQueue();
+    }
+    function checkIfBothUpdatesComplete() {
+      if (photoUpdateComplete && infoUpdateComplete) {
+        afterBothUpdates();
+      }
+    }
+
+    // -------------- Page Initialization & File Handling --------------
+
+    function updateUploadedFilesList() {
+      const uploadedFilesListElem = document.getElementById('uploadedFilesList');
+      const fileNames = soldOrdersCSV.map(file => file.name || file.fileName || 'Unnamed File');
+      uploadedFilesListElem.value = fileNames.join('\n');
+    }
+
+    function loadReservedPhotos() {
+      const stored = localStorage.getItem("reservedPhotos");
+      reservedPhotos = stored ? JSON.parse(stored) : [];
+    }
+    function saveReservedPhotos() {
+      localStorage.setItem("reservedPhotos", JSON.stringify(reservedPhotos));
+    }
+
+    async function resizeImage(dataURL, width, height) {
+      return new Promise((resolve, reject) => {
+        const img = new Image();
+        img.onload = () => {
+          const canvas = document.createElement("canvas");
+          canvas.width = width;
+          canvas.height = height;
+          const ctx = canvas.getContext("2d");
+          ctx.drawImage(img, 0, 0, width, height);
+          resolve(canvas.toDataURL("image/jpeg", 0.85));
+        };
+        img.onerror = reject;
+        img.src = dataURL;
+      });
+    }
+    async function uploadCSVFile(file) {
+      return new Promise((resolve, reject) => {
+        const reader = new FileReader();
+        reader.onload = async (event) => {
+          try {
+            const dataURL = event.target.result;
+            const base64Content = dataURL.split(",")[1];
+            if (!base64Content) throw new Error("File content is empty.");
+            const payload = { file: base64Content, fileName: file.name, purpose: "user_data" };
+            const response = await fetch("/.netlify/functions/uploadFile", {
+              method: "POST",
+              headers: { "Content-Type": "application/json" },
+              body: JSON.stringify(payload)
+            });
+            if (!response.ok) throw new Error("Upload failed with status " + response.status);
+            const fileData = await response.json();
+            fileData.name = fileData.name || file.name;
+            fileData.id = fileData.id || file.name || ('file-' + Date.now());
+            resolve(fileData);
+          } catch (err) { reject(err); }
+        };
+        reader.onerror = reject;
+        reader.readAsDataURL(file);
+      });
+    }
+    async function uploadDocFile(file) {
+      return new Promise((resolve, reject) => {
+        const reader = new FileReader();
+        reader.onload = async (event) => {
+          try {
+            const dataURL = event.target.result;
+            const base64Content = dataURL.split(",")[1];
+            if (!base64Content) throw new Error("File content is empty.");
+            const payload = { file: base64Content, fileName: file.name, purpose: "user_data" };
+            const response = await fetch("/.netlify/functions/uploadFile", {
+              method: "POST",
+              headers: { "Content-Type": "application/json" },
+              body: JSON.stringify(payload)
+            });
+            if (!response.ok) throw new Error("Upload failed with status " + response.status);
+            const fileData = await response.json();
+            fileData.name = fileData.name || file.name;
+            fileData.id = fileData.id || file.name || ('file-' + Date.now());
+            resolve(fileData);
+          } catch (err) { reject(err); }
+        };
+        reader.onerror = reject;
+        reader.readAsDataURL(file);
+      });
+    }
+    async function updateVectorStore() {
+      const allFileIds = [...soldOrdersCSV, ...listingsCSV].map(file => file.id);
+      if (!allFileIds.length) return console.log("No supported files uploaded yet.");
+      try {
+        const vectorStorePayload = { name: "CSV Vector Store", file_ids: allFileIds };
+        const response = await fetch("/.netlify/functions/vectorStore", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify(vectorStorePayload)
+        });
+        if (!response.ok) throw new Error("Error creating vector store");
+        
+        // Grab the JSON response so we can retrieve store_id
+        const data = await response.json();
+        console.log("Vector store created/updated:", data);
+        
+        // If the creation was successful, store the returned store_id locally
+        if (data && data.id) {
+          localStorage.setItem("vectorStoreId", data.id); // <--- SAVE store_id
+          console.log("Saved store_id in localStorage:", data.id);
+        }
+      } catch (err) {
+        console.error(err);
+      }
+    }
+
     const uploadedFilesList = document.getElementById("uploadedFilesList");
-    uploadedFilesList.addEventListener("dragover", e => { e.preventDefault(); e.stopPropagation(); uploadedFilesList.style.borderColor = "#000"; });
-    uploadedFilesList.addEventListener("dragleave", e => { e.preventDefault(); e.stopPropagation(); uploadedFilesList.style.borderColor = "#ccc"; });
-    uploadedFilesList.addEventListener("drop", async e => { 
-      e.preventDefault(); e.stopPropagation(); uploadedFilesList.style.borderColor = "#ccc";
+    uploadedFilesList.addEventListener("dragover", e => {
+      e.preventDefault(); e.stopPropagation();
+      uploadedFilesList.style.borderColor = "#000";
+    });
+    uploadedFilesList.addEventListener("dragleave", e => {
+      e.preventDefault(); e.stopPropagation();
+      uploadedFilesList.style.borderColor = "#ccc";
+    });
+    uploadedFilesList.addEventListener("drop", async e => {
+      e.preventDefault(); e.stopPropagation();
+      uploadedFilesList.style.borderColor = "#ccc";
       const files = e.dataTransfer.files;
       for (let file of files) {
         if (/\.(csv|doc|docx)$/i.test(file.name)) {
-          try { 
+          try {
             const fileData = file.name.endsWith(".csv") ? await uploadCSVFile(file) : await uploadDocFile(file);
             soldOrdersCSV.push(fileData);
-            updateUploadedFilesList(); await updateVectorStore();
+            updateUploadedFilesList();
+            await updateVectorStore();
           } catch (err) { console.error(err); }
-        } else { alert("Only .csv, .doc, and .docx files supported."); }
+        } else {
+          alert("Only .csv, .doc, and .docx files supported.");
+        }
       }
     });
-    
     const dropZone = document.getElementById("dropZone");
-    dropZone.addEventListener("dragover", e => { e.preventDefault(); dropZone.style.borderColor = "#000"; });
-    dropZone.addEventListener("dragleave", e => { e.preventDefault(); dropZone.style.borderColor = "#ccc"; });
+    dropZone.addEventListener("dragover", e => {
+      e.preventDefault();
+      dropZone.style.borderColor = "#000";
+    });
+    dropZone.addEventListener("dragleave", e => {
+      e.preventDefault();
+      dropZone.style.borderColor = "#ccc";
+    });
     dropZone.addEventListener("drop", async e => {
-      e.preventDefault(); dropZone.style.borderColor = "#ccc";
+      e.preventDefault();
+      dropZone.style.borderColor = "#ccc";
       const files = e.dataTransfer.files;
       const maxRemaining = 10 - previewImages.length;
       for (let i = 0; i < Math.min(files.length, maxRemaining); i++) {
         let file = files[i];
         if (/image\/(jpeg|png)/.test(file.type)) {
           try {
-            const dataURL = await new Promise((resolve, reject) => { 
-              const reader = new FileReader(); reader.onload = event => resolve(event.target.result); reader.onerror = reject; reader.readAsDataURL(file); 
+            const dataURL = await new Promise((resolve, reject) => {
+              const reader = new FileReader();
+              reader.onload = event => resolve(event.target.result);
+              reader.onerror = reject;
+              reader.readAsDataURL(file);
             });
             const resizedDataURL = await resizeImage(dataURL, 3000, 3000);
-            previewImages.push(resizedDataURL); photoNames.push(file.name); photoIds.push('img-' + Date.now() + '-' + i);
-            updateStaticPreviewGrid(); updateUploadedFilesList();
+            previewImages.push(resizedDataURL);
+            photoNames.push(file.name);
+            photoIds.push('img-' + Date.now() + '-' + i);
+            updateStaticPreviewGrid();
+            updateUploadedFilesList();
           } catch (err) { console.error(err); }
-        } else { M.toast({ html: "Only JPEG/PNG images supported." }); }
+        } else {
+          M.toast({ html: "Only JPEG/PNG images supported." });
+        }
       }
     });
-    
-    // Photo Preview Logic
+
+    // ------------------ Photo Preview Logic ------------------
     function updateStaticPreviewGrid() {
       for (let i = 0; i < 10; i++) {
         let cell = document.getElementById("previewCell" + i);
         if (!cell) continue;
         cell.innerHTML = "Empty";
-        if (i < 7) {  // non-reserved
+        if (i < 7) {
           if (i < previewImages.length && previewImages[i]) {
             cell.innerHTML = "";
             let previewBox = document.createElement("div");
@@ -439,32 +871,63 @@ Using Sales Report Files:
             previewBox.setAttribute("data-id", photoIds[i] || "");
             previewBox.setAttribute("draggable", "true");
             previewBox.addEventListener("dragstart", e => { draggedIndex = i; });
+            
             let img = document.createElement("img");
-            img.src = previewImages[i];
+            if (previewImages[i]) {
+              img.src = previewImages[i];
+            }
             previewBox.appendChild(img);
+            
             let removeBtn = document.createElement("div");
-            removeBtn.className = "remove-btn"; removeBtn.textContent = "X";
-            removeBtn.addEventListener("click", ev => { ev.stopPropagation(); previewImages.splice(i, 1); photoNames.splice(i, 1); photoMeta.splice(i, 1); photoIds.splice(i, 1); updateStaticPreviewGrid(); });
+            removeBtn.className = "remove-btn";
+            removeBtn.textContent = "X";
+            removeBtn.addEventListener("click", ev => {
+              ev.stopPropagation();
+              previewImages.splice(i, 1);
+              photoNames.splice(i, 1);
+              photoMeta.splice(i, 1);
+              photoIds.splice(i, 1);
+              updateStaticPreviewGrid();
+            });
             previewBox.appendChild(removeBtn);
+            
             let numOverlay = document.createElement("div");
-            numOverlay.className = "number-overlay"; numOverlay.textContent = (i + 1).toString();
+            numOverlay.className = "number-overlay";
+            numOverlay.textContent = (i + 1).toString();
             previewBox.appendChild(numOverlay);
+            
             let cropBtn = document.createElement("button");
-            cropBtn.textContent = "Crop"; cropBtn.style.position = "absolute"; cropBtn.style.bottom = "2px"; cropBtn.style.right = "2px"; cropBtn.style.width = "20px"; cropBtn.style.height = "20px"; cropBtn.style.borderRadius = "50%"; cropBtn.style.backgroundColor = "green"; cropBtn.style.color = "white"; cropBtn.style.fontSize = "10px";
-            cropBtn.addEventListener("click", ev => { ev.stopPropagation(); openCropModal(i); });
+            cropBtn.textContent = "Crop";
+            cropBtn.style.position = "absolute";
+            cropBtn.style.bottom = "2px";
+            cropBtn.style.right = "2px";
+            cropBtn.style.width = "20px";
+            cropBtn.style.height = "20px";
+            cropBtn.style.borderRadius = "50%";
+            cropBtn.style.backgroundColor = "green";
+            cropBtn.style.color = "white";
+            cropBtn.style.fontSize = "10px";
+            cropBtn.addEventListener("click", ev => {
+              ev.stopPropagation();
+              openCropModal(i);
+            });
             previewBox.appendChild(cropBtn);
-            // Instead of adding metadata text, we only show a checkmark if metadata is saved
-            let statusDiv = document.createElement("div");
-            statusDiv.className = "metadata-status"; statusDiv.id = "metadataStatus" + i;
-            previewBox.appendChild(statusDiv);
+            
+            previewBox.addEventListener("click", () => { showMetadata(i); });
             cell.appendChild(previewBox);
+            
+            let metadataStatus = document.createElement("div");
+            metadataStatus.className = "metadata-status";
+            metadataStatus.id = "metadataStatus" + i;
+            cell.appendChild(metadataStatus);
           } else {
             cell.innerHTML = "Empty";
-            let statusDiv = document.createElement("div");
-            statusDiv.className = "metadata-status"; statusDiv.id = "metadataStatus" + i;
-            cell.appendChild(statusDiv);
+            let metadataStatus = document.createElement("div");
+            metadataStatus.className = "metadata-status";
+            metadataStatus.id = "metadataStatus" + i;
+            cell.appendChild(metadataStatus);
           }
-        } else {  // reserved cells (similar handling)
+        } else {
           let rIndex = i - 7;
           if (rIndex < reservedPhotos.length && reservedPhotos[rIndex] && reservedPhotos[rIndex].src) {
             cell.innerHTML = "";
@@ -477,47 +940,66 @@ Using Sales Report Files:
             img.src = reservedPhotos[rIndex].src;
             previewBox.appendChild(img);
             let removeBtn = document.createElement("div");
-            removeBtn.className = "remove-btn"; removeBtn.textContent = "X";
-            removeBtn.addEventListener("click", ev => { ev.stopPropagation(); reservedPhotos.splice(rIndex, 1); saveReservedPhotos(); updateStaticPreviewGrid(); });
+            removeBtn.className = "remove-btn";
+            removeBtn.textContent = "X";
+            removeBtn.addEventListener("click", ev => {
+              ev.stopPropagation();
+              reservedPhotos.splice(rIndex, 1);
+              saveReservedPhotos();
+              updateStaticPreviewGrid();
+            });
             previewBox.appendChild(removeBtn);
             let numOverlay = document.createElement("div");
-            numOverlay.className = "number-overlay"; numOverlay.textContent = (i + 1).toString();
+            numOverlay.className = "number-overlay";
+            numOverlay.textContent = (i + 1).toString();
             previewBox.appendChild(numOverlay);
-            let statusDiv = document.createElement("div");
-            statusDiv.className = "metadata-status"; statusDiv.id = "metadataStatus" + i;
-            previewBox.appendChild(statusDiv);
+            previewBox.addEventListener("click", () => { showMetadata(i); });
             cell.appendChild(previewBox);
+            let metadataStatus = document.createElement("div");
+            metadataStatus.className = "metadata-status";
+            metadataStatus.id = "metadataStatus" + i;
+            cell.appendChild(metadataStatus);
           } else {
             cell.innerHTML = "Empty";
-            let statusDiv = document.createElement("div");
-            statusDiv.className = "metadata-status"; statusDiv.id = "metadataStatus" + i;
-            cell.appendChild(statusDiv);
+            let metadataStatus = document.createElement("div");
+            metadataStatus.className = "metadata-status";
+            metadataStatus.id = "metadataStatus" + i;
+            cell.appendChild(metadataStatus);
           }
         }
       }
     }
-    
+
     function initializeCellDragAndDrop() {
       for (let i = 0; i < 10; i++) {
         let cell = document.getElementById("previewCell" + i);
         if (!cell.dataset.listenersAttached) {
-          cell.addEventListener("dragover", function(e) { e.preventDefault(); this.classList.add("drag-over"); });
-          cell.addEventListener("dragleave", function(e) { e.preventDefault(); this.classList.remove("drag-over"); });
+          cell.addEventListener("dragover", function(e) {
+            e.preventDefault();
+            this.classList.add("drag-over");
+          });
+          cell.addEventListener("dragleave", function(e) {
+            e.preventDefault();
+            this.classList.remove("drag-over");
+          });
           cell.addEventListener("drop", async function(e) {
-            e.preventDefault(); this.classList.remove("drag-over");
+            e.preventDefault();
+            this.classList.remove("drag-over");
             let cellIndex = parseInt(this.id.replace("previewCell", ""));
             if (cellIndex < 7) {
-              if (draggedIndex !== null && draggedIndex !== cellIndex && previewImages[draggedIndex]) {
-                const [movedImage] = previewImages.splice(draggedIndex, 1);
-                previewImages.splice(cellIndex, 0, movedImage);
-                const [movedName] = photoNames.splice(draggedIndex, 1);
-                photoNames.splice(cellIndex, 0, movedName);
-                const [movedMeta] = photoMeta.splice(draggedIndex, 1);
-                photoMeta.splice(cellIndex, 0, movedMeta);
-                const [movedId] = photoIds.splice(draggedIndex, 1);
-                photoIds.splice(cellIndex, 0, movedId);
-                updateStaticPreviewGrid();
-                draggedIndex = null;
+              if (draggedIndex !== null && draggedIndex !== cellIndex) {
+                if (previewImages[draggedIndex]) {
+                  const [movedImage] = previewImages.splice(draggedIndex, 1);
+                  previewImages.splice(cellIndex, 0, movedImage);
+                  const [movedName] = photoNames.splice(draggedIndex, 1);
+                  photoNames.splice(cellIndex, 0, movedName);
+                  const [movedMeta] = photoMeta.splice(draggedIndex, 1);
+                  photoMeta.splice(cellIndex, 0, movedMeta);
+                  const [movedId] = photoIds.splice(draggedIndex, 1);
+                  photoIds.splice(cellIndex, 0, movedId);
+                  updateStaticPreviewGrid();
+                  draggedIndex = null;
+                }
               }
             } else {
               let rIndex = cellIndex - 7;
@@ -529,11 +1011,18 @@ Using Sales Report Files:
                     try {
                       const dataURL = ev.target.result;
                       const resizedDataURL = await resizeImage(dataURL, 3000, 3000);
-                      let newReserved = { src: resizedDataURL, name: file.name, meta: "", id: 'img-' + Date.now() };
+                      let newReserved = {
+                        src: resizedDataURL,
+                        name: file.name,
+                        meta: "",
+                        id: 'img-' + Date.now()
+                      };
                       reservedPhotos[rIndex] = newReserved;
                       saveReservedPhotos();
                       updateStaticPreviewGrid();
-                    } catch (err) { console.error(err); }
+                    } catch (err) {
+                      console.error(err);
+                    }
                   };
                   reader.readAsDataURL(file);
                 }
@@ -543,7 +1032,12 @@ Using Sales Report Files:
                   const [movedName] = photoNames.splice(draggedIndex, 1);
                   const [movedMeta] = photoMeta.splice(draggedIndex, 1);
                   const [movedId] = photoIds.splice(draggedIndex, 1);
-                  let newReserved = { src: movedImage, name: movedName, meta: movedMeta || "", id: movedId };
+                  let newReserved = {
+                    src: movedImage,
+                    name: movedName,
+                    meta: movedMeta || "",
+                    id: movedId
+                  };
                   reservedPhotos[rIndex] = newReserved;
                   saveReservedPhotos();
                 } else {
@@ -561,86 +1055,18 @@ Using Sales Report Files:
         }
       }
     }
-    
-    // --- New: Analyze a photo, embed description as alt-text (EXIF) and show green checkmark ---
-    function dataURLtoBlob(dataurl) {
-      const arr = dataurl.split(',');
-      const mime = arr[0].match(/:(.*?);/)[1];
-      const bstr = atob(arr[1]);
-      let n = bstr.length, u8arr = new Uint8Array(n);
-      while (n--) { u8arr[n] = bstr.charCodeAt(n); }
-      return new Blob([u8arr], { type: mime });
-    }
-    
-    // We no longer display the full metadata text. Instead, we insert the description (trimmed to 200 chars)
-    // into the EXIF field "ImageDescription" using piexifjs.
-    async function analyzePhoto(index) {
-      const dataUrl = previewImages[index];
-      const blob = dataURLtoBlob(dataUrl);
-      const formData = new FormData();
-      formData.append("imageFile", blob, "analyzed_photo_" + index + ".jpg");
-      formData.append("rules", "Analyze the image and extract SEO-friendly metadata including Title, Description, and Keywords.");
-      try {
-        const response = await fetch("/.netlify/functions/analyzeImage", { method: "POST", body: formData });
-        if (!response.ok) {
-          const errorText = await response.text();
-          updateMetadataStatus(index, { error: "Error: " + errorText });
-          return;
-        }
-        const result = await response.json();
-        const metadataText = result.metadata || "";
-        // Parse metadata (we only need the description)
-        const parsed = (function parseMetadata(text) {
-          const metadata = { description: "" };
-          const descriptionMatch = text.match(/(?:\*\*Description\*\*:\s*)(.*)/i);
-          if (descriptionMatch) { metadata.description = descriptionMatch[1].trim(); }
-          return metadata;
-        })(metadataText);
-        // Embed the description (first 200 chars) into the JPEG's EXIF "ImageDescription" field
-        let altText = parsed.description.substring(0,200);
-        let exifObj = piexif.load(previewImages[index]);
-        if (!exifObj["0th"]) exifObj["0th"] = {};
-        exifObj["0th"][piexif.ImageIFD.ImageDescription] = altText;
-        let exifBytes = piexif.dump(exifObj);
-        previewImages[index] = piexif.insert(exifBytes, previewImages[index]);
-        // Save the metadata for later use (if needed)
-        photoMeta[index] = parsed;
-        // Update UI to show a green checkmark
-        updateMetadataStatus(index, { success: true });
-      } catch (error) {
-        updateMetadataStatus(index, { error: "Exception: " + error.message });
-      }
-    }
-    
-    // Analyze all non-reserved photos (indexes 0-6)
-    document.getElementById("analyzeMetadataBtn").addEventListener("click", async () => {
-      const maxPhotos = Math.min(previewImages.length, 7);
-      for (let i = 0; i < maxPhotos; i++) {
-        if (!photoMeta[i]) {
-          await analyzePhoto(i);
-        }
-      }
-    });
-    
-    // Update metadata-status div: only show green checkmark on success or error message.
-    function updateMetadataStatus(index, data) {
-      const statusDiv = document.getElementById("metadataStatus" + index);
-      if (data.success) {
-        statusDiv.innerHTML = `<div class="metadata-check"><i class="material-icons">check_circle</i></div>`;
-      } else if (data.error) {
-        statusDiv.innerHTML = `<span style="color:red;">${data.error}</span>`;
-      }
-    }
-    
-    // OAuth & Startup functions (unchanged)
+
     function generateRandomString(length) {
       const possible = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789';
       let text = '';
-      for (let i = 0; i < length; i++) { text += possible.charAt(Math.floor(Math.random() * possible.length)); }
+      for (let i = 0; i < length; i++) {
+        text += possible.charAt(Math.floor(Math.random() * possible.length));
+      }
       return text;
     }
     function base64urlEncode(buffer) {
-      return btoa(String.fromCharCode(...new Uint8Array(buffer))).replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, '');
+      return btoa(String.fromCharCode(...new Uint8Array(buffer)))
+        .replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, '');
     }
     async function generateCodeChallenge(codeVerifier) {
       let encoder = new TextEncoder();
@@ -648,6 +1074,7 @@ Using Sales Report Files:
       let digest = await crypto.subtle.digest("SHA-256", data);
       return base64urlEncode(digest);
     }
+
     document.getElementById("connectEtsyBtn").addEventListener("click", async () => {
       persistDataBeforeRedirect();
       let state = "randomState123";
@@ -663,6 +1090,7 @@ Using Sales Report Files:
         `&code_challenge_method=S256`;
       window.location.href = etsyAuthUrl;
     });
+
     document.addEventListener("DOMContentLoaded", () => {
       loadButtonPositions();
       loadReservedPhotos();
@@ -701,14 +1129,20 @@ Using Sales Report Files:
         M.toast({ html: "Error exchanging code for token" });
       }
     }
+
     document.getElementById("uploadToEtsyBtn").addEventListener("click", async () => {
       let listingInput = document.getElementById("shopListings").value.trim();
       if (!listingInput) {
         M.toast({ html: "Please provide a listing URL or ID in 'Etsy Shop Listings'." });
         return;
       }
-      let listingId = /^\d+$/.test(listingInput) ? listingInput : (listingInput.match(/\/listing\/(\d+)/) || [])[1];
-      if (!listingId) { M.toast({ html: "Invalid listing URL or ID." }); return; }
+      let listingId = /^\d+$/.test(listingInput)
+        ? listingInput
+        : (listingInput.match(/\/listing\/(\d+)/) || [])[1];
+      if (!listingId) {
+        M.toast({ html: "Invalid listing URL or ID." });
+        return;
+      }
       let userDescription = document.getElementById("listingDescription").value || "";
       let finalDescription = userDescription + appendedDescriptionText; 
       let payload = {
@@ -736,10 +1170,15 @@ Using Sales Report Files:
         M.toast({ html: "Exception: " + e.message });
       }
     });
+
     document.getElementById("photoUploadNewBtn").addEventListener("click", async () => {
       let listingInput = document.getElementById("shopListings").value.trim();
-      if (!listingInput) { M.toast({ html: "Please provide a listing URL or ID in 'Etsy Shop Listings'." }); return; }
-      let btn = document.getElementById("photoUploadNewBtn"); btn.disabled = true;
+      if (!listingInput) {
+        M.toast({ html: "Please provide a listing URL or ID in 'Etsy Shop Listings'." });
+        return;
+      }
+      let btn = document.getElementById("photoUploadNewBtn");
+      btn.disabled = true;
       try {
         await uploadPhotos();
         await uploadReservedPhotos();
@@ -748,91 +1187,350 @@ Using Sales Report Files:
         checkIfBothUpdatesComplete();
       } catch (err) {
         console.error(err);
-      } finally { btn.disabled = false; }
+      } finally {
+        btn.disabled = false;
+      }
+    });
+
+    // -------------- New: Analyze Photos Functionality --------------
+    function dataURLtoBlob(dataurl) {
+      const arr = dataurl.split(',');
+      const mime = arr[0].match(/:(.*?);/)[1];
+      const bstr = atob(arr[1]);
+      let n = bstr.length;
+      const u8arr = new Uint8Array(n);
+      while (n--) {
+        u8arr[n] = bstr.charCodeAt(n);
+      }
+      return new Blob([u8arr], { type: mime });
+    }
+
+    document.getElementById("analyzeMetadataBtn").addEventListener("click", async () => {
+      if (!previewImages.length) {
+        M.toast({ html: "No images available to analyze." });
+        return;
+      }
+      const dataUrl = previewImages[0];
+      const blob = dataURLtoBlob(dataUrl);
+      const formData = new FormData();
+      formData.append("imageFile", blob, "analyzed_photo.jpg");
+      formData.append("rules", "Analyze the image and extract SEO-friendly metadata.");
+      try {
+        const response = await fetch("/.netlify/functions/analyzeImage", {
+          method: "POST",
+          body: formData
+        });
+        if (!response.ok) {
+          const errorText = await response.text();
+          M.toast({ html: "Error analyzing photo: " + errorText });
+          return;
+        }
+        const result = await response.json();
+        const metadata = result.metadata || "No metadata returned.";
+        document.getElementById("metadataTextarea").value = metadata;
+        const metadataModalElem = document.getElementById("metadataModal");
+        let metadataModalInstance = M.Modal.getInstance(metadataModalElem);
+        if (!metadataModalInstance) {
+          metadataModalInstance = M.Modal.init(metadataModalElem);
+        }
+        metadataModalInstance.open();
+      } catch (error) {
+        console.error("Error in analyze photo:", error);
+        M.toast({ html: "Exception: " + error.message });
+      }
+    });
+
+    // -------------- Generate Key Phrases Using CSV Context --------------
+    async function regenerateSinglePhrase(question, keywordRules, currentValid, maxAttempts = 5) {
+      for (let attempt = 1; attempt <= maxAttempts; attempt++) {
+        let store_id = localStorage.getItem("vectorStoreId");
+        let retrievedContext = "";
+        try {
+          let resp = await fetch("/.netlify/functions/vectorStore", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({
+              action: "query",
+              store_id,
+              query: question,
+              topK: 5
+            })
+          });
+          if (resp.ok) {
+            let data = await resp.json();
+            retrievedContext = data?.data || "";
+          }
+        } catch (err) {
+          console.warn("Could not retrieve CSV context for single phrase regeneration:", err);
+        }
+        let prompt = `
+We have 12 valid phrases:
+${currentValid.join(", ")}
+
+Now produce ONE new phrase (≤20 chars) that satisfies the same rules:
+
+Here is some relevant data from our CSV:
+${retrievedContext}
+
+Keyword Rules:
+${keywordRules}
+Return only one phrase in plain text.
+        `;
+        let payload = {
+          model: modelName,
+          messages: [
+            { role: "system", content: "Generate a single phrase, up to 20 characters." },
+            { role: "user", content: prompt }
+          ],
+          temperature: 0.7,
+          max_tokens: 150
+        };
+        let data = await callOpenAI(payload);
+        let answer = data.choices[0].message.content || "";
+        let candidate = answer.trim()
+          .replace(/^\d+\.\s*/, "")
+          .split("\n")[0]
+          .trim();
+        if (candidate.length <= 20) {
+          return candidate;
+        }
+        console.warn(`Attempt ${attempt}: Single phrase too long => "${candidate}"`);
+      }
+      throw new Error("Failed to generate a single phrase under 20 chars after multiple attempts.");
+    }
+
+    async function getInitialPhrases(question, keywordRules) {
+      let store_id = localStorage.getItem("vectorStoreId");
+      if (!store_id) {
+        console.warn("No store_id found in localStorage. CSV context may not be loaded!");
+      }
+      let retrievedContext = "";
+      try {
+        let resp = await fetch("/.netlify/functions/vectorStore", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            action: "query",
+            store_id,
+            query: question,
+            topK: 5
+          })
+        });
+        if (resp.ok) {
+          let data = await resp.json();
+          retrievedContext = data?.data || "";
+        } else {
+          console.warn("Could not retrieve CSV context from vector store. HTTP status:", resp.status);
+        }
+      } catch (err) {
+        console.error("Error retrieving CSV context:", err);
+      }
+      let prompt = `
+Here is some relevant data from our CSV files:
+${retrievedContext}
+
+Listing Description (for emphasis): "${question}"
+Emphasis on SEO and generating effective Etsy tag phrases.
+
+Keyword Rules:
+${keywordRules}
+
+Generate exactly 13 SEO key phrases (each ≤ 20 characters). Return as plain text.
+      `;
+      let payload = {
+        model: modelName,
+        messages: [
+          { role: "system", content: "Use the CSV context above to generate more accurate key phrases." },
+          { role: "user", content: prompt }
+        ],
+        temperature: 0.7,
+        max_tokens: 500
+      };
+      let data = await callOpenAI(payload);
+      let answer = data.choices[0].message.content || "";
+      let phrasesArray = answer
+        .split(/[\n,]+/)
+        .map(s => s.replace(/^\d+\.\s*/, "").trim())
+        .filter(p => p);
+      return phrasesArray;
+    }
+
+    async function generateTagPhrases() {
+      let question = document.getElementById("listingDescInput").value.trim();
+      if (!question) {
+        M.toast({ html: "Please enter a question in the Listing Description." });
+        return;
+      }
+      let keywordRules = stripMarkdownJSON(document.getElementById("keywordRulesTextarea").value);
+      try {
+        let phrasesArray = await getInitialPhrases(question, keywordRules);
+        for (let i = 0; i < phrasesArray.length; i++) {
+          if (phrasesArray[i].length > 20) {
+            let otherValid = phrasesArray.filter((_, idx) => idx !== i && phrasesArray[idx].length <= 20);
+            let newPhrase = await regenerateSinglePhrase(question, keywordRules, otherValid);
+            phrasesArray[i] = newPhrase;
+          }
+        }
+        if (phrasesArray.some(p => p.length > 20)) {
+          throw new Error("Could not fix some phrases under 20 chars. Please try again.");
+        }
+        document.getElementById("searchKeyPhrases").value = phrasesArray.join("\n");
+        M.toast({ html: "Tag Phrases generated successfully!" });
+      } catch (err) {
+        console.error(err);
+        M.toast({ html: "Error generating valid tag phrases: " + err.message });
+      }
+    }
+
+    document.getElementById("listingDescInput").addEventListener("keydown", async (e) => {
+      if (e.key === "Enter" && !e.shiftKey) {
+        e.preventDefault();
+        await generateTagPhrases();
+      }
+    });
+
+    document.getElementById("generateBtn").addEventListener("click", async () => {
+      await Promise.all([generateTitleOnly(), generateDescriptionOnly()]);
     });
     
-    // Upload photos (with alt-text now coming from embedded EXIF)
-    async function uploadPhotos() {
-      let listingInput = document.getElementById("shopListings").value.trim();
-      if (!listingInput) { M.toast({ html: "Please provide a listing URL or ID in 'Etsy Shop Listings'." }); return; }
-      if (!previewImages.length) { M.toast({ html: "No images to upload. Please drag and drop images first." }); return; }
-      let listingId = /^\d+$/.test(listingInput) ? listingInput : (listingInput.match(/\/listing\/(\d+)/) || [])[1];
-      if (!listingId) { M.toast({ html: "Invalid listing URL or ID." }); return; }
-      for (let i = 0; i < previewImages.length; i++) {
-        let dataURL = previewImages[i];
-        // altText is now already embedded into the JPEG via EXIF
-        let rankNumber = i + 1;
-        try {
-          let res = await fetch(dataURL);
-          let blob = await res.blob();
-          let formData = new FormData();
-          formData.append("listingId", listingId);
-          formData.append("token", accessToken);
-          formData.append("fileName", photoNames[i] || `uploaded_photo_${i}.jpg`);
-          formData.append("rank", rankNumber);
-          // No need to add alt_text separately; it’s embedded in the JPEG EXIF.
-          formData.append("file", blob, photoNames[i] || `uploaded_photo_${i}.jpg`);
-          let uploadUrl = `/.netlify/functions/imageUpload`;
-          let response = await fetch(uploadUrl, { method: "POST", body: formData });
-          if (!response.ok) { M.toast({ html: `Error uploading photo #${rankNumber}: ` + response.status }); }
-          else { M.toast({ html: `Photo #${rankNumber} uploaded successfully!` }); }
-        } catch (e) {
-          console.error(e);
-          M.toast({ html: `Exception uploading photo #${rankNumber}: ${e.message}` });
+    async function generateTitleOnly() {
+      let etsyLink = ETSY_SHOP_URL;
+      let keyPhrases = document.getElementById("searchKeyPhrases").value.trim();
+      if (!keyPhrases) {
+        M.toast({ html: "Please provide the search key phrases." });
+        return;
+      }
+      let rulesText = document.getElementById("titleRulesTextarea").value;
+      let promptText = `
+You are ChatGPT using ${modelName}.
+Based on the inputs below, generate an Etsy Listing TITLE only.
+Input Context:
+Etsy Link: "${etsyLink}"
+Search KeyPhrases: "${keyPhrases}"
+--- Rules for TITLE ---
+${stripMarkdownJSON(rulesText)}
+Important: Return ONLY the title as plain text.`;
+      document.getElementById("listingTitle").value = "Generating title...";
+      let payload = {
+        model: modelName,
+        messages: [
+          { role: "system", content: "Return ONLY the title as plain text." },
+          { role: "user", content: promptText }
+        ],
+        temperature: 0.7
+      };
+      try {
+        let data = await callOpenAI(payload);
+        if (data.choices && data.choices.length > 0) {
+          let output = stripMarkdownJSON(data.choices[0].message.content);
+          document.getElementById("listingTitle").value = output || "No title generated.";
+          updateTitleCount(output);
+        } else {
+          document.getElementById("listingTitle").value = "No title generated.";
         }
+      } catch (error) {
+        document.getElementById("listingTitle").value = "Error: " + error;
       }
     }
-    window.uploadPhotos = uploadPhotos;
-    async function uploadReservedPhotos() {
-      let listingInput = document.getElementById("shopListings").value.trim();
-      if (!listingInput) { M.toast({ html: "Please provide a listing URL or ID in 'Etsy Shop Listings'." }); return; }
-      if (!reservedPhotos.length) { M.toast({ html: "No reserved photos to upload." }); return; }
-      let listingId = /^\d+$/.test(listingInput) ? listingInput : (listingInput.match(/\/listing\/(\d+)/) || [])[1];
-      if (!listingId) { M.toast({ html: "Invalid listing URL or ID." }); return; }
-      for (let i = 0; i < reservedPhotos.length; i++) {
-        let dataURL = reservedPhotos[i].src;
-        let rankNumber = i + 8;
-        try {
-          let res = await fetch(dataURL);
-          let blob = await res.blob();
-          let formData = new FormData();
-          formData.append("listingId", listingId);
-          formData.append("token", accessToken);
-          formData.append("fileName", reservedPhotos[i].name || `reserved_photo_${i}.jpg`);
-          formData.append("rank", rankNumber);
-          formData.append("file", blob, reservedPhotos[i].name || `reserved_photo_${i}.jpg`);
-          let uploadUrl = `/.netlify/functions/imageUpload`;
-          let response = await fetch(uploadUrl, { method: "POST", body: formData });
-          if (!response.ok) { M.toast({ html: `Error uploading reserved photo #${rankNumber}: ` + response.status }); }
-          else { M.toast({ html: `Reserved photo #${rankNumber} uploaded successfully!` }); }
-        } catch (e) {
-          console.error(e);
-          M.toast({ html: `Exception uploading reserved photo #${rankNumber}: ${e.message}` });
+    async function generateDescriptionOnly() {
+      let etsyLink = ETSY_SHOP_URL;
+      let keyPhrases = document.getElementById("searchKeyPhrases").value.trim();
+      if (!keyPhrases) {
+        M.toast({ html: "Please provide the search key phrases." });
+        return;
+      }
+      let rulesText = document.getElementById("descriptionRulesTextarea").value;
+      let promptText = `
+You are ChatGPT using ${modelName}.
+Based on the inputs below, generate an Etsy Listing DESCRIPTION only.
+Input Context:
+Etsy Link: "${etsyLink}"
+Search KeyPhrases: "${keyPhrases}"
+--- Rules for DESCRIPTION ---
+${stripMarkdownJSON(rulesText)}
+Important: Return ONLY the description as plain text.`;
+      document.getElementById("listingDescription").value = "Generating description...";
+      let payload = {
+        model: modelName,
+        messages: [
+          { role: "system", content: "Return ONLY the description as plain text." },
+          { role: "user", content: promptText }
+        ],
+        temperature: 0.7
+      };
+      try {
+        let data = await callOpenAI(payload);
+        if (data.choices && data.choices.length > 0) {
+          let output = stripMarkdownJSON(data.choices[0].message.content);
+          document.getElementById("listingDescription").value = output || "No description generated.";
+        } else {
+          document.getElementById("listingDescription").value = "No description generated.";
         }
+      } catch (error) {
+        document.getElementById("listingDescription").value = "Error: " + error;
       }
     }
-    
-    // Title & Description Generation (unchanged)
-    document.getElementById("listingDescInput").addEventListener("keydown", async (e) => { if (e.key === "Enter" && !e.shiftKey) { e.preventDefault(); await generateTagPhrases(); } });
-    document.getElementById("generateBtn").addEventListener("click", async () => { await Promise.all([generateTitleOnly(), generateDescriptionOnly()]); });
-    async function generateTitleOnly() { /* ... (same as before) ... */ }
-    async function generateDescriptionOnly() { /* ... (same as before) ... */ }
     async function callOpenAI(payload) {
-      let response = await fetch("/.netlify/functions/openaiProxy", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(payload) });
-      if (!response.ok) { let errorData = await response.json(); throw new Error("API Error: " + (errorData.error ? errorData.error.message : response.statusText)); }
+      let response = await fetch("/.netlify/functions/openaiProxy", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(payload)
+      });
+      if (!response.ok) {
+        let errorData = await response.json();
+        throw new Error("API Error: " + (errorData.error ? errorData.error.message : response.statusText));
+      }
       return await response.json();
     }
-    function updateTitleCount(text) { document.getElementById("titleCount").textContent = "Count: " + text.length; }
-    document.getElementById("copyTitleBtn").addEventListener("click", () => { navigator.clipboard.writeText(document.getElementById("listingTitle").value).catch(err => console.error("Copy error:", err)); });
-    document.getElementById("copyDescriptionBtn").addEventListener("click", () => { navigator.clipboard.writeText(document.getElementById("listingDescription").value).catch(err => console.error("Copy error:", err)); });
-    document.getElementById("clearKeyPhrasesBtn").addEventListener("click", () => { document.getElementById("searchKeyPhrases").value = ""; });
-    document.getElementById("copyKeyPhrasesBtn").addEventListener("click", () => { let lines = document.getElementById("searchKeyPhrases").value.split(/\n+/).map(l => l.trim()).filter(l => l !== ""); navigator.clipboard.writeText(lines.join(", ")).catch(err => console.error("Error copying key phrases:", err)); });
+    function updateTitleCount(text) {
+      document.getElementById("titleCount").textContent = "Count: " + text.length;
+    }
+    document.getElementById("copyTitleBtn").addEventListener("click", () => {
+      let text = document.getElementById("listingTitle").value;
+      navigator.clipboard.writeText(text).catch(err => console.error("Copy error:", err));
+    });
+    document.getElementById("copyDescriptionBtn").addEventListener("click", () => {
+      let text = document.getElementById("listingDescription").value;
+      navigator.clipboard.writeText(text).catch(err => console.error("Copy error:", err));
+    });
+    document.getElementById("clearKeyPhrasesBtn").addEventListener("click", () => {
+      document.getElementById("searchKeyPhrases").value = "";
+    });
+    document.getElementById("copyKeyPhrasesBtn").addEventListener("click", () => {
+      let lines = document.getElementById("searchKeyPhrases").value.split(/\n+/).map(l => l.trim()).filter(l => l !== "");
+      navigator.clipboard.writeText(lines.join(", ")).catch(err => console.error("Error copying key phrases:", err));
+    });
+
     document.getElementById("configureButtonsBtn").addEventListener("click", () => {
-      let configContainer = document.getElementById("buttonConfigContainer"); configContainer.innerHTML = "";
-      const selectors = ["#configureButtonsBtn","#listingDescContainer","#uploadedFilesList","#dropZone","#previewGridContainer","#container13","#uploadToEtsyBtn","#etsyShopListingsContainer","#userProvidedKeyPhrasesContainer","#etsyListingTitleContainer","#etsyListingDescriptionContainer","#regenTitleBtn","#copyTitleBtn","#regenDescriptionBtn","#copyDescriptionBtn","#photoUploadNewBtn","#generateBtn","#connectEtsyBtn","#analyzeMetadataBtn","#showAnalyzeRulesBtn"].join(", ");
+      let configContainer = document.getElementById("buttonConfigContainer");
+      configContainer.innerHTML = "";
+      const selectors = [
+        "#configureButtonsBtn",
+        "#listingDescContainer",
+        "#uploadedFilesList",
+        "#dropZone",
+        "#previewGridContainer",
+        "#container13",
+        "#uploadToEtsyBtn",
+        "#etsyShopListingsContainer",
+        "#userProvidedKeyPhrasesContainer",
+        "#etsyListingTitleContainer",
+        "#etsyListingDescriptionContainer",
+        "#regenTitleBtn",
+        "#copyTitleBtn",
+        "#regenDescriptionBtn",
+        "#copyDescriptionBtn",
+        "#photoUploadNewBtn",
+        "#generateBtn",
+        "#connectEtsyBtn",
+        "#analyzeMetadataBtn",
+        "#showAnalyzeRulesBtn"
+      ].join(", ");
       let elements = document.querySelectorAll(selectors);
-      let table = document.createElement("table"); table.className = "striped";
-      let thead = document.createElement("thead"); thead.innerHTML = "<tr><th>Element ID</th><th>Top (px)</th><th>Left (px)</th></tr>";
+      let table = document.createElement("table");
+      table.className = "striped";
+      let thead = document.createElement("thead");
+      thead.innerHTML = "<tr><th>Element ID</th><th>Top (px)</th><th>Left (px)</th></tr>";
       table.appendChild(thead);
       let tbody = document.createElement("tbody");
       elements.forEach(el => {
@@ -841,9 +1539,17 @@ Using Sales Report Files:
         let currentTop = el.style.top || computedStyle.top || "0";
         let currentLeft = el.style.left || computedStyle.left || "0";
         let tr = document.createElement("tr");
-        tr.innerHTML = `<td>${id}</td><td><input type="number" id="${id}_top" value="${parseInt(currentTop)||0}"></td><td><input type="number" id="${id}_left" value="${parseInt(currentLeft)||0}"></td>`;
-        tr.querySelector(`#${id}_top`).addEventListener("input", () => { el.style.top = el.style.top = document.getElementById(id+"_top").value + "px"; });
-        tr.querySelector(`#${id}_left`).addEventListener("input", () => { el.style.left = document.getElementById(id+"_left").value + "px"; });
+        tr.innerHTML = `<td>${id}</td>
+          <td><input type="number" id="${id}_top" value="${parseInt(currentTop)||0}"></td>
+          <td><input type="number" id="${id}_left" value="${parseInt(currentLeft)||0}"></td>`;
+        let topInput = tr.querySelector(`#${id}_top`);
+        let leftInput = tr.querySelector(`#${id}_left`);
+        topInput.addEventListener("input", () => {
+          el.style.top = topInput.value + "px";
+        });
+        leftInput.addEventListener("input", () => {
+          el.style.left = leftInput.value + "px";
+        });
         tbody.appendChild(tr);
       });
       table.appendChild(tbody);
@@ -853,21 +1559,57 @@ Using Sales Report Files:
       modalInstance.open();
     });
     document.getElementById("saveButtonPositionsBtn").addEventListener("click", () => {
-      const selectors = ["#configureButtonsBtn","#listingDescContainer","#uploadedFilesList","#dropZone","#previewGridContainer","#container13","#uploadToEtsyBtn","#etsyShopListingsContainer","#userProvidedKeyPhrasesContainer","#etsyListingTitleContainer","#etsyListingDescriptionContainer","#regenTitleBtn","#copyTitleBtn","#regenDescriptionBtn","#copyDescriptionBtn","#photoUploadNewBtn","#generateBtn","#connectEtsyBtn","#analyzeMetadataBtn","#showAnalyzeRulesBtn"].join(", ");
+      const selectors = [
+        "#configureButtonsBtn",
+        "#listingDescContainer",
+        "#uploadedFilesList",
+        "#dropZone",
+        "#previewGridContainer",
+        "#container13",
+        "#uploadToEtsyBtn",
+        "#etsyShopListingsContainer",
+        "#userProvidedKeyPhrasesContainer",
+        "#etsyListingTitleContainer",
+        "#etsyListingDescriptionContainer",
+        "#regenTitleBtn",
+        "#copyTitleBtn",
+        "#regenDescriptionBtn",
+        "#copyDescriptionBtn",
+        "#photoUploadNewBtn",
+        "#generateBtn",
+        "#connectEtsyBtn",
+        "#analyzeMetadataBtn",
+        "#showAnalyzeRulesBtn"
+      ].join(", ");
       let elements = document.querySelectorAll(selectors);
       let positions = {};
-      elements.forEach(el => { positions[el.id] = { top: el.style.top || "0px", left: el.style.left || "0px" }; });
+      elements.forEach(el => {
+        positions[el.id] = {
+          top: el.style.top || "0px",
+          left: el.style.left || "0px"
+        };
+      });
       localStorage.setItem("buttonPositions", JSON.stringify(positions));
       M.toast({ html: "Button positions saved." });
     });
     function loadButtonPositions() {
       let stored = localStorage.getItem("buttonPositions");
-      if (stored) { let positions = JSON.parse(stored); for (let id in positions) { let el = document.getElementById(id); if (el) { el.style.top = positions[id].top; el.style.left = positions[id].left; } } }
+      if (stored) {
+        let positions = JSON.parse(stored);
+        for (let id in positions) {
+          let el = document.getElementById(id);
+          if (el) {
+            el.style.top = positions[id].top;
+            el.style.left = positions[id].left;
+          }
+        }
+      }
     }
     window.addEventListener("load", () => {
       let container13 = document.getElementById("container13");
       container13.style.height = (container13.offsetHeight * 2.5) + "px";
     });
+
     function openCropModal(index) {
       currentCropIndex = index;
       let cropModal = document.getElementById("photoCropModal");
@@ -875,13 +1617,28 @@ Using Sales Report Files:
       cropImage.src = previewImages[index];
       cropImage.onload = function() {
         cropper = new Cropper(cropImage, {
-          viewMode: 1, autoCropArea: 1, movable: true, zoomable: true, scalable: false, rotatable: false,
-          responsive: true, background: false, modal: true, guides: true, center: true, highlight: true,
-          cropBoxMovable: true, cropBoxResizable: true, dragMode: 'move',
+          viewMode: 1,
+          autoCropArea: 1,
+          movable: true,
+          zoomable: true,
+          scalable: false,
+          rotatable: false,
+          responsive: true,
+          background: false,
+          modal: true,
+          guides: true,
+          center: true,
+          highlight: true,
+          cropBoxMovable: true,
+          cropBoxResizable: true,
+          dragMode: 'move',
           ready: function() {
             let containerData = cropper.getContainerData();
             let cropBoxData = cropper.getCropBoxData();
-            cropper.setCropBoxData({ left: (containerData.width - cropBoxData.width) / 2, top: (containerData.height - cropBoxData.height) / 2 });
+            cropper.setCropBoxData({
+              left: (containerData.width - cropBoxData.width) / 2,
+              top: (containerData.height - cropBoxData.height) / 2
+            });
           }
         });
       };
@@ -900,14 +1657,104 @@ Using Sales Report Files:
       }
     });
     document.getElementById("cancelCropBtn").addEventListener("click", () => {
-      if (cropper) { cropper.destroy(); cropper = null; }
+      if (cropper) {
+        cropper.destroy();
+        cropper = null;
+      }
       currentCropIndex = null;
       M.Modal.getInstance(document.getElementById("photoCropModal")).close();
     });
-    
-    // Title & Description Generation functions remain unchanged...
-    // (generateTitleOnly, generateDescriptionOnly, callOpenAI, updateTitleCount, etc.)
-    
+
+    async function uploadPhotos() {
+      let listingInput = document.getElementById("shopListings").value.trim();
+      if (!listingInput) {
+        M.toast({ html: "Please provide a listing URL or ID in 'Etsy Shop Listings'." });
+        return;
+      }
+      if (!previewImages.length) {
+        M.toast({ html: "No images to upload. Please drag and drop images first." });
+        return;
+      }
+      let listingId = /^\d+$/.test(listingInput)
+        ? listingInput
+        : (listingInput.match(/\/listing\/(\d+)/) || [])[1];
+      if (!listingId) {
+        M.toast({ html: "Invalid listing URL or ID." });
+        return;
+      }
+      for (let i = 0; i < previewImages.length; i++) {
+        let dataURL = previewImages[i];
+        let altText = photoMeta[i] || "";
+        let rankNumber = i + 1;
+        try {
+          let res = await fetch(dataURL);
+          let blob = await res.blob();
+          let formData = new FormData();
+          formData.append("listingId", listingId);
+          formData.append("token", accessToken);
+          formData.append("fileName", photoNames[i] || `uploaded_photo_${i}.jpg`);
+          formData.append("rank", rankNumber);
+          formData.append("alt_text", altText);
+          formData.append("file", blob, photoNames[i] || `uploaded_photo_${i}.jpg`);
+          let uploadUrl = `/.netlify/functions/imageUpload`;
+          let response = await fetch(uploadUrl, { method: "POST", body: formData });
+          if (!response.ok) {
+            M.toast({ html: `Error uploading photo #${rankNumber}: ` + response.status });
+          } else {
+            M.toast({ html: `Photo #${rankNumber} uploaded with alt_text!` });
+          }
+        } catch (e) {
+          console.error(e);
+          M.toast({ html: `Exception uploading photo #${rankNumber}: ${e.message}` });
+        }
+      }
+    }
+    window.uploadPhotos = uploadPhotos;
+
+    async function uploadReservedPhotos() {
+      let listingInput = document.getElementById("shopListings").value.trim();
+      if (!listingInput) {
+        M.toast({ html: "Please provide a listing URL or ID in 'Etsy Shop Listings'." });
+        return;
+      }
+      if (!reservedPhotos.length) {
+        M.toast({ html: "No reserved photos to upload." });
+        return;
+      }
+      let listingId = /^\d+$/.test(listingInput)
+        ? listingInput
+        : (listingInput.match(/\/listing\/(\d+)/) || [])[1];
+      if (!listingId) {
+        M.toast({ html: "Invalid listing URL or ID." });
+        return;
+      }
+      for (let i = 0; i < reservedPhotos.length; i++) {
+        let dataURL = reservedPhotos[i].src;
+        let altText = reservedPhotos[i].meta || "";
+        let rankNumber = i + 8;
+        try {
+          let res = await fetch(dataURL);
+          let blob = await res.blob();
+          let formData = new FormData();
+          formData.append("listingId", listingId);
+          formData.append("token", accessToken);
+          formData.append("fileName", reservedPhotos[i].name || `reserved_photo_${i}.jpg`);
+          formData.append("rank", rankNumber);
+          formData.append("alt_text", altText);
+          formData.append("file", blob, reservedPhotos[i].name || `reserved_photo_${i}.jpg`);
+          let uploadUrl = `/.netlify/functions/imageUpload`;
+          let response = await fetch(uploadUrl, { method: "POST", body: formData });
+          if (!response.ok) {
+            M.toast({ html: `Error uploading reserved photo #${rankNumber}: ` + response.status });
+          } else {
+            M.toast({ html: `Reserved photo #${rankNumber} uploaded successfully!` });
+          }
+        } catch (e) {
+          console.error(e);
+          M.toast({ html: `Exception uploading reserved photo #${rankNumber}: ${e.message}` });
+        }
+      }
+    }
   </script>
 </body>
 </html>
