@@ -1705,9 +1705,6 @@ Important: Return ONLY the description as plain text.`;
         }
       }
     }
-    // Expose uploadPhotos globally
-    window.uploadPhotos = uploadPhotos;
-
     async function uploadReservedPhotos() {
       let listingInput = document.getElementById("shopListings").value.trim();
       if (!listingInput) {
