@@ -745,33 +745,7 @@ https://www.etsy.com/shop/CustomBrites/policy
       }
     }
 
-    const uploadedFilesList = document.getElementById("uploadedFilesList");
-    uploadedFilesList.addEventListener("dragover", e => {
-      e.preventDefault(); e.stopPropagation();
-      uploadedFilesList.style.borderColor = "#000";
-    });
-    uploadedFilesList.addEventListener("dragleave", e => {
-      e.preventDefault(); e.stopPropagation();
-      uploadedFilesList.style.borderColor = "#ccc";
-    });
-    uploadedFilesList.addEventListener("drop", async e => {
-      e.preventDefault(); e.stopPropagation();
-      uploadedFilesList.style.borderColor = "#ccc";
-      const files = e.dataTransfer.files;
-      for (let file of files) {
-        if (/\.(csv|doc|docx)$/i.test(file.name)) {
-          try {
-            const fileData = file.name.endsWith(".csv") ? await uploadCSVFile(file) : await uploadDocFile(file);
-            soldOrdersCSV.push(fileData);
-            updateUploadedFilesList();
-            await updateVectorStore();
-          } catch (err) { console.error(err); }
-        } else {
-          alert("Only .csv, .doc, and .docx files supported.");
-        }
-      }
-    });
-
+    // Updated drop zone handler: Process all files first, then update grid once.
     const dropZone = document.getElementById("dropZone");
     dropZone.addEventListener("dragover", e => {
       e.preventDefault();
@@ -800,13 +774,13 @@ https://www.etsy.com/shop/CustomBrites/policy
             previewImages.push(resizedDataURL);
             photoNames.push(file.name);
             photoIds.push('img-' + Date.now() + '-' + i);
-            updateStaticPreviewGrid();
-            updateUploadedFilesList();
           } catch (err) { console.error(err); }
         } else {
           M.toast({ html: "Only JPEG/PNG images supported." });
         }
       }
+      updateStaticPreviewGrid();
+      updateUploadedFilesList();
     });
 
     function updateStaticPreviewGrid() {
