@@ -466,101 +466,57 @@ Using Sales Report and Product List Files:
       return text;
     }
 
-    // Global variables
-    const ETSY_SHOP_URL = "https://www.etsy.com/shop/custombrites";
-    const CLIENT_ID = "k75zdspz4r99txpqdji7i2em";
-    const REDIRECT_URI = "https://delicate-tanuki-616ac0.netlify.app/";
-    const modelName = "chatgpt-4o-latest";
-    let accessToken;
-    let soldOrdersCSV = [];
-    let listingsCSV = [];
-    let photoNames = [];
-    let previewImages = [];
-    let photoMeta = [];
-    let draggedIndex = null;
-    let photoIds = [];
-    let currentCropIndex = null;
-    let cropper = null;
-    let reservedPhotos = [];
-    let listingQueue = [];
-    let photoUpdateComplete = false;
-    let infoUpdateComplete = false;
+    // Global variables attached to window so they are accessible in metadataHandler.js
+    window.ETSY_SHOP_URL = "https://www.etsy.com/shop/custombrites";
+    window.CLIENT_ID = "k75zdspz4r99txpqdji7i2em";
+    window.REDIRECT_URI = "https://delicate-tanuki-616ac0.netlify.app/";
+    window.modelName = "chatgpt-4o-latest";
+    window.accessToken;
+    window.soldOrdersCSV = [];
+    window.listingsCSV = [];
+    window.photoNames = [];
+    window.previewImages = [];   // Changed from let to window.previewImages
+    window.photoMeta = [];       // Changed from let to window.photoMeta
+    window.draggedIndex = null;
+    window.photoIds = [];
+    window.currentCropIndex = null;
+    window.cropper = null;
+    window.reservedPhotos = [];
+    window.listingQueue = [];
+    window.photoUpdateComplete = false;
+    window.infoUpdateComplete = false;
 
-    const appendedDescriptionText = `
+    window.appendedDescriptionText = `
 • We use the Highest Quality materials from the US and Italy.
 • Your purchase will come packaged and ready for gift giving!
 
 M A K E S · A · P E R F E C T · G I F T : )
 
-· · · · · · · · · · · · · · · · · · · · · · · ·
-
-D E T A I L S
-
+• D E T A I L S
 • 13.4mm x 8.7mm Flying DragonFly
 • 14K Gold Filled, 14K Rose Gold Filled, Sterling Silver = Pendant + Chain
 • Available necklace lengths are 14 - 20 inches 
 
+• P E R S O N A L I Z E • Y O U R • O R D E R
+Need to make your chain longer? Visit our custom chain length link.
 ------------------------------------
-
-P E R S O N A L I Z E • Y O U R • O R D E R
-
-Need to make your chain longer? Please click on the link below for a custom chain length.
-https://www.etsy.com/ca/listing/770835682/custom-longer-chain-length-add-on-to?ref=listing_published_alert
-
-Not sure exactly what size to order? Fine tune the fit with an extender!
-https://www.etsy.com/listing/628970499/add-on-an-extender-to-your-jewelry?ga_search_query=add%2Bon&ref=shop_items_search_2&frs=1
-
+• S I M I L A R • I T E M S
+Tiny Gold Bar Necklace, Initial Disc Necklace, Vertical Gold Bar Necklace, Silver Bar Necklace
 ------------------------------------
-
-S I M I L A R •  I T E M S
-• If you liked this piece here's a few links to some similar items! These pieces are either alike in style or will look amazing paired together! Happy Shopping and don't forget each piece is completely customizable :)
-
-Tiny Gold Bar Necklace 
-https://www.etsy.com/listing/196984758/tiny-horizontal-gold-bar-necklace-14k
-
-Initial Disc Necklace 
-https://www.etsy.com/listing/182232792/single-initial-necklace-gold-filled
-
-Vertical Gold Bar Necklace
-https://www.etsy.com/listing/247277919/vertical-engraved-bar-necklace-name-bar
-
-Silver Bar Necklace
-https://www.etsy.com/listing/184233228/bar-necklace-personalized-bar-nameplate
-
+• P A C K A G I N G
+Your purchase comes beautifully packaged.
 ------------------------------------
-
-P A C K A G I N G
-• Your purchase will come beautifully packaged. If you are ordering for a gift and would like each piece to be packaged separately please let me know. 
-
-• If this purchase is a gift, and you would like us to include a handwritten message, leave a note in the "gift message" box at checkout.
-
+• E X P E D I T E D • S H I P P I N G
+Choose expedited shipping at checkout.
 ------------------------------------
-
-E X P E D I T E D • S H I P P I N G
-You will be able to choose faster shipping options in the drop down menu when you check out. Ship times do NOT include production times (1-3 business days). However, if you select expedited shipping, we will try to get your order done faster.
-
-------------------------------------
-
-E X P L O R E • O U R • S H O P
-Don't forget to check out the rest of our shop! We specialize in making handmade custom jewelry for every occasion. We take pride in making sure each order is made exactly to the customers specifications. We love collaborating with our customers to create  special and unique pieces for themselves and their loved ones. Please don't hesitate to contact us with any questions you have.  
-
+• E X P L O R E • O U R • S H O P
 http://custombrites.etsy.com
-
 ------------------------------------
-
-C H E C K • U S • O U T
-Make sure you follow us on all our social media platforms to get a behind the scenes look, special promo codes, and some daily inspiration :) 
-
-Instagram: https://www.instagram.com/britesjewelry
-Facebook: https://www.facebook.com/britesjewelry
-Pinterest Page : https://www.pinterest.com/britesjewelry
-
+• C H E C K • U S • O U T
+Follow us on Instagram, Facebook, Pinterest.
 ------------------------------------
-
-S H O P  • P O L I C I E S
-Check out our shop polices page for more details about all our polices and please don't hesitate to contact us with any questions you have! Happy Shopping :)
-
-https://www.etsy.com/shop/CustomBrites/policy
+• S H O P  • P O L I C I E S
+Visit our shop policies page.
 `;
 
     // Helper function to show metadata in a modal
@@ -574,11 +530,11 @@ https://www.etsy.com/shop/CustomBrites/policy
 
     function persistDataBeforeRedirect() {
       try {
-        localStorage.setItem("soldOrdersCSV", JSON.stringify(soldOrdersCSV));
-        localStorage.setItem("listingsCSV", JSON.stringify(listingsCSV));
+        localStorage.setItem("soldOrdersCSV", JSON.stringify(window.soldOrdersCSV));
+        localStorage.setItem("listingsCSV", JSON.stringify(window.listingsCSV));
         const listingsInputValue = document.getElementById("shopListings").value || "";
         localStorage.setItem("shopListingsText", listingsInputValue);
-        localStorage.setItem("listingQueue", JSON.stringify(listingQueue));
+        localStorage.setItem("listingQueue", JSON.stringify(window.listingQueue));
       } catch (err) {
         console.error("Error persisting data before redirect:", err);
       }
@@ -588,11 +544,11 @@ https://www.etsy.com/shop/CustomBrites/policy
       try {
         let soCSV = localStorage.getItem("soldOrdersCSV");
         if (soCSV) {
-          soldOrdersCSV = JSON.parse(soCSV);
+          window.soldOrdersCSV = JSON.parse(soCSV);
         }
         let liCSV = localStorage.getItem("listingsCSV");
         if (liCSV) {
-          listingsCSV = JSON.parse(liCSV);
+          window.listingsCSV = JSON.parse(liCSV);
         }
         let storedShopListingsText = localStorage.getItem("shopListingsText");
         if (storedShopListingsText) {
@@ -600,7 +556,7 @@ https://www.etsy.com/shop/CustomBrites/policy
         }
         let storedQueue = localStorage.getItem("listingQueue");
         if (storedQueue) {
-          listingQueue = JSON.parse(storedQueue);
+          window.listingQueue = JSON.parse(storedQueue);
         }
         loadNextListingInQueue();
       } catch (err) {
@@ -610,49 +566,46 @@ https://www.etsy.com/shop/CustomBrites/policy
     
     function parseListingNumbers(rawInput) {
       let parts = rawInput.split(",");
-      let cleaned = parts
-        .map(p => p.trim())
-        .filter(p => /^\d{10}$/.test(p));
+      let cleaned = parts.map(p => p.trim()).filter(p => /^\d{10}$/.test(p));
       let unique = Array.from(new Set(cleaned));
-      let finalList = unique.slice(0, 250);
-      return finalList;
+      return unique.slice(0, 250);
     }
     function updateListingQueueCount() {
       const countBox = document.getElementById("listingQueueCount");
-      countBox.textContent = listingQueue.length;
+      countBox.textContent = window.listingQueue.length;
     }
     function loadNextListingInQueue() {
-      photoUpdateComplete = false;
-      infoUpdateComplete = false;
-      if (listingQueue.length > 0) {
-        document.getElementById("shopListings").value = listingQueue[0];
+      window.photoUpdateComplete = false;
+      window.infoUpdateComplete = false;
+      if (window.listingQueue.length > 0) {
+        document.getElementById("shopListings").value = window.listingQueue[0];
       } else {
         document.getElementById("shopListings").value = "";
       }
       updateListingQueueCount();
     }
     function afterBothUpdates() {
-      listingQueue.shift();
+      window.listingQueue.shift();
       loadNextListingInQueue();
     }
     function checkIfBothUpdatesComplete() {
-      if (photoUpdateComplete && infoUpdateComplete) {
+      if (window.photoUpdateComplete && window.infoUpdateComplete) {
         afterBothUpdates();
       }
     }
 
     function updateUploadedFilesList() {
       const uploadedFilesListElem = document.getElementById('uploadedFilesList');
-      const fileNames = soldOrdersCSV.map(file => file.name || file.fileName || 'Unnamed File');
+      const fileNames = window.soldOrdersCSV.map(file => file.name || file.fileName || 'Unnamed File');
       uploadedFilesListElem.value = fileNames.join('\n');
     }
 
     function loadReservedPhotos() {
       const stored = localStorage.getItem("reservedPhotos");
-      reservedPhotos = stored ? JSON.parse(stored) : [];
+      window.reservedPhotos = stored ? JSON.parse(stored) : [];
     }
     function saveReservedPhotos() {
-      localStorage.setItem("reservedPhotos", JSON.stringify(reservedPhotos));
+      localStorage.setItem("reservedPhotos", JSON.stringify(window.reservedPhotos));
     }
 
     async function resizeImage(dataURL, width, height) {
@@ -724,7 +677,7 @@ https://www.etsy.com/shop/CustomBrites/policy
     }
 
     async function updateVectorStore() {
-      const allFileIds = [...soldOrdersCSV, ...listingsCSV].map(file => file.id);
+      const allFileIds = [...window.soldOrdersCSV, ...window.listingsCSV].map(file => file.id);
       if (!allFileIds.length) return console.log("No supported files uploaded yet.");
       try {
         const vectorStorePayload = { name: "CSV Vector Store", file_ids: allFileIds };
@@ -745,7 +698,7 @@ https://www.etsy.com/shop/CustomBrites/policy
       }
     }
 
-    // Updated drop zone handler: Process all files first, then update grid once.
+    // Drop zone: process all files and then update grid.
     const dropZone = document.getElementById("dropZone");
     dropZone.addEventListener("dragover", e => {
       e.preventDefault();
@@ -759,7 +712,7 @@ https://www.etsy.com/shop/CustomBrites/policy
       e.preventDefault();
       dropZone.style.borderColor = "#ccc";
       const files = e.dataTransfer.files;
-      const maxRemaining = 10 - previewImages.length;
+      const maxRemaining = 10 - window.previewImages.length;
       for (let i = 0; i < Math.min(files.length, maxRemaining); i++) {
         let file = files[i];
         if (/image\/(jpeg|png)/.test(file.type)) {
@@ -771,9 +724,9 @@ https://www.etsy.com/shop/CustomBrites/policy
               reader.readAsDataURL(file);
             });
             const resizedDataURL = await resizeImage(dataURL, 3000, 3000);
-            previewImages.push(resizedDataURL);
-            photoNames.push(file.name);
-            photoIds.push('img-' + Date.now() + '-' + i);
+            window.previewImages.push(resizedDataURL);
+            window.photoNames.push(file.name);
+            window.photoIds.push('img-' + Date.now() + '-' + i);
           } catch (err) { console.error(err); }
         } else {
           M.toast({ html: "Only JPEG/PNG images supported." });
@@ -789,36 +742,32 @@ https://www.etsy.com/shop/CustomBrites/policy
         if (!cell) continue;
         cell.innerHTML = "Empty";
         if (i < 7) {
-          if (i < previewImages.length && previewImages[i]) {
+          if (i < window.previewImages.length && window.previewImages[i]) {
             cell.innerHTML = "";
             let previewBox = document.createElement("div");
             previewBox.className = "preview-box";
-            previewBox.setAttribute("data-id", photoIds[i] || "");
+            previewBox.setAttribute("data-id", window.photoIds[i] || "");
             previewBox.setAttribute("draggable", "true");
-            previewBox.addEventListener("dragstart", e => { draggedIndex = i; });
-            
+            previewBox.addEventListener("dragstart", e => { window.draggedIndex = i; });
             let img = document.createElement("img");
-            img.src = previewImages[i];
+            img.src = window.previewImages[i];
             previewBox.appendChild(img);
-            
             let removeBtn = document.createElement("div");
             removeBtn.className = "remove-btn";
             removeBtn.textContent = "X";
             removeBtn.addEventListener("click", ev => {
               ev.stopPropagation();
-              previewImages.splice(i, 1);
-              photoNames.splice(i, 1);
-              photoMeta.splice(i, 1);
-              photoIds.splice(i, 1);
+              window.previewImages.splice(i, 1);
+              window.photoNames.splice(i, 1);
+              window.photoMeta.splice(i, 1);
+              window.photoIds.splice(i, 1);
               updateStaticPreviewGrid();
             });
             previewBox.appendChild(removeBtn);
-            
             let numOverlay = document.createElement("div");
             numOverlay.className = "number-overlay";
             numOverlay.textContent = (i + 1).toString();
             previewBox.appendChild(numOverlay);
-            
             let cropBtn = document.createElement("button");
             cropBtn.textContent = "Crop";
             cropBtn.style.position = "absolute";
@@ -835,10 +784,8 @@ https://www.etsy.com/shop/CustomBrites/policy
               openCropModal(i);
             });
             previewBox.appendChild(cropBtn);
-            
             previewBox.addEventListener("click", () => { showMetadata(i); });
             cell.appendChild(previewBox);
-            
             let metadataStatus = document.createElement("div");
             metadataStatus.className = "metadata-status";
             metadataStatus.id = "metadataStatus" + i;
@@ -852,22 +799,22 @@ https://www.etsy.com/shop/CustomBrites/policy
           }
         } else {
           let rIndex = i - 7;
-          if (rIndex < reservedPhotos.length && reservedPhotos[rIndex] && reservedPhotos[rIndex].src) {
+          if (rIndex < window.reservedPhotos.length && window.reservedPhotos[rIndex] && window.reservedPhotos[rIndex].src) {
             cell.innerHTML = "";
             let previewBox = document.createElement("div");
             previewBox.className = "preview-box";
-            previewBox.setAttribute("data-id", reservedPhotos[rIndex].id || "");
+            previewBox.setAttribute("data-id", window.reservedPhotos[rIndex].id || "");
             previewBox.setAttribute("draggable", "true");
-            previewBox.addEventListener("dragstart", e => { draggedIndex = i; });
+            previewBox.addEventListener("dragstart", e => { window.draggedIndex = i; });
             let img = document.createElement("img");
-            img.src = reservedPhotos[rIndex].src;
+            img.src = window.reservedPhotos[rIndex].src;
             previewBox.appendChild(img);
             let removeBtn = document.createElement("div");
             removeBtn.className = "remove-btn";
             removeBtn.textContent = "X";
             removeBtn.addEventListener("click", ev => {
               ev.stopPropagation();
-              reservedPhotos.splice(rIndex, 1);
+              window.reservedPhotos.splice(rIndex, 1);
               saveReservedPhotos();
               updateStaticPreviewGrid();
             });
@@ -910,18 +857,18 @@ https://www.etsy.com/shop/CustomBrites/policy
             this.classList.remove("drag-over");
             let cellIndex = parseInt(this.id.replace("previewCell", ""));
             if (cellIndex < 7) {
-              if (draggedIndex !== null && draggedIndex !== cellIndex) {
-                if (previewImages[draggedIndex]) {
-                  const [movedImage] = previewImages.splice(draggedIndex, 1);
-                  previewImages.splice(cellIndex, 0, movedImage);
-                  const [movedName] = photoNames.splice(draggedIndex, 1);
-                  photoNames.splice(cellIndex, 0, movedName);
-                  const [movedMeta] = photoMeta.splice(draggedIndex, 1);
-                  photoMeta.splice(cellIndex, 0, movedMeta);
-                  const [movedId] = photoIds.splice(draggedIndex, 1);
-                  photoIds.splice(cellIndex, 0, movedId);
+              if (window.draggedIndex !== null && window.draggedIndex !== cellIndex) {
+                if (window.previewImages[window.draggedIndex]) {
+                  const [movedImage] = window.previewImages.splice(window.draggedIndex, 1);
+                  window.previewImages.splice(cellIndex, 0, movedImage);
+                  const [movedName] = window.photoNames.splice(window.draggedIndex, 1);
+                  window.photoNames.splice(cellIndex, 0, movedName);
+                  const [movedMeta] = window.photoMeta.splice(window.draggedIndex, 1);
+                  window.photoMeta.splice(cellIndex, 0, movedMeta);
+                  const [movedId] = window.photoIds.splice(window.draggedIndex, 1);
+                  window.photoIds.splice(cellIndex, 0, movedId);
                   updateStaticPreviewGrid();
-                  draggedIndex = null;
+                  window.draggedIndex = null;
                 }
               }
             } else {
@@ -940,7 +887,7 @@ https://www.etsy.com/shop/CustomBrites/policy
                         meta: "",
                         id: 'img-' + Date.now()
                       };
-                      reservedPhotos[rIndex] = newReserved;
+                      window.reservedPhotos[rIndex] = newReserved;
                       saveReservedPhotos();
                       updateStaticPreviewGrid();
                     } catch (err) {
@@ -949,28 +896,28 @@ https://www.etsy.com/shop/CustomBrites/policy
                   };
                   reader.readAsDataURL(file);
                 }
-              } else if (draggedIndex !== null && draggedIndex !== cellIndex) {
-                if (draggedIndex < 7) {
-                  const [movedImage] = previewImages.splice(draggedIndex, 1);
-                  const [movedName] = photoNames.splice(draggedIndex, 1);
-                  const [movedMeta] = photoMeta.splice(draggedIndex, 1);
-                  const [movedId] = photoIds.splice(draggedIndex, 1);
+              } else if (window.draggedIndex !== null && window.draggedIndex !== cellIndex) {
+                if (window.draggedIndex < 7) {
+                  const [movedImage] = window.previewImages.splice(window.draggedIndex, 1);
+                  const [movedName] = window.photoNames.splice(window.draggedIndex, 1);
+                  const [movedMeta] = window.photoMeta.splice(window.draggedIndex, 1);
+                  const [movedId] = window.photoIds.splice(window.draggedIndex, 1);
                   let newReserved = {
                     src: movedImage,
                     name: movedName,
                     meta: movedMeta || "",
                     id: movedId
                   };
-                  reservedPhotos[rIndex] = newReserved;
+                  window.reservedPhotos[rIndex] = newReserved;
                   saveReservedPhotos();
                 } else {
-                  let oldRIndex = draggedIndex - 7;
-                  const [moved] = reservedPhotos.splice(oldRIndex, 1);
-                  reservedPhotos[rIndex] = moved;
+                  let oldRIndex = window.draggedIndex - 7;
+                  const [moved] = window.reservedPhotos.splice(oldRIndex, 1);
+                  window.reservedPhotos[rIndex] = moved;
                   saveReservedPhotos();
                 }
                 updateStaticPreviewGrid();
-                draggedIndex = null;
+                window.draggedIndex = null;
               }
             }
           });
@@ -1005,8 +952,8 @@ https://www.etsy.com/shop/CustomBrites/policy
       let codeVerifier = generateRandomString(64);
       localStorage.setItem("etsy_code_verifier", codeVerifier);
       let codeChallenge = await generateCodeChallenge(codeVerifier);
-      let etsyAuthUrl = `https://www.etsy.com/oauth/connect?response_type=code&client_id=${CLIENT_ID}` +
-        `&redirect_uri=${encodeURIComponent(REDIRECT_URI)}` +
+      let etsyAuthUrl = `https://www.etsy.com/oauth/connect?response_type=code&client_id=${window.CLIENT_ID}` +
+        `&redirect_uri=${encodeURIComponent(window.REDIRECT_URI)}` +
         `&scope=${encodeURIComponent(scope)}` +
         `&state=${state}` +
         `&code_challenge=${encodeURIComponent(codeChallenge)}` +
@@ -1022,13 +969,13 @@ https://www.etsy.com/shop/CustomBrites/policy
       let code = urlParams.get("code");
       if (code) {
         exchangeCodeForToken(code);
-        window.history.replaceState({}, document.title, REDIRECT_URI);
+        window.history.replaceState({}, document.title, window.REDIRECT_URI);
       }
       updateStaticPreviewGrid();
       initializeCellDragAndDrop();
       document.getElementById("shopListings").addEventListener("change", () => {
         let rawInput = document.getElementById("shopListings").value;
-        listingQueue = parseListingNumbers(rawInput);
+        window.listingQueue = parseListingNumbers(rawInput);
         loadNextListingInQueue();
       });
     });
@@ -1043,7 +990,7 @@ https://www.etsy.com/shop/CustomBrites/policy
         let response = await fetch(`/.netlify/functions/exchangeToken?code=${encodeURIComponent(code)}&code_verifier=${encodeURIComponent(codeVerifier)}`);
         let tokenData = await response.json();
         if (tokenData.access_token) {
-          accessToken = tokenData.access_token;
+          window.accessToken = tokenData.access_token;
           M.toast({ html: "Connected to Etsy!" });
         } else {
           M.toast({ html: "Error obtaining token: " + JSON.stringify(tokenData) });
@@ -1068,13 +1015,13 @@ https://www.etsy.com/shop/CustomBrites/policy
         return;
       }
       let userDescription = document.getElementById("listingDescription").value || "";
-      let finalDescription = userDescription + appendedDescriptionText; 
+      let finalDescription = userDescription + window.appendedDescriptionText; 
       let payload = {
         title: document.getElementById("listingTitle").value,
         description: finalDescription,
         tags: document.getElementById("searchKeyPhrases").value.split("\n").map(s => s.trim()).filter(s => s !== "")
       };
-      let updateUrl = `/.netlify/functions/updateListing?listingId=${listingId}&token=${encodeURIComponent(accessToken)}`;
+      let updateUrl = `/.netlify/functions/updateListing?listingId=${listingId}&token=${encodeURIComponent(window.accessToken)}`;
       try {
         let response = await fetch(updateUrl, {
           method: "PUT",
@@ -1086,7 +1033,7 @@ https://www.etsy.com/shop/CustomBrites/policy
           M.toast({ html: "Error updating listing: " + response.status + " - " + errorText });
         } else {
           M.toast({ html: "Listing info updated successfully!" });
-          infoUpdateComplete = true;
+          window.infoUpdateComplete = true;
           checkIfBothUpdatesComplete();
         }
       } catch (e) {
@@ -1107,7 +1054,7 @@ https://www.etsy.com/shop/CustomBrites/policy
         await uploadPhotos();
         await uploadReservedPhotos();
         M.toast({ html: "Photos updated successfully!" });
-        photoUpdateComplete = true;
+        window.photoUpdateComplete = true;
         checkIfBothUpdatesComplete();
       } catch (err) {
         console.error(err);
@@ -1140,7 +1087,7 @@ https://www.etsy.com/shop/CustomBrites/policy
     });
     
     async function generateTitleOnly() {
-      let etsyLink = ETSY_SHOP_URL;
+      let etsyLink = window.ETSY_SHOP_URL;
       let keyPhrases = document.getElementById("searchKeyPhrases").value.trim();
       if (!keyPhrases) {
         M.toast({ html: "Please provide the search key phrases." });
@@ -1148,7 +1095,7 @@ https://www.etsy.com/shop/CustomBrites/policy
       }
       let rulesText = document.getElementById("titleRulesTextarea").value;
       let promptText = `
-You are ChatGPT using ${modelName}.
+You are ChatGPT using ${window.modelName}.
 Based on the inputs below, generate an Etsy Listing TITLE only.
 Input Context:
 Etsy Link: "${etsyLink}"
@@ -1158,7 +1105,7 @@ ${stripMarkdownJSON(rulesText)}
 Important: Return ONLY the title as plain text.`;
       document.getElementById("listingTitle").value = "Generating title...";
       let payload = {
-        model: modelName,
+        model: window.modelName,
         messages: [
           { role: "system", content: "Return ONLY the title as plain text." },
           { role: "user", content: promptText }
@@ -1180,7 +1127,7 @@ Important: Return ONLY the title as plain text.`;
     }
 
     async function generateDescriptionOnly() {
-      let etsyLink = ETSY_SHOP_URL;
+      let etsyLink = window.ETSY_SHOP_URL;
       let keyPhrases = document.getElementById("searchKeyPhrases").value.trim();
       if (!keyPhrases) {
         M.toast({ html: "Please provide the search key phrases." });
@@ -1188,7 +1135,7 @@ Important: Return ONLY the title as plain text.`;
       }
       let rulesText = document.getElementById("descriptionRulesTextarea").value;
       let promptText = `
-You are ChatGPT using ${modelName}.
+You are ChatGPT using ${window.modelName}.
 Based on the inputs below, generate an Etsy Listing DESCRIPTION only.
 Input Context:
 Etsy Link: "${etsyLink}"
@@ -1198,7 +1145,7 @@ ${stripMarkdownJSON(rulesText)}
 Important: Return ONLY the description as plain text.`;
       document.getElementById("listingDescription").value = "Generating description...";
       let payload = {
-        model: modelName,
+        model: window.modelName,
         messages: [
           { role: "system", content: "Return ONLY the description as plain text." },
           { role: "user", content: promptText }
@@ -1363,12 +1310,12 @@ Important: Return ONLY the description as plain text.`;
     });
 
     function openCropModal(index) {
-      currentCropIndex = index;
+      window.currentCropIndex = index;
       let cropModal = document.getElementById("photoCropModal");
       let cropImage = document.getElementById("cropImage");
-      cropImage.src = previewImages[index];
+      cropImage.src = window.previewImages[index];
       cropImage.onload = function() {
-        cropper = new Cropper(cropImage, {
+        window.cropper = new Cropper(cropImage, {
           viewMode: 1,
           autoCropArea: 1,
           movable: true,
@@ -1385,9 +1332,9 @@ Important: Return ONLY the description as plain text.`;
           cropBoxResizable: true,
           dragMode: 'move',
           ready: function() {
-            let containerData = cropper.getContainerData();
-            let cropBoxData = cropper.getCropBoxData();
-            cropper.setCropBoxData({
+            let containerData = window.cropper.getContainerData();
+            let cropBoxData = window.cropper.getCropBoxData();
+            window.cropper.setCropBoxData({
               left: (containerData.width - cropBoxData.width) / 2,
               top: (containerData.height - cropBoxData.height) / 2
             });
@@ -1399,23 +1346,23 @@ Important: Return ONLY the description as plain text.`;
     }
 
     document.getElementById("saveCropBtn").addEventListener("click", () => {
-      if (cropper && currentCropIndex !== null) {
-        let croppedCanvas = cropper.getCroppedCanvas({ width: 3000, height: 3000 });
-        previewImages[currentCropIndex] = croppedCanvas.toDataURL("image/jpeg", 0.85);
+      if (window.cropper && window.currentCropIndex !== null) {
+        let croppedCanvas = window.cropper.getCroppedCanvas({ width: 3000, height: 3000 });
+        window.previewImages[window.currentCropIndex] = croppedCanvas.toDataURL("image/jpeg", 0.85);
         updateStaticPreviewGrid();
-        cropper.destroy();
-        cropper = null;
-        currentCropIndex = null;
+        window.cropper.destroy();
+        window.cropper = null;
+        window.currentCropIndex = null;
         M.Modal.getInstance(document.getElementById("photoCropModal")).close();
       }
     });
 
     document.getElementById("cancelCropBtn").addEventListener("click", () => {
-      if (cropper) {
-        cropper.destroy();
-        cropper = null;
+      if (window.cropper) {
+        window.cropper.destroy();
+        window.cropper = null;
       }
-      currentCropIndex = null;
+      window.currentCropIndex = null;
       M.Modal.getInstance(document.getElementById("photoCropModal")).close();
     });
 
@@ -1425,7 +1372,7 @@ Important: Return ONLY the description as plain text.`;
         M.toast({ html: "Please provide a listing URL or ID in 'Etsy Shop Listings'." });
         return;
       }
-      if (!previewImages.length) {
+      if (!window.previewImages.length) {
         M.toast({ html: "No images to upload. Please drag and drop images first." });
         return;
       }
@@ -1436,20 +1383,20 @@ Important: Return ONLY the description as plain text.`;
         M.toast({ html: "Invalid listing URL or ID." });
         return;
       }
-      for (let i = 0; i < previewImages.length; i++) {
-        let dataURL = previewImages[i];
-        let altText = photoMeta[i] || "";
+      for (let i = 0; i < window.previewImages.length; i++) {
+        let dataURL = window.previewImages[i];
+        let altText = window.photoMeta[i] || "";
         let rankNumber = i + 1;
         try {
           let res = await fetch(dataURL);
           let blob = await res.blob();
           let formData = new FormData();
           formData.append("listingId", listingId);
-          formData.append("token", accessToken);
-          formData.append("fileName", photoNames[i] || `uploaded_photo_${i}.jpg`);
+          formData.append("token", window.accessToken);
+          formData.append("fileName", window.photoNames[i] || `uploaded_photo_${i}.jpg`);
           formData.append("rank", rankNumber);
           formData.append("alt_text", altText);
-          formData.append("file", blob, photoNames[i] || `uploaded_photo_${i}.jpg`);
+          formData.append("file", blob, window.photoNames[i] || `uploaded_photo_${i}.jpg`);
           let uploadUrl = `/.netlify/functions/imageUpload`;
           let response = await fetch(uploadUrl, { method: "POST", body: formData });
           if (!response.ok) {
@@ -1471,7 +1418,7 @@ Important: Return ONLY the description as plain text.`;
         M.toast({ html: "Please provide a listing URL or ID in 'Etsy Shop Listings'." });
         return;
       }
-      if (!reservedPhotos.length) {
+      if (!window.reservedPhotos.length) {
         M.toast({ html: "No reserved photos to upload." });
         return;
       }
@@ -1482,20 +1429,20 @@ Important: Return ONLY the description as plain text.`;
         M.toast({ html: "Invalid listing URL or ID." });
         return;
       }
-      for (let i = 0; i < reservedPhotos.length; i++) {
-        let dataURL = reservedPhotos[i].src;
-        let altText = reservedPhotos[i].meta || "";
+      for (let i = 0; i < window.reservedPhotos.length; i++) {
+        let dataURL = window.reservedPhotos[i].src;
+        let altText = window.reservedPhotos[i].meta || "";
         let rankNumber = i + 8;
         try {
           let res = await fetch(dataURL);
           let blob = await res.blob();
           let formData = new FormData();
           formData.append("listingId", listingId);
-          formData.append("token", accessToken);
-          formData.append("fileName", reservedPhotos[i].name || `reserved_photo_${i}.jpg`);
+          formData.append("token", window.accessToken);
+          formData.append("fileName", window.reservedPhotos[i].name || `reserved_photo_${i}.jpg`);
           formData.append("rank", rankNumber);
           formData.append("alt_text", altText);
-          formData.append("file", blob, reservedPhotos[i].name || `reserved_photo_${i}.jpg`);
+          formData.append("file", blob, window.reservedPhotos[i].name || `reserved_photo_${i}.jpg`);
           let uploadUrl = `/.netlify/functions/imageUpload`;
           let response = await fetch(uploadUrl, { method: "POST", body: formData });
           if (!response.ok) {
@@ -1510,7 +1457,7 @@ Important: Return ONLY the description as plain text.`;
       }
     }
 
-    // Updated event listener for analyzing metadata using metadataHandler module
+    // Event listener for analyzing metadata using metadataHandler module
     document.getElementById("analyzeMetadataBtn").addEventListener("click", async () => {
       // Analyze and embed metadata into the first image (index 0)
       await metadataHandler.analyzeAndEmbedMetadata(0);
@@ -1586,7 +1533,7 @@ ${keywordRules}
 Generate exactly 13 SEO key phrases (each ≤ 20 characters). Return as plain text.
       `;
       let payload = {
-        model: modelName,
+        model: window.modelName,
         messages: [
           { role: "system", content: "Use the CSV context above to generate more accurate key phrases." },
           { role: "user", content: prompt }
@@ -1639,7 +1586,7 @@ ${keywordRules}
 Return only one phrase in plain text.
         `;
         let payload = {
-          model: modelName,
+          model: window.modelName,
           messages: [
             { role: "system", content: "Generate a single phrase, up to 20 characters." },
             { role: "user", content: prompt }
