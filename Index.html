@@ -885,12 +885,11 @@ https://www.etsy.com/shop/CustomBrites/policy
             });
             previewBox.appendChild(cropBtn);
             
-            // Instead of using a modal, we now display metadata inside the cell.
             let metadataStatus = document.createElement("div");
             metadataStatus.className = "metadata-status";
             metadataStatus.id = "metadataStatus" + i;
             previewBox.appendChild(metadataStatus);
-            previewBox.addEventListener("click", () => { /* Optionally, add a detailed view */ });
+            previewBox.addEventListener("click", () => { /* Optionally, add detailed view */ });
             cell.appendChild(previewBox);
           } else {
             cell.innerHTML = "Empty";
@@ -1029,7 +1028,6 @@ https://www.etsy.com/shop/CustomBrites/policy
     }
 
     // NEW: Analyze all non-reserved photos and populate metadata in each cell.
-    // Helper: Convert data URL to Blob
     function dataURLtoBlob(dataurl) {
       const arr = dataurl.split(',');
       const mime = arr[0].match(/:(.*?);/)[1];
@@ -1040,7 +1038,7 @@ https://www.etsy.com/shop/CustomBrites/policy
       return new Blob([u8arr], { type: mime });
     }
     
-    // Helper: Parse metadata text into title, description, keywords.
+    // Helper to parse metadata text into title, description, keywords.
     function parseMetadata(text) {
       const metadata = { title: "", description: "", keywords: "" };
       const titleMatch = text.match(/(?:\*\*Title\*\*:\s*)(.*)/i);
@@ -1052,7 +1050,7 @@ https://www.etsy.com/shop/CustomBrites/policy
       return metadata;
     }
     
-    // Function to update metadata display inside a photo cell.
+    // Update metadata display inside a photo cell.
     function updateMetadataStatus(index, data) {
       const statusDiv = document.getElementById("metadataStatus" + index);
       if (data.error) {
@@ -1094,7 +1092,7 @@ https://www.etsy.com/shop/CustomBrites/policy
       }
     }
     
-    // New event handler: Analyze all non-reserved photos (indexes 0-6)
+    // Analyze all non-reserved photos (indexes 0-6)
     document.getElementById("analyzeMetadataBtn").addEventListener("click", async () => {
       const maxPhotos = Math.min(previewImages.length, 7);
       for (let i = 0; i < maxPhotos; i++) {
@@ -1104,7 +1102,7 @@ https://www.etsy.com/shop/CustomBrites/policy
       }
     });
 
-    // OAuth & Startup functions (unchanged)
+    // OAuth & Startup functions
     function generateRandomString(length) {
       const possible = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789';
       let text = '';
@@ -1237,7 +1235,100 @@ https://www.etsy.com/shop/CustomBrites/policy
       }
     });
     
-    // -------------- Title & Description Generation ------------------
+    // ------------------ Upload Photos with Alt-Text Truncated to 200 Characters ------------------
+    async function uploadPhotos() {
+      let listingInput = document.getElementById("shopListings").value.trim();
+      if (!listingInput) {
+        M.toast({ html: "Please provide a listing URL or ID in 'Etsy Shop Listings'." });
+        return;
+      }
+      if (!previewImages.length) {
+        M.toast({ html: "No images to upload. Please drag and drop images first." });
+        return;
+      }
+      let listingId = /^\d+$/.test(listingInput)
+        ? listingInput
+        : (listingInput.match(/\/listing\/(\d+)/) || [])[1];
+      if (!listingId) {
+        M.toast({ html: "Invalid listing URL or ID." });
+        return;
+      }
+      for (let i = 0; i < previewImages.length; i++) {
+        let dataURL = previewImages[i];
+        // Truncate the description to under 200 characters for alt-text.
+        let altText = (photoMeta[i] && photoMeta[i].description) ? photoMeta[i].description.substring(0,200) : "";
+        let rankNumber = i + 1;
+        try {
+          let res = await fetch(dataURL);
+          let blob = await res.blob();
+          let formData = new FormData();
+          formData.append("listingId", listingId);
+          formData.append("token", accessToken);
+          formData.append("fileName", photoNames[i] || `uploaded_photo_${i}.jpg`);
+          formData.append("rank", rankNumber);
+          formData.append("alt_text", altText);
+          formData.append("file", blob, photoNames[i] || `uploaded_photo_${i}.jpg`);
+          let uploadUrl = `/.netlify/functions/imageUpload`;
+          let response = await fetch(uploadUrl, { method: "POST", body: formData });
+          if (!response.ok) {
+            M.toast({ html: `Error uploading photo #${rankNumber}: ` + response.status });
+          } else {
+            M.toast({ html: `Photo #${rankNumber} uploaded with alt_text!` });
+          }
+        } catch (e) {
+          console.error(e);
+          M.toast({ html: `Exception uploading photo #${rankNumber}: ${e.message}` });
+        }
+      }
+    }
+    window.uploadPhotos = uploadPhotos;
+    
+    async function uploadReservedPhotos() {
+      let listingInput = document.getElementById("shopListings").value.trim();
+      if (!listingInput) {
+        M.toast({ html: "Please provide a listing URL or ID in 'Etsy Shop Listings'." });
+        return;
+      }
+      if (!reservedPhotos.length) {
+        M.toast({ html: "No reserved photos to upload." });
+        return;
+      }
+      let listingId = /^\d+$/.test(listingInput)
+        ? listingInput
+        : (listingInput.match(/\/listing\/(\d+)/) || [])[1];
+      if (!listingId) {
+        M.toast({ html: "Invalid listing URL or ID." });
+        return;
+      }
+      for (let i = 0; i < reservedPhotos.length; i++) {
+        let dataURL = reservedPhotos[i].src;
+        let altText = reservedPhotos[i].meta || "";
+        let rankNumber = i + 8;
+        try {
+          let res = await fetch(dataURL);
+          let blob = await res.blob();
+          let formData = new FormData();
+          formData.append("listingId", listingId);
+          formData.append("token", accessToken);
+          formData.append("fileName", reservedPhotos[i].name || `reserved_photo_${i}.jpg`);
+          formData.append("rank", rankNumber);
+          formData.append("alt_text", altText);
+          formData.append("file", blob, reservedPhotos[i].name || `reserved_photo_${i}.jpg`);
+          let uploadUrl = `/.netlify/functions/imageUpload`;
+          let response = await fetch(uploadUrl, { method: "POST", body: formData });
+          if (!response.ok) {
+            M.toast({ html: `Error uploading reserved photo #${rankNumber}: ` + response.status });
+          } else {
+            M.toast({ html: `Reserved photo #${rankNumber} uploaded successfully!` });
+          }
+        } catch (e) {
+          console.error(e);
+          M.toast({ html: `Exception uploading reserved photo #${rankNumber}: ${e.message}` });
+        }
+      }
+    }
+    
+    // ------------------ Title & Description Generation ------------------
     document.getElementById("listingDescInput").addEventListener("keydown", async (e) => {
       if (e.key === "Enter" && !e.shiftKey) {
         e.preventDefault();
@@ -1532,7 +1623,8 @@ Important: Return ONLY the description as plain text.`;
       }
       for (let i = 0; i < previewImages.length; i++) {
         let dataURL = previewImages[i];
-        let altText = (photoMeta[i] && photoMeta[i].description) || "";
+        // Truncate the description to under 200 characters for alt-text.
+        let altText = (photoMeta[i] && photoMeta[i].description) ? photoMeta[i].description.substring(0,200) : "";
         let rankNumber = i + 1;
         try {
           let res = await fetch(dataURL);
