@@ -916,7 +916,6 @@ https://www.etsy.com/shop/CustomBrites/policy
             });
             previewBox.appendChild(cropBtn);
             
-            // Attach event to show metadata on click
             previewBox.addEventListener("click", () => { showMetadata(i); });
             cell.appendChild(previewBox);
             
@@ -1753,36 +1752,6 @@ Important: Return ONLY the description as plain text.`;
         }
       }
     }
-
-    // ========================
-    // NEW FUNCTIONS FOR ANALYZE PHOTOS & METADATA MODAL
-    // ========================
-
-    // Function to display metadata for a given photo index in the Metadata Modal.
-    function showMetadata(index) {
-      let metadataTextarea = document.getElementById("metadataTextarea");
-      // Display associated metadata or a default message.
-      metadataTextarea.value = photoMeta[index] || "No metadata available.";
-      let metadataModalElem = document.getElementById("metadataModal");
-      let modalInstance = M.Modal.getInstance(metadataModalElem) || M.Modal.init(metadataModalElem);
-      modalInstance.open();
-    }
-
-    // Function to "analyze" photos.
-    // For demonstration, this simply shows metadata for the first photo.
-    function analyzePhotos() {
-      if (previewImages.length === 0) {
-        M.toast({ html: "No photos available for analysis." });
-        return;
-      }
-      // Example: Analyze the first photo.
-      showMetadata(0);
-    }
-
-    // Attach the analyzePhotos function to the Analyze Photos button.
-    document.getElementById("analyzeMetadataBtn").addEventListener("click", analyzePhotos);
-
-    // -------------- Title & Description Gen End --------------
   </script>
 </body>
 </html>
