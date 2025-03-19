@@ -1,4 +1,4 @@
-// File: netlify/functions/vectorStore.js
+// netlify/functions/vectorStore.js
 exports.handler = async function(event) {
   try {
     console.log("vectorStore function invoked with event:", event);
@@ -52,6 +52,7 @@ exports.handler = async function(event) {
         top_k: payload.topK || 5
       };
 
+      // Make the actual request
       const response = await fetch(`https://api.openai.com/v1/vector_stores/${storeId}/query`, {
         method: "POST",
         headers: {

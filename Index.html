@@ -502,7 +502,7 @@ Using Sales Report and Product List Files:
 
 M A K E S · A · P E R F E C T · G I F T : )
 
-· · · · · · · · · · · · · · · · · · · · · · · · ·
+· · · · · · · · · · · · · · · · · · · · · · · ·
 
 D E T A I L S
 
@@ -693,6 +693,8 @@ https://www.etsy.com/shop/CustomBrites/policy
         reader.readAsDataURL(file);
       });
     }
+
+    // UPDATED: store_id capturing
     async function updateVectorStore() {
       const allFileIds = [...soldOrdersCSV, ...listingsCSV].map(file => file.id);
       if (!allFileIds.length) return console.log("No supported files uploaded yet.");
@@ -704,9 +706,21 @@ https://www.etsy.com/shop/CustomBrites/policy
           body: JSON.stringify(vectorStorePayload)
         });
         if (!response.ok) throw new Error("Error creating vector store");
-        console.log("Vector store created:", await response.json());
-      } catch (err) { console.error(err); }
+        
+        // Grab the JSON response so we can retrieve store_id
+        const data = await response.json();
+        console.log("Vector store created/updated:", data);
+        
+        // If the creation was successful, store the returned store_id locally
+        if (data && data.id) {
+          localStorage.setItem("vectorStoreId", data.id); // <--- SAVE store_id
+          console.log("Saved store_id in localStorage:", data.id);
+        }
+      } catch (err) {
+        console.error(err);
+      }
     }
+
     const uploadedFilesList = document.getElementById("uploadedFilesList");
     uploadedFilesList.addEventListener("dragover", e => {
       e.preventDefault(); e.stopPropagation();
@@ -1111,20 +1125,33 @@ https://www.etsy.com/shop/CustomBrites/policy
       }
       let keywordRules = stripMarkdownJSON(document.getElementById("keywordRulesTextarea").value);
       let extraText = "Emphasis on SEO and generating effective Etsy tag phrases.";
-      
+
+      // RETRIEVE store_id from localStorage
+      let store_id = localStorage.getItem("vectorStoreId");
+      if (!store_id) {
+        console.warn("No store_id found in localStorage. CSV context may not be loaded!");
+      }
+
       // 1) Retrieve relevant CSV context
       let retrievedContext = "";
       try {
-        let resp = await fetch("/.netlify/functions/queryVectorStore", {
+        // UPDATED: we now call the same Netlify function with action="query" & pass store_id
+        let resp = await fetch("/.netlify/functions/vectorStore", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ query: question, topK: 5 })
+          body: JSON.stringify({
+            action: "query",
+            store_id,
+            query: question,
+            topK: 5
+          })
         });
+
         if (resp.ok) {
           let data = await resp.json();
           retrievedContext = data?.data || "";
         } else {
-          console.warn("Could not retrieve CSV context from vector store.");
+          console.warn("Could not retrieve CSV context from vector store. HTTP status:", resp.status);
         }
       } catch (err) {
         console.error("Error retrieving CSV context:", err);
