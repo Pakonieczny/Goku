@@ -126,6 +126,7 @@
       justify-content: center; 
       font-size: 12px; 
       color: #666;
+      overflow: hidden;
     }
     /* Mark the last three cells as "reserved" with higher z-index */
     .preview-cell.reserved {
@@ -147,9 +148,21 @@
       align-items: center; justify-content: center; font-size: 10px;
       z-index: 999; border-radius: 3px;
     }
-    /* Metadata status styles */
-    .metadata-status { margin-top: 5px; text-align: center; font-size: 14px; min-height: 20px; }
-    .metadata-progress { width: 90%; }
+    /* Metadata status styles; now used to display generated metadata inside each photo cell */
+    .metadata-status { 
+      margin-top: 4px; 
+      font-size: 10px; 
+      text-align: left; 
+      width: 100%; 
+      background: rgba(255,255,255,0.8); 
+      padding: 2px;
+      box-sizing: border-box;
+    }
+    .metadata-check { 
+      color: green; 
+      font-size: 14px; 
+      text-align: right;
+    }
     
     /* Container #13 */
     #container13 { position: relative; width: 250px; top: -150px; }
@@ -331,19 +344,6 @@
     </div>
   </div>
   
-  <!-- Metadata Modal (for viewing metadata on click) -->
-  <div id="metadataModal" class="modal">
-    <div class="modal-content">
-      <h4>Photo Metadata</h4>
-      <textarea id="metadataTextarea" readonly style="width:100%; height:300px;"></textarea>
-    </div>
-    <div class="modal-footer">
-      <a href="#!" id="closeMetadataBtn" class="modal-close waves-effect waves-green btn">
-        Close
-      </a>
-    </div>
-  </div>
-  
   <!-- Analyze Rules Modal -->
   <div id="analyzeRulesModal" class="modal">
     <div class="modal-content">
@@ -507,7 +507,8 @@ Using Sales Report and Product List Files:
     let listingsCSV = [];
     let photoNames = [];
     let previewImages = []; // data URLs for display
-    let photoMeta = [];     // AI-generated metadata
+    // Now we store metadata as an object per photo with title, description, keywords.
+    let photoMeta = [];
     let draggedIndex = null;
     let photoIds = [];
     let currentCropIndex = null;
@@ -607,14 +608,9 @@ https://www.etsy.com/shop/CustomBrites/policy
       try {
         localStorage.setItem("soldOrdersCSV", JSON.stringify(soldOrdersCSV));
         localStorage.setItem("listingsCSV", JSON.stringify(listingsCSV));
-        
-        // Also store the user-typed text in "Etsy Shop Listings"
         const listingsInputValue = document.getElementById("shopListings").value || "";
         localStorage.setItem("shopListingsText", listingsInputValue);
-        
-        // Save the queue itself
         localStorage.setItem("listingQueue", JSON.stringify(listingQueue));
-        
       } catch (err) {
         console.error("Error persisting data before redirect:", err);
       }
@@ -626,25 +622,15 @@ https://www.etsy.com/shop/CustomBrites/policy
     function restoreDataAfterRedirect() {
       try {
         let soCSV = localStorage.getItem("soldOrdersCSV");
-        if (soCSV) {
-          soldOrdersCSV = JSON.parse(soCSV);
-        }
-
+        if (soCSV) { soldOrdersCSV = JSON.parse(soCSV); }
         let liCSV = localStorage.getItem("listingsCSV");
-        if (liCSV) {
-          listingsCSV = JSON.parse(liCSV);
-        }
-
+        if (liCSV) { listingsCSV = JSON.parse(liCSV); }
         let storedShopListingsText = localStorage.getItem("shopListingsText");
         if (storedShopListingsText) {
           document.getElementById("shopListings").value = storedShopListingsText;
         }
-
         let storedQueue = localStorage.getItem("listingQueue");
-        if (storedQueue) {
-          listingQueue = JSON.parse(storedQueue);
-        }
-        // re-parse the shopListings text in case user typed new IDs previously
+        if (storedQueue) { listingQueue = JSON.parse(storedQueue); }
         loadNextListingInQueue();
       } catch (err) {
         console.error("Error restoring data after redirect:", err);
@@ -652,15 +638,11 @@ https://www.etsy.com/shop/CustomBrites/policy
     }
     
     // -------------- Utility & Queue Helpers -------------------
-
     function parseListingNumbers(rawInput) {
       let parts = rawInput.split(",");
-      let cleaned = parts
-        .map(p => p.trim())
-        .filter(p => /^\d{10}$/.test(p)); // only keep valid 10-digit
-      let unique = Array.from(new Set(cleaned)); // remove duplicates
-      let finalList = unique.slice(0, 250); // limit to 250
-      return finalList;
+      let cleaned = parts.map(p => p.trim()).filter(p => /^\d{10}$/.test(p));
+      let unique = Array.from(new Set(cleaned));
+      return unique.slice(0, 250);
     }
     function updateListingQueueCount() {
       const countBox = document.getElementById("listingQueueCount");
@@ -677,7 +659,6 @@ https://www.etsy.com/shop/CustomBrites/policy
       updateListingQueueCount();
     }
     function afterBothUpdates() {
-      // Shift the queue & load next listing
       listingQueue.shift();
       loadNextListingInQueue();
     }
@@ -688,13 +669,11 @@ https://www.etsy.com/shop/CustomBrites/policy
     }
 
     // -------------- Page Initialization & File Handling --------------
-
     function updateUploadedFilesList() {
       const uploadedFilesListElem = document.getElementById('uploadedFilesList');
       const fileNames = soldOrdersCSV.map(file => file.name || file.fileName || 'Unnamed File');
       uploadedFilesListElem.value = fileNames.join('\n');
     }
-
     function loadReservedPhotos() {
       const stored = localStorage.getItem("reservedPhotos");
       reservedPhotos = stored ? JSON.parse(stored) : [];
@@ -702,7 +681,6 @@ https://www.etsy.com/shop/CustomBrites/policy
     function saveReservedPhotos() {
       localStorage.setItem("reservedPhotos", JSON.stringify(reservedPhotos));
     }
-
     async function resizeImage(dataURL, width, height) {
       return new Promise((resolve, reject) => {
         const img = new Image();
@@ -779,14 +757,10 @@ https://www.etsy.com/shop/CustomBrites/policy
           body: JSON.stringify(vectorStorePayload)
         });
         if (!response.ok) throw new Error("Error creating vector store");
-        
-        // Grab the JSON response so we can retrieve store_id
         const data = await response.json();
         console.log("Vector store created/updated:", data);
-        
-        // If the creation was successful, store the returned store_id locally
         if (data && data.id) {
-          localStorage.setItem("vectorStoreId", data.id); // <--- SAVE store_id
+          localStorage.setItem("vectorStoreId", data.id);
           console.log("Saved store_id in localStorage:", data.id);
         }
       } catch (err) {
@@ -863,7 +837,7 @@ https://www.etsy.com/shop/CustomBrites/policy
         let cell = document.getElementById("previewCell" + i);
         if (!cell) continue;
         cell.innerHTML = "Empty";
-        if (i < 7) {
+        if (i < 7) {  // non-reserved cells
           if (i < previewImages.length && previewImages[i]) {
             cell.innerHTML = "";
             let previewBox = document.createElement("div");
@@ -873,9 +847,7 @@ https://www.etsy.com/shop/CustomBrites/policy
             previewBox.addEventListener("dragstart", e => { draggedIndex = i; });
             
             let img = document.createElement("img");
-            if (previewImages[i]) {
-              img.src = previewImages[i];
-            }
+            if (previewImages[i]) { img.src = previewImages[i]; }
             previewBox.appendChild(img);
             
             let removeBtn = document.createElement("div");
@@ -913,13 +885,13 @@ https://www.etsy.com/shop/CustomBrites/policy
             });
             previewBox.appendChild(cropBtn);
             
-            previewBox.addEventListener("click", () => { showMetadata(i); });
-            cell.appendChild(previewBox);
-            
+            // Instead of using a modal, we now display metadata inside the cell.
             let metadataStatus = document.createElement("div");
             metadataStatus.className = "metadata-status";
             metadataStatus.id = "metadataStatus" + i;
-            cell.appendChild(metadataStatus);
+            previewBox.appendChild(metadataStatus);
+            previewBox.addEventListener("click", () => { /* Optionally, add a detailed view */ });
+            cell.appendChild(previewBox);
           } else {
             cell.innerHTML = "Empty";
             let metadataStatus = document.createElement("div");
@@ -927,7 +899,7 @@ https://www.etsy.com/shop/CustomBrites/policy
             metadataStatus.id = "metadataStatus" + i;
             cell.appendChild(metadataStatus);
           }
-        } else {
+        } else {  // reserved cells
           let rIndex = i - 7;
           if (rIndex < reservedPhotos.length && reservedPhotos[rIndex] && reservedPhotos[rIndex].src) {
             cell.innerHTML = "";
@@ -953,12 +925,12 @@ https://www.etsy.com/shop/CustomBrites/policy
             numOverlay.className = "number-overlay";
             numOverlay.textContent = (i + 1).toString();
             previewBox.appendChild(numOverlay);
-            previewBox.addEventListener("click", () => { showMetadata(i); });
-            cell.appendChild(previewBox);
             let metadataStatus = document.createElement("div");
             metadataStatus.className = "metadata-status";
             metadataStatus.id = "metadataStatus" + i;
-            cell.appendChild(metadataStatus);
+            previewBox.appendChild(metadataStatus);
+            previewBox.addEventListener("click", () => { /* Optionally, add detailed view */ });
+            cell.appendChild(previewBox);
           } else {
             cell.innerHTML = "Empty";
             let metadataStatus = document.createElement("div");
@@ -1056,6 +1028,83 @@ https://www.etsy.com/shop/CustomBrites/policy
       }
     }
 
+    // NEW: Analyze all non-reserved photos and populate metadata in each cell.
+    // Helper: Convert data URL to Blob
+    function dataURLtoBlob(dataurl) {
+      const arr = dataurl.split(',');
+      const mime = arr[0].match(/:(.*?);/)[1];
+      const bstr = atob(arr[1]);
+      let n = bstr.length;
+      const u8arr = new Uint8Array(n);
+      while (n--) { u8arr[n] = bstr.charCodeAt(n); }
+      return new Blob([u8arr], { type: mime });
+    }
+    
+    // Helper: Parse metadata text into title, description, keywords.
+    function parseMetadata(text) {
+      const metadata = { title: "", description: "", keywords: "" };
+      const titleMatch = text.match(/(?:\*\*Title\*\*:\s*)(.*)/i);
+      const descriptionMatch = text.match(/(?:\*\*Description\*\*:\s*)(.*)/i);
+      const keywordsMatch = text.match(/(?:\*\*Keywords\*\*:\s*)(.*)/i);
+      if (titleMatch) { metadata.title = titleMatch[1].trim(); }
+      if (descriptionMatch) { metadata.description = descriptionMatch[1].trim(); }
+      if (keywordsMatch) { metadata.keywords = keywordsMatch[1].trim(); }
+      return metadata;
+    }
+    
+    // Function to update metadata display inside a photo cell.
+    function updateMetadataStatus(index, data) {
+      const statusDiv = document.getElementById("metadataStatus" + index);
+      if (data.error) {
+        statusDiv.innerHTML = `<span style="color:red;">${data.error}</span>`;
+      } else {
+        statusDiv.innerHTML = `
+          <div><strong>Title:</strong> ${data.title}</div>
+          <div><strong>Description:</strong> ${data.description}</div>
+          <div><strong>Keywords:</strong> ${data.keywords}</div>
+          <div class="metadata-check"><i class="material-icons">check_circle</i></div>
+        `;
+      }
+    }
+    
+    // Analyze a single photo and save its metadata.
+    async function analyzePhoto(index) {
+      const dataUrl = previewImages[index];
+      const blob = dataURLtoBlob(dataUrl);
+      const formData = new FormData();
+      formData.append("imageFile", blob, "analyzed_photo_" + index + ".jpg");
+      formData.append("rules", "Analyze the image and extract SEO-friendly metadata including Title, Description, and Keywords.");
+      try {
+        const response = await fetch("/.netlify/functions/analyzeImage", {
+          method: "POST",
+          body: formData
+        });
+        if (!response.ok) {
+          const errorText = await response.text();
+          updateMetadataStatus(index, { error: "Error: " + errorText });
+          return;
+        }
+        const result = await response.json();
+        const metadataText = result.metadata || "";
+        const parsed = parseMetadata(metadataText);
+        photoMeta[index] = parsed;
+        updateMetadataStatus(index, parsed);
+      } catch (error) {
+        updateMetadataStatus(index, { error: "Exception: " + error.message });
+      }
+    }
+    
+    // New event handler: Analyze all non-reserved photos (indexes 0-6)
+    document.getElementById("analyzeMetadataBtn").addEventListener("click", async () => {
+      const maxPhotos = Math.min(previewImages.length, 7);
+      for (let i = 0; i < maxPhotos; i++) {
+        if (!photoMeta[i]) {
+          await analyzePhoto(i);
+        }
+      }
+    });
+
+    // OAuth & Startup functions (unchanged)
     function generateRandomString(length) {
       const possible = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789';
       let text = '';
@@ -1074,7 +1123,6 @@ https://www.etsy.com/shop/CustomBrites/policy
       let digest = await crypto.subtle.digest("SHA-256", data);
       return base64urlEncode(digest);
     }
-
     document.getElementById("connectEtsyBtn").addEventListener("click", async () => {
       persistDataBeforeRedirect();
       let state = "randomState123";
@@ -1090,7 +1138,6 @@ https://www.etsy.com/shop/CustomBrites/policy
         `&code_challenge_method=S256`;
       window.location.href = etsyAuthUrl;
     });
-
     document.addEventListener("DOMContentLoaded", () => {
       loadButtonPositions();
       loadReservedPhotos();
@@ -1129,7 +1176,6 @@ https://www.etsy.com/shop/CustomBrites/policy
         M.toast({ html: "Error exchanging code for token" });
       }
     }
-
     document.getElementById("uploadToEtsyBtn").addEventListener("click", async () => {
       let listingInput = document.getElementById("shopListings").value.trim();
       if (!listingInput) {
@@ -1170,7 +1216,6 @@ https://www.etsy.com/shop/CustomBrites/policy
         M.toast({ html: "Exception: " + e.message });
       }
     });
-
     document.getElementById("photoUploadNewBtn").addEventListener("click", async () => {
       let listingInput = document.getElementById("shopListings").value.trim();
       if (!listingInput) {
@@ -1191,208 +1236,17 @@ https://www.etsy.com/shop/CustomBrites/policy
         btn.disabled = false;
       }
     });
-
-    // -------------- New: Analyze Photos Functionality --------------
-    function dataURLtoBlob(dataurl) {
-      const arr = dataurl.split(',');
-      const mime = arr[0].match(/:(.*?);/)[1];
-      const bstr = atob(arr[1]);
-      let n = bstr.length;
-      const u8arr = new Uint8Array(n);
-      while (n--) {
-        u8arr[n] = bstr.charCodeAt(n);
-      }
-      return new Blob([u8arr], { type: mime });
-    }
-
-    document.getElementById("analyzeMetadataBtn").addEventListener("click", async () => {
-      if (!previewImages.length) {
-        M.toast({ html: "No images available to analyze." });
-        return;
-      }
-      const dataUrl = previewImages[0];
-      const blob = dataURLtoBlob(dataUrl);
-      const formData = new FormData();
-      formData.append("imageFile", blob, "analyzed_photo.jpg");
-      formData.append("rules", "Analyze the image and extract SEO-friendly metadata.");
-      try {
-        const response = await fetch("/.netlify/functions/analyzeImage", {
-          method: "POST",
-          body: formData
-        });
-        if (!response.ok) {
-          const errorText = await response.text();
-          M.toast({ html: "Error analyzing photo: " + errorText });
-          return;
-        }
-        const result = await response.json();
-        const metadata = result.metadata || "No metadata returned.";
-        document.getElementById("metadataTextarea").value = metadata;
-        const metadataModalElem = document.getElementById("metadataModal");
-        let metadataModalInstance = M.Modal.getInstance(metadataModalElem);
-        if (!metadataModalInstance) {
-          metadataModalInstance = M.Modal.init(metadataModalElem);
-        }
-        metadataModalInstance.open();
-      } catch (error) {
-        console.error("Error in analyze photo:", error);
-        M.toast({ html: "Exception: " + error.message });
-      }
-    });
-
-    // -------------- Generate Key Phrases Using CSV Context --------------
-    async function regenerateSinglePhrase(question, keywordRules, currentValid, maxAttempts = 5) {
-      for (let attempt = 1; attempt <= maxAttempts; attempt++) {
-        let store_id = localStorage.getItem("vectorStoreId");
-        let retrievedContext = "";
-        try {
-          let resp = await fetch("/.netlify/functions/vectorStore", {
-            method: "POST",
-            headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({
-              action: "query",
-              store_id,
-              query: question,
-              topK: 5
-            })
-          });
-          if (resp.ok) {
-            let data = await resp.json();
-            retrievedContext = data?.data || "";
-          }
-        } catch (err) {
-          console.warn("Could not retrieve CSV context for single phrase regeneration:", err);
-        }
-        let prompt = `
-We have 12 valid phrases:
-${currentValid.join(", ")}
-
-Now produce ONE new phrase (≤20 chars) that satisfies the same rules:
-
-Here is some relevant data from our CSV:
-${retrievedContext}
-
-Keyword Rules:
-${keywordRules}
-Return only one phrase in plain text.
-        `;
-        let payload = {
-          model: modelName,
-          messages: [
-            { role: "system", content: "Generate a single phrase, up to 20 characters." },
-            { role: "user", content: prompt }
-          ],
-          temperature: 0.7,
-          max_tokens: 150
-        };
-        let data = await callOpenAI(payload);
-        let answer = data.choices[0].message.content || "";
-        let candidate = answer.trim()
-          .replace(/^\d+\.\s*/, "")
-          .split("\n")[0]
-          .trim();
-        if (candidate.length <= 20) {
-          return candidate;
-        }
-        console.warn(`Attempt ${attempt}: Single phrase too long => "${candidate}"`);
-      }
-      throw new Error("Failed to generate a single phrase under 20 chars after multiple attempts.");
-    }
-
-    async function getInitialPhrases(question, keywordRules) {
-      let store_id = localStorage.getItem("vectorStoreId");
-      if (!store_id) {
-        console.warn("No store_id found in localStorage. CSV context may not be loaded!");
-      }
-      let retrievedContext = "";
-      try {
-        let resp = await fetch("/.netlify/functions/vectorStore", {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({
-            action: "query",
-            store_id,
-            query: question,
-            topK: 5
-          })
-        });
-        if (resp.ok) {
-          let data = await resp.json();
-          retrievedContext = data?.data || "";
-        } else {
-          console.warn("Could not retrieve CSV context from vector store. HTTP status:", resp.status);
-        }
-      } catch (err) {
-        console.error("Error retrieving CSV context:", err);
-      }
-      let prompt = `
-Here is some relevant data from our CSV files:
-${retrievedContext}
-
-Listing Description (for emphasis): "${question}"
-Emphasis on SEO and generating effective Etsy tag phrases.
-
-Keyword Rules:
-${keywordRules}
-
-Generate exactly 13 SEO key phrases (each ≤ 20 characters). Return as plain text.
-      `;
-      let payload = {
-        model: modelName,
-        messages: [
-          { role: "system", content: "Use the CSV context above to generate more accurate key phrases." },
-          { role: "user", content: prompt }
-        ],
-        temperature: 0.7,
-        max_tokens: 500
-      };
-      let data = await callOpenAI(payload);
-      let answer = data.choices[0].message.content || "";
-      let phrasesArray = answer
-        .split(/[\n,]+/)
-        .map(s => s.replace(/^\d+\.\s*/, "").trim())
-        .filter(p => p);
-      return phrasesArray;
-    }
-
-    async function generateTagPhrases() {
-      let question = document.getElementById("listingDescInput").value.trim();
-      if (!question) {
-        M.toast({ html: "Please enter a question in the Listing Description." });
-        return;
-      }
-      let keywordRules = stripMarkdownJSON(document.getElementById("keywordRulesTextarea").value);
-      try {
-        let phrasesArray = await getInitialPhrases(question, keywordRules);
-        for (let i = 0; i < phrasesArray.length; i++) {
-          if (phrasesArray[i].length > 20) {
-            let otherValid = phrasesArray.filter((_, idx) => idx !== i && phrasesArray[idx].length <= 20);
-            let newPhrase = await regenerateSinglePhrase(question, keywordRules, otherValid);
-            phrasesArray[i] = newPhrase;
-          }
-        }
-        if (phrasesArray.some(p => p.length > 20)) {
-          throw new Error("Could not fix some phrases under 20 chars. Please try again.");
-        }
-        document.getElementById("searchKeyPhrases").value = phrasesArray.join("\n");
-        M.toast({ html: "Tag Phrases generated successfully!" });
-      } catch (err) {
-        console.error(err);
-        M.toast({ html: "Error generating valid tag phrases: " + err.message });
-      }
-    }
-
+    
+    // -------------- Title & Description Generation ------------------
     document.getElementById("listingDescInput").addEventListener("keydown", async (e) => {
       if (e.key === "Enter" && !e.shiftKey) {
         e.preventDefault();
         await generateTagPhrases();
       }
     });
-
     document.getElementById("generateBtn").addEventListener("click", async () => {
       await Promise.all([generateTitleOnly(), generateDescriptionOnly()]);
     });
-    
     async function generateTitleOnly() {
       let etsyLink = ETSY_SHOP_URL;
       let keyPhrases = document.getElementById("searchKeyPhrases").value.trim();
@@ -1500,7 +1354,6 @@ Important: Return ONLY the description as plain text.`;
       let lines = document.getElementById("searchKeyPhrases").value.split(/\n+/).map(l => l.trim()).filter(l => l !== "");
       navigator.clipboard.writeText(lines.join(", ")).catch(err => console.error("Error copying key phrases:", err));
     });
-
     document.getElementById("configureButtonsBtn").addEventListener("click", () => {
       let configContainer = document.getElementById("buttonConfigContainer");
       configContainer.innerHTML = "";
@@ -1609,7 +1462,6 @@ Important: Return ONLY the description as plain text.`;
       let container13 = document.getElementById("container13");
       container13.style.height = (container13.offsetHeight * 2.5) + "px";
     });
-
     function openCropModal(index) {
       currentCropIndex = index;
       let cropModal = document.getElementById("photoCropModal");
@@ -1657,14 +1509,10 @@ Important: Return ONLY the description as plain text.`;
       }
     });
     document.getElementById("cancelCropBtn").addEventListener("click", () => {
-      if (cropper) {
-        cropper.destroy();
-        cropper = null;
-      }
+      if (cropper) { cropper.destroy(); cropper = null; }
       currentCropIndex = null;
       M.Modal.getInstance(document.getElementById("photoCropModal")).close();
     });
-
     async function uploadPhotos() {
       let listingInput = document.getElementById("shopListings").value.trim();
       if (!listingInput) {
@@ -1684,7 +1532,7 @@ Important: Return ONLY the description as plain text.`;
       }
       for (let i = 0; i < previewImages.length; i++) {
         let dataURL = previewImages[i];
-        let altText = photoMeta[i] || "";
+        let altText = (photoMeta[i] && photoMeta[i].description) || "";
         let rankNumber = i + 1;
         try {
           let res = await fetch(dataURL);
@@ -1710,7 +1558,6 @@ Important: Return ONLY the description as plain text.`;
       }
     }
     window.uploadPhotos = uploadPhotos;
-
     async function uploadReservedPhotos() {
       let listingInput = document.getElementById("shopListings").value.trim();
       if (!listingInput) {
@@ -1755,6 +1602,150 @@ Important: Return ONLY the description as plain text.`;
         }
       }
     }
+    
+    // ------------------ Title & Description Gen --------------
+    async function regenerateSinglePhrase(question, keywordRules, currentValid, maxAttempts = 5) {
+      for (let attempt = 1; attempt <= maxAttempts; attempt++) {
+        let store_id = localStorage.getItem("vectorStoreId");
+        let retrievedContext = "";
+        try {
+          let resp = await fetch("/.netlify/functions/vectorStore", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({
+              action: "query",
+              store_id,
+              query: question,
+              topK: 5
+            })
+          });
+          if (resp.ok) {
+            let data = await resp.json();
+            retrievedContext = data?.data || "";
+          }
+        } catch (err) {
+          console.warn("Could not retrieve CSV context for single phrase regeneration:", err);
+        }
+        let prompt = `
+We have 12 valid phrases:
+${currentValid.join(", ")}
+
+Now produce ONE new phrase (≤20 chars) that satisfies the same rules:
+
+Here is some relevant data from our CSV:
+${retrievedContext}
+
+Keyword Rules:
+${keywordRules}
+Return only one phrase in plain text.
+        `;
+        let payload = {
+          model: modelName,
+          messages: [
+            { role: "system", content: "Generate a single phrase, up to 20 characters." },
+            { role: "user", content: prompt }
+          ],
+          temperature: 0.7,
+          max_tokens: 150
+        };
+        let data = await callOpenAI(payload);
+        let answer = data.choices[0].message.content || "";
+        let candidate = answer.trim()
+          .replace(/^\d+\.\s*/, "")
+          .split("\n")[0]
+          .trim();
+        if (candidate.length <= 20) {
+          return candidate;
+        }
+        console.warn(`Attempt ${attempt}: Single phrase too long => "${candidate}"`);
+      }
+      throw new Error("Failed to generate a single phrase under 20 chars after multiple attempts.");
+    }
+    async function getInitialPhrases(question, keywordRules) {
+      let store_id = localStorage.getItem("vectorStoreId");
+      if (!store_id) { console.warn("No store_id found in localStorage. CSV context may not be loaded!"); }
+      let retrievedContext = "";
+      try {
+        let resp = await fetch("/.netlify/functions/vectorStore", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            action: "query",
+            store_id,
+            query: question,
+            topK: 5
+          })
+        });
+        if (resp.ok) {
+          let data = await resp.json();
+          retrievedContext = data?.data || "";
+        } else {
+          console.warn("Could not retrieve CSV context from vector store. HTTP status:", resp.status);
+        }
+      } catch (err) {
+        console.error("Error retrieving CSV context:", err);
+      }
+      let prompt = `
+Here is some relevant data from our CSV files:
+${retrievedContext}
+
+Listing Description (for emphasis): "${question}"
+Emphasis on SEO and generating effective Etsy tag phrases.
+
+Keyword Rules:
+${keywordRules}
+
+Generate exactly 13 SEO key phrases (each ≤ 20 characters). Return as plain text.
+      `;
+      let payload = {
+        model: modelName,
+        messages: [
+          { role: "system", content: "Use the CSV context above to generate more accurate key phrases." },
+          { role: "user", content: prompt }
+        ],
+        temperature: 0.7,
+        max_tokens: 500
+      };
+      let data = await callOpenAI(payload);
+      let answer = data.choices[0].message.content || "";
+      let phrasesArray = answer
+        .split(/[\n,]+/)
+        .map(s => s.replace(/^\d+\.\s*/, "").trim())
+        .filter(p => p);
+      return phrasesArray;
+    }
+    async function generateTagPhrases() {
+      let question = document.getElementById("listingDescInput").value.trim();
+      if (!question) {
+        M.toast({ html: "Please enter a question in the Listing Description." });
+        return;
+      }
+      let keywordRules = stripMarkdownJSON(document.getElementById("keywordRulesTextarea").value);
+      try {
+        let phrasesArray = await getInitialPhrases(question, keywordRules);
+        for (let i = 0; i < phrasesArray.length; i++) {
+          if (phrasesArray[i].length > 20) {
+            let otherValid = phrasesArray.filter((_, idx) => idx !== i && phrasesArray[idx].length <= 20);
+            let newPhrase = await regenerateSinglePhrase(question, keywordRules, otherValid);
+            phrasesArray[i] = newPhrase;
+          }
+        }
+        if (phrasesArray.some(p => p.length > 20)) {
+          throw new Error("Could not fix some phrases under 20 chars. Please try again.");
+        }
+        document.getElementById("searchKeyPhrases").value = phrasesArray.join("\n");
+        M.toast({ html: "Tag Phrases generated successfully!" });
+      } catch (err) {
+        console.error(err);
+        M.toast({ html: "Error generating valid tag phrases: " + err.message });
+      }
+    }
+    document.getElementById("listingDescInput").addEventListener("keydown", async (e) => {
+      if (e.key === "Enter" && !e.shiftKey) {
+        e.preventDefault();
+        await generateTagPhrases();
+      }
+    });
   </script>
 </body>
 </html>
