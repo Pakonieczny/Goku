@@ -857,27 +857,30 @@ https://www.etsy.com/shop/CustomBrites/policy
     });
 
     // ------------------ Photo Preview Logic ------------------
-    // Updated updateStaticPreviewGrid: event listeners on cells are now attached once in initializeCellDragAndDrop()
+    // Updated updateStaticPreviewGrid with guard checks to prevent null errors
     function updateStaticPreviewGrid() {
       for (let i = 0; i < 10; i++) {
         let cell = document.getElementById("previewCell" + i);
+        if (!cell) continue;
+        // Clear cell and default to "Empty"
         cell.innerHTML = "Empty";
-        // For the last three cells, we gave them a "reserved" class in HTML
         if (i < 7) {
-          if (i < previewImages.length) {
+          // Non-reserved cell: check that previewImages[i] exists and is not null
+          if (i < previewImages.length && previewImages[i]) {
             cell.innerHTML = "";
             let previewBox = document.createElement("div");
             previewBox.className = "preview-box";
-            previewBox.setAttribute("data-id", photoIds[i]);
+            previewBox.setAttribute("data-id", photoIds[i] || "");
             previewBox.setAttribute("draggable", "true");
-            previewBox.addEventListener("dragstart", e => {
-              draggedIndex = i;
-            });
-
+            previewBox.addEventListener("dragstart", e => { draggedIndex = i; });
+            
             let img = document.createElement("img");
-            img.src = previewImages[i];
+            // Guard against null image source
+            if (previewImages[i]) {
+              img.src = previewImages[i];
+            }
             previewBox.appendChild(img);
-
+            
             let removeBtn = document.createElement("div");
             removeBtn.className = "remove-btn";
             removeBtn.textContent = "X";
@@ -890,12 +893,12 @@ https://www.etsy.com/shop/CustomBrites/policy
               updateStaticPreviewGrid();
             });
             previewBox.appendChild(removeBtn);
-
+            
             let numOverlay = document.createElement("div");
             numOverlay.className = "number-overlay";
             numOverlay.textContent = (i + 1).toString();
             previewBox.appendChild(numOverlay);
-
+            
             let cropBtn = document.createElement("button");
             cropBtn.textContent = "Crop";
             cropBtn.style.position = "absolute";
@@ -912,28 +915,31 @@ https://www.etsy.com/shop/CustomBrites/policy
               openCropModal(i);
             });
             previewBox.appendChild(cropBtn);
-
-            previewBox.addEventListener("click", () => {
-              showMetadata(i);
-            });
+            
+            previewBox.addEventListener("click", () => { showMetadata(i); });
             cell.appendChild(previewBox);
-
+            
+            let metadataStatus = document.createElement("div");
+            metadataStatus.className = "metadata-status";
+            metadataStatus.id = "metadataStatus" + i;
+            cell.appendChild(metadataStatus);
+          } else {
+            cell.innerHTML = "Empty";
             let metadataStatus = document.createElement("div");
             metadataStatus.className = "metadata-status";
             metadataStatus.id = "metadataStatus" + i;
             cell.appendChild(metadataStatus);
           }
         } else {
+          // Reserved cells
           let rIndex = i - 7;
-          if (rIndex < reservedPhotos.length && reservedPhotos[rIndex].src) {
+          if (rIndex < reservedPhotos.length && reservedPhotos[rIndex] && reservedPhotos[rIndex].src) {
             cell.innerHTML = "";
             let previewBox = document.createElement("div");
             previewBox.className = "preview-box";
-            previewBox.setAttribute("data-id", reservedPhotos[rIndex].id);
+            previewBox.setAttribute("data-id", reservedPhotos[rIndex].id || "");
             previewBox.setAttribute("draggable", "true");
-            previewBox.addEventListener("dragstart", e => {
-              draggedIndex = i;
-            });
+            previewBox.addEventListener("dragstart", e => { draggedIndex = i; });
             let img = document.createElement("img");
             img.src = reservedPhotos[rIndex].src;
             previewBox.appendChild(img);
@@ -951,11 +957,8 @@ https://www.etsy.com/shop/CustomBrites/policy
             numOverlay.className = "number-overlay";
             numOverlay.textContent = (i + 1).toString();
             previewBox.appendChild(numOverlay);
-            previewBox.addEventListener("click", () => {
-              showMetadata(i);
-            });
+            previewBox.addEventListener("click", () => { showMetadata(i); });
             cell.appendChild(previewBox);
-
             let metadataStatus = document.createElement("div");
             metadataStatus.className = "metadata-status";
             metadataStatus.id = "metadataStatus" + i;
@@ -991,16 +994,19 @@ https://www.etsy.com/shop/CustomBrites/policy
             if (cellIndex < 7) {
               // Non-reserved drop logic
               if (draggedIndex !== null && draggedIndex !== cellIndex) {
-                const [movedImage] = previewImages.splice(draggedIndex, 1);
-                previewImages.splice(cellIndex, 0, movedImage);
-                const [movedName] = photoNames.splice(draggedIndex, 1);
-                photoNames.splice(cellIndex, 0, movedName);
-                const [movedMeta] = photoMeta.splice(draggedIndex, 1);
-                photoMeta.splice(cellIndex, 0, movedMeta);
-                const [movedId] = photoIds.splice(draggedIndex, 1);
-                photoIds.splice(cellIndex, 0, movedId);
-                updateStaticPreviewGrid();
-                draggedIndex = null;
+                // Ensure the dragged image exists before swapping
+                if (previewImages[draggedIndex]) {
+                  const [movedImage] = previewImages.splice(draggedIndex, 1);
+                  previewImages.splice(cellIndex, 0, movedImage);
+                  const [movedName] = photoNames.splice(draggedIndex, 1);
+                  photoNames.splice(cellIndex, 0, movedName);
+                  const [movedMeta] = photoMeta.splice(draggedIndex, 1);
+                  photoMeta.splice(cellIndex, 0, movedMeta);
+                  const [movedId] = photoIds.splice(draggedIndex, 1);
+                  photoIds.splice(cellIndex, 0, movedId);
+                  updateStaticPreviewGrid();
+                  draggedIndex = null;
+                }
               }
             } else {
               // Reserved cell drop logic
