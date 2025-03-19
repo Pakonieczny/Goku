@@ -600,70 +600,48 @@ https://www.etsy.com/shop/CustomBrites/policy
 `;
 
     /* 
-      NEW: Function to persist data to localStorage before redirecting to Etsy OAuth
+      Function to persist data to localStorage before redirecting to Etsy OAuth
     */
     function persistDataBeforeRedirect() {
       try {
         localStorage.setItem("soldOrdersCSV", JSON.stringify(soldOrdersCSV));
         localStorage.setItem("listingsCSV", JSON.stringify(listingsCSV));
-        
-        // Also store the user-typed text in "Etsy Shop Listings"
         const listingsInputValue = document.getElementById("shopListings").value || "";
         localStorage.setItem("shopListingsText", listingsInputValue);
-        
-        // Save the queue itself
         localStorage.setItem("listingQueue", JSON.stringify(listingQueue));
-        
       } catch (err) {
         console.error("Error persisting data before redirect:", err);
       }
     }
 
     /* 
-      NEW: Function to restore data from localStorage after returning from OAuth
+      Function to restore data from localStorage after returning from OAuth
     */
     function restoreDataAfterRedirect() {
       try {
         let soCSV = localStorage.getItem("soldOrdersCSV");
-        if (soCSV) {
-          soldOrdersCSV = JSON.parse(soCSV);
-        }
-
+        if (soCSV) { soldOrdersCSV = JSON.parse(soCSV); }
         let liCSV = localStorage.getItem("listingsCSV");
-        if (liCSV) {
-          listingsCSV = JSON.parse(liCSV);
-        }
-
+        if (liCSV) { listingsCSV = JSON.parse(liCSV); }
         let storedShopListingsText = localStorage.getItem("shopListingsText");
-        if (storedShopListingsText) {
-          document.getElementById("shopListings").value = storedShopListingsText;
-        }
-
+        if (storedShopListingsText) { document.getElementById("shopListings").value = storedShopListingsText; }
         let storedQueue = localStorage.getItem("listingQueue");
-        if (storedQueue) {
-          listingQueue = JSON.parse(storedQueue);
-        }
-        // re-parse the shopListings text in case user typed new IDs previously
+        if (storedQueue) { listingQueue = JSON.parse(storedQueue); }
         loadNextListingInQueue();
       } catch (err) {
         console.error("Error restoring data after redirect:", err);
       }
     }
     
-    // -------------- Utility & Queue Helpers -------------------
-
+    // Utility & Queue Helpers
     function parseListingNumbers(rawInput) {
       let parts = rawInput.split(",");
-      let cleaned = parts
-        .map(p => p.trim())
-        .filter(p => /^\d{10}$/.test(p)); // only keep valid 10-digit
-      let unique = Array.from(new Set(cleaned)); // remove duplicates
-      let finalList = unique.slice(0, 250); // limit to 250
-      return finalList;
+      let cleaned = parts.map(p => p.trim()).filter(p => /^\d{10}$/.test(p));
+      let unique = Array.from(new Set(cleaned));
+      return unique.slice(0, 250);
     }
     function updateListingQueueCount() {
-      const countBox = document.getElementById("listingQueueCount");
-      countBox.textContent = listingQueue.length;
+      document.getElementById("listingQueueCount").textContent = listingQueue.length;
     }
     function loadNextListingInQueue() {
       photoUpdateComplete = false;
@@ -676,24 +654,19 @@ https://www.etsy.com/shop/CustomBrites/policy
       updateListingQueueCount();
     }
     function afterBothUpdates() {
-      // Shift the queue & load next listing
       listingQueue.shift();
       loadNextListingInQueue();
     }
     function checkIfBothUpdatesComplete() {
-      if (photoUpdateComplete && infoUpdateComplete) {
-        afterBothUpdates();
-      }
+      if (photoUpdateComplete && infoUpdateComplete) { afterBothUpdates(); }
     }
 
-    // -------------- Page Initialization & File Handling --------------
-
+    // Page Initialization & File Handling
     function updateUploadedFilesList() {
       const uploadedFilesListElem = document.getElementById('uploadedFilesList');
       const fileNames = soldOrdersCSV.map(file => file.name || file.fileName || 'Unnamed File');
       uploadedFilesListElem.value = fileNames.join('\n');
     }
-
     function loadReservedPhotos() {
       const stored = localStorage.getItem("reservedPhotos");
       reservedPhotos = stored ? JSON.parse(stored) : [];
@@ -701,7 +674,6 @@ https://www.etsy.com/shop/CustomBrites/policy
     function saveReservedPhotos() {
       localStorage.setItem("reservedPhotos", JSON.stringify(reservedPhotos));
     }
-
     async function resizeImage(dataURL, width, height) {
       return new Promise((resolve, reject) => {
         const img = new Image();
@@ -778,14 +750,10 @@ https://www.etsy.com/shop/CustomBrites/policy
           body: JSON.stringify(vectorStorePayload)
         });
         if (!response.ok) throw new Error("Error creating vector store");
-        
-        // Grab the JSON response so we can retrieve store_id
         const data = await response.json();
         console.log("Vector store created/updated:", data);
-        
-        // If the creation was successful, store the returned store_id locally
         if (data && data.id) {
-          localStorage.setItem("vectorStoreId", data.id); // <--- SAVE store_id
+          localStorage.setItem("vectorStoreId", data.id);
           console.log("Saved store_id in localStorage:", data.id);
         }
       } catch (err) {
@@ -857,15 +825,12 @@ https://www.etsy.com/shop/CustomBrites/policy
     });
 
     // ------------------ Photo Preview Logic ------------------
-    // Updated updateStaticPreviewGrid with guard checks to prevent null errors
     function updateStaticPreviewGrid() {
       for (let i = 0; i < 10; i++) {
         let cell = document.getElementById("previewCell" + i);
         if (!cell) continue;
-        // Clear cell and default to "Empty"
         cell.innerHTML = "Empty";
         if (i < 7) {
-          // Non-reserved cell: check that previewImages[i] exists and is not null
           if (i < previewImages.length && previewImages[i]) {
             cell.innerHTML = "";
             let previewBox = document.createElement("div");
@@ -873,14 +838,9 @@ https://www.etsy.com/shop/CustomBrites/policy
             previewBox.setAttribute("data-id", photoIds[i] || "");
             previewBox.setAttribute("draggable", "true");
             previewBox.addEventListener("dragstart", e => { draggedIndex = i; });
-            
             let img = document.createElement("img");
-            // Guard against null image source
-            if (previewImages[i]) {
-              img.src = previewImages[i];
-            }
+            if (previewImages[i]) { img.src = previewImages[i]; }
             previewBox.appendChild(img);
-            
             let removeBtn = document.createElement("div");
             removeBtn.className = "remove-btn";
             removeBtn.textContent = "X";
@@ -893,12 +853,10 @@ https://www.etsy.com/shop/CustomBrites/policy
               updateStaticPreviewGrid();
             });
             previewBox.appendChild(removeBtn);
-            
             let numOverlay = document.createElement("div");
             numOverlay.className = "number-overlay";
             numOverlay.textContent = (i + 1).toString();
             previewBox.appendChild(numOverlay);
-            
             let cropBtn = document.createElement("button");
             cropBtn.textContent = "Crop";
             cropBtn.style.position = "absolute";
@@ -915,10 +873,8 @@ https://www.etsy.com/shop/CustomBrites/policy
               openCropModal(i);
             });
             previewBox.appendChild(cropBtn);
-            
             previewBox.addEventListener("click", () => { showMetadata(i); });
             cell.appendChild(previewBox);
-            
             let metadataStatus = document.createElement("div");
             metadataStatus.className = "metadata-status";
             metadataStatus.id = "metadataStatus" + i;
@@ -931,7 +887,6 @@ https://www.etsy.com/shop/CustomBrites/policy
             cell.appendChild(metadataStatus);
           }
         } else {
-          // Reserved cells
           let rIndex = i - 7;
           if (rIndex < reservedPhotos.length && reservedPhotos[rIndex] && reservedPhotos[rIndex].src) {
             cell.innerHTML = "";
@@ -974,7 +929,6 @@ https://www.etsy.com/shop/CustomBrites/policy
       }
     }
 
-    // Initialize drag and drop listeners for preview cells only once
     function initializeCellDragAndDrop() {
       for (let i = 0; i < 10; i++) {
         let cell = document.getElementById("previewCell" + i);
@@ -992,9 +946,7 @@ https://www.etsy.com/shop/CustomBrites/policy
             this.classList.remove("drag-over");
             let cellIndex = parseInt(this.id.replace("previewCell", ""));
             if (cellIndex < 7) {
-              // Non-reserved drop logic
               if (draggedIndex !== null && draggedIndex !== cellIndex) {
-                // Ensure the dragged image exists before swapping
                 if (previewImages[draggedIndex]) {
                   const [movedImage] = previewImages.splice(draggedIndex, 1);
                   previewImages.splice(cellIndex, 0, movedImage);
@@ -1009,7 +961,6 @@ https://www.etsy.com/shop/CustomBrites/policy
                 }
               }
             } else {
-              // Reserved cell drop logic
               let rIndex = cellIndex - 7;
               if (e.dataTransfer.files && e.dataTransfer.files.length > 0) {
                 let file = e.dataTransfer.files[0];
@@ -1064,7 +1015,68 @@ https://www.etsy.com/shop/CustomBrites/policy
       }
     }
 
-    // -------------- OAuth & Startup ---------------
+    // ------------------ Analyze Photos ------------------
+    document.getElementById("analyzeMetadataBtn").addEventListener("click", async () => {
+      for (let i = 0; i < previewImages.length; i++) {
+        console.log("Starting analysis for photo index " + i);
+        await analyzePhoto(i);
+      }
+    });
+
+    async function analyzePhoto(index) {
+      let statusElem = document.getElementById("metadataStatus" + index);
+      if (!statusElem) return;
+      statusElem.innerHTML = "";
+      let progressBar = document.createElement("progress");
+      progressBar.className = "metadata-progress";
+      progressBar.max = 100;
+      progressBar.value = 0;
+      statusElem.appendChild(progressBar);
+      let progress = 0;
+      let interval = setInterval(() => {
+        progress = Math.min(progress + 3, 60);
+        progressBar.value = progress;
+      }, 100);
+      try {
+        const rulesText = document.getElementById("analyzeRulesTextarea").value || "";
+        if (!previewImages[index]) {
+          throw new Error("No preview image available for index " + index);
+        }
+        let blob = await (await fetch(previewImages[index])).blob();
+        let formData = new FormData();
+        formData.append("rules", rulesText);
+        formData.append("imageFile", blob, photoNames[index] || `image_${index}.jpg`);
+        console.log("Analyzing photo at index " + index);
+        let resp = await fetch("/.netlify/functions/analyzeImage", { method: "POST", body: formData });
+        clearInterval(interval);
+        progressBar.value = 80;
+        if (!resp.ok) {
+          let errData = await resp.text();
+          throw new Error(`analyzeImage error: ${resp.status} - ${errData}`);
+        }
+        let json = await resp.json();
+        console.log("Response from analyzeImage:", json);
+        // Try to retrieve metadata from either 'metadata' or 'data' field
+        photoMeta[index] = json.metadata || json.data || "No metadata returned.";
+        progressBar.value = 100;
+        statusElem.innerHTML = '<span style="color:green; font-size:16px;"><i class="material-icons">check_circle</i></span>';
+      } catch (err) {
+        clearInterval(interval);
+        console.error("Error in analyzePhoto index " + index + ":", err);
+        statusElem.innerHTML = `<span style="color:red;">Error: ${err.message}</span>`;
+      }
+    }
+
+    // ------------------ Modal to Show Metadata ------------------
+    function showMetadata(index) {
+      const metadata = photoMeta[index] || "No metadata available for this photo.";
+      document.getElementById("metadataTextarea").value = metadata;
+      let modalElem = document.getElementById("metadataModal");
+      let instance = M.Modal.getInstance(modalElem) || M.Modal.init(modalElem, {});
+      instance.open();
+    }
+
+    // ------------------ OAuth & Startup ------------------
     function generateRandomString(length) {
       const possible = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789';
       let text = '';
@@ -1083,17 +1095,13 @@ https://www.etsy.com/shop/CustomBrites/policy
       let digest = await crypto.subtle.digest("SHA-256", data);
       return base64urlEncode(digest);
     }
-
-    // UPDATED: first persist data, then do the usual OAuth
     document.getElementById("connectEtsyBtn").addEventListener("click", async () => {
-      persistDataBeforeRedirect(); // <--- NEW: save CSV & queue, then redirect
-
+      persistDataBeforeRedirect();
       let state = "randomState123";
       let scope = "listings_w listings_r";
       let codeVerifier = generateRandomString(64);
       localStorage.setItem("etsy_code_verifier", codeVerifier);
       let codeChallenge = await generateCodeChallenge(codeVerifier);
-      
       let etsyAuthUrl = `https://www.etsy.com/oauth/connect?response_type=code&client_id=${CLIENT_ID}` +
         `&redirect_uri=${encodeURIComponent(REDIRECT_URI)}` +
         `&scope=${encodeURIComponent(scope)}` +
@@ -1102,14 +1110,10 @@ https://www.etsy.com/shop/CustomBrites/policy
         `&code_challenge_method=S256`;
       window.location.href = etsyAuthUrl;
     });
-
     document.addEventListener("DOMContentLoaded", () => {
       loadButtonPositions();
       loadReservedPhotos();
-      
-      // NEW: restore any data we saved in localStorage (CSV arrays, listing queue, etc.)
       restoreDataAfterRedirect();
-      
       let urlParams = new URLSearchParams(window.location.search);
       let code = urlParams.get("code");
       if (code) {
@@ -1118,7 +1122,6 @@ https://www.etsy.com/shop/CustomBrites/policy
       }
       updateStaticPreviewGrid();
       initializeCellDragAndDrop();
-      
       document.getElementById("shopListings").addEventListener("change", () => {
         let rawInput = document.getElementById("shopListings").value;
         listingQueue = parseListingNumbers(rawInput);
@@ -1146,7 +1149,7 @@ https://www.etsy.com/shop/CustomBrites/policy
       }
     }
 
-    // -------------- Info & Photo Updates --------------
+    // ------------------ Info & Photo Updates ------------------
     document.getElementById("uploadToEtsyBtn").addEventListener("click", async () => {
       let listingInput = document.getElementById("shopListings").value.trim();
       if (!listingInput) {
@@ -1160,16 +1163,13 @@ https://www.etsy.com/shop/CustomBrites/policy
         M.toast({ html: "Invalid listing URL or ID." });
         return;
       }
-      
       let userDescription = document.getElementById("listingDescription").value || "";
       let finalDescription = userDescription + appendedDescriptionText; 
-      
       let payload = {
         title: document.getElementById("listingTitle").value,
         description: finalDescription,
         tags: document.getElementById("searchKeyPhrases").value.split("\n").map(s => s.trim()).filter(s => s !== "")
       };
-      
       let updateUrl = `/.netlify/functions/updateListing?listingId=${listingId}&token=${encodeURIComponent(accessToken)}`;
       try {
         let response = await fetch(updateUrl, {
@@ -1190,7 +1190,6 @@ https://www.etsy.com/shop/CustomBrites/policy
         M.toast({ html: "Exception: " + e.message });
       }
     });
-
     document.getElementById("photoUploadNewBtn").addEventListener("click", async () => {
       let listingInput = document.getElementById("shopListings").value.trim();
       if (!listingInput) {
@@ -1212,9 +1211,7 @@ https://www.etsy.com/shop/CustomBrites/policy
       }
     });
 
-    // -------------- Generate Key Phrases Using CSV Context --------------
-
-    // Single-phrase regeneration if we find >20 chars
+    // ------------------ Generate Key Phrases Using CSV Context ------------------
     async function regenerateSinglePhrase(question, keywordRules, currentValid, maxAttempts = 5) {
       for (let attempt = 1; attempt <= maxAttempts; attempt++) {
         let store_id = localStorage.getItem("vectorStoreId");
@@ -1237,21 +1234,16 @@ https://www.etsy.com/shop/CustomBrites/policy
         } catch (err) {
           console.warn("Could not retrieve CSV context for single phrase regeneration:", err);
         }
-
         let prompt = `
 We have 12 valid phrases:
 ${currentValid.join(", ")}
-
 Now produce ONE new phrase (≤20 chars) that satisfies the same rules:
-
 Here is some relevant data from our CSV:
 ${retrievedContext}
-
 Keyword Rules:
 ${keywordRules}
 Return only one phrase in plain text.
         `;
-
         let payload = {
           model: modelName,
           messages: [
@@ -1261,14 +1253,9 @@ Return only one phrase in plain text.
           temperature: 0.7,
           max_tokens: 150
         };
-
         let data = await callOpenAI(payload);
         let answer = data.choices[0].message.content || "";
-        let candidate = answer.trim()
-          .replace(/^\d+\.\s*/, "")
-          .split("\n")[0]
-          .trim();
-
+        let candidate = answer.trim().replace(/^\d+\.\s*/, "").split("\n")[0].trim();
         if (candidate.length <= 20) {
           return candidate;
         }
@@ -1276,14 +1263,11 @@ Return only one phrase in plain text.
       }
       throw new Error("Failed to generate a single phrase under 20 chars after multiple attempts.");
     }
-
-    // Grab all 13 phrases at once
     async function getInitialPhrases(question, keywordRules) {
       let store_id = localStorage.getItem("vectorStoreId");
       if (!store_id) {
         console.warn("No store_id found in localStorage. CSV context may not be loaded!");
       }
-
       let retrievedContext = "";
       try {
         let resp = await fetch("/.netlify/functions/vectorStore", {
@@ -1305,20 +1289,15 @@ Return only one phrase in plain text.
       } catch (err) {
         console.error("Error retrieving CSV context:", err);
       }
-
       let prompt = `
 Here is some relevant data from our CSV files:
 ${retrievedContext}
-
 Listing Description (for emphasis): "${question}"
 Emphasis on SEO and generating effective Etsy tag phrases.
-
 Keyword Rules:
 ${keywordRules}
-
 Generate exactly 13 SEO key phrases (each ≤ 20 characters). Return as plain text.
       `;
-
       let payload = {
         model: modelName,
         messages: [
@@ -1330,14 +1309,9 @@ Generate exactly 13 SEO key phrases (each ≤ 20 characters). Return as plain te
       };
       let data = await callOpenAI(payload);
       let answer = data.choices[0].message.content || "";
-      let phrasesArray = answer
-        .split(/[\n,]+/)
-        .map(s => s.replace(/^\d+\.\s*/, "").trim())
-        .filter(p => p);
-
+      let phrasesArray = answer.split(/[\n,]+/).map(s => s.replace(/^\d+\.\s*/, "").trim()).filter(p => p);
       return phrasesArray;
     }
-
     async function generateTagPhrases() {
       let question = document.getElementById("listingDescInput").value.trim();
       if (!question) {
@@ -1345,12 +1319,8 @@ Generate exactly 13 SEO key phrases (each ≤ 20 characters). Return as plain te
         return;
       }
       let keywordRules = stripMarkdownJSON(document.getElementById("keywordRulesTextarea").value);
-
       try {
-        // Step 1: get all 13 phrases in a single pass
         let phrasesArray = await getInitialPhrases(question, keywordRules);
-
-        // Step 2: if any exceed 20 chars, re-generate individually
         for (let i = 0; i < phrasesArray.length; i++) {
           if (phrasesArray[i].length > 20) {
             let otherValid = phrasesArray.filter((_, idx) => idx !== i && phrasesArray[idx].length <= 20);
@@ -1358,33 +1328,25 @@ Generate exactly 13 SEO key phrases (each ≤ 20 characters). Return as plain te
             phrasesArray[i] = newPhrase;
           }
         }
-
-        // final check
         if (phrasesArray.some(p => p.length > 20)) {
           throw new Error("Could not fix some phrases under 20 chars. Please try again.");
         }
-
         document.getElementById("searchKeyPhrases").value = phrasesArray.join("\n");
         M.toast({ html: "Tag Phrases generated successfully!" });
-
       } catch (err) {
         console.error(err);
         M.toast({ html: "Error generating valid tag phrases: " + err.message });
       }
     }
-
     document.getElementById("listingDescInput").addEventListener("keydown", async (e) => {
       if (e.key === "Enter" && !e.shiftKey) {
         e.preventDefault();
         await generateTagPhrases();
       }
     });
-
-    // -------------- Title & Description Gen --------------
     document.getElementById("generateBtn").addEventListener("click", async () => {
       await Promise.all([generateTitleOnly(), generateDescriptionOnly()]);
     });
-    
     async function generateTitleOnly() {
       let etsyLink = ETSY_SHOP_URL;
       let keyPhrases = document.getElementById("searchKeyPhrases").value.trim();
@@ -1462,8 +1424,6 @@ Important: Return ONLY the description as plain text.`;
         document.getElementById("listingDescription").value = "Error: " + error;
       }
     }
-
-    // Calls OpenAI via your netlify function
     async function callOpenAI(payload) {
       let response = await fetch("/.netlify/functions/openaiProxy", {
         method: "POST",
@@ -1494,8 +1454,6 @@ Important: Return ONLY the description as plain text.`;
       let lines = document.getElementById("searchKeyPhrases").value.split(/\n+/).map(l => l.trim()).filter(l => l !== "");
       navigator.clipboard.writeText(lines.join(", ")).catch(err => console.error("Error copying key phrases:", err));
     });
-
-    // -------------- Configure Buttons Modal --------------
     document.getElementById("configureButtonsBtn").addEventListener("click", () => {
       let configContainer = document.getElementById("buttonConfigContainer");
       configContainer.innerHTML = "";
@@ -1539,12 +1497,8 @@ Important: Return ONLY the description as plain text.`;
           <td><input type="number" id="${id}_left" value="${parseInt(currentLeft)||0}"></td>`;
         let topInput = tr.querySelector(`#${id}_top`);
         let leftInput = tr.querySelector(`#${id}_left`);
-        topInput.addEventListener("input", () => {
-          el.style.top = topInput.value + "px";
-        });
-        leftInput.addEventListener("input", () => {
-          el.style.left = leftInput.value + "px";
-        });
+        topInput.addEventListener("input", () => { el.style.top = topInput.value + "px"; });
+        leftInput.addEventListener("input", () => { el.style.left = leftInput.value + "px"; });
         tbody.appendChild(tr);
       });
       table.appendChild(tbody);
@@ -1579,10 +1533,7 @@ Important: Return ONLY the description as plain text.`;
       let elements = document.querySelectorAll(selectors);
       let positions = {};
       elements.forEach(el => {
-        positions[el.id] = {
-          top: el.style.top || "0px",
-          left: el.style.left || "0px"
-        };
+        positions[el.id] = { top: el.style.top || "0px", left: el.style.left || "0px" };
       });
       localStorage.setItem("buttonPositions", JSON.stringify(positions));
       M.toast({ html: "Button positions saved." });
@@ -1604,151 +1555,6 @@ Important: Return ONLY the description as plain text.`;
       let container13 = document.getElementById("container13");
       container13.style.height = (container13.offsetHeight * 2.5) + "px";
     });
-
-    // -------------- Crop Modal --------------
-    function openCropModal(index) {
-      currentCropIndex = index;
-      let cropModal = document.getElementById("photoCropModal");
-      let cropImage = document.getElementById("cropImage");
-      cropImage.src = previewImages[index];
-      cropImage.onload = function() {
-        cropper = new Cropper(cropImage, {
-          viewMode: 1,
-          autoCropArea: 1,
-          movable: true,
-          zoomable: true,
-          scalable: false,
-          rotatable: false,
-          responsive: true,
-          background: false,
-          modal: true,
-          guides: true,
-          center: true,
-          highlight: true,
-          cropBoxMovable: true,
-          cropBoxResizable: true,
-          dragMode: 'move',
-          ready: function() {
-            let containerData = cropper.getContainerData();
-            let cropBoxData = cropper.getCropBoxData();
-            cropper.setCropBoxData({
-              left: (containerData.width - cropBoxData.width) / 2,
-              top: (containerData.height - cropBoxData.height) / 2
-            });
-          }
-        });
-      };
-      let instance = M.Modal.getInstance(cropModal) || M.Modal.init(cropModal, {});
-      instance.open();
-    }
-    document.getElementById("saveCropBtn").addEventListener("click", () => {
-      if (cropper && currentCropIndex !== null) {
-        let croppedCanvas = cropper.getCroppedCanvas({ width: 3000, height: 3000 });
-        previewImages[currentCropIndex] = croppedCanvas.toDataURL("image/jpeg", 0.85);
-        updateStaticPreviewGrid();
-        cropper.destroy();
-        cropper = null;
-        currentCropIndex = null;
-        M.Modal.getInstance(document.getElementById("photoCropModal")).close();
-      }
-    });
-    document.getElementById("cancelCropBtn").addEventListener("click", () => {
-      if (cropper) {
-        cropper.destroy();
-        cropper = null;
-      }
-      currentCropIndex = null;
-      M.Modal.getInstance(document.getElementById("photoCropModal")).close();
-    });
-
-    async function uploadPhotos() {
-      let listingInput = document.getElementById("shopListings").value.trim();
-      if (!listingInput) {
-        M.toast({ html: "Please provide a listing URL or ID in 'Etsy Shop Listings'." });
-        return;
-      }
-      if (!previewImages.length) {
-        M.toast({ html: "No images to upload. Please drag and drop images first." });
-        return;
-      }
-      let listingId = /^\d+$/.test(listingInput)
-        ? listingInput
-        : (listingInput.match(/\/listing\/(\d+)/) || [])[1];
-      if (!listingId) {
-        M.toast({ html: "Invalid listing URL or ID." });
-        return;
-      }
-      for (let i = 0; i < previewImages.length; i++) {
-        let dataURL = previewImages[i];
-        let altText = photoMeta[i] || "";
-        let rankNumber = i + 1;
-        try {
-          let res = await fetch(dataURL);
-          let blob = await res.blob();
-          let formData = new FormData();
-          formData.append("listingId", listingId);
-          formData.append("token", accessToken);
-          formData.append("fileName", photoNames[i] || `uploaded_photo_${i}.jpg`);
-          formData.append("rank", rankNumber);
-          formData.append("alt_text", altText);
-          formData.append("file", blob, photoNames[i] || `uploaded_photo_${i}.jpg`);
-          let uploadUrl = `/.netlify/functions/imageUpload`;
-          let response = await fetch(uploadUrl, { method: "POST", body: formData });
-          if (!response.ok) {
-            M.toast({ html: `Error uploading photo #${rankNumber}: ` + response.status });
-          } else {
-            M.toast({ html: `Photo #${rankNumber} uploaded with alt_text!` });
-          }
-        } catch (e) {
-          console.error(e);
-          M.toast({ html: `Exception uploading photo #${rankNumber}: ${e.message}` });
-        }
-      }
-    }
-    async function uploadReservedPhotos() {
-      let listingInput = document.getElementById("shopListings").value.trim();
-      if (!listingInput) {
-        M.toast({ html: "Please provide a listing URL or ID in 'Etsy Shop Listings'." });
-        return;
-      }
-      if (!reservedPhotos.length) {
-        M.toast({ html: "No reserved photos to upload." });
-        return;
-      }
-      let listingId = /^\d+$/.test(listingInput)
-        ? listingInput
-        : (listingInput.match(/\/listing\/(\d+)/) || [])[1];
-      if (!listingId) {
-        M.toast({ html: "Invalid listing URL or ID." });
-        return;
-      }
-      for (let i = 0; i < reservedPhotos.length; i++) {
-        let dataURL = reservedPhotos[i].src;
-        let altText = reservedPhotos[i].meta || "";
-        let rankNumber = i + 8;
-        try {
-          let res = await fetch(dataURL);
-          let blob = await res.blob();
-          let formData = new FormData();
-          formData.append("listingId", listingId);
-          formData.append("token", accessToken);
-          formData.append("fileName", reservedPhotos[i].name || `reserved_photo_${i}.jpg`);
-          formData.append("rank", rankNumber);
-          formData.append("alt_text", altText);
-          formData.append("file", blob, reservedPhotos[i].name || `reserved_photo_${i}.jpg`);
-          let uploadUrl = `/.netlify/functions/imageUpload`;
-          let response = await fetch(uploadUrl, { method: "POST", body: formData });
-          if (!response.ok) {
-            M.toast({ html: `Error uploading reserved photo #${rankNumber}: ` + response.status });
-          } else {
-            M.toast({ html: `Reserved photo #${rankNumber} uploaded successfully!` });
-          }
-        } catch (e) {
-          console.error(e);
-          M.toast({ html: `Exception uploading reserved photo #${rankNumber}: ${e.message}` });
-        }
-      }
-    }
   </script>
 </body>
 </html>
