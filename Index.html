@@ -72,7 +72,6 @@
     
     /* Drag and Drop Box: "Image Drop" */
     #dropZone {
-      /* Set width to match the photo grid width: 5*120 + 4*28 = 712px */
       width: 712px; height: 120px; border: 2px dashed #ccc;
       border-radius: 3px; display: inline-block; vertical-align: middle;
       text-align: center; line-height: 120px; position: relative;
@@ -86,10 +85,8 @@
       width: 225px; height: 125px; resize: none; box-sizing: border-box;
       border: 1px solid grey; margin-left: 85px; position: relative;
       font-size: 0.875rem;
-      /* Lower the z-index so modals appear above it */
       z-index: 10;
     }
-    /* Ensure modals appear above everything else */
     .modal {
       z-index: 9999 !important;
     }
@@ -97,15 +94,14 @@
       z-index: 9998 !important;
     }
     
-    /* Static 10-Photo Preview Grid - increased by 20% */
-    /* Increase z-index to ensure it's above neighboring containers */
+    /* Static 10-Photo Preview Grid */
     #previewGridContainer {
       position: relative; 
       margin: 20px auto; 
       width: auto;
       max-width: 720px; 
       text-align: center;
-      z-index: 2000; /* raised so it can catch drag events */
+      z-index: 2000;
     }
     #previewGridStatic {
       display: grid; 
@@ -127,9 +123,8 @@
       font-size: 12px; 
       color: #666;
     }
-    /* Mark the last three cells as "reserved" with higher z-index */
     .preview-cell.reserved {
-      z-index: 2500; /* ensures these are on top */
+      z-index: 2500; 
     }
     .preview-box { position: relative; width: 100%; height: 100%; }
     .preview-box img {
@@ -147,34 +142,24 @@
       align-items: center; justify-content: center; font-size: 10px;
       z-index: 999; border-radius: 3px;
     }
-    /* Metadata status styles */
     .metadata-status { margin-top: 5px; text-align: center; font-size: 14px; min-height: 20px; }
     .metadata-progress { width: 90%; }
     
-    /* Container #13 */
     #container13 { position: relative; width: 250px; top: -150px; }
-    
-    /* Components below search key phrases */
     #belowSearch { margin-top: -180px; margin-left: 10px; }
     
-    /* Etsy Listing TITLE container */
     .title-container { margin-top: -50px; }
     #etsyListingTitleContainer { position: relative; width: 1000px; }
     #etsyListingTitleContainer textarea { width: 1000px; }
     
-    /* Etsy Listing DESCRIPTION container */
     .description-container { margin-top: 0px; }
     #etsyListingDescriptionContainer { position: relative; width: 1000px; }
     #etsyListingDescriptionContainer textarea { width: 1000px; }
     
-    /* New container for "Search Key Phrases" */
     #userProvidedKeyPhrasesContainer { position: relative; top: 125px; left: 10px; }
     
-    /* Top buttons section */
     #topButtons { margin: 10px 0; }
     #etsyShopListingsContainer { position: relative; margin-top: 10px; margin-left: 10px; }
-    
-    /* A small 25×25 box for queue count */
     #listingQueueCount {
       width: 25px; 
       height: 25px; 
@@ -185,15 +170,9 @@
       font-weight: bold;
       margin-left: 5px; 
     }
-    
-    /* Button Styles */
     .regen-btn, .copy-btn { width: 125px; }
     .update-btn { background-color: #FFA500 !important; color: white !important; }
-
-    /* NEW: Highlight drop target */
-    .drag-over {
-      border: 2px dashed #2196f3 !important;
-    }
+    .drag-over { border: 2px dashed #2196f3 !important; }
   </style>
 </head>
 <body>
@@ -208,7 +187,6 @@
       <h5>Listing Description</h5>
       <input id="listingDescInput" type="text" placeholder="Enter your question here">
     </div>
-    <!-- Use uploadedFilesList area for file drop -->
     <textarea id="uploadedFilesList" class="materialize-textarea" rows="2" placeholder="Uploaded .csv, .doc, .docx files will appear here"></textarea>
   </div>
   
@@ -217,17 +195,13 @@
     <button id="connectEtsyBtn" class="btn waves-effect waves-light configurable">
       Connect to Etsy
     </button>
-    <!-- Update Photos button -->
     <button id="photoUploadNewBtn" class="btn waves-effect waves-light configurable update-btn" style="margin-left: 10px;">
       Update Photos
     </button>
-    <!-- Update Info button -->
     <button id="uploadToEtsyBtn" class="btn waves-effect waves-light configurable update-btn" style="margin-left: 10px;">
       Update Info
     </button>
-    <!-- Etsy Shop Listings container -->
     <div id="etsyShopListingsContainer">
-      <!-- Title + queue count box -->
       <div class="section-heading configurable">
         Etsy Shop Listings
         <span id="listingQueueCount">0</span>
@@ -249,7 +223,6 @@
       Copy
     </button>
     <div id="dropZone" class="configurable">Image Drop</div>
-    <!-- Analyze Photos and Analyze Rules buttons -->
     <button id="analyzeMetadataBtn" class="btn waves-effect waves-light configurable">
       Analyze Photos
     </button>
@@ -263,12 +236,10 @@
     </div>
   </div>
   
-  <!-- Components below Search Key Phrases -->
   <div id="belowSearch">
     <button id="generateBtn" class="btn waves-effect waves-light configurable">
       Generate
     </button>
-    <!-- Etsy Listing TITLE container -->
     <div class="title-container" id="etsyListingTitleContainer" style="margin-top: -50px;">
       <div class="section-heading configurable">Etsy Listing TITLE</div>
       <div class="flex-container configurable">
@@ -283,7 +254,6 @@
             <i class="material-icons">content_copy</i>
           </button>
         </div>
-        <!-- Hide the Title Rules button -->
         <button id="showTitleRulesBtn" class="btn waves-effect waves-light rules-button configurable" data-target="titleRulesModal" style="display:none;">
           Title Rules
         </button>
@@ -291,7 +261,6 @@
       <p id="titleCount" class="count-text configurable">Count: 0</p>
     </div>
     
-    <!-- Etsy Listing DESCRIPTION container -->
     <div class="description-container" id="etsyListingDescriptionContainer" style="margin-top: 0px;">
       <div class="section-heading configurable">Etsy Listing DESCRIPTION</div>
       <div class="flex-container configurable">
@@ -306,7 +275,6 @@
             <i class="material-icons">content_copy</i>
           </button>
         </div>
-        <!-- Hide the Description Rules button -->
         <button id="showDescriptionRulesBtn" class="btn waves-effect waves-light rules-button configurable" data-target="descriptionRulesModal" style="display:none;">
           Description Rules
         </button>
@@ -314,7 +282,6 @@
     </div>
   </div>
   
-  <!-- Static 10-Photo Preview Grid Container (increased by 20%) -->
   <div id="previewGridContainer">
     <div id="previewGridStatic">
       <div class="preview-cell" id="previewCell0">Empty</div>
@@ -324,7 +291,6 @@
       <div class="preview-cell" id="previewCell4">Empty</div>
       <div class="preview-cell" id="previewCell5">Empty</div>
       <div class="preview-cell" id="previewCell6">Empty</div>
-      <!-- Last 3 reserved cells have "reserved" class so they stay on top -->
       <div class="preview-cell reserved" id="previewCell7">Empty</div>
       <div class="preview-cell reserved" id="previewCell8">Empty</div>
       <div class="preview-cell reserved" id="previewCell9">Empty</div>
@@ -496,8 +462,27 @@ Using Sales Report and Product List Files:
     function stripMarkdownJSON(text) {
       return text;
     }
-    
-    // GLOBALS & MAIN LOGIC
+
+    /*
+      NEW: Helper to embed alt text into JPEG EXIF using piexifjs.
+      We'll store the generated text in the "ImageDescription" field (in the 0th IFD).
+      This physically modifies the base64-encoded JPEG so it carries the alt text.
+    */
+    function embedAltTextInDataURL(originalDataURL, altText) {
+      // Load existing EXIF data
+      let exifObj = piexif.load(originalDataURL);
+
+      // Set the ImageDescription tag (common place for alt text)
+      exifObj["0th"][piexif.ImageIFD.ImageDescription] = altText;
+
+      // Convert updated EXIF data to binary
+      let exifBytes = piexif.dump(exifObj);
+
+      // Insert into the original base64 JPEG
+      let newDataURL = piexif.insert(exifBytes, originalDataURL);
+      return newDataURL;
+    }
+
     const ETSY_SHOP_URL = "https://www.etsy.com/shop/custombrites";
     const CLIENT_ID = "k75zdspz4r99txpqdji7i2em";
     const REDIRECT_URI = "https://delicate-tanuki-616ac0.netlify.app/";
@@ -506,22 +491,17 @@ Using Sales Report and Product List Files:
     let soldOrdersCSV = [];
     let listingsCSV = [];
     let photoNames = [];
-    let previewImages = []; // data URLs for display
-    let photoMeta = [];     // AI-generated metadata
+    let previewImages = [];
+    let photoMeta = [];
     let draggedIndex = null;
     let photoIds = [];
     let currentCropIndex = null;
     let cropper = null;
     let reservedPhotos = [];
-    
-    // We'll store up to 250 10-digit listing IDs in a queue
     let listingQueue = [];
-
-    // Track when photos & info updates are done for the "current" listing
     let photoUpdateComplete = false;
     let infoUpdateComplete = false;
 
-    // Hard-coded text to append to every generated description before sending to Etsy
     const appendedDescriptionText = `
 
 • We use the Highest Quality materials from the US and Italy.
@@ -600,29 +580,18 @@ Check out our shop polices page for more details about all our polices and pleas
 https://www.etsy.com/shop/CustomBrites/policy
 `;
 
-    /* 
-      NEW: Function to persist data to localStorage before redirecting to Etsy OAuth
-    */
     function persistDataBeforeRedirect() {
       try {
         localStorage.setItem("soldOrdersCSV", JSON.stringify(soldOrdersCSV));
         localStorage.setItem("listingsCSV", JSON.stringify(listingsCSV));
-        
-        // Also store the user-typed text in "Etsy Shop Listings"
         const listingsInputValue = document.getElementById("shopListings").value || "";
         localStorage.setItem("shopListingsText", listingsInputValue);
-        
-        // Save the queue itself
         localStorage.setItem("listingQueue", JSON.stringify(listingQueue));
-        
       } catch (err) {
         console.error("Error persisting data before redirect:", err);
       }
     }
 
-    /* 
-      NEW: Function to restore data from localStorage after returning from OAuth
-    */
     function restoreDataAfterRedirect() {
       try {
         let soCSV = localStorage.getItem("soldOrdersCSV");
@@ -644,22 +613,19 @@ https://www.etsy.com/shop/CustomBrites/policy
         if (storedQueue) {
           listingQueue = JSON.parse(storedQueue);
         }
-        // re-parse the shopListings text in case user typed new IDs previously
         loadNextListingInQueue();
       } catch (err) {
         console.error("Error restoring data after redirect:", err);
       }
     }
     
-    // -------------- Utility & Queue Helpers -------------------
-
     function parseListingNumbers(rawInput) {
       let parts = rawInput.split(",");
       let cleaned = parts
         .map(p => p.trim())
-        .filter(p => /^\d{10}$/.test(p)); // only keep valid 10-digit
-      let unique = Array.from(new Set(cleaned)); // remove duplicates
-      let finalList = unique.slice(0, 250); // limit to 250
+        .filter(p => /^\d{10}$/.test(p));
+      let unique = Array.from(new Set(cleaned));
+      let finalList = unique.slice(0, 250);
       return finalList;
     }
     function updateListingQueueCount() {
@@ -677,7 +643,6 @@ https://www.etsy.com/shop/CustomBrites/policy
       updateListingQueueCount();
     }
     function afterBothUpdates() {
-      // Shift the queue & load next listing
       listingQueue.shift();
       loadNextListingInQueue();
     }
@@ -686,8 +651,6 @@ https://www.etsy.com/shop/CustomBrites/policy
         afterBothUpdates();
       }
     }
-
-    // -------------- Page Initialization & File Handling --------------
 
     function updateUploadedFilesList() {
       const uploadedFilesListElem = document.getElementById('uploadedFilesList');
@@ -718,6 +681,7 @@ https://www.etsy.com/shop/CustomBrites/policy
         img.src = dataURL;
       });
     }
+
     async function uploadCSVFile(file) {
       return new Promise((resolve, reject) => {
         const reader = new FileReader();
@@ -743,6 +707,7 @@ https://www.etsy.com/shop/CustomBrites/policy
         reader.readAsDataURL(file);
       });
     }
+
     async function uploadDocFile(file) {
       return new Promise((resolve, reject) => {
         const reader = new FileReader();
@@ -768,6 +733,7 @@ https://www.etsy.com/shop/CustomBrites/policy
         reader.readAsDataURL(file);
       });
     }
+
     async function updateVectorStore() {
       const allFileIds = [...soldOrdersCSV, ...listingsCSV].map(file => file.id);
       if (!allFileIds.length) return console.log("No supported files uploaded yet.");
@@ -780,13 +746,11 @@ https://www.etsy.com/shop/CustomBrites/policy
         });
         if (!response.ok) throw new Error("Error creating vector store");
         
-        // Grab the JSON response so we can retrieve store_id
         const data = await response.json();
         console.log("Vector store created/updated:", data);
         
-        // If the creation was successful, store the returned store_id locally
         if (data && data.id) {
-          localStorage.setItem("vectorStoreId", data.id); // <--- SAVE store_id
+          localStorage.setItem("vectorStoreId", data.id);
           console.log("Saved store_id in localStorage:", data.id);
         }
       } catch (err) {
@@ -820,6 +784,7 @@ https://www.etsy.com/shop/CustomBrites/policy
         }
       }
     });
+
     const dropZone = document.getElementById("dropZone");
     dropZone.addEventListener("dragover", e => {
       e.preventDefault();
@@ -857,7 +822,6 @@ https://www.etsy.com/shop/CustomBrites/policy
       }
     });
 
-    // ------------------ Photo Preview Logic ------------------
     function updateStaticPreviewGrid() {
       for (let i = 0; i < 10; i++) {
         let cell = document.getElementById("previewCell" + i);
@@ -873,9 +837,7 @@ https://www.etsy.com/shop/CustomBrites/policy
             previewBox.addEventListener("dragstart", e => { draggedIndex = i; });
             
             let img = document.createElement("img");
-            if (previewImages[i]) {
-              img.src = previewImages[i];
-            }
+            img.src = previewImages[i];
             previewBox.appendChild(img);
             
             let removeBtn = document.createElement("div");
@@ -1109,6 +1071,7 @@ https://www.etsy.com/shop/CustomBrites/policy
         loadNextListingInQueue();
       });
     });
+
     async function exchangeCodeForToken(code) {
       let codeVerifier = localStorage.getItem("etsy_code_verifier");
       if (!codeVerifier) {
@@ -1192,7 +1155,6 @@ https://www.etsy.com/shop/CustomBrites/policy
       }
     });
 
-    // -------------- New: Analyze Photos Functionality --------------
     function dataURLtoBlob(dataurl) {
       const arr = dataurl.split(',');
       const mime = arr[0].match(/:(.*?);/)[1];
@@ -1205,6 +1167,10 @@ https://www.etsy.com/shop/CustomBrites/policy
       return new Blob([u8arr], { type: mime });
     }
 
+    /*
+      UPDATED: We embed the GPT metadata in EXIF, so the file physically
+      carries the text in the ImageDescription field.
+    */
     document.getElementById("analyzeMetadataBtn").addEventListener("click", async () => {
       if (!previewImages.length) {
         M.toast({ html: "No images available to analyze." });
@@ -1227,6 +1193,16 @@ https://www.etsy.com/shop/CustomBrites/policy
         }
         const result = await response.json();
         const metadata = result.metadata || "No metadata returned.";
+
+        // Embed the alt text in the first photo's EXIF
+        let updatedDataURL = embedAltTextInDataURL(previewImages[0], metadata);
+        // Replace the original data URL with the new one that has EXIF
+        previewImages[0] = updatedDataURL;
+
+        // Also store the text in the photoMeta array if we want to pass it to Etsy as well
+        photoMeta[0] = metadata;
+
+        // Show the user in a modal (optional)
         document.getElementById("metadataTextarea").value = metadata;
         const metadataModalElem = document.getElementById("metadataModal");
         let metadataModalInstance = M.Modal.getInstance(metadataModalElem);
@@ -1234,13 +1210,14 @@ https://www.etsy.com/shop/CustomBrites/policy
           metadataModalInstance = M.Modal.init(metadataModalElem);
         }
         metadataModalInstance.open();
+
+        M.toast({ html: "Alt text embedded into photo #1 EXIF!" });
       } catch (error) {
         console.error("Error in analyze photo:", error);
         M.toast({ html: "Exception: " + error.message });
       }
     });
 
-    // -------------- Generate Key Phrases Using CSV Context --------------
     async function regenerateSinglePhrase(question, keywordRules, currentValid, maxAttempts = 5) {
       for (let attempt = 1; attempt <= maxAttempts; attempt++) {
         let store_id = localStorage.getItem("vectorStoreId");
@@ -1432,6 +1409,7 @@ Important: Return ONLY the title as plain text.`;
         document.getElementById("listingTitle").value = "Error: " + error;
       }
     }
+
     async function generateDescriptionOnly() {
       let etsyLink = ETSY_SHOP_URL;
       let keyPhrases = document.getElementById("searchKeyPhrases").value.trim();
@@ -1470,6 +1448,7 @@ Important: Return ONLY the description as plain text.`;
         document.getElementById("listingDescription").value = "Error: " + error;
       }
     }
+
     async function callOpenAI(payload) {
       let response = await fetch("/.netlify/functions/openaiProxy", {
         method: "POST",
@@ -1482,6 +1461,7 @@ Important: Return ONLY the description as plain text.`;
       }
       return await response.json();
     }
+
     function updateTitleCount(text) {
       document.getElementById("titleCount").textContent = "Count: " + text.length;
     }
@@ -1558,6 +1538,7 @@ Important: Return ONLY the description as plain text.`;
       let modalInstance = M.Modal.getInstance(modalElem) || M.Modal.init(modalElem, { preventScrolling: false });
       modalInstance.open();
     });
+
     document.getElementById("saveButtonPositionsBtn").addEventListener("click", () => {
       const selectors = [
         "#configureButtonsBtn",
@@ -1592,6 +1573,7 @@ Important: Return ONLY the description as plain text.`;
       localStorage.setItem("buttonPositions", JSON.stringify(positions));
       M.toast({ html: "Button positions saved." });
     });
+
     function loadButtonPositions() {
       let stored = localStorage.getItem("buttonPositions");
       if (stored) {
@@ -1605,6 +1587,7 @@ Important: Return ONLY the description as plain text.`;
         }
       }
     }
+
     window.addEventListener("load", () => {
       let container13 = document.getElementById("container13");
       container13.style.height = (container13.offsetHeight * 2.5) + "px";
@@ -1645,6 +1628,7 @@ Important: Return ONLY the description as plain text.`;
       let instance = M.Modal.getInstance(cropModal) || M.Modal.init(cropModal, {});
       instance.open();
     }
+
     document.getElementById("saveCropBtn").addEventListener("click", () => {
       if (cropper && currentCropIndex !== null) {
         let croppedCanvas = cropper.getCroppedCanvas({ width: 3000, height: 3000 });
@@ -1656,6 +1640,7 @@ Important: Return ONLY the description as plain text.`;
         M.Modal.getInstance(document.getElementById("photoCropModal")).close();
       }
     });
+
     document.getElementById("cancelCropBtn").addEventListener("click", () => {
       if (cropper) {
         cropper.destroy();
