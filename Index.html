@@ -5,26 +5,20 @@
   <title>Etsy Listing Generator & Shop Listings</title>
   <!-- Favicon -->
   <link rel="icon" type="image/png" href="assets/favicon.png">
-  <!-- Material Icons & Materialize CSS -->
+  <!-- Import Google Material Icons and Materialize CSS -->
   <link href="https://fonts.googleapis.com/icon?family=Material+Icons" rel="stylesheet">
-  <link rel="stylesheet" 
-        href="https://cdnjs.cloudflare.com/ajax/libs/materialize/1.0.0/css/materialize.min.css">
-
-  <!-- Optional Piexifjs -->
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/materialize/1.0.0/css/materialize.min.css">
+  <!-- Include piexifjs for EXIF manipulation (optional, if needed) -->
   <script src="https://cdn.jsdelivr.net/npm/piexifjs@1.0.4/piexif.min.js"></script>
-
-  <!-- SortableJS -->
+  <!-- ADDED LINE FOR SORTABLEJS: -->
   <script src="https://cdn.jsdelivr.net/npm/sortablejs@1.14.0/Sortable.min.js"></script>
-
-  <!-- Cropper.js -->
-  <link rel="stylesheet" 
-        href="https://cdnjs.cloudflare.com/ajax/libs/cropperjs/1.5.13/cropper.min.css" />
+  <!-- ADDED LINES FOR CROPPER.JS: -->
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/cropperjs/1.5.13/cropper.min.css" />
   <script src="https://cdnjs.cloudflare.com/ajax/libs/cropperjs/1.5.13/cropper.min.js"></script>
-
   <style>
     /* Basic layout */
     html, body {
-      margin: 0; padding: 0; width: 100%; 
+      margin: 0; padding: 0; width: 100vw;
       font-family: Arial, sans-serif;
     }
     .container {
@@ -33,100 +27,134 @@
     }
     h5, label, p { text-align: left; }
     input, textarea { width: 100%; box-sizing: border-box; }
-
-    /* Listing Description + CSV Upload side by side */
+    
+    /* Wrap Listing Description and File Drop Zones */
     #descriptionAndFileUploadContainer {
-      display: flex; 
-      align-items: center;
+      display: flex; align-items: center;
     }
     .listing-desc-container {
-      position: relative; 
-      display: inline-block; 
-      width: 500px;
+      position: relative; display: inline-block; width: 500px;
     }
     .listing-desc-container h5 {
-      margin: 0 0 10px 0; 
-      font-size: 1.2rem; 
-      font-weight: 500;
+      margin: 0 0 10px 0; font-size: 1.2rem; font-weight: 500;
     }
-    #listingDescInput {
-      width: 500px; 
-      height: 30px; 
-      border: 1px solid #000; 
-      padding: 5px;
+    .listing-desc-container label.section-heading {
+      font-size: 1.2rem; font-weight: 500;
     }
+    .listing-desc-container input {
+      width: 500px; height: 30px; border: 1px solid #000; padding: 5px;
+    }
+    
+    /* "User Provided Search Key Phrases" textarea */
+    #searchKeyPhrases {
+      resize: none; box-sizing: border-box; border: 1px solid grey;
+    }
+    #searchKeyPhrases[rows="14"] { height: auto; }
+    
+    .flex-container { display: flex; gap: 10px; align-items: stretch; }
+    .textbox-container { flex: 1; }
+    .textbox-container textarea {
+      width: 100%; padding: 0.8rem; font-size: 1rem; line-height: 1.2;
+      resize: none; overflow: visible; box-sizing: border-box;
+    }
+    .button-container {
+      width: 200px; display: flex; flex-direction: column; gap: 10px;
+      align-self: flex-start;
+    }
+    #listingTitle { min-height: 45px; }
+    #listingDescInput { width: 500px; height: 30px; border: 1px solid #000; padding: 5px; }
+    #listingDescription { min-height: 150px; width: 500px; }
+    .section-heading {
+      font-size: 1.2rem; font-weight: 500; margin-bottom: 5px;
+      display: inline-block;
+    }
+    .count-text { font-style: italic; font-size: 0.9em; margin-top: 5px; }
+    
+    /* Drag and Drop Box: "Image Drop" */
+    #dropZone {
+      /* Set width to match the photo grid width: 5*120 + 4*28 = 712px */
+      width: 712px; height: 120px; border: 2px dashed #ccc;
+      border-radius: 3px; display: inline-block; vertical-align: middle;
+      text-align: center; line-height: 120px; position: relative;
+    }
+    
+    /* Remove the separate drop zones for Etsy Orders/Listings */
+    #fileDropZonesContainer { display: none; }
+    
+    /* Make uploadedFilesList repositionable and used for file drop */
     #uploadedFilesList {
-      width: 225px; 
-      height: 125px; 
-      resize: none; 
-      box-sizing: border-box;
-      border: 1px solid grey; 
-      margin-left: 85px; 
-      position: relative;
+      width: 225px; height: 125px; resize: none; box-sizing: border-box;
+      border: 1px solid grey; margin-left: 85px; position: relative;
       font-size: 0.875rem;
+      /* Lower the z-index so modals appear above it */
       z-index: 10;
     }
-
-    /* Key Phrases + big dropZone */
-    #userProvidedKeyPhrasesContainer {
-      position: relative; 
-      left: 10px;
+    /* Ensure modals appear above everything else */
+    .modal {
+      z-index: 9999 !important;
     }
-    #dropZone {
-      width: 712px; 
-      height: 120px; 
-      border: 2px dashed #ccc;
-      border-radius: 3px; 
-      display: inline-block; 
-      vertical-align: middle;
-      text-align: center; 
-      line-height: 120px; 
-      position: relative;
+    .modal-overlay {
+      z-index: 9998 !important;
     }
-
-    /* The "Search Key Phrases" textarea container (#container13) */
-    #container13 { 
-      position: relative; 
-      width: 250px; 
-      top: 0px; /* no negative offset */
+    
+    /* Static 10-Photo Preview Grid - increased by 20% */
+    #previewGridContainer {
+      position: relative; margin: 20px auto; width: auto;
+      max-width: 720px; text-align: center;
     }
-    #searchKeyPhrases {
-      resize: none; 
-      box-sizing: border-box; 
-      border: 1px solid grey;
+    #previewGridStatic {
+      display: grid; grid-template-columns: repeat(5, 120px);
+      grid-column-gap: 28px; grid-row-gap: 22px; margin: 0 auto;
     }
-
-    /* The big "Below Search" area where Title & Description are */
-    #belowSearch {
-      margin-top: 0px; /* no negative offset so it doesn't overlap the grid */
-      margin-left: 10px; 
-      position: relative; 
-      z-index: 1;
+    .preview-cell {
+      position: relative; width: 120px; height: 158px; border: 2px solid #ccc;
+      border-radius: 3px; display: flex; flex-direction: column;
+      align-items: center; justify-content: center; font-size: 12px; color: #666;
     }
-
-    /* Title & Description containers */
-    .title-container { 
-      margin-top: -50px; 
+    .preview-box { position: relative; width: 100%; height: 100%; }
+    .preview-box img {
+      width: 120px; height: 120px; object-fit: cover;
+      border-radius: 3px; display: block;
     }
-    #etsyListingTitleContainer, 
-    #etsyListingDescriptionContainer {
-      position: relative; 
-      width: 1000px;
+    .remove-btn {
+      position: absolute; top: -5px; left: -5px; width: 15px; height: 15px;
+      background-color: black; color: white; font-size: 10px;
+      text-align: center; cursor: pointer; z-index: 999; border-radius: 50%;
     }
-    #listingTitle, 
-    #listingDescription {
-      width: 1000px;
+    .number-overlay {
+      position: absolute; top: 0; right: 0; width: 16px; height: 16px;
+      background-color: rgba(0,0,0,0.7); color: white; display: flex;
+      align-items: center; justify-content: center; font-size: 10px;
+      z-index: 999; border-radius: 3px;
     }
-
-    /* Top Buttons & Etsy Shop Listings */
-    #topButtons { 
-      margin: 10px 0; 
-    }
-    #etsyShopListingsContainer { 
-      position: relative; 
-      margin-top: 10px; 
-      margin-left: 10px; 
-    }
+    /* Metadata status styles */
+    .metadata-status { margin-top: 5px; text-align: center; font-size: 14px; min-height: 20px; }
+    .metadata-progress { width: 90%; }
+    
+    /* Container #13 */
+    #container13 { position: relative; width: 250px; top: -150px; }
+    
+    /* Components below search key phrases */
+    #belowSearch { margin-top: -180px; margin-left: 10px; }
+    
+    /* Etsy Listing TITLE container */
+    .title-container { margin-top: -50px; }
+    #etsyListingTitleContainer { position: relative; width: 1000px; }
+    #etsyListingTitleContainer textarea { width: 1000px; }
+    
+    /* Etsy Listing DESCRIPTION container */
+    .description-container { margin-top: 0px; }
+    #etsyListingDescriptionContainer { position: relative; width: 1000px; }
+    #etsyListingDescriptionContainer textarea { width: 1000px; }
+    
+    /* New container for "Search Key Phrases" */
+    #userProvidedKeyPhrasesContainer { position: relative; top: 125px; left: 10px; }
+    
+    /* Top buttons section */
+    #topButtons { margin: 10px 0; }
+    #etsyShopListingsContainer { position: relative; margin-top: 10px; margin-left: 10px; }
+    
+    /* A small 25×25 box for queue count */
     #listingQueueCount {
       width: 25px; 
       height: 25px; 
@@ -137,160 +165,61 @@
       font-weight: bold;
       margin-left: 5px; 
     }
+    
+    /* Button Styles */
+    .regen-btn, .copy-btn { width: 125px; }
+    .update-btn { background-color: #FFA500 !important; color: white !important; }
 
-    /* 10-Photo Preview Grid */
-    #previewGridContainer {
-      position: relative; 
-      margin: 20px auto; 
-      width: auto; 
-      max-width: 720px; 
-      text-align: center;
-      z-index: 10; /* on top so negative margin won't overlap it */
+    /* NEW: Highlight drop target */
+    .drag-over {
+      border: 2px dashed #2196f3;
     }
-    #previewGridStatic {
-      display: grid; 
-      grid-template-columns: repeat(5, 120px);
-      grid-column-gap: 28px; 
-      grid-row-gap: 22px; 
-      margin: 0 auto;
-    }
-    .preview-cell {
-      position: relative; 
-      width: 120px; 
-      height: 158px; 
-      border: 2px solid #ccc;
-      border-radius: 3px; 
-      display: flex; 
-      flex-direction: column;
-      align-items: center; 
-      justify-content: center; 
-      font-size: 12px; 
-      color: #666;
-      pointer-events: auto; 
-      z-index: 0; 
-    }
-    .preview-box {
-      position: relative; 
-      width: 100%; 
-      height: 100%;
-    }
-    .preview-box img {
-      width: 120px; 
-      height: 120px; 
-      object-fit: cover;
-      border-radius: 3px; 
-      display: block;
-    }
-    .remove-btn {
-      position: absolute; 
-      top: -5px; 
-      left: -5px; 
-      width: 15px; 
-      height: 15px;
-      background-color: black; 
-      color: white; 
-      font-size: 10px; 
-      text-align: center; 
-      cursor: pointer; 
-      z-index: 999; 
-      border-radius: 50%;
-    }
-    .number-overlay {
-      position: absolute; 
-      top: 0; 
-      right: 0; 
-      width: 16px; 
-      height: 16px;
-      background-color: rgba(0,0,0,0.7); 
-      color: white; 
-      display: flex;
-      align-items: center; 
-      justify-content: center; 
-      font-size: 10px;
-      z-index: 999; 
-      border-radius: 3px;
-    }
-    .metadata-status {
-      margin-top: 5px; 
-      text-align: center; 
-      font-size: 14px; 
-      min-height: 20px;
-    }
-    .metadata-progress { 
-      width: 90%; 
-    }
-
-    /* pointer-events: none on child elements, except clickable items */
-    .preview-cell > * {
-      pointer-events: none; 
-    }
-    .preview-cell .remove-btn,
-    .preview-cell button,
-    .preview-box {
-      pointer-events: auto; 
-    }
-
-    /* highlight style for drag over */
-    .preview-cell.drag-over {
-      border: 2px dashed blue !important; 
-      cursor: copy;
-      z-index: 9999;
-    }
-
-    /* Button styling */
-    .regen-btn, .copy-btn { 
-      width: 125px; 
-    }
-    .update-btn { 
-      background-color: #FFA500 !important; 
-      color: white !important; 
-    }
-
-    /* Modals and overlays have high z-indices already from Materialize */
   </style>
 </head>
 <body>
-
-  <!-- Configure Positions Button -->
+  <!-- Configure Buttons control (also available in modal) -->
   <button id="configureButtonsBtn" class="btn waves-effect waves-light configurable">
     Configure Buttons
   </button>
   
-  <!-- Listing Desc + CSV Upload side by side -->
+  <!-- Wrap Listing Description and Uploaded Files List (for file drop) -->
   <div id="descriptionAndFileUploadContainer">
     <div class="listing-desc-container" id="listingDescContainer">
       <h5>Listing Description</h5>
       <input id="listingDescInput" type="text" placeholder="Enter your question here">
     </div>
-    <textarea id="uploadedFilesList" class="materialize-textarea" rows="2"
-              placeholder="Uploaded .csv, .doc, .docx files will appear here"></textarea>
+    <!-- Use uploadedFilesList area for file drop -->
+    <textarea id="uploadedFilesList" class="materialize-textarea" rows="2" placeholder="Uploaded .csv, .doc, .docx files will appear here"></textarea>
   </div>
-
-  <!-- Top Buttons + Etsy Shop Listings -->
+  
+  <!-- Etsy OAuth and Shop Listings Section with Top Buttons -->
   <div id="topButtons">
     <button id="connectEtsyBtn" class="btn waves-effect waves-light configurable">
       Connect to Etsy
     </button>
+    <!-- Update Photos button -->
     <button id="photoUploadNewBtn" class="btn waves-effect waves-light configurable update-btn" style="margin-left: 10px;">
       Update Photos
     </button>
+    <!-- Update Info button -->
     <button id="uploadToEtsyBtn" class="btn waves-effect waves-light configurable update-btn" style="margin-left: 10px;">
       Update Info
     </button>
+    <!-- Etsy Shop Listings container -->
     <div id="etsyShopListingsContainer">
+      <!-- Title + queue count box -->
       <div class="section-heading configurable">
         Etsy Shop Listings
         <span id="listingQueueCount">0</span>
       </div>
       <div class="textbox-container configurable">
         <textarea id="shopListings" class="materialize-textarea" rows="2" 
-                  placeholder="Enter up to 250 comma-separated 10-digit listing IDs" 
-                  style="width:500px;"></textarea>
+          placeholder="Enter up to 250 comma-separated 10-digit listing IDs" style="width:500px;"></textarea>
       </div>
     </div>
   </div>
-
-  <!-- Key Phrases + DropZone + Analyze Buttons -->
+  
+  <!-- Etsy Listing Generator UI -->
   <div class="phrases-header configurable" id="userProvidedKeyPhrasesContainer">
     <span class="section-heading configurable">Search Key Phrases</span>
     <button id="clearKeyPhrasesBtn" class="btn-small waves-effect waves-light configurable">
@@ -300,28 +229,27 @@
       Copy
     </button>
     <div id="dropZone" class="configurable">Image Drop</div>
+    <!-- Analyze Photos and Analyze Rules buttons -->
     <button id="analyzeMetadataBtn" class="btn waves-effect waves-light configurable">
       Analyze Photos
     </button>
-    <button id="showAnalyzeRulesBtn" class="btn waves-effect waves-light configurable" 
-            data-target="analyzeRulesModal" style="margin-top:25px;">
+    <button id="showAnalyzeRulesBtn" class="btn waves-effect waves-light configurable" data-target="analyzeRulesModal" style="margin-top:25px;">
       Analyze Rules
     </button>
   </div>
-
-  <!-- container13 with Key Phrases textarea -->
   <div id="container13" class="flex-container configurable">
     <div class="textbox-container configurable">
       <textarea id="searchKeyPhrases" class="materialize-textarea" rows="14"></textarea>
     </div>
   </div>
-
-  <!-- Below Search: Generate button + Title + Description -->
+  
+  <!-- Components below Search Key Phrases -->
   <div id="belowSearch">
     <button id="generateBtn" class="btn waves-effect waves-light configurable">
       Generate
     </button>
-    <div class="title-container" id="etsyListingTitleContainer">
+    <!-- Etsy Listing TITLE container -->
+    <div class="title-container" id="etsyListingTitleContainer" style="margin-top: -50px;">
       <div class="section-heading configurable">Etsy Listing TITLE</div>
       <div class="flex-container configurable">
         <div class="textbox-container configurable">
@@ -335,15 +263,16 @@
             <i class="material-icons">content_copy</i>
           </button>
         </div>
-        <!-- Hidden Title Rules button -->
-        <button id="showTitleRulesBtn" class="btn waves-effect waves-light rules-button configurable" 
-                data-target="titleRulesModal" style="display:none;">
+        <!-- Hide the Title Rules button -->
+        <button id="showTitleRulesBtn" class="btn waves-effect waves-light rules-button configurable" data-target="titleRulesModal" style="display:none;">
           Title Rules
         </button>
       </div>
       <p id="titleCount" class="count-text configurable">Count: 0</p>
     </div>
-    <div class="description-container" id="etsyListingDescriptionContainer">
+    
+    <!-- Etsy Listing DESCRIPTION container -->
+    <div class="description-container" id="etsyListingDescriptionContainer" style="margin-top: 0px;">
       <div class="section-heading configurable">Etsy Listing DESCRIPTION</div>
       <div class="flex-container configurable">
         <div class="textbox-container configurable">
@@ -357,16 +286,15 @@
             <i class="material-icons">content_copy</i>
           </button>
         </div>
-        <!-- Hidden Description Rules button -->
-        <button id="showDescriptionRulesBtn" class="btn waves-effect waves-light rules-button configurable" 
-                data-target="descriptionRulesModal" style="display:none;">
+        <!-- Hide the Description Rules button -->
+        <button id="showDescriptionRulesBtn" class="btn waves-effect waves-light rules-button configurable" data-target="descriptionRulesModal" style="display:none;">
           Description Rules
         </button>
       </div>
     </div>
   </div>
-
-  <!-- Preview Grid Container with 10 photo cells (z-index:10 so it’s on top) -->
+  
+  <!-- Static 10-Photo Preview Grid Container (increased by 20%) -->
   <div id="previewGridContainer">
     <div id="previewGridStatic">
       <div class="preview-cell" id="previewCell0">Empty</div>
@@ -381,8 +309,8 @@
       <div class="preview-cell" id="previewCell9">Empty</div>
     </div>
   </div>
-
-  <!-- Metadata Modal -->
+  
+  <!-- Metadata Modal (for viewing metadata on click) -->
   <div id="metadataModal" class="modal">
     <div class="modal-content">
       <h4>Photo Metadata</h4>
@@ -394,14 +322,21 @@
       </a>
     </div>
   </div>
-
+  
   <!-- Analyze Rules Modal -->
   <div id="analyzeRulesModal" class="modal">
     <div class="modal-content">
       <h4>Photo Analysis Rules</h4>
       <textarea id="analyzeRulesTextarea" style="width:100%; height:300px;">
 Default Photo Analysis Rules:
-1. Use SEO-friendly descriptive long-tail key phrases ...
+1. Use SEO-friendly descriptive long-tail key phrases without special characters, focus on describing the jewelry and charm pendant, also focus and tailor Key Phrases and description to appropriate client based on the type of jewelry.
+2. Emphasize charm details, focus image description on the type of jewelry and pendant description (what it is, occasion, metal, size, style).
+3. Focus solely on the jewelry details especially the charm description.
+4. Ignore environment, model, and clothing.
+5. Organize into a short paragraph.
+6. Limit the description to 300 characters.
+7. Do not mention earrings unless explicitly identified.
+8. Do not mix necklace and earring descriptions.
       </textarea>
     </div>
     <div class="modal-footer">
@@ -410,14 +345,40 @@ Default Photo Analysis Rules:
       </a>
     </div>
   </div>
-
+  
   <!-- Title Rules Modal -->
   <div id="titleRulesModal" class="modal">
     <div class="modal-content">
       <h4>Title Rules</h4>
       <textarea id="titleRulesTextarea" style="width:100%; height:300px;">
 Title Structure & Formatting:
-...
+- Create 5-7 SEO optimized long-tail key phrases (3-5 words each).
+- The title must begin with the product type (e.g., "Angel Earrings", "Daisy Necklace").
+- Ensure grammatical flow and no punctuation.
+- If the product is a charm/pendant, the first word should describe that type.
+- For necklaces, the second word must be "necklace"; for earrings, "Earring".
+
+Word Usage & Frequency:
+- No word may appear more than three times.
+- "earrings" must be plural and follow a noun.
+- "stud" may only appear in approved phrases and must precede "earrings".
+
+Required Words:
+- "Charm" must appear exactly once.
+
+Use of "For":
+- "for" must appear at least twice in a grammatically correct manner.
+
+Title Length & Word Order:
+- Titles must be between 125 and 140 characters.
+- Adjectives must follow nouns.
+- Avoid plurals for "stud" and "animal"; use plurals for "hoops" and "earrings" correctly.
+
+SEO Optimization:
+- The title’s word order should form at least eight natural SEO phrases.
+
+Prohibited Words:
+- Exclude: "accessories", "unique", "simple", "minimalist", "whimsical", "cute", "filled", "gold filled", "silver", "solid gold", "gold vermeil", "rosegold", "14k", "handmade", "quirky", "delicate", "accessory", "for", "dangle", "gold plated", "jewelry", "custom", "celestial", "design", "lightweight".
       </textarea>
     </div>
     <div class="modal-footer">
@@ -426,14 +387,25 @@ Title Structure & Formatting:
       </a>
     </div>
   </div>
-
+  
   <!-- Description Rules Modal -->
   <div id="descriptionRulesModal" class="modal">
     <div class="modal-content">
       <h4>Description Rules</h4>
       <textarea id="descriptionRulesTextarea" style="width:100%; height:300px;">
 Rules for Description:
-...
+- Merge the key phrases with your output.
+- Modify the description to match the jewelry type.
+- Keep the output paragraph to 80 words.
+
+Option 1:
+"This stunning gold Playing Card Charm is the perfect gift for her, featuring an intricately designed Ace of Spades charm. Ideal for jewelry lovers, this pendant is perfect for personalized pieces."
+
+Option 2:
+"This playful Allosaurus charm is the perfect add-on for charm necklaces or huggie hoops. It adds a whimsical touch to any collection, making it a delightful gift."
+
+Option 3:
+"This charming gold Alligator Necklace is a delightful gift for animal lovers. Featuring a beautifully designed crocodile pendant, it adds a unique touch to any collection."
       </textarea>
     </div>
     <div class="modal-footer">
@@ -442,14 +414,21 @@ Rules for Description:
       </a>
     </div>
   </div>
-
+  
   <!-- Keyword Rules Modal -->
   <div id="keywordRulesModal" class="modal">
     <div class="modal-content">
       <h4>Keyword Rules</h4>
       <textarea id="keywordRulesTextarea" style="width:100%; height:300px;">
 Using Sales Report and Product List Files:
-...
+- Extrapolate the best tag phrases based on performance.
+- Focus on key terms like "Necklace", "Earrings", "Studs", "Hoops".
+- Emphasize sales success; higher performing listings have more valuable keywords.
+- Generate exactly 13 tag phrases, each ≤ 20 characters.
+- Include "Gift for Her".
+- "Charm" must appear at least once in a multi-word phrase (max 4 times total).
+- "Necklace" appears no more than 3 times, "Gift" no more than 3 times, "Lover" no more than 2 times.
+- Exclude: "Gift for Him", "Statement Piece", "Unique", "Spiritual Gift", "Outdoor Style", "accessories", "simple", "minimalist", "whimsical", "cute", "filled", "gold filled", "silver", "solid gold", "gold vermeil", "rosegold", "14k", "handmade", "quirky", "delicate", "accessory", "for", "dangle", "gold plated", "jewelry", "custom", "celestial", "design", "lightweight", "Fine Chain Necklace", "Small", "Large", "Nice", "Long", "Dark", "Short", "and", "but", "light", "heavy", "Wanderlust", "Theme", "Minimal Chain Gift", "Tiny Pendant Chain", "Charm Look", "Charm Wear", "Chain Necklace", "Small Pendant Chain", "Everyday"
       </textarea>
     </div>
     <div class="modal-footer">
@@ -458,14 +437,13 @@ Using Sales Report and Product List Files:
       </a>
     </div>
   </div>
-
+  
   <!-- Button Config Modal -->
   <div id="buttonConfigModal" class="modal">
     <div class="modal-content">
       <h4>Configure Button Positions</h4>
       <div id="buttonConfigContainer"></div>
-      <textarea id="uploadedFilesListModal" class="materialize-textarea" rows="2" 
-                placeholder="Uploaded files will appear here"></textarea>
+      <textarea id="uploadedFilesListModal" class="materialize-textarea" rows="2" placeholder="Uploaded files will appear here"></textarea>
     </div>
     <div class="modal-footer">
       <a href="#!" id="saveButtonPositionsBtn" class="modal-close waves-effect waves-green btn">
@@ -473,7 +451,7 @@ Using Sales Report and Product List Files:
       </a>
     </div>
   </div>
-
+  
   <!-- Crop Modal -->
   <div id="photoCropModal" class="modal" style="width:650px; height:650px;">
     <div class="crop-container" style="position: relative; width: 100%; height: 100%;">
@@ -487,77 +465,155 @@ Using Sales Report and Product List Files:
       </div>
     </div>
   </div>
-
-  <!-- jQuery & Materialize JS -->
+  
+  <!-- Include jQuery and Materialize JS -->
   <script src="https://code.jquery.com/jquery-3.6.0.min.js"></script>
-  <script 
-    src="https://cdnjs.cloudflare.com/ajax/libs/materialize/1.0.0/js/materialize.min.js">
-  </script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/materialize/1.0.0/js/materialize.min.js"></script>
   <script>
-    /***********************************************************
-     * COMPLETE SCRIPTS: CSV + VectorStore, Single-Phrase Re-Gen,
-     * Local Storage for listing queue, Photo Drag & Drop
-     ***********************************************************/
-
-    // ... (Paste your fully integrated scripts here, 
-    // using the final version from our previous conversation.)
-
-    // 
-    // We'll just provide the integrated version inline:
-    //
-
-    // GPT or ChatGPT model name
-    const modelName = "chatgpt-4o-latest";
+    // Helper function to strip markdown or JSON formatting (currently a passthrough)
+    function stripMarkdownJSON(text) {
+      return text;
+    }
+    
+    // GLOBALS & MAIN LOGIC
     const ETSY_SHOP_URL = "https://www.etsy.com/shop/custombrites";
     const CLIENT_ID = "k75zdspz4r99txpqdji7i2em";
     const REDIRECT_URI = "https://delicate-tanuki-616ac0.netlify.app/";
-
-    // CSV arrays & Photo Data
+    const modelName = "chatgpt-4o-latest";
+    let accessToken;
     let soldOrdersCSV = [];
     let listingsCSV = [];
     let photoNames = [];
-    let previewImages = [];
-    let photoMeta = [];
+    let previewImages = []; // data URLs for display
+    let photoMeta = [];     // AI-generated metadata
     let draggedIndex = null;
     let photoIds = [];
     let currentCropIndex = null;
     let cropper = null;
     let reservedPhotos = [];
-
-    // Listing queue & update states
+    
+    // We'll store up to 250 10-digit listing IDs in a queue
     let listingQueue = [];
+
+    // Track when photos & info updates are done for the "current" listing
     let photoUpdateComplete = false;
     let infoUpdateComplete = false;
-    let accessToken;
 
-    // Hard-coded appended text
+    // Hard-coded text to append to every generated description before sending to Etsy
     const appendedDescriptionText = `
+
 • We use the Highest Quality materials from the US and Italy.
 • Your purchase will come packaged and ready for gift giving!
-... (the rest of your appended text) ...
+
+M A K E S · A · P E R F E C T · G I F T : )
+
+· · · · · · · · · · · · · · · · · · · · · · · ·
+
+D E T A I L S
+
+• 13.4mm x 8.7mm Flying DragonFly
+• 14K Gold Filled, 14K Rose Gold Filled, Sterling Silver = Pendant + Chain
+• Available necklace lengths are 14 - 20 inches 
+
+------------------------------------
+
+P E R S O N A L I Z E • Y O U R • O R D E R
+
+Need to make your chain longer? Please click on the link below for a custom chain length.
+https://www.etsy.com/ca/listing/770835682/custom-longer-chain-length-add-on-to?ref=listing_published_alert
+
+Not sure exactly what size to order? Fine tune the fit with an extender!
+https://www.etsy.com/listing/628970499/add-on-an-extender-to-your-jewelry?ga_search_query=add%2Bon&ref=shop_items_search_2&frs=1
+
+-----------------------------------
+
+S I M I L A R •  I T E M S
+• If you liked this piece here's a few links to some similar items! These pieces are either alike in style or will look amazing paired together! Happy Shopping and don't forget each piece is completely customizable :)
+
+Tiny Gold Bar Necklace 
+https://www.etsy.com/listing/196984758/tiny-horizontal-gold-bar-necklace-14k
+
+Initial Disc Necklace 
+https://www.etsy.com/listing/182232792/single-initial-necklace-gold-filled
+
+Vertical Gold Bar Necklace
+https://www.etsy.com/listing/247277919/vertical-engraved-bar-necklace-name-bar
+
+Silver Bar Necklace
+https://www.etsy.com/listing/184233228/bar-necklace-personalized-bar-nameplate
+
+------------------------------------
+
+P A C K A G I N G
+• Your purchase will come beautifully packaged. If you are ordering for a gift and would like each piece to be packaged separately please let me know. 
+
+• If this purchase is a gift, and you would like us to include a handwritten message, leave a note in the "gift message" box at checkout.
+
+------------------------------------
+
+E X P E D I T E D • S H I P P I N G
+You will be able to choose faster shipping options in the drop down menu when you check out. Ship times do NOT include production times (1-3 business days). However, if you select expedited shipping, we will try to get your order done faster.
+
+------------------------------------
+
+E X P L O R E • O U R • S H O P
+Don't forget to check out the rest of our shop! We specialize in making handmade custom jewelry for every occasion. We take pride in making sure each order is made exactly to the customers specifications. We love collaborating with our customers to create  special and unique pieces for themselves and their loved ones. Please don't hesitate to contact us with any questions you have.  
+
+http://custombrites.etsy.com
+
+-----------------------------------
+
+C H E C K • U S • O U T
+Make sure you follow us on all our social media platforms to get a behind the scenes look, special promo codes, and some daily inspiration :) 
+
+Instagram: https://www.instagram.com/britesjewelry
+Facebook: https://www.facebook.com/britesjewelry
+Pinterest Page : https://www.pinterest.com/britesjewelry
+
+------------------------------------
+
+S H O P  • P O L I C I E S
+Check out our shop polices page for more details about all our polices and please don't hesitate to contact us with any questions you have! Happy Shopping :)
+
+https://www.etsy.com/shop/CustomBrites/policy
 `;
 
-    /*******************************************************
-     * PERSIST & RESTORE for CSV + listing queue across OAuth
-     *******************************************************/
+    /* 
+      NEW: Function to persist data to localStorage before redirecting to Etsy OAuth
+    */
     function persistDataBeforeRedirect() {
       try {
         localStorage.setItem("soldOrdersCSV", JSON.stringify(soldOrdersCSV));
         localStorage.setItem("listingsCSV", JSON.stringify(listingsCSV));
+        
+        // Also store the user-typed text in "Etsy Shop Listings"
         const listingsInputValue = document.getElementById("shopListings").value || "";
         localStorage.setItem("shopListingsText", listingsInputValue);
+        
+        // Save the queue itself
         localStorage.setItem("listingQueue", JSON.stringify(listingQueue));
+        
+        // If you want to store other data, e.g. images, you can add more lines here.
+        // e.g. localStorage.setItem("previewImages", JSON.stringify(previewImages));
       } catch (err) {
         console.error("Error persisting data before redirect:", err);
       }
     }
+
+    /* 
+      NEW: Function to restore data from localStorage after returning from OAuth
+    */
     function restoreDataAfterRedirect() {
       try {
         let soCSV = localStorage.getItem("soldOrdersCSV");
-        if (soCSV) soldOrdersCSV = JSON.parse(soCSV);
+        if (soCSV) {
+          soldOrdersCSV = JSON.parse(soCSV);
+        }
 
         let liCSV = localStorage.getItem("listingsCSV");
-        if (liCSV) listingsCSV = JSON.parse(liCSV);
+        if (liCSV) {
+          listingsCSV = JSON.parse(liCSV);
+        }
 
         let storedShopListingsText = localStorage.getItem("shopListingsText");
         if (storedShopListingsText) {
@@ -568,15 +624,28 @@ Using Sales Report and Product List Files:
         if (storedQueue) {
           listingQueue = JSON.parse(storedQueue);
         }
+        // re-parse the shopListings text in case user typed new IDs previously
         loadNextListingInQueue();
       } catch (err) {
         console.error("Error restoring data after redirect:", err);
       }
     }
+    
+    // -------------- Utility & Queue Helpers -------------------
 
-    /****************************************
-     * UTILITY for listing queue & drag logic
-     ****************************************/
+    function parseListingNumbers(rawInput) {
+      let parts = rawInput.split(",");
+      let cleaned = parts
+        .map(p => p.trim())
+        .filter(p => /^\d{10}$/.test(p)); // only keep valid 10-digit
+      let unique = Array.from(new Set(cleaned)); // remove duplicates
+      let finalList = unique.slice(0, 250); // limit to 250
+      return finalList;
+    }
+    function updateListingQueueCount() {
+      const countBox = document.getElementById("listingQueueCount");
+      countBox.textContent = listingQueue.length;
+    }
     function loadNextListingInQueue() {
       photoUpdateComplete = false;
       infoUpdateComplete = false;
@@ -587,155 +656,150 @@ Using Sales Report and Product List Files:
       }
       updateListingQueueCount();
     }
-    function updateListingQueueCount() {
-      const countBox = document.getElementById("listingQueueCount");
-      countBox.textContent = listingQueue.length;
-    }
-    function parseListingNumbers(rawInput) {
-      let parts = rawInput.split(",");
-      let cleaned = parts.map(p => p.trim()).filter(p => /^\d{10}$/.test(p));
-      let unique = Array.from(new Set(cleaned));
-      return unique.slice(0, 250);
+    function afterBothUpdates() {
+      // Shift the queue & load next listing
+      listingQueue.shift();
+      loadNextListingInQueue();
     }
     function checkIfBothUpdatesComplete() {
       if (photoUpdateComplete && infoUpdateComplete) {
         afterBothUpdates();
       }
     }
-    function afterBothUpdates() {
-      listingQueue.shift();
-      loadNextListingInQueue();
+
+    // -------------- Page Initialization & File Handling --------------
+
+    function updateUploadedFilesList() {
+      const uploadedFilesListElem = document.getElementById('uploadedFilesList');
+      const fileNames = soldOrdersCSV.map(file => file.name || file.fileName || 'Unnamed File');
+      uploadedFilesListElem.value = fileNames.join('\n');
     }
 
-    // DOMContentLoaded
-    document.addEventListener("DOMContentLoaded", () => {
-      loadButtonPositions();
-      loadReservedPhotos();
-      restoreDataAfterRedirect();
+    function loadReservedPhotos() {
+      const stored = localStorage.getItem("reservedPhotos");
+      reservedPhotos = stored ? JSON.parse(stored) : [];
+    }
+    function saveReservedPhotos() {
+      localStorage.setItem("reservedPhotos", JSON.stringify(reservedPhotos));
+    }
 
-      let urlParams = new URLSearchParams(window.location.search);
-      let code = urlParams.get("code");
-      if (code) {
-        exchangeCodeForToken(code);
-        window.history.replaceState({}, document.title, REDIRECT_URI);
-      }
-      updateStaticPreviewGrid();
-      updateUploadedFilesList();
-
-      document.getElementById("shopListings").addEventListener("change", () => {
-        let rawInput = document.getElementById("shopListings").value;
-        listingQueue = parseListingNumbers(rawInput);
-        loadNextListingInQueue();
+    async function resizeImage(dataURL, width, height) {
+      return new Promise((resolve, reject) => {
+        const img = new Image();
+        img.onload = () => {
+          const canvas = document.createElement("canvas");
+          canvas.width = width;
+          canvas.height = height;
+          const ctx = canvas.getContext("2d");
+          ctx.drawImage(img, 0, 0, width, height);
+          resolve(canvas.toDataURL("image/jpeg", 0.85));
+        };
+        img.onerror = reject;
+        img.src = dataURL;
       });
-    });
-
-    /***********************************************
-     * CONNECT TO ETSY & EXCHANGE CODE FOR TOKEN
-     ***********************************************/
-    function generateRandomString(length) {
-      const possible = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789";
-      let text = "";
-      for (let i = 0; i < length; i++) {
-        text += possible.charAt(Math.floor(Math.random() * possible.length));
-      }
-      return text;
     }
-    function base64urlEncode(buffer) {
-      return btoa(String.fromCharCode(...new Uint8Array(buffer)))
-        .replace(/\+/g, "-").replace(/\//g, "_").replace(/=+$/, "");
+    async function uploadCSVFile(file) {
+      return new Promise((resolve, reject) => {
+        const reader = new FileReader();
+        reader.onload = async (event) => {
+          try {
+            const dataURL = event.target.result;
+            const base64Content = dataURL.split(",")[1];
+            if (!base64Content) throw new Error("File content is empty.");
+            const payload = { file: base64Content, fileName: file.name, purpose: "user_data" };
+            const response = await fetch("/.netlify/functions/uploadFile", {
+              method: "POST",
+              headers: { "Content-Type": "application/json" },
+              body: JSON.stringify(payload)
+            });
+            if (!response.ok) throw new Error("Upload failed with status " + response.status);
+            const fileData = await response.json();
+            fileData.name = fileData.name || file.name;
+            fileData.id = fileData.id || file.name || ('file-' + Date.now());
+            resolve(fileData);
+          } catch (err) { reject(err); }
+        };
+        reader.onerror = reject;
+        reader.readAsDataURL(file);
+      });
     }
-    async function generateCodeChallenge(codeVerifier) {
-      let encoder = new TextEncoder();
-      let data = encoder.encode(codeVerifier);
-      let digest = await crypto.subtle.digest("SHA-256", data);
-      return base64urlEncode(digest);
+    async function uploadDocFile(file) {
+      return new Promise((resolve, reject) => {
+        const reader = new FileReader();
+        reader.onload = async (event) => {
+          try {
+            const dataURL = event.target.result;
+            const base64Content = dataURL.split(",")[1];
+            if (!base64Content) throw new Error("File content is empty.");
+            const payload = { file: base64Content, fileName: file.name, purpose: "user_data" };
+            const response = await fetch("/.netlify/functions/uploadFile", {
+              method: "POST",
+              headers: { "Content-Type": "application/json" },
+              body: JSON.stringify(payload)
+            });
+            if (!response.ok) throw new Error("Upload failed with status " + response.status);
+            const fileData = await response.json();
+            fileData.name = fileData.name || file.name;
+            fileData.id = fileData.id || file.name || ('file-' + Date.now());
+            resolve(fileData);
+          } catch (err) { reject(err); }
+        };
+        reader.onerror = reject;
+        reader.readAsDataURL(file);
+      });
     }
-
-    document.getElementById("connectEtsyBtn").addEventListener("click", async () => {
-      persistDataBeforeRedirect();
-
-      let state = "randomState123";
-      let scope = "listings_w listings_r";
-      let codeVerifier = generateRandomString(64);
-      localStorage.setItem("etsy_code_verifier", codeVerifier);
-      let codeChallenge = await generateCodeChallenge(codeVerifier);
-
-      let etsyAuthUrl = `https://www.etsy.com/oauth/connect?response_type=code&client_id=${CLIENT_ID}` +
-        `&redirect_uri=${encodeURIComponent(REDIRECT_URI)}` +
-        `&scope=${encodeURIComponent(scope)}` +
-        `&state=${state}` +
-        `&code_challenge=${encodeURIComponent(codeChallenge)}` +
-        `&code_challenge_method=S256`;
-      window.location.href = etsyAuthUrl;
-    });
-
-    async function exchangeCodeForToken(code) {
-      let codeVerifier = localStorage.getItem("etsy_code_verifier");
-      if (!codeVerifier) {
-        M.toast({ html: "No code verifier found. Please try connecting again." });
-        return;
-      }
+    async function updateVectorStore() {
+      const allFileIds = [...soldOrdersCSV, ...listingsCSV].map(file => file.id);
+      if (!allFileIds.length) return console.log("No supported files uploaded yet.");
       try {
-        let response = await fetch(`/.netlify/functions/exchangeToken?code=${encodeURIComponent(code)}&code_verifier=${encodeURIComponent(codeVerifier)}`);
-        let tokenData = await response.json();
-        if (tokenData.access_token) {
-          accessToken = tokenData.access_token;
-          M.toast({ html: "Connected to Etsy!" });
-        } else {
-          M.toast({ html: "Error obtaining token: " + JSON.stringify(tokenData) });
+        const vectorStorePayload = { name: "CSV Vector Store", file_ids: allFileIds };
+        const response = await fetch("/.netlify/functions/vectorStore", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify(vectorStorePayload)
+        });
+        if (!response.ok) throw new Error("Error creating vector store");
+        
+        // Grab the JSON response so we can retrieve store_id
+        const data = await response.json();
+        console.log("Vector store created/updated:", data);
+        
+        // If the creation was successful, store the returned store_id locally
+        if (data && data.id) {
+          localStorage.setItem("vectorStoreId", data.id); // <--- SAVE store_id
+          console.log("Saved store_id in localStorage:", data.id);
         }
-      } catch (error) {
-        console.error(error);
-        M.toast({ html: "Error exchanging code for token" });
+      } catch (err) {
+        console.error(err);
       }
     }
 
-    /****************************************
-     * FILE DRAG & DROP FOR CSV / DOC
-     ****************************************/
     const uploadedFilesList = document.getElementById("uploadedFilesList");
     uploadedFilesList.addEventListener("dragover", e => {
-      e.preventDefault();
-      e.stopPropagation();
+      e.preventDefault(); e.stopPropagation();
       uploadedFilesList.style.borderColor = "#000";
     });
     uploadedFilesList.addEventListener("dragleave", e => {
-      e.preventDefault();
-      e.stopPropagation();
+      e.preventDefault(); e.stopPropagation();
       uploadedFilesList.style.borderColor = "#ccc";
     });
     uploadedFilesList.addEventListener("drop", async e => {
-      e.preventDefault();
-      e.stopPropagation();
+      e.preventDefault(); e.stopPropagation();
       uploadedFilesList.style.borderColor = "#ccc";
       const files = e.dataTransfer.files;
       for (let file of files) {
         if (/\.(csv|doc|docx)$/i.test(file.name)) {
           try {
-            const fileData = file.name.endsWith(".csv") 
-              ? await uploadCSVFile(file) 
-              : await uploadDocFile(file);
+            const fileData = file.name.endsWith(".csv") ? await uploadCSVFile(file) : await uploadDocFile(file);
             soldOrdersCSV.push(fileData);
             updateUploadedFilesList();
             await updateVectorStore();
-          } catch (err) {
-            console.error(err);
-          }
+          } catch (err) { console.error(err); }
         } else {
           alert("Only .csv, .doc, and .docx files supported.");
         }
       }
     });
-
-    function updateUploadedFilesList() {
-      const uploadedFilesListElem = document.getElementById("uploadedFilesList");
-      const fileNames = soldOrdersCSV.map(file => file.name || file.fileName || "Unnamed File");
-      uploadedFilesListElem.value = fileNames.join("\n");
-    }
-
-    /****************************************
-     * IMAGE DROP ZONE (TOP)
-     ****************************************/
     const dropZone = document.getElementById("dropZone");
     dropZone.addEventListener("dragover", e => {
       e.preventDefault();
@@ -763,74 +827,34 @@ Using Sales Report and Product List Files:
             const resizedDataURL = await resizeImage(dataURL, 3000, 3000);
             previewImages.push(resizedDataURL);
             photoNames.push(file.name);
-            photoIds.push("img-" + Date.now() + "-" + i);
+            photoIds.push('img-' + Date.now() + '-' + i);
             updateStaticPreviewGrid();
             updateUploadedFilesList();
-          } catch (err) {
-            console.error(err);
-          }
+          } catch (err) { console.error(err); }
         } else {
           M.toast({ html: "Only JPEG/PNG images supported." });
         }
       }
     });
 
-    /********************************
-     * VECTOR STORE FOR CSV
-     ********************************/
-    async function updateVectorStore() {
-      const allFileIds = [...soldOrdersCSV, ...listingsCSV].map(file => file.id);
-      if (!allFileIds.length) {
-        console.log("No supported files uploaded yet.");
-        return;
-      }
-      try {
-        const vectorStorePayload = { name: "CSV Vector Store", file_ids: allFileIds };
-        const response = await fetch("/.netlify/functions/vectorStore", {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify(vectorStorePayload)
-        });
-        if (!response.ok) throw new Error("Error creating vector store");
-        const data = await response.json();
-        console.log("Vector store created/updated:", data);
-        if (data && data.id) {
-          localStorage.setItem("vectorStoreId", data.id);
-          console.log("Saved store_id in localStorage:", data.id);
-        }
-      } catch (err) {
-        console.error(err);
-      }
-    }
-
-    /*******************************************************
-     * HELPER: load and save reserved photos to localStorage
-     *******************************************************/
-    function loadReservedPhotos() {
-      const stored = localStorage.getItem("reservedPhotos");
-      reservedPhotos = stored ? JSON.parse(stored) : [];
-    }
-    function saveReservedPhotos() {
-      localStorage.setItem("reservedPhotos", JSON.stringify(reservedPhotos));
-    }
-
-    /***************************************************
-     * PHOTO PREVIEW GRID (7 normal + 3 reserved)
-     ***************************************************/
+    // ------------------ Photo Preview Logic ------------------
     function updateStaticPreviewGrid() {
       for (let i = 0; i < 10; i++) {
         let cell = document.getElementById("previewCell" + i);
-        cell.classList.remove("drag-over");
         cell.innerHTML = "Empty";
-        
+
         if (i < 7) {
-          // Normal slots 0..6 => previewImages
+          // Standard 7-Photo logic
           if (i < previewImages.length) {
             cell.innerHTML = "";
             let previewBox = document.createElement("div");
             previewBox.className = "preview-box";
             previewBox.setAttribute("data-id", photoIds[i]);
-            previewBox.addEventListener("dragstart", e => { if (i < 7) draggedIndex = i; });
+            // Make it draggable
+            previewBox.setAttribute("draggable", "true");
+            previewBox.addEventListener("dragstart", e => {
+              draggedIndex = i;
+            });
 
             let img = document.createElement("img");
             img.src = previewImages[i];
@@ -871,27 +895,21 @@ Using Sales Report and Product List Files:
             });
             previewBox.appendChild(cropBtn);
 
-            previewBox.addEventListener("click", () => { showMetadata(i); });
+            previewBox.addEventListener("click", () => {
+              showMetadata(i);
+            });
             cell.appendChild(previewBox);
 
-            // Re-order logic
-            cell.addEventListener("dragenter", e => {
-              e.preventDefault();
-              e.stopPropagation();
-              cell.classList.add("drag-over");
-            });
+            // DnD listeners
             cell.addEventListener("dragover", e => {
               e.preventDefault();
-              e.stopPropagation();
+              cell.classList.add("drag-over");
             });
             cell.addEventListener("dragleave", e => {
-              e.preventDefault();
-              e.stopPropagation();
               cell.classList.remove("drag-over");
             });
             cell.addEventListener("drop", e => {
               e.preventDefault();
-              e.stopPropagation();
               cell.classList.remove("drag-over");
               if (draggedIndex !== null && draggedIndex !== i) {
                 const [movedImage] = previewImages.splice(draggedIndex, 1);
@@ -912,15 +930,20 @@ Using Sales Report and Product List Files:
             metadataStatus.id = "metadataStatus" + i;
             cell.appendChild(metadataStatus);
           }
-        } 
-        else {
-          // reserved slots => i = 7..9 => rIndex = i-7
+        } else {
+          // Reserved 3-Photo logic
           let rIndex = i - 7;
           if (rIndex < reservedPhotos.length && reservedPhotos[rIndex].src) {
             cell.innerHTML = "";
             let previewBox = document.createElement("div");
             previewBox.className = "preview-box";
             previewBox.setAttribute("data-id", reservedPhotos[rIndex].id);
+            
+            // Make the reserved cell draggable too
+            previewBox.setAttribute("draggable", "true");
+            previewBox.addEventListener("dragstart", e => {
+              draggedIndex = i;
+            });
 
             let img = document.createElement("img");
             img.src = reservedPhotos[rIndex].src;
@@ -942,29 +965,26 @@ Using Sales Report and Product List Files:
             numOverlay.textContent = (i + 1).toString();
             previewBox.appendChild(numOverlay);
 
-            previewBox.addEventListener("click", () => { showMetadata(i); });
+            previewBox.addEventListener("click", () => {
+              showMetadata(i);
+            });
             cell.appendChild(previewBox);
-          }
 
-          // drag events for these last 3
-          cell.addEventListener("dragenter", e => {
-            e.preventDefault();
-            e.stopPropagation();
-            cell.classList.add("drag-over");
-          });
+          } else {
+            cell.innerHTML = "Empty";
+          }
+          // Attach the DnD listeners on the cell so we see .drag-over
           cell.addEventListener("dragover", e => {
             e.preventDefault();
-            e.stopPropagation();
+            cell.classList.add("drag-over");
           });
           cell.addEventListener("dragleave", e => {
-            e.preventDefault();
-            e.stopPropagation();
             cell.classList.remove("drag-over");
           });
           cell.addEventListener("drop", async e => {
             e.preventDefault();
-            e.stopPropagation();
             cell.classList.remove("drag-over");
+            // If a file is dragged in, handle it:
             if (e.dataTransfer.files && e.dataTransfer.files.length > 0) {
               let file = e.dataTransfer.files[0];
               if (/image\/(jpeg|png)/.test(file.type)) {
@@ -977,7 +997,7 @@ Using Sales Report and Product List Files:
                       src: resizedDataURL,
                       name: file.name,
                       meta: "",
-                      id: "img-" + Date.now()
+                      id: 'img-' + Date.now()
                     };
                     reservedPhotos[rIndex] = newReserved;
                     saveReservedPhotos();
@@ -988,6 +1008,33 @@ Using Sales Report and Product List Files:
                 };
                 reader.readAsDataURL(file);
               }
+            } else if (draggedIndex !== null && draggedIndex !== i) {
+              // If rearranging from an existing cell
+              if (draggedIndex < 7) {
+                // Coming from previewImages array
+                const [movedImage] = previewImages.splice(draggedIndex, 1);
+                const [movedName] = photoNames.splice(draggedIndex, 1);
+                const [movedMeta] = photoMeta.splice(draggedIndex, 1);
+                const [movedId] = photoIds.splice(draggedIndex, 1);
+
+                // Put that data in reservedPhotos[rIndex]
+                let newReserved = {
+                  src: movedImage,
+                  name: movedName,
+                  meta: movedMeta || "",
+                  id: movedId
+                };
+                reservedPhotos[rIndex] = newReserved;
+                saveReservedPhotos();
+              } else {
+                // Coming from another reserved slot
+                let oldRIndex = draggedIndex - 7;
+                const [moved] = reservedPhotos.splice(oldRIndex, 1);
+                reservedPhotos[rIndex] = moved;
+                saveReservedPhotos();
+              }
+              updateStaticPreviewGrid();
+              draggedIndex = null;
             }
           });
 
@@ -998,10 +1045,6 @@ Using Sales Report and Product List Files:
         }
       }
     }
-
-    /***************************************************
-     * SHOW METADATA, ANALYZE PHOTOS
-     ***************************************************/
     function showMetadata(index) {
       const metadata = photoMeta[index] || "No metadata available for this photo.";
       document.getElementById("metadataTextarea").value = metadata;
@@ -1052,122 +1095,89 @@ Using Sales Report and Product List Files:
       }
     }
 
-    /***************************************************
-     * PHOTO UPLOADS -> ETSY
-     ***************************************************/
-    document.getElementById("photoUploadNewBtn").addEventListener("click", async () => {
-      let listingInput = document.getElementById("shopListings").value.trim();
-      if (!listingInput) {
-        M.toast({ html: "Please provide a listing URL or ID in 'Etsy Shop Listings'." });
-        return;
+    // -------------- OAuth & Startup ---------------
+    function generateRandomString(length) {
+      const possible = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789';
+      let text = '';
+      for (let i = 0; i < length; i++) {
+        text += possible.charAt(Math.floor(Math.random() * possible.length));
       }
-      let btn = document.getElementById("photoUploadNewBtn");
-      btn.disabled = true;
-      try {
-        await uploadPhotos();
-        await uploadReservedPhotos();
-        M.toast({ html: "Photos updated successfully!" });
-        photoUpdateComplete = true;
-        checkIfBothUpdatesComplete();
-      } catch (err) {
-        console.error(err);
-      } finally {
-        btn.disabled = false;
-      }
+      return text;
+    }
+    function base64urlEncode(buffer) {
+      return btoa(String.fromCharCode(...new Uint8Array(buffer)))
+        .replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, '');
+    }
+    async function generateCodeChallenge(codeVerifier) {
+      let encoder = new TextEncoder();
+      let data = encoder.encode(codeVerifier);
+      let digest = await crypto.subtle.digest("SHA-256", data);
+      return base64urlEncode(digest);
+    }
+
+    // UPDATED: first persist data, then do the usual OAuth
+    document.getElementById("connectEtsyBtn").addEventListener("click", async () => {
+      persistDataBeforeRedirect(); // <--- NEW: save CSV & queue, then redirect
+
+      let state = "randomState123";
+      let scope = "listings_w listings_r";
+      let codeVerifier = generateRandomString(64);
+      localStorage.setItem("etsy_code_verifier", codeVerifier);
+      let codeChallenge = await generateCodeChallenge(codeVerifier);
+      
+      let etsyAuthUrl = `https://www.etsy.com/oauth/connect?response_type=code&client_id=${CLIENT_ID}` +
+        `&redirect_uri=${encodeURIComponent(REDIRECT_URI)}` +
+        `&scope=${encodeURIComponent(scope)}` +
+        `&state=${state}` +
+        `&code_challenge=${encodeURIComponent(codeChallenge)}` +
+        `&code_challenge_method=S256`;
+      window.location.href = etsyAuthUrl;
     });
 
-    async function uploadPhotos() {
-      let listingInput = document.getElementById("shopListings").value.trim();
-      if (!listingInput) {
-        M.toast({ html: "Please provide a listing URL or ID in 'Etsy Shop Listings'." });
+    document.addEventListener("DOMContentLoaded", () => {
+      loadButtonPositions();
+      loadReservedPhotos();
+      
+      // NEW: restore any data we saved in localStorage (CSV arrays, listing queue, etc.)
+      restoreDataAfterRedirect();
+      
+      let urlParams = new URLSearchParams(window.location.search);
+      let code = urlParams.get("code");
+      if (code) {
+        exchangeCodeForToken(code);
+        window.history.replaceState({}, document.title, REDIRECT_URI);
+      }
+      updateStaticPreviewGrid();
+      updateUploadedFilesList();
+      
+      document.getElementById("shopListings").addEventListener("change", () => {
+        let rawInput = document.getElementById("shopListings").value;
+        listingQueue = parseListingNumbers(rawInput);
+        loadNextListingInQueue();
+      });
+    });
+    async function exchangeCodeForToken(code) {
+      let codeVerifier = localStorage.getItem("etsy_code_verifier");
+      if (!codeVerifier) {
+        M.toast({ html: "No code verifier found. Please try connecting again." });
         return;
       }
-      if (!previewImages.length) {
-        M.toast({ html: "No images to upload. Please drag and drop images first." });
-        return;
-      }
-      let listingId = /^\d+$/.test(listingInput)
-        ? listingInput
-        : (listingInput.match(/\/listing\/(\d+)/) || [])[1];
-      if (!listingId) {
-        M.toast({ html: "Invalid listing URL or ID." });
-        return;
-      }
-      for (let i = 0; i < previewImages.length; i++) {
-        let dataURL = previewImages[i];
-        let altText = photoMeta[i] || "";
-        let rankNumber = i + 1;
-        try {
-          let res = await fetch(dataURL);
-          let blob = await res.blob();
-          let formData = new FormData();
-          formData.append("listingId", listingId);
-          formData.append("token", accessToken);
-          formData.append("fileName", photoNames[i] || `uploaded_photo_${i}.jpg`);
-          formData.append("rank", rankNumber);
-          formData.append("alt_text", altText);
-          formData.append("file", blob, photoNames[i] || `uploaded_photo_${i}.jpg`);
-          let uploadUrl = `/.netlify/functions/imageUpload`;
-          let response = await fetch(uploadUrl, { method: "POST", body: formData });
-          if (!response.ok) {
-            M.toast({ html: `Error uploading photo #${rankNumber}: ` + response.status });
-          } else {
-            M.toast({ html: `Photo #${rankNumber} uploaded with alt_text!` });
-          }
-        } catch (e) {
-          console.error(e);
-          M.toast({ html: `Exception uploading photo #${rankNumber}: ${e.message}` });
+      try {
+        let response = await fetch(`/.netlify/functions/exchangeToken?code=${encodeURIComponent(code)}&code_verifier=${encodeURIComponent(codeVerifier)}`);
+        let tokenData = await response.json();
+        if (tokenData.access_token) {
+          accessToken = tokenData.access_token;
+          M.toast({ html: "Connected to Etsy!" });
+        } else {
+          M.toast({ html: "Error obtaining token: " + JSON.stringify(tokenData) });
         }
-      }
-    }
-    async function uploadReservedPhotos() {
-      let listingInput = document.getElementById("shopListings").value.trim();
-      if (!listingInput) {
-        M.toast({ html: "Please provide a listing URL or ID in 'Etsy Shop Listings'." });
-        return;
-      }
-      if (!reservedPhotos.length) {
-        M.toast({ html: "No reserved photos to upload." });
-        return;
-      }
-      let listingId = /^\d+$/.test(listingInput)
-        ? listingInput
-        : (listingInput.match(/\/listing\/(\d+)/) || [])[1];
-      if (!listingId) {
-        M.toast({ html: "Invalid listing URL or ID." });
-        return;
-      }
-      for (let i = 0; i < reservedPhotos.length; i++) {
-        let dataURL = reservedPhotos[i].src;
-        let altText = reservedPhotos[i].meta || "";
-        let rankNumber = i + 8;
-        try {
-          let res = await fetch(dataURL);
-          let blob = await res.blob();
-          let formData = new FormData();
-          formData.append("listingId", listingId);
-          formData.append("token", accessToken);
-          formData.append("fileName", reservedPhotos[i].name || `reserved_photo_${i}.jpg`);
-          formData.append("rank", rankNumber);
-          formData.append("alt_text", altText);
-          formData.append("file", blob, reservedPhotos[i].name || `reserved_photo_${i}.jpg`);
-          let uploadUrl = `/.netlify/functions/imageUpload`;
-          let response = await fetch(uploadUrl, { method: "POST", body: formData });
-          if (!response.ok) {
-            M.toast({ html: `Error uploading reserved photo #${rankNumber}: ` + response.status });
-          } else {
-            M.toast({ html: `Reserved photo #${rankNumber} uploaded successfully!` });
-          }
-        } catch (e) {
-          console.error(e);
-          M.toast({ html: `Exception uploading reserved photo #${rankNumber}: ${e.message}` });
-        }
+      } catch (error) {
+        console.error(error);
+        M.toast({ html: "Error exchanging code for token" });
       }
     }
 
-    /****************************************************
-     * INFO UPLOAD -> ETSY
-     ****************************************************/
+    // -------------- Info & Photo Updates --------------
     document.getElementById("uploadToEtsyBtn").addEventListener("click", async () => {
       let listingInput = document.getElementById("shopListings").value.trim();
       if (!listingInput) {
@@ -1181,20 +1191,16 @@ Using Sales Report and Product List Files:
         M.toast({ html: "Invalid listing URL or ID." });
         return;
       }
-
+      
       let userDescription = document.getElementById("listingDescription").value || "";
       let finalDescription = userDescription + appendedDescriptionText; 
-
+      
       let payload = {
         title: document.getElementById("listingTitle").value,
         description: finalDescription,
-        tags: document
-          .getElementById("searchKeyPhrases")
-          .value.split("\n")
-          .map(s => s.trim())
-          .filter(s => s !== "")
+        tags: document.getElementById("searchKeyPhrases").value.split("\n").map(s => s.trim()).filter(s => s !== "")
       };
-
+      
       let updateUrl = `/.netlify/functions/updateListing?listingId=${listingId}&token=${encodeURIComponent(accessToken)}`;
       try {
         let response = await fetch(updateUrl, {
@@ -1216,38 +1222,30 @@ Using Sales Report and Product List Files:
       }
     });
 
-    /*******************************************************
-     * KEY PHRASES GENERATION WITH PARTIAL RE-GEN 
-     *******************************************************/
-    async function generateTagPhrases() {
-      let question = document.getElementById("listingDescInput").value.trim();
-      if (!question) {
-        M.toast({ html: "Please enter a question in the Listing Description." });
+    document.getElementById("photoUploadNewBtn").addEventListener("click", async () => {
+      let listingInput = document.getElementById("shopListings").value.trim();
+      if (!listingInput) {
+        M.toast({ html: "Please provide a listing URL or ID in 'Etsy Shop Listings'." });
         return;
       }
-      let keywordRules = stripMarkdownJSON(document.getElementById("keywordRulesTextarea").value);
-
+      let btn = document.getElementById("photoUploadNewBtn");
+      btn.disabled = true;
       try {
-        let phrasesArray = await getInitialPhrases(question, keywordRules);
-        // If any exceed 20 chars, re-generate them individually
-        for (let i = 0; i < phrasesArray.length; i++) {
-          if (phrasesArray[i].length > 20) {
-            let otherValid = phrasesArray.filter((_, idx) => idx !== i && phrasesArray[idx].length <= 20);
-            let newPhrase = await regenerateSinglePhrase(question, keywordRules, otherValid);
-            phrasesArray[i] = newPhrase;
-          }
-        }
-        if (phrasesArray.some(p => p.length > 20)) {
-          throw new Error("Could not fix some phrases under 20 chars. Please try again.");
-        }
-        document.getElementById("searchKeyPhrases").value = phrasesArray.join("\n");
-        M.toast({ html: "Tag Phrases generated successfully!" });
+        await uploadPhotos();
+        await uploadReservedPhotos();
+        M.toast({ html: "Photos updated successfully!" });
+        photoUpdateComplete = true;
+        checkIfBothUpdatesComplete();
       } catch (err) {
         console.error(err);
-        M.toast({ html: "Error generating valid tag phrases: " + err.message });
+      } finally {
+        btn.disabled = false;
       }
-    }
-    // Single phrase re-generation
+    });
+
+    // -------------- Generate Key Phrases Using CSV Context --------------
+
+    // Single-phrase regeneration if we find >20 chars
     async function regenerateSinglePhrase(question, keywordRules, currentValid, maxAttempts = 5) {
       for (let attempt = 1; attempt <= maxAttempts; attempt++) {
         let store_id = localStorage.getItem("vectorStoreId");
@@ -1284,6 +1282,7 @@ Keyword Rules:
 ${keywordRules}
 Return only one phrase in plain text.
         `;
+
         let payload = {
           model: modelName,
           messages: [
@@ -1308,12 +1307,14 @@ Return only one phrase in plain text.
       }
       throw new Error("Failed to generate a single phrase under 20 chars after multiple attempts.");
     }
-    // Entire set generation
+
+    // Grab all 13 phrases at once
     async function getInitialPhrases(question, keywordRules) {
       let store_id = localStorage.getItem("vectorStoreId");
       if (!store_id) {
         console.warn("No store_id found in localStorage. CSV context may not be loaded!");
       }
+
       let retrievedContext = "";
       try {
         let resp = await fetch("/.netlify/functions/vectorStore", {
@@ -1348,6 +1349,7 @@ ${keywordRules}
 
 Generate exactly 13 SEO key phrases (each ≤ 20 characters). Return as plain text.
       `;
+
       let payload = {
         model: modelName,
         messages: [
@@ -1366,7 +1368,42 @@ Generate exactly 13 SEO key phrases (each ≤ 20 characters). Return as plain te
 
       return phrasesArray;
     }
-    // Fire generateTagPhrases on Enter
+
+    async function generateTagPhrases() {
+      let question = document.getElementById("listingDescInput").value.trim();
+      if (!question) {
+        M.toast({ html: "Please enter a question in the Listing Description." });
+        return;
+      }
+      let keywordRules = stripMarkdownJSON(document.getElementById("keywordRulesTextarea").value);
+
+      try {
+        // Step 1: get all 13 phrases in a single pass
+        let phrasesArray = await getInitialPhrases(question, keywordRules);
+
+        // Step 2: if any exceed 20 chars, re-generate individually
+        for (let i = 0; i < phrasesArray.length; i++) {
+          if (phrasesArray[i].length > 20) {
+            let otherValid = phrasesArray.filter((_, idx) => idx !== i && phrasesArray[idx].length <= 20);
+            let newPhrase = await regenerateSinglePhrase(question, keywordRules, otherValid);
+            phrasesArray[i] = newPhrase;
+          }
+        }
+
+        // final check
+        if (phrasesArray.some(p => p.length > 20)) {
+          throw new Error("Could not fix some phrases under 20 chars. Please try again.");
+        }
+
+        document.getElementById("searchKeyPhrases").value = phrasesArray.join("\n");
+        M.toast({ html: "Tag Phrases generated successfully!" });
+
+      } catch (err) {
+        console.error(err);
+        M.toast({ html: "Error generating valid tag phrases: " + err.message });
+      }
+    }
+
     document.getElementById("listingDescInput").addEventListener("keydown", async (e) => {
       if (e.key === "Enter" && !e.shiftKey) {
         e.preventDefault();
@@ -1374,12 +1411,11 @@ Generate exactly 13 SEO key phrases (each ≤ 20 characters). Return as plain te
       }
     });
 
-    /***********************************************
-     * TITLE & DESCRIPTION GENERATION
-     ***********************************************/
+    // -------------- Title & Description Gen --------------
     document.getElementById("generateBtn").addEventListener("click", async () => {
       await Promise.all([generateTitleOnly(), generateDescriptionOnly()]);
     });
+    
     async function generateTitleOnly() {
       let etsyLink = ETSY_SHOP_URL;
       let keyPhrases = document.getElementById("searchKeyPhrases").value.trim();
@@ -1419,10 +1455,6 @@ Important: Return ONLY the title as plain text.`;
         document.getElementById("listingTitle").value = "Error: " + error;
       }
     }
-    function updateTitleCount(text) {
-      document.getElementById("titleCount").textContent = "Count: " + text.length;
-    }
-
     async function generateDescriptionOnly() {
       let etsyLink = ETSY_SHOP_URL;
       let keyPhrases = document.getElementById("searchKeyPhrases").value.trim();
@@ -1462,142 +1494,7 @@ Important: Return ONLY the description as plain text.`;
       }
     }
 
-    /*********************************************
-     * IMAGE CROPPING
-     *********************************************/
-    function openCropModal(index) {
-      currentCropIndex = index;
-      let cropModal = document.getElementById("photoCropModal");
-      let cropImage = document.getElementById("cropImage");
-      cropImage.src = previewImages[index];
-      cropImage.onload = function() {
-        cropper = new Cropper(cropImage, {
-          viewMode: 1,
-          autoCropArea: 1,
-          movable: true,
-          zoomable: true,
-          scalable: false,
-          rotatable: false,
-          responsive: true,
-          background: false,
-          modal: true,
-          guides: true,
-          center: true,
-          highlight: true,
-          cropBoxMovable: true,
-          cropBoxResizable: true,
-          dragMode: 'move',
-          ready: function() {
-            let containerData = cropper.getContainerData();
-            let cropBoxData = cropper.getCropBoxData();
-            cropper.setCropBoxData({
-              left: (containerData.width - cropBoxData.width) / 2,
-              top: (containerData.height - cropBoxData.height) / 2
-            });
-          }
-        });
-      };
-      let instance = M.Modal.getInstance(cropModal) || M.Modal.init(cropModal, {});
-      instance.open();
-    }
-    document.getElementById("saveCropBtn").addEventListener("click", () => {
-      if (cropper && currentCropIndex !== null) {
-        let croppedCanvas = cropper.getCroppedCanvas({ width: 3000, height: 3000 });
-        previewImages[currentCropIndex] = croppedCanvas.toDataURL("image/jpeg", 0.85);
-        updateStaticPreviewGrid();
-        cropper.destroy();
-        cropper = null;
-        currentCropIndex = null;
-        M.Modal.getInstance(document.getElementById("photoCropModal")).close();
-      }
-    });
-    document.getElementById("cancelCropBtn").addEventListener("click", () => {
-      if (cropper) {
-        cropper.destroy();
-        cropper = null;
-      }
-      currentCropIndex = null;
-      M.Modal.getInstance(document.getElementById("photoCropModal")).close();
-    });
-
-    /****************************************************
-     * READ/WRITE FILES
-     ****************************************************/
-    async function uploadCSVFile(file) {
-      return new Promise((resolve, reject) => {
-        const reader = new FileReader();
-        reader.onload = async (event) => {
-          try {
-            const dataURL = event.target.result;
-            const base64Content = dataURL.split(",")[1];
-            if (!base64Content) throw new Error("File content is empty.");
-            const payload = { file: base64Content, fileName: file.name, purpose: "user_data" };
-            const response = await fetch("/.netlify/functions/uploadFile", {
-              method: "POST",
-              headers: { "Content-Type": "application/json" },
-              body: JSON.stringify(payload)
-            });
-            if (!response.ok) throw new Error("Upload failed with status " + response.status);
-            const fileData = await response.json();
-            fileData.name = fileData.name || file.name;
-            fileData.id = fileData.id || file.name || ("file-" + Date.now());
-            resolve(fileData);
-          } catch (err) {
-            reject(err);
-          }
-        };
-        reader.onerror = reject;
-        reader.readAsDataURL(file);
-      });
-    }
-    async function uploadDocFile(file) {
-      return new Promise((resolve, reject) => {
-        const reader = new FileReader();
-        reader.onload = async (event) => {
-          try {
-            const dataURL = event.target.result;
-            const base64Content = dataURL.split(",")[1];
-            if (!base64Content) throw new Error("File content is empty.");
-            const payload = { file: base64Content, fileName: file.name, purpose: "user_data" };
-            const response = await fetch("/.netlify/functions/uploadFile", {
-              method: "POST",
-              headers: { "Content-Type": "application/json" },
-              body: JSON.stringify(payload)
-            });
-            if (!response.ok) throw new Error("Upload failed with status " + response.status);
-            const fileData = await response.json();
-            fileData.name = fileData.name || file.name;
-            fileData.id = fileData.id || file.name || ("file-" + Date.now());
-            resolve(fileData);
-          } catch (err) {
-            reject(err);
-          }
-        };
-        reader.onerror = reject;
-        reader.readAsDataURL(file);
-      });
-    }
-
-    // Resize images
-    async function resizeImage(dataURL, width, height) {
-      return new Promise((resolve, reject) => {
-        const img = new Image();
-        img.onload = () => {
-          const canvas = document.createElement("canvas");
-          canvas.width = width;
-          canvas.height = height;
-          const ctx = canvas.getContext("2d");
-          ctx.drawImage(img, 0, 0, width, height);
-          resolve(canvas.toDataURL("image/jpeg", 0.85));
-        };
-        img.onerror = reject;
-        img.src = dataURL;
-      });
-    }
-
-    /***********************************************
-     * OPENAI CALL
-     ***********************************************/
+    // Calls OpenAI via your netlify function
     async function callOpenAI(payload) {
       let response = await fetch("/.netlify/functions/openaiProxy", {
         method: "POST",
@@ -1610,13 +1507,26 @@ Important: Return ONLY the description as plain text.`;
       }
       return await response.json();
     }
-    function stripMarkdownJSON(text) {
-      return text;
+    function updateTitleCount(text) {
+      document.getElementById("titleCount").textContent = "Count: " + text.length;
     }
+    document.getElementById("copyTitleBtn").addEventListener("click", () => {
+      let text = document.getElementById("listingTitle").value;
+      navigator.clipboard.writeText(text).catch(err => console.error("Copy error:", err));
+    });
+    document.getElementById("copyDescriptionBtn").addEventListener("click", () => {
+      let text = document.getElementById("listingDescription").value;
+      navigator.clipboard.writeText(text).catch(err => console.error("Copy error:", err));
+    });
+    document.getElementById("clearKeyPhrasesBtn").addEventListener("click", () => {
+      document.getElementById("searchKeyPhrases").value = "";
+    });
+    document.getElementById("copyKeyPhrasesBtn").addEventListener("click", () => {
+      let lines = document.getElementById("searchKeyPhrases").value.split(/\n+/).map(l => l.trim()).filter(l => l !== "");
+      navigator.clipboard.writeText(lines.join(", ")).catch(err => console.error("Error copying key phrases:", err));
+    });
 
-    /********************************************************
-     * CONFIGURE BUTTONS: DRAG & DROP POSITIONS
-     ********************************************************/
+    // -------------- Configure Buttons Modal --------------
     document.getElementById("configureButtonsBtn").addEventListener("click", () => {
       let configContainer = document.getElementById("buttonConfigContainer");
       configContainer.innerHTML = "";
@@ -1721,12 +1631,155 @@ Important: Return ONLY the description as plain text.`;
         }
       }
     }
-
     window.addEventListener("load", () => {
-      // Adjust container13 if needed
       let container13 = document.getElementById("container13");
       container13.style.height = (container13.offsetHeight * 2.5) + "px";
     });
+
+    // -------------- Crop Modal --------------
+    function openCropModal(index) {
+      currentCropIndex = index;
+      let cropModal = document.getElementById("photoCropModal");
+      let cropImage = document.getElementById("cropImage");
+      cropImage.src = previewImages[index];
+      cropImage.onload = function() {
+        cropper = new Cropper(cropImage, {
+          viewMode: 1,
+          autoCropArea: 1,
+          movable: true,
+          zoomable: true,
+          scalable: false,
+          rotatable: false,
+          responsive: true,
+          background: false,
+          modal: true,
+          guides: true,
+          center: true,
+          highlight: true,
+          cropBoxMovable: true,
+          cropBoxResizable: true,
+          dragMode: 'move',
+          ready: function() {
+            let containerData = cropper.getContainerData();
+            let cropBoxData = cropper.getCropBoxData();
+            cropper.setCropBoxData({
+              left: (containerData.width - cropBoxData.width) / 2,
+              top: (containerData.height - cropBoxData.height) / 2
+            });
+          }
+        });
+      };
+      let instance = M.Modal.getInstance(cropModal) || M.Modal.init(cropModal, {});
+      instance.open();
+    }
+    document.getElementById("saveCropBtn").addEventListener("click", () => {
+      if (cropper && currentCropIndex !== null) {
+        let croppedCanvas = cropper.getCroppedCanvas({ width: 3000, height: 3000 });
+        previewImages[currentCropIndex] = croppedCanvas.toDataURL("image/jpeg", 0.85);
+        updateStaticPreviewGrid();
+        cropper.destroy();
+        cropper = null;
+        currentCropIndex = null;
+        M.Modal.getInstance(document.getElementById("photoCropModal")).close();
+      }
+    });
+    document.getElementById("cancelCropBtn").addEventListener("click", () => {
+      if (cropper) {
+        cropper.destroy();
+        cropper = null;
+      }
+      currentCropIndex = null;
+      M.Modal.getInstance(document.getElementById("photoCropModal")).close();
+    });
+
+    async function uploadPhotos() {
+      let listingInput = document.getElementById("shopListings").value.trim();
+      if (!listingInput) {
+        M.toast({ html: "Please provide a listing URL or ID in 'Etsy Shop Listings'." });
+        return;
+      }
+      if (!previewImages.length) {
+        M.toast({ html: "No images to upload. Please drag and drop images first." });
+        return;
+      }
+      let listingId = /^\d+$/.test(listingInput)
+        ? listingInput
+        : (listingInput.match(/\/listing\/(\d+)/) || [])[1];
+      if (!listingId) {
+        M.toast({ html: "Invalid listing URL or ID." });
+        return;
+      }
+      for (let i = 0; i < previewImages.length; i++) {
+        let dataURL = previewImages[i];
+        let altText = photoMeta[i] || "";
+        let rankNumber = i + 1;
+        try {
+          let res = await fetch(dataURL);
+          let blob = await res.blob();
+          let formData = new FormData();
+          formData.append("listingId", listingId);
+          formData.append("token", accessToken);
+          formData.append("fileName", photoNames[i] || `uploaded_photo_${i}.jpg`);
+          formData.append("rank", rankNumber);
+          formData.append("alt_text", altText);
+          formData.append("file", blob, photoNames[i] || `uploaded_photo_${i}.jpg`);
+          let uploadUrl = `/.netlify/functions/imageUpload`;
+          let response = await fetch(uploadUrl, { method: "POST", body: formData });
+          if (!response.ok) {
+            M.toast({ html: `Error uploading photo #${rankNumber}: ` + response.status });
+          } else {
+            M.toast({ html: `Photo #${rankNumber} uploaded with alt_text!` });
+          }
+        } catch (e) {
+          console.error(e);
+          M.toast({ html: `Exception uploading photo #${rankNumber}: ${e.message}` });
+        }
+      }
+    }
+    async function uploadReservedPhotos() {
+      let listingInput = document.getElementById("shopListings").value.trim();
+      if (!listingInput) {
+        M.toast({ html: "Please provide a listing URL or ID in 'Etsy Shop Listings'." });
+        return;
+      }
+      if (!reservedPhotos.length) {
+        M.toast({ html: "No reserved photos to upload." });
+        return;
+      }
+      let listingId = /^\d+$/.test(listingInput)
+        ? listingInput
+        : (listingInput.match(/\/listing\/(\d+)/) || [])[1];
+      if (!listingId) {
+        M.toast({ html: "Invalid listing URL or ID." });
+        return;
+      }
+      for (let i = 0; i < reservedPhotos.length; i++) {
+        let dataURL = reservedPhotos[i].src;
+        let altText = reservedPhotos[i].meta || "";
+        let rankNumber = i + 8;
+        try {
+          let res = await fetch(dataURL);
+          let blob = await res.blob();
+          let formData = new FormData();
+          formData.append("listingId", listingId);
+          formData.append("token", accessToken);
+          formData.append("fileName", reservedPhotos[i].name || `reserved_photo_${i}.jpg`);
+          formData.append("rank", rankNumber);
+          formData.append("alt_text", altText);
+          formData.append("file", blob, reservedPhotos[i].name || `reserved_photo_${i}.jpg`);
+          let uploadUrl = `/.netlify/functions/imageUpload`;
+          let response = await fetch(uploadUrl, { method: "POST", body: formData });
+          if (!response.ok) {
+            M.toast({ html: `Error uploading reserved photo #${rankNumber}: ` + response.status });
+          } else {
+            M.toast({ html: `Reserved photo #${rankNumber} uploaded successfully!` });
+          }
+        } catch (e) {
+          console.error(e);
+          M.toast({ html: `Exception uploading reserved photo #${rankNumber}: ${e.message}` });
+        }
+      }
+    }
   </script>
 </body>
 </html>
