@@ -1,14 +1,12 @@
 // netlify/functions/vectorStore.js
 exports.handler = async function(event) {
   try {
-    console.log("vectorStore function invoked with event:", event);
     const apiKey = process.env.OPENAI_API_KEY;
     if (!apiKey) throw new Error("Missing OPENAI_API_KEY environment variable");
 
-    // Parse the incoming payload
+    // Parse the incoming payload.
     const payload = JSON.parse(event.body || "{}");
-
-    // Force "create" action if file_ids is provided and non-empty; otherwise use provided action or default to "query"
+    // If file_ids are provided, assume a creation action; otherwise, default to query.
     const action = (payload.file_ids && Array.isArray(payload.file_ids) && payload.file_ids.length > 0)
       ? "create"
       : (payload.action || "query");
@@ -17,7 +15,7 @@ exports.handler = async function(event) {
       if (!payload.file_ids || !Array.isArray(payload.file_ids) || payload.file_ids.length === 0) {
         throw new Error("file_ids must be a non-empty array when creating a vector store.");
       }
-      // Build the payload using "file_ids" (remove "model" parameter)
+      // Build the payload using file_ids
       const newPayload = {
         name: payload.name || "CSV Vector Store",
         file_ids: payload.file_ids
@@ -62,7 +60,8 @@ exports.handler = async function(event) {
 
       console.log(`Querying vector store ${storeId} with:`, queryObj);
 
-      const response = await fetch(`https://api.openai.com/v1/vector_stores/${storeId}/query`, {
+      // Use the supported /search endpoint.
+      const response = await fetch(`https://api.openai.com/v1/vector_stores/${storeId}/search`, {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
@@ -73,7 +72,7 @@ exports.handler = async function(event) {
 
       if (!response.ok) {
         const errorData = await response.json().catch(() => ({}));
-        console.error("Error response from OpenAI vector_stores query:", errorData);
+        console.error("Error response from OpenAI vector_stores search:", errorData);
         return {
           statusCode: response.status,
           body: JSON.stringify({ error: errorData })
@@ -81,7 +80,7 @@ exports.handler = async function(event) {
       }
 
       const data = await response.json();
-      console.log("Vector store query success. Matches:", data);
+      console.log("Vector store search success. Matches:", data);
       return {
         statusCode: 200,
         body: JSON.stringify(data)
