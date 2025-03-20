@@ -8,18 +8,20 @@ exports.handler = async function(event) {
     // Parse the request payload
     const payload = JSON.parse(event.body || "{}");
 
-    // Validate the payload for create action:
-    if (payload.file_ids) {
-      if (!Array.isArray(payload.file_ids) || payload.file_ids.length === 0) {
+    // Decide on action: if file_ids are provided (or action is explicitly "create"), we create/update.
+    const action = payload.action || (payload.file_ids ? "create" : "query");
+
+    if (action === "create") {
+      // Validate file_ids payload
+      if (!payload.file_ids || !Array.isArray(payload.file_ids) || payload.file_ids.length === 0) {
         throw new Error("file_ids must be a non-empty array when creating a vector store.");
       }
-    }
-
-    // Explicitly set action if not provided.
-    payload.action = payload.action || (payload.file_ids ? "create" : "query");
-
-    if (payload.action === "create") {
-      console.log("Creating vector store with payload:", payload);
+      // Use a property name "documents" instead of "file_ids" if the API expects that.
+      const newPayload = {
+        name: payload.name || "CSV Vector Store",
+        documents: payload.file_ids  // sending file IDs as documents
+      };
+      console.log("Creating vector store with payload:", newPayload);
 
       const response = await fetch("https://api.openai.com/v1/vector_stores", {
         method: "POST",
@@ -27,7 +29,7 @@ exports.handler = async function(event) {
           "Content-Type": "application/json",
           "Authorization": `Bearer ${apiKey}`
         },
-        body: JSON.stringify(payload)
+        body: JSON.stringify(newPayload)
       });
 
       if (!response.ok) {
@@ -46,7 +48,8 @@ exports.handler = async function(event) {
         body: JSON.stringify(data)
       };
 
-    } else if (payload.action === "query") {
+    } else if (action === "query") {
+      // For query, we expect a store_id and a query string.
       const storeId = payload.store_id;
       if (!storeId) {
         throw new Error("Missing 'store_id' for vector store query.");
