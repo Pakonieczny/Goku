@@ -8,16 +8,19 @@ exports.handler = async function(event) {
     // Parse the request payload
     const payload = JSON.parse(event.body || "{}");
 
-    // Determine action based on provided properties.
+    // Determine action: if payload contains documents (or file_ids), we assume creation.
+    // (We expect the frontend to now send CSV file content as 'documents'.)
     const action = payload.action || (payload.documents ? "create" : "query");
 
     if (action === "create") {
       if (!payload.documents || !Array.isArray(payload.documents) || payload.documents.length === 0) {
         throw new Error("documents must be a non-empty array when creating a vector store.");
       }
+      // Include the model required by the API.
       const newPayload = {
         name: payload.name || "CSV Vector Store",
-        documents: payload.documents
+        documents: payload.documents,
+        model: "text-embedding-ada-002"
       };
       console.log("Creating vector store with payload:", newPayload);
 
@@ -47,7 +50,7 @@ exports.handler = async function(event) {
       };
 
     } else if (action === "query") {
-      // Query: require store_id and perform query as before.
+      // For query, require store_id and a query string.
       const storeId = payload.store_id;
       if (!storeId) {
         throw new Error("Missing 'store_id' for vector store query.");
