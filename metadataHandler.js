@@ -22,7 +22,7 @@
   }
 
   // Analyzes the image at the given index, embeds metadata into its EXIF,
-  // saves the metadata into the global photoMeta array, and immediately triggers an update of the grid.
+  // saves the metadata into the global photoMeta array, and immediately triggers a grid update.
   async function analyzeAndEmbedMetadata(imageIndex) {
     if (!window.previewImages || window.previewImages.length <= imageIndex) {
       console.error("No image available to analyze at index " + imageIndex);

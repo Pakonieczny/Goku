@@ -68,6 +68,7 @@
       border-radius: 3px; display: inline-block; vertical-align: middle;
       text-align: center; line-height: 120px; position: relative;
     }
+    /* Hide any unused drop zones */
     #fileDropZonesContainer { display: none; }
     #uploadedFilesList {
       width: 225px; height: 125px; resize: none; box-sizing: border-box;
@@ -157,18 +158,21 @@
   </style>
 </head>
 <body>
+  <!-- Configure Buttons -->
   <button id="configureButtonsBtn" class="btn waves-effect waves-light configurable">
     Configure Buttons
   </button>
   
+  <!-- Listing Description and CSV Upload -->
   <div id="descriptionAndFileUploadContainer">
     <div class="listing-desc-container" id="listingDescContainer">
       <h5>Listing Description</h5>
       <input id="listingDescInput" type="text" placeholder="Enter your question here">
     </div>
-    <textarea id="uploadedFilesList" class="materialize-textarea" rows="2" placeholder="Uploaded .csv, .doc, .docx files will appear here"></textarea>
+    <textarea id="uploadedFilesList" class="materialize-textarea" rows="2" placeholder="Drop CSV files here"></textarea>
   </div>
   
+  <!-- Etsy OAuth and Shop Listings -->
   <div id="topButtons">
     <button id="connectEtsyBtn" class="btn waves-effect waves-light configurable">
       Connect to Etsy
@@ -190,10 +194,12 @@
     </div>
   </div>
   
+  <!-- Etsy Listing Generator UI -->
   <div class="phrases-header configurable" id="userProvidedKeyPhrasesContainer">
     <span class="section-heading configurable">Search Key Phrases</span>
+    <!-- Repurposed Clear button now deletes all CSV files from stored memory -->
     <button id="clearKeyPhrasesBtn" class="btn-small waves-effect waves-light configurable">
-      Clear
+      Clear CSV Files
     </button>
     <button id="copyKeyPhrasesBtn" class="btn-small waves-effect waves-light configurable copy-btn">
       Copy
@@ -212,6 +218,7 @@
     </div>
   </div>
   
+  <!-- Below Search: Generate and Listing Title/Description -->
   <div id="belowSearch">
     <button id="generateBtn" class="btn waves-effect waves-light configurable">
       Generate
@@ -258,6 +265,7 @@
     </div>
   </div>
   
+  <!-- Preview Grid -->
   <div id="previewGridContainer">
     <div id="previewGridStatic">
       <div class="preview-cell" id="previewCell0">Empty</div>
@@ -273,6 +281,7 @@
     </div>
   </div>
   
+  <!-- Metadata Modal -->
   <div id="metadataModal" class="modal">
     <div class="modal-content">
       <h4>Photo Metadata</h4>
@@ -285,6 +294,7 @@
     </div>
   </div>
   
+  <!-- Analyze Rules Modal -->
   <div id="analyzeRulesModal" class="modal">
     <div class="modal-content">
       <h4>Photo Analysis Rules</h4>
@@ -307,6 +317,7 @@ Default Photo Analysis Rules:
     </div>
   </div>
   
+  <!-- Title Rules Modal -->
   <div id="titleRulesModal" class="modal">
     <div class="modal-content">
       <h4>Title Rules</h4>
@@ -348,6 +359,7 @@ Prohibited Words:
     </div>
   </div>
   
+  <!-- Description Rules Modal -->
   <div id="descriptionRulesModal" class="modal">
     <div class="modal-content">
       <h4>Description Rules</h4>
@@ -374,6 +386,7 @@ Option 3:
     </div>
   </div>
   
+  <!-- Keyword Rules Modal -->
   <div id="keywordRulesModal" class="modal">
     <div class="modal-content">
       <h4>Keyword Rules</h4>
@@ -396,6 +409,7 @@ Using Sales Report and Product List Files:
     </div>
   </div>
   
+  <!-- Button Config Modal -->
   <div id="buttonConfigModal" class="modal">
     <div class="modal-content">
       <h4>Configure Button Positions</h4>
@@ -409,6 +423,7 @@ Using Sales Report and Product List Files:
     </div>
   </div>
   
+  <!-- Crop Modal -->
   <div id="photoCropModal" class="modal" style="width:650px; height:650px;">
     <div class="crop-container" style="position: relative; width: 100%; height: 100%;">
       <h4 style="text-align:center; margin: 0 0 10px 0;">Crop Photo</h4>
@@ -461,6 +476,35 @@ Using Sales Report and Product List Files:
 • C H E C K: Follow us on social media.
 • S H O P  • P O L I C I E S: Check our policies.
 `;
+
+    // CSV Text Box Drop Listener
+    const uploadedFilesListElem = document.getElementById("uploadedFilesList");
+    uploadedFilesListElem.addEventListener("dragover", e => {
+      e.preventDefault();
+      e.stopPropagation();
+      uploadedFilesListElem.style.borderColor = "#000";
+    });
+    uploadedFilesListElem.addEventListener("dragleave", e => {
+      e.preventDefault();
+      e.stopPropagation();
+      uploadedFilesListElem.style.borderColor = "#ccc";
+    });
+    uploadedFilesListElem.addEventListener("drop", async e => {
+      e.preventDefault();
+      e.stopPropagation();
+      uploadedFilesListElem.style.borderColor = "#ccc";
+      const files = e.dataTransfer.files;
+      for (let file of files) {
+        if (/\.csv$/i.test(file.name)) {
+          try {
+            const fileData = await uploadCSVFile(file);
+            window.soldOrdersCSV.push(fileData);
+            updateUploadedFilesList();
+            await updateVectorStore();
+          } catch (err) { console.error(err); }
+        }
+      }
+    });
 
     function showMetadata(index) {
       const metadata = (window.photoMeta && window.photoMeta[index]) ? window.photoMeta[index] : "No metadata available.";
@@ -729,15 +773,15 @@ Using Sales Report and Product List Files:
             });
             previewBox.appendChild(cropBtn);
             
-            // If metadata exists, add a green checkmark icon with adjusted styling.
+            // Add checkmark if metadata exists.
             if (window.photoMeta[i] && window.photoMeta[i].trim() !== "") {
               let checkmark = document.createElement("span");
-              checkmark.innerHTML = "&#10003;";
-              checkmark.style.fontSize = "17px";  // Increased by ~8%
+              checkmark.innerHTML = "&#10003;"; // Unicode checkmark
+              checkmark.style.fontSize = "18px"; // Increased by 15% from 16px
               checkmark.style.color = "green";
               checkmark.style.position = "absolute";
-              checkmark.style.bottom = "10px";  // 10px from the bottom
-              checkmark.style.left = "5px";     // 5px from the left
+              checkmark.style.bottom = "20px"; // Moved down by 20px
+              checkmark.style.left = "5px";    // Remains 5px from the left
               previewBox.appendChild(checkmark);
             }
             
@@ -1147,8 +1191,12 @@ Important: Return ONLY the description as plain text.`;
       let text = document.getElementById("listingDescription").value;
       navigator.clipboard.writeText(text).catch(err => console.error("Copy error:", err));
     });
+    // Repurposed Clear button: Delete all CSV files from stored memory.
     document.getElementById("clearKeyPhrasesBtn").addEventListener("click", () => {
-      document.getElementById("searchKeyPhrases").value = "";
+      window.soldOrdersCSV = [];
+      localStorage.removeItem("soldOrdersCSV");
+      updateUploadedFilesList();
+      M.toast({ html: "CSV files deleted from stored memory." });
     });
     document.getElementById("copyKeyPhrasesBtn").addEventListener("click", () => {
       let lines = document.getElementById("searchKeyPhrases").value.split(/\n+/).map(l => l.trim()).filter(l => l !== "");
@@ -1415,7 +1463,6 @@ Important: Return ONLY the description as plain text.`;
       }
     }
 
-    // "Analyze Photos" button: process each non-reserved photo (indices 0 to 6) one-by-one.
     document.getElementById("analyzeMetadataBtn").addEventListener("click", async () => {
       const count = Math.min(7, window.previewImages.length);
       for (let i = 0; i < count; i++) {
