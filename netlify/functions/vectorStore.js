@@ -7,8 +7,10 @@ exports.handler = async function(event) {
     // Parse the incoming request body
     const payload = JSON.parse(event.body || "{}");
 
-    // If file_ids are provided, assume a creation action; otherwise, default to query
-    // but we also have new custom actions: "list_files" and "clear_csv_files".
+    // Determine action:
+    // - "create": if file_ids is provided
+    // - "query": if no file_ids and no specific action
+    // - Also support custom actions: "list_files", "clear_csv_files", "update_file_attributes"
     let action = "query";
     if (payload.file_ids && Array.isArray(payload.file_ids) && payload.file_ids.length > 0) {
       action = "create";
@@ -16,7 +18,7 @@ exports.handler = async function(event) {
       action = payload.action;
     }
 
-    // Common helper for fetch calls to OpenAI
+    // Helper for making OpenAI API requests with beta header
     async function openAIRequest(url, method = "GET", body = null) {
       const headers = {
         "Authorization": `Bearer ${apiKey}`,
@@ -44,35 +46,30 @@ exports.handler = async function(event) {
     }
 
     if (action === "create") {
-      // Creating (or updating) a vector store by attaching file_ids
+      // Creating a vector store by attaching file_ids
       if (!payload.file_ids || !Array.isArray(payload.file_ids) || payload.file_ids.length === 0) {
         throw new Error("file_ids must be a non-empty array when creating a vector store.");
       }
-
-      // Build the request body for the vector store creation
       const newPayload = {
         name: payload.name || "CSV Vector Store",
         file_ids: payload.file_ids
       };
 
       console.log("Creating vector store with payload:", newPayload);
-
-      // POST /v1/vector_stores
       const url = "https://api.openai.com/v1/vector_stores";
       const result = await openAIRequest(url, "POST", newPayload);
       console.log("Result from create vector store:", result);
       return result;
 
     } else if (action === "query") {
-      // For a vector store query, we expect a store_id
+      // Query a vector store (POST /v1/vector_stores/{storeId}/search)
       const storeId = payload.store_id;
       if (!storeId) {
         throw new Error("Missing 'store_id' for vector store query.");
       }
-      // POST /v1/vector_stores/{storeId}/search
       const searchObj = {
         query: payload.query || "",
-        max_num_results: payload.topK || 10, 
+        max_num_results: payload.topK || 10,
         rewrite_query: false
       };
       if (payload.filters) {
@@ -81,7 +78,6 @@ exports.handler = async function(event) {
       if (payload.ranking_options) {
         searchObj.ranking_options = payload.ranking_options;
       }
-
       const url = `https://api.openai.com/v1/vector_stores/${storeId}/search`;
       console.log(`Querying vector store ${storeId} with:`, searchObj);
       const result = await openAIRequest(url, "POST", searchObj);
@@ -89,12 +85,11 @@ exports.handler = async function(event) {
       return result;
 
     } else if (action === "list_files") {
-      // Custom action: list the files in a given vector store
+      // List files in a given vector store: GET /v1/vector_stores/{storeId}/files
       const storeId = payload.store_id;
       if (!storeId) {
         throw new Error("Missing 'store_id' for listing files.");
       }
-      // GET /v1/vector_stores/{storeId}/files
       const url = `https://api.openai.com/v1/vector_stores/${storeId}/files`;
       console.log(`Listing files in vector store ${storeId}...`);
       const result = await openAIRequest(url, "GET");
@@ -102,13 +97,11 @@ exports.handler = async function(event) {
       return result;
 
     } else if (action === "clear_csv_files") {
-      // Custom action: list all files, then remove CSV ones
+      // Clear CSV files: list files then delete those with .csv or .txt filenames
       const storeId = payload.store_id;
       if (!storeId) {
         throw new Error("Missing 'store_id' for clearing CSV files.");
       }
-
-      // 1) List the files
       const listUrl = `https://api.openai.com/v1/vector_stores/${storeId}/files`;
       const listResult = await openAIRequest(listUrl, "GET");
       if (listResult.statusCode !== 200) {
@@ -121,19 +114,14 @@ exports.handler = async function(event) {
           body: JSON.stringify({ status: "No files found." })
         };
       }
-      // 2) For each file that was originally CSV, delete it
       const files = listData.data;
       let deletedIds = [];
       for (let f of files) {
-        // If the original filename ends with ".csv" or if name is .txt from our CSV flow
-        // We'll just check if the "filename" has ".csv" or ".txt" to consider it a CSV
-        const originalFilename = f.filename || "";
+        const originalFilename = (f.metadata && f.metadata.name) || "";
         if (originalFilename.toLowerCase().endsWith(".csv") || originalFilename.toLowerCase().endsWith(".txt")) {
-          // DELETE /v1/vector_stores/{storeId}/files/{file_id}
           const deleteUrl = `https://api.openai.com/v1/vector_stores/${storeId}/files/${f.id}`;
           console.log("Deleting file from store:", deleteUrl);
           const deleteResult = await openAIRequest(deleteUrl, "DELETE");
-          // We won't stop if there's an error; just keep going
           if (deleteResult.statusCode === 200) {
             deletedIds.push(f.id);
           }
@@ -144,11 +132,24 @@ exports.handler = async function(event) {
         body: JSON.stringify({ status: "csv_files_cleared", deleted_file_ids: deletedIds })
       };
 
+    } else if (action === "update_file_attributes") {
+      // Update a vector store file's attributes
+      const storeId = payload.store_id;
+      const fileId = payload.file_id;
+      const attributes = payload.attributes;
+      if (!storeId || !fileId || !attributes) {
+        throw new Error("Missing store_id, file_id or attributes for update_file_attributes");
+      }
+      const url = `https://api.openai.com/v1/vector_stores/${storeId}/files/${fileId}`;
+      console.log("Updating file attributes for:", url, "with", attributes);
+      const result = await openAIRequest(url, "POST", { attributes });
+      return result;
+
     } else {
       return {
         statusCode: 400,
         body: JSON.stringify({
-          error: "Unknown action. Provide 'file_ids' for creation, 'query' with store_id, 'list_files' with store_id, or 'clear_csv_files' with store_id."
+          error: "Unknown action. Provide 'file_ids' for creation, 'query' with store_id, 'list_files' with store_id, 'clear_csv_files' with store_id, or 'update_file_attributes' with store_id, file_id, and attributes."
         })
       };
     }
