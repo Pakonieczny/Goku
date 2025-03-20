@@ -5,23 +5,29 @@ exports.handler = async function(event) {
     const apiKey = process.env.OPENAI_API_KEY;
     if (!apiKey) throw new Error("Missing OPENAI_API_KEY environment variable");
 
-    // Parse the request payload
-    const payload = JSON.parse(event.body || "{}");
+    // Parse the request payload from the front end.
+    const incomingPayload = JSON.parse(event.body || "{}");
 
-    // Determine action: if payload contains documents (or file_ids), we assume creation.
-    const action = payload.action || (payload.documents ? "create" : "query");
+    // Decide on action: if the incoming payload includes documents, we assume "create".
+    const action = incomingPayload.action || (incomingPayload.documents ? "create" : "query");
 
     if (action === "create") {
-      if (!payload.documents || !Array.isArray(payload.documents) || payload.documents.length === 0) {
+      // Validate that we have a non-empty array of documents.
+      if (!incomingPayload.documents || 
+          !Array.isArray(incomingPayload.documents) || 
+          incomingPayload.documents.length === 0) {
         throw new Error("documents must be a non-empty array when creating a vector store.");
       }
-      // Build payload with each document as an object with a "text" property.
-      const newPayload = {
-        name: payload.name || "CSV Vector Store",
-        documents: payload.documents, // expects an array of objects, e.g., [{ text: "CSV content here" }, ...]
+
+      // Build the payload as expected by the OpenAI vector store API.
+      // Each document should be an object with a "text" property.
+      const payload = {
+        name: incomingPayload.name || "CSV Vector Store",
+        documents: incomingPayload.documents, // Expected to be like: [{ text: "CSV file content" }, ...]
         model: "text-embedding-ada-002"
       };
-      console.log("Creating vector store with payload:", newPayload);
+
+      console.log("Creating vector store with payload:", payload);
 
       const response = await fetch("https://api.openai.com/v1/vector_stores", {
         method: "POST",
@@ -29,7 +35,7 @@ exports.handler = async function(event) {
           "Content-Type": "application/json",
           "Authorization": `Bearer ${apiKey}`
         },
-        body: JSON.stringify(newPayload)
+        body: JSON.stringify(payload)
       });
 
       if (!response.ok) {
@@ -49,17 +55,18 @@ exports.handler = async function(event) {
       };
 
     } else if (action === "query") {
-      // For query, require store_id and perform query as before.
-      const storeId = payload.store_id;
+      // Query mode: ensure that store_id is provided.
+      const storeId = incomingPayload.store_id;
       if (!storeId) {
         throw new Error("Missing 'store_id' for vector store query.");
       }
       const queryObj = {
-        query: payload.query || "",
-        top_k: payload.topK || 5
+        query: incomingPayload.query || "",
+        top_k: incomingPayload.topK || 5
       };
 
       console.log(`Querying vector store ${storeId} with:`, queryObj);
+
       const response = await fetch(`https://api.openai.com/v1/vector_stores/${storeId}/query`, {
         method: "POST",
         headers: {

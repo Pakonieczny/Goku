@@ -46,9 +46,7 @@
     }
     #searchKeyPhrases[rows="14"] { height: auto; }
     /* Ensure the CSV textarea can receive drop events */
-    #uploadedFilesList {
-      pointer-events: auto;
-    }
+    #uploadedFilesList { pointer-events: auto; }
     .flex-container { display: flex; gap: 10px; align-items: stretch; }
     .textbox-container { flex: 1; }
     .textbox-container textarea {
@@ -80,43 +78,24 @@
       font-size: 0.875rem;
       z-index: 10;
     }
-    .modal {
-      z-index: 9999 !important;
-    }
-    .modal-overlay {
-      z-index: 9998 !important;
-    }
+    .modal { z-index: 9999 !important; }
+    .modal-overlay { z-index: 9998 !important; }
     #previewGridContainer {
-      position: relative; 
-      margin: 20px auto; 
-      width: auto;
-      max-width: 720px; 
-      text-align: center;
-      z-index: 2000;
+      position: relative; margin: 20px auto; width: auto;
+      max-width: 720px; text-align: center; z-index: 2000;
     }
     #previewGridStatic {
-      display: grid; 
-      grid-template-columns: repeat(5, 120px);
-      grid-column-gap: 28px; 
-      grid-row-gap: 22px; 
-      margin: 0 auto;
+      display: grid; grid-template-columns: repeat(5, 120px);
+      grid-column-gap: 28px; grid-row-gap: 22px; margin: 0 auto;
     }
     .preview-cell {
-      position: relative; 
-      width: 120px; 
-      height: 158px; 
-      border: 2px solid #ccc;
-      border-radius: 3px; 
-      display: flex; 
-      flex-direction: column;
-      align-items: center; 
-      justify-content: center; 
-      font-size: 12px; 
-      color: #666;
+      position: relative; width: 120px; height: 158px;
+      border: 2px solid #ccc; border-radius: 3px;
+      display: flex; flex-direction: column;
+      align-items: center; justify-content: center;
+      font-size: 12px; color: #666;
     }
-    .preview-cell.reserved {
-      z-index: 2500; 
-    }
+    .preview-cell.reserved { z-index: 2500; }
     .preview-box { position: relative; width: 100%; height: 100%; }
     .preview-box img {
       width: 120px; height: 120px; object-fit: cover;
@@ -129,9 +108,9 @@
     }
     .number-overlay {
       position: absolute; top: 0; right: 0; width: 16px; height: 16px;
-      background-color: rgba(0,0,0,0.7); color: white; display: flex;
-      align-items: center; justify-content: center; font-size: 10px;
-      z-index: 999; border-radius: 3px;
+      background-color: rgba(0,0,0,0.7); color: white;
+      display: flex; align-items: center; justify-content: center;
+      font-size: 10px; z-index: 999; border-radius: 3px;
     }
     .metadata-status { margin-top: 5px; text-align: center; font-size: 14px; min-height: 20px; }
     .metadata-progress { width: 90%; }
@@ -147,14 +126,9 @@
     #topButtons { margin: 10px 0; }
     #etsyShopListingsContainer { position: relative; margin-top: 10px; margin-left: 10px; }
     #listingQueueCount {
-      width: 25px; 
-      height: 25px; 
-      border: 1px solid #000; 
-      display: inline-flex; 
-      align-items: center; 
-      justify-content: center; 
-      font-weight: bold;
-      margin-left: 5px; 
+      width: 25px; height: 25px; border: 1px solid #000;
+      display: inline-flex; align-items: center; justify-content: center;
+      font-weight: bold; margin-left: 5px;
     }
     .regen-btn, .copy-btn { width: 125px; }
     .update-btn { background-color: #FFA500 !important; color: white !important; }
@@ -508,10 +482,10 @@ Using Sales Report and Product List Files:
               reader.onerror = reject;
               reader.readAsText(file);
             });
-            // Create a fileData object including the CSV text content.
+            // Create an object with CSV file data
             const fileData = {
               name: file.name,
-              id: file.name + "-" + Date.now(),  // Generate a unique id
+              id: `${file.name}-${Date.now()}`,
               content: fileText
             };
             window.soldOrdersCSV.push(fileData);
@@ -652,7 +626,7 @@ Using Sales Report and Product List Files:
     }
 
     async function updateVectorStore() {
-      // Wrap each CSV file's content as an object with a "text" property.
+      // Map CSV file objects to documents (each with a "text" property)
       const documents = [...window.soldOrdersCSV, ...window.listingsCSV].map(file => ({ text: file.content || file.id }));
       if (!documents.length) return console.log("No supported CSV files uploaded yet.");
       try {
@@ -768,14 +742,14 @@ Using Sales Report and Product List Files:
             });
             previewBox.appendChild(cropBtn);
             
-            // Add checkmark 15px below the photo (using negative bottom offset)
+            // Add green checkmark 15px below the photo
             if (window.photoMeta[i] && window.photoMeta[i].trim() !== "") {
               let checkmark = document.createElement("span");
               checkmark.innerHTML = "&#10003;";
               checkmark.style.fontSize = "18px";
               checkmark.style.color = "green";
               checkmark.style.position = "absolute";
-              checkmark.style.bottom = "-15px";
+              checkmark.style.bottom = "-15px"; // 15px below the container
               checkmark.style.left = "5px";
               previewBox.appendChild(checkmark);
             }
