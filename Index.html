@@ -621,31 +621,35 @@ Using Sales Report and Product List Files:
     }
 
     async function updateVectorStore() {
-      const fileIds = window.uploadedCSVFileIds || [];
-      if (fileIds.length === 0) return console.log("No CSV files uploaded yet.");
-      try {
-        const vectorStorePayload = { 
-          name: "CSV Vector Store", 
-          file_ids: fileIds,
-          model: "text-embedding-ada-002"
-        };
-        console.log("Vector store payload:", vectorStorePayload);
-        const response = await fetch("/.netlify/functions/vectorStore", {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify(vectorStorePayload)
-        });
-        if (!response.ok) throw new Error("Error creating vector store");
-        const data = await response.json();
-        console.log("Vector store created/updated:", data);
-        if (data && data.id) {
-          localStorage.setItem("vectorStoreId", data.id);
-          console.log("Saved store_id in localStorage:", data.id);
-        }
-      } catch (err) {
-        console.error(err);
-      }
+  // Filter out any falsy IDs to ensure valid file_ids
+  const fileIds = (window.uploadedCSVFileIds || []).filter(id => id);
+  if (fileIds.length === 0) {
+    console.log("No valid CSV file IDs found. Skipping vector store creation.");
+    return;
+  }
+  try {
+    const vectorStorePayload = { 
+      name: "CSV Vector Store", 
+      file_ids: fileIds,
+      model: "text-embedding-ada-002"
+    };
+    console.log("Vector store payload:", vectorStorePayload);
+    const response = await fetch("/.netlify/functions/vectorStore", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(vectorStorePayload)
+    });
+    if (!response.ok) throw new Error("Error creating vector store");
+    const data = await response.json();
+    console.log("Vector store created/updated:", data);
+    if (data && data.id) {
+      localStorage.setItem("vectorStoreId", data.id);
+      console.log("Saved store_id in localStorage:", data.id);
     }
+  } catch (err) {
+    console.error(err);
+  }
+}
 
     const dropZone = document.getElementById("dropZone");
     dropZone.addEventListener("dragover", e => {
