@@ -119,10 +119,10 @@
     #belowSearch { margin-top: -180px; margin-left: 10px; }
     .title-container { margin-top: -50px; }
     #etsyListingTitleContainer { position: relative; width: 1000px; }
-    #etsyListingTitleContainer textarea { width: 1000px; }
+    #etsyListingTitleContainer textarea { width:1000px; }
     .description-container { margin-top: 0px; }
     #etsyListingDescriptionContainer { position: relative; width: 1000px; }
-    #etsyListingDescriptionContainer textarea { width: 1000px; }
+    #etsyListingDescriptionContainer textarea { width:1000px; }
     #userProvidedKeyPhrasesContainer { position: relative; top: 125px; left: 10px; }
     #topButtons { margin: 10px 0; }
     #etsyShopListingsContainer { position: relative; margin-top: 10px; margin-left: 10px; }
@@ -421,6 +421,19 @@ Using Sales Report and Product List Files:
   <!-- Include metadataHandler.js if needed -->
   <script src="metadataHandler.js"></script>
   <script>
+    /*
+      To quickly DISABLE these debug toasts, set DEBUG_TOASTS to false.
+      Or search for "if (window.DEBUG_TOASTS)" to remove them all.
+    */
+    window.DEBUG_TOASTS = true;
+
+    function maybeToast(message) {
+      // Helper function to easily remove or disable toasts
+      if (window.DEBUG_TOASTS) {
+        M.toast({ html: message });
+      }
+    }
+
     function stripMarkdownJSON(text) {
       return text;
     }
@@ -493,13 +506,16 @@ Using Sales Report and Product List Files:
       for (let file of files) {
         if (/\.csv$/i.test(file.name)) {
           try {
+            maybeToast("Dropping CSV file: " + file.name + "... uploading now");
             // Upload CSV file using uploadDocFile function
             const fileData = await uploadDocFile(file);
+            maybeToast("CSV file uploaded with ID: " + (fileData.id || "N/A"));
             window.uploadedCSVFileIds.push(fileData.id);
             uploadedFilesListElem.value = window.uploadedCSVFileIds.join("\n");
             await updateVectorStore();
           } catch (err) {
             console.error(err);
+            maybeToast("Error uploading CSV: " + err.message);
           }
         }
       }
@@ -553,8 +569,11 @@ Using Sales Report and Product List Files:
     function loadNextListingInQueue() {
       window.photoUpdateComplete = false;
       window.infoUpdateComplete = false;
-      if (window.listingQueue.length > 0) { document.getElementById("shopListings").value = window.listingQueue[0]; }
-      else { document.getElementById("shopListings").value = ""; }
+      if (window.listingQueue.length > 0) {
+        document.getElementById("shopListings").value = window.listingQueue[0];
+      } else {
+        document.getElementById("shopListings").value = "";
+      }
       updateListingQueueCount();
     }
     function afterBothUpdates() {
@@ -562,7 +581,9 @@ Using Sales Report and Product List Files:
       loadNextListingInQueue();
     }
     function checkIfBothUpdatesComplete() {
-      if (window.photoUpdateComplete && window.infoUpdateComplete) { afterBothUpdates(); }
+      if (window.photoUpdateComplete && window.infoUpdateComplete) {
+        afterBothUpdates();
+      }
     }
 
     function updateUploadedFilesList() {
@@ -595,90 +616,106 @@ Using Sales Report and Product List Files:
     }
 
     async function uploadDocFile(file) {
-  return new Promise((resolve, reject) => {
-    const reader = new FileReader();
-    reader.onload = async (event) => {
-      try {
-        const dataURL = event.target.result;
-        let base64Content;
-        let newFileName = file.name;
-        let contentType = "text/plain"; // default to text/plain for converted CSV
+      maybeToast("uploadDocFile: Reading file '" + file.name + "'");
+      return new Promise((resolve, reject) => {
+        const reader = new FileReader();
+        reader.onload = async (event) => {
+          try {
+            maybeToast("uploadDocFile: File read complete, sending to server...");
+            const dataURL = event.target.result;
+            let base64Content;
+            let newFileName = file.name;
+            let contentType = "text/plain"; // default to text/plain for converted CSV
 
-        if (/\.csv$/i.test(file.name)) {
-          // Parse CSV and generate a text summary
-          const csvText = dataURL.split(",")[1] ? atob(dataURL.split(",")[1]) : "";
-          const parsed = Papa.parse(csvText, { header: true });
-          let summary = "";
-          if (parsed.data && parsed.data.length > 0) {
-            // Create a summary: header and first 10 rows
-            const header = Object.keys(parsed.data[0]).join(", ");
-            summary += header + "\n";
-            const rows = parsed.data.slice(0, 10);
-            rows.forEach(row => {
-              summary += Object.values(row).join(", ") + "\n";
+            if (/\.csv$/i.test(file.name)) {
+              // Parse CSV and generate a text summary
+              const csvText = dataURL.split(",")[1] ? atob(dataURL.split(",")[1]) : "";
+              const parsed = Papa.parse(csvText, { header: true });
+              let summary = "";
+              if (parsed.data && parsed.data.length > 0) {
+                // Create a summary: header and first 10 rows
+                const header = Object.keys(parsed.data[0]).join(", ");
+                summary += header + "\n";
+                const rows = parsed.data.slice(0, 10);
+                rows.forEach(row => {
+                  summary += Object.values(row).join(", ") + "\n";
+                });
+              }
+              // Convert summary to base64
+              base64Content = btoa(summary);
+              // Change file name extension to .txt for compatibility
+              newFileName = file.name.replace(/\.csv$/i, ".txt");
+            } else {
+              // For other files, use the original content
+              base64Content = dataURL.split(",")[1];
+              // Set contentType based on file extension if needed
+              if (file.name.toLowerCase().endsWith(".docx")) {
+                contentType = "application/vnd.openxmlformats-officedocument.wordprocessingml.document";
+              } else if (file.name.toLowerCase().endsWith(".doc")) {
+                contentType = "application/msword";
+              }
+            }
+            
+            if (!base64Content) throw new Error("File content is empty.");
+
+            const payload = { file: base64Content, fileName: newFileName, purpose: "user_data" };
+            const response = await fetch("/.netlify/functions/uploadFile", {
+              method: "POST",
+              headers: { "Content-Type": "application/json" },
+              body: JSON.stringify(payload)
             });
+            if (!response.ok) {
+              throw new Error("Upload failed with status " + response.status);
+            }
+            const fileData = await response.json();
+            fileData.name = fileData.name || newFileName;
+            // Ensure an ID is returned; if not, create one
+            fileData.id = fileData.id || newFileName || ('file-' + Date.now());
+            maybeToast("uploadDocFile: Success. File ID: " + fileData.id);
+            resolve(fileData);
+          } catch (err) { 
+            maybeToast("uploadDocFile: ERROR -> " + err.message);
+            reject(err); 
           }
-          // Convert summary to base64
-          base64Content = btoa(summary);
-          // Change file name extension to .txt for compatibility
-          newFileName = file.name.replace(/\.csv$/i, ".txt");
-        } else {
-          // For other files, use the original content
-          base64Content = dataURL.split(",")[1];
-          // Set contentType based on file extension if needed
-          if (file.name.toLowerCase().endsWith(".docx")) {
-            contentType = "application/vnd.openxmlformats-officedocument.wordprocessingml.document";
-          } else if (file.name.toLowerCase().endsWith(".doc")) {
-            contentType = "application/msword";
-          }
-        }
-        
-        if (!base64Content) throw new Error("File content is empty.");
-
-        const payload = { file: base64Content, fileName: newFileName, purpose: "user_data" };
-        const response = await fetch("/.netlify/functions/uploadFile", {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify(payload)
-        });
-        if (!response.ok) throw new Error("Upload failed with status " + response.status);
-        const fileData = await response.json();
-        fileData.name = fileData.name || newFileName;
-        // Ensure an ID is returned; if not, create one
-        fileData.id = fileData.id || newFileName || ('file-' + Date.now());
-        resolve(fileData);
-      } catch (err) { 
-        reject(err); 
-      }
-    };
-    reader.onerror = reject;
-    reader.readAsDataURL(file);
-  });
-}
+        };
+        reader.onerror = (err) => {
+          maybeToast("uploadDocFile: FileReader error -> " + err);
+          reject(err);
+        };
+        reader.readAsDataURL(file);
+      });
+    }
 
     async function updateVectorStore() {
       const fileIds = window.uploadedCSVFileIds || [];
-      if (fileIds.length === 0) return console.log("No CSV files uploaded yet.");
+      if (fileIds.length === 0) {
+        maybeToast("No CSV files uploaded yet, skipping vector store update.");
+        return;
+      }
+      maybeToast("Sending file_ids to vector store creation: " + fileIds.join(", "));
       try {
         const vectorStorePayload = { 
           name: "CSV Vector Store", 
           file_ids: fileIds,
           model: "text-embedding-ada-002"
         };
-        console.log("Vector store payload:", vectorStorePayload);
+        maybeToast("updateVectorStore: " + JSON.stringify(vectorStorePayload));
         const response = await fetch("/.netlify/functions/vectorStore", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify(vectorStorePayload)
         });
-        if (!response.ok) throw new Error("Error creating vector store");
+        if (!response.ok) {
+          throw new Error("Error creating vector store, status " + response.status);
+        }
         const data = await response.json();
-        console.log("Vector store created/updated:", data);
+        maybeToast("Vector store created/updated. Store ID: " + data.id);
         if (data && data.id) {
           localStorage.setItem("vectorStoreId", data.id);
-          console.log("Saved store_id in localStorage:", data.id);
+          maybeToast("Saved store_id in localStorage: " + data.id);
         }
       } catch (err) {
+        maybeToast("updateVectorStore error: " + err.message);
         console.error(err);
       }
     }
@@ -701,6 +738,7 @@ Using Sales Report and Product List Files:
         let file = files[i];
         if (/image\/(jpeg|png)/.test(file.type)) {
           try {
+            maybeToast("Dropping image " + file.name);
             const dataURL = await new Promise((resolve, reject) => {
               const reader = new FileReader();
               reader.onload = event => resolve(event.target.result);
@@ -711,7 +749,10 @@ Using Sales Report and Product List Files:
             window.previewImages.push(resizedDataURL);
             window.photoNames.push(file.name);
             window.photoIds.push('img-' + Date.now() + '-' + i);
-          } catch (err) { console.error(err); }
+          } catch (err) {
+            console.error(err);
+            maybeToast("Error dropping image: " + err.message);
+          }
         } else {
           M.toast({ html: "Only JPEG/PNG images supported." });
         }
@@ -988,6 +1029,7 @@ Using Sales Report and Product List Files:
         return;
       }
       try {
+        maybeToast("Exchanging Etsy auth code for token...");
         let response = await fetch(`/.netlify/functions/exchangeToken?code=${encodeURIComponent(code)}&code_verifier=${encodeURIComponent(codeVerifier)}`);
         let tokenData = await response.json();
         if (tokenData.access_token) {
@@ -1022,6 +1064,7 @@ Using Sales Report and Product List Files:
         description: finalDescription,
         tags: document.getElementById("searchKeyPhrases").value.split("\n").map(s => s.trim()).filter(s => s !== "")
       };
+      maybeToast("Updating Etsy listing info: " + JSON.stringify(payload).substring(0,200) + "...");
       let updateUrl = `/.netlify/functions/updateListing?listingId=${listingId}&token=${encodeURIComponent(window.accessToken)}`;
       try {
         let response = await fetch(updateUrl, {
@@ -1052,13 +1095,16 @@ Using Sales Report and Product List Files:
       let btn = document.getElementById("photoUploadNewBtn");
       btn.disabled = true;
       try {
+        maybeToast("Uploading photos to Etsy...");
         await uploadPhotos();
+        maybeToast("Uploading reserved photos to Etsy...");
         await uploadReservedPhotos();
         M.toast({ html: "Photos updated successfully!" });
         window.photoUpdateComplete = true;
         checkIfBothUpdatesComplete();
       } catch (err) {
         console.error(err);
+        M.toast({ html: "Error uploading photos: " + err.message });
       } finally {
         btn.disabled = false;
       }
@@ -1082,6 +1128,7 @@ Using Sales Report and Product List Files:
     });
 
     document.getElementById("generateBtn").addEventListener("click", async () => {
+      maybeToast("Generate: generating title & description...");
       await Promise.all([generateTitleOnly(), generateDescriptionOnly()]);
     });
     
@@ -1102,6 +1149,7 @@ Search KeyPhrases: "${keyPhrases}"
 --- Rules for TITLE ---
 ${stripMarkdownJSON(rulesText)}
 Important: Return ONLY the title as plain text.`;
+      maybeToast("generateTitleOnly: sending request to OpenAI...");
       document.getElementById("listingTitle").value = "Generating title...";
       let payload = {
         model: window.modelName,
@@ -1142,6 +1190,7 @@ Search KeyPhrases: "${keyPhrases}"
 --- Rules for DESCRIPTION ---
 ${stripMarkdownJSON(rulesText)}
 Important: Return ONLY the description as plain text.`;
+      maybeToast("generateDescriptionOnly: sending request to OpenAI...");
       document.getElementById("listingDescription").value = "Generating description...";
       let payload = {
         model: window.modelName,
@@ -1165,6 +1214,7 @@ Important: Return ONLY the description as plain text.`;
     }
 
     async function callOpenAI(payload) {
+      maybeToast("callOpenAI: " + JSON.stringify(payload).substring(0,200) + "...");
       let response = await fetch("/.netlify/functions/openaiProxy", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
@@ -1174,7 +1224,9 @@ Important: Return ONLY the description as plain text.`;
         let errorData = await response.json();
         throw new Error("API Error: " + (errorData.error ? errorData.error.message : response.statusText));
       }
-      return await response.json();
+      let jsonData = await response.json();
+      maybeToast("callOpenAI: received response!");
+      return jsonData;
     }
 
     function updateTitleCount(text) {
@@ -1463,12 +1515,16 @@ Important: Return ONLY the description as plain text.`;
         return;
       }
       let keywordRules = stripMarkdownJSON(document.getElementById("keywordRulesTextarea").value);
+      maybeToast("Starting to generate key phrases from question: " + question);
       try {
         let phrasesArray = await getInitialPhrases(question, keywordRules);
+        maybeToast("Initial phrases from vector store: " + JSON.stringify(phrasesArray));
         for (let i = 0; i < phrasesArray.length; i++) {
           if (phrasesArray[i].length > 20) {
+            maybeToast("Phrase too long, regenerating -> " + phrasesArray[i]);
             let otherValid = phrasesArray.filter((_, idx) => idx !== i && phrasesArray[idx].length <= 20);
             let newPhrase = await regenerateSinglePhrase(question, keywordRules, otherValid);
+            maybeToast("Regenerated phrase: " + newPhrase);
             phrasesArray[i] = newPhrase;
           }
         }
@@ -1488,6 +1544,7 @@ Important: Return ONLY the description as plain text.`;
       let retrievedContext = "";
       if (store_id) {
         try {
+          maybeToast("Querying vector store for context, store_id: " + store_id);
           let resp = await fetch("/.netlify/functions/vectorStore", {
             method: "POST",
             headers: { "Content-Type": "application/json" },
@@ -1501,14 +1558,18 @@ Important: Return ONLY the description as plain text.`;
           if (resp.ok) {
             let data = await resp.json();
             retrievedContext = data?.data || "";
+            maybeToast("Received context from vector store: " + JSON.stringify(retrievedContext).substring(0,200) + "...");
           } else {
             console.warn("Could not retrieve CSV context from vector store. HTTP status:", resp.status);
+            maybeToast("Could not retrieve context from store. HTTP " + resp.status);
           }
         } catch (err) {
           console.error("Error retrieving CSV context:", err);
+          maybeToast("getInitialPhrases error: " + err.message);
         }
       } else {
         console.warn("No store_id found in localStorage. CSV context may not be loaded!");
+        maybeToast("Warning: no store_id in localStorage. Possibly no CSV context loaded.");
       }
       let prompt = `
 Here is some relevant data from our CSV files:
@@ -1531,6 +1592,7 @@ Generate exactly 13 SEO key phrases (each ≤ 20 characters). Return as plain te
         temperature: 0.7,
         max_tokens: 500
       };
+      maybeToast("Sending prompt to OpenAI for initial phrases...");
       let data = await callOpenAI(payload);
       let answer = data.choices[0].message.content || "";
       let phrasesArray = answer
@@ -1586,6 +1648,7 @@ Return only one phrase in plain text.
           temperature: 0.7,
           max_tokens: 150
         };
+        maybeToast(`Regenerate attempt #${attempt}: calling OpenAI...`);
         let data = await callOpenAI(payload);
         let answerText = data.choices[0].message.content || "";
         let candidate = answerText.trim()
