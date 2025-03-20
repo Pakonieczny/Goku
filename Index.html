@@ -166,7 +166,8 @@
     <span class="section-heading configurable">Search Key Phrases</span>
     <!-- Clear button now deletes files from the vector store -->
     <button id="clearKeyPhrasesBtn" class="btn-small waves-effect waves-light configurable">Clear CSV Files</button>
-    <button id="copyKeyPhrasesBtn" class="btn-small waves-effect waves-light configurable copy-btn">Copy</button>
+    <!-- Renamed to "Retrieve Files" and updated function -->
+    <button id="copyKeyPhrasesBtn" class="btn-small waves-effect waves-light configurable copy-btn">Retrieve Files</button>
     <div id="dropZone" class="configurable">Image Drop</div>
     <button id="analyzeMetadataBtn" class="btn waves-effect waves-light configurable">Analyze Photos</button>
     <button id="showAnalyzeRulesBtn" class="btn waves-effect waves-light configurable" data-target="analyzeRulesModal" style="margin-top:25px;">Analyze Rules</button>
@@ -949,7 +950,7 @@ Using Sales Report and Product List Files:
         loadNextListingInQueue();
       });
       // On load, list the CSV files from the vector store
-      await listVectorStoreFiles();
+      await listVectorStoreFiles(); 
     });
 
     async function exchangeCodeForToken(code) {
@@ -1205,7 +1206,7 @@ Important: Return ONLY the description as plain text.`;
     }
     document.getElementById("clearKeyPhrasesBtn").addEventListener("click", clearStoreCSVFiles);
 
-    // NEW: list vector store files and display their base names (without .csv/.txt)
+    // NEW: list vector store files and display their base names in the .csv text area
     async function listVectorStoreFiles() {
       let storeId = localStorage.getItem("vectorStoreId");
       if (!storeId) {
@@ -1244,10 +1245,46 @@ Important: Return ONLY the description as plain text.`;
       }
     }
 
-    document.getElementById("copyKeyPhrasesBtn").addEventListener("click", () => {
-      let lines = document.getElementById("searchKeyPhrases").value.split(/\n+/).map(l => l.trim()).filter(l => l !== "");
-      navigator.clipboard.writeText(lines.join(", ")).catch(err => console.error("Error copying key phrases:", err));
+    // Reassigned the "Retrieve Files" button to populate .csv text area with vector store file list
+    document.getElementById("copyKeyPhrasesBtn").addEventListener("click", async () => {
+      let storeId = localStorage.getItem("vectorStoreId");
+      if (!storeId) {
+        M.toast({ html: "No vector store ID found in localStorage. Not listing files." });
+        return;
+      }
+      const payload = {
+        action: "list_files",
+        store_id: storeId
+      };
+      try {
+        maybeToast("Retrieving file names from store " + storeId + "...");
+        const response = await fetch("/.netlify/functions/vectorStore", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify(payload)
+        });
+        if (!response.ok) {
+          maybeToast("Error listing files. Status: " + response.status);
+          return;
+        }
+        const data = await response.json();
+        if (!data.data || !Array.isArray(data.data)) {
+          maybeToast("No files found in the store.");
+          return;
+        }
+        const displayNames = data.data.map(file => {
+          let fname = file.filename || "";
+          return fname.replace(/(\.csv|\.txt)$/i, "");
+        });
+        document.getElementById("uploadedFilesList").value = displayNames.join("\n");
+        maybeToast("File names retrieved and placed in the CSV text area!");
+      } catch (err) {
+        console.error(err);
+        maybeToast("Error listing files: " + err.message);
+      }
     });
+
+    document.getElementById("copyKeyPhrasesBtn").removeAttribute("title"); // remove old tooltip if any
 
     document.getElementById("configureButtonsBtn").addEventListener("click", () => {
       let configContainer = document.getElementById("buttonConfigContainer");
