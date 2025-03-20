@@ -951,10 +951,10 @@ Using Sales Report and Product List Files:
       await listVectorStoreFiles();
     });
 
-    // NEW: On page reload or when revisiting the page, refresh the CSV file list.
-    window.addEventListener("pageshow", async () => {
+    // ALTERNATE SOLUTION: Poll the vector store every 10 seconds to refresh the CSV file list.
+    setInterval(async () => {
       await listVectorStoreFiles();
-    });
+    }, 10000);
 
     async function exchangeCodeForToken(code) {
       let codeVerifier = localStorage.getItem("etsy_code_verifier");
@@ -1209,7 +1209,7 @@ Important: Return ONLY the description as plain text.`;
     }
     document.getElementById("clearKeyPhrasesBtn").addEventListener("click", clearStoreCSVFiles);
 
-    // NEW: list vector store files and display their base names (without .csv/.txt)
+    // ALTERNATE: List vector store files and display their base names (without .csv/.txt)
     async function listVectorStoreFiles() {
       let storeId = localStorage.getItem("vectorStoreId");
       if (!storeId) {
