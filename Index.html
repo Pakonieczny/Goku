@@ -8,6 +8,8 @@
   <!-- Import Google Material Icons and Materialize CSS -->
   <link href="https://fonts.googleapis.com/icon?family=Material+Icons" rel="stylesheet">
   <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/materialize/1.0.0/css/materialize.min.css">
+  <!-- Include PapaParse for CSV parsing -->
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/PapaParse/5.3.2/papaparse.min.js"></script>
   <!-- Include piexifjs for EXIF manipulation -->
   <script src="https://cdn.jsdelivr.net/npm/piexifjs@1.0.4/piexif.min.js"></script>
   <!-- Include SortableJS -->
@@ -75,8 +77,7 @@
     #uploadedFilesList {
       width: 225px; height: 125px; resize: none; box-sizing: border-box;
       border: 1px solid grey; margin-left: 85px; position: relative;
-      font-size: 0.875rem;
-      z-index: 10;
+      font-size: 0.875rem; z-index: 10;
     }
     .modal { z-index: 9999 !important; }
     .modal-overlay { z-index: 9998 !important; }
@@ -417,6 +418,7 @@ Using Sales Report and Product List Files:
   
   <script src="https://code.jquery.com/jquery-3.6.0.min.js"></script>
   <script src="https://cdnjs.cloudflare.com/ajax/libs/materialize/1.0.0/js/materialize.min.js"></script>
+  <!-- Include metadataHandler.js if needed -->
   <script src="metadataHandler.js"></script>
   <script>
     function stripMarkdownJSON(text) {
@@ -455,6 +457,23 @@ Using Sales Report and Product List Files:
 • S H O P  • P O L I C I E S: Check our policies.
 `;
 
+    // CSV Preprocessing function using PapaParse
+    function preprocessCSVContent(csvText) {
+      // Parse the CSV text with header option
+      var parsed = Papa.parse(csvText, { header: true });
+      var data = parsed.data;
+      if (!data || data.length === 0) return "";
+      // Create a summary by taking the header and first 10 rows
+      var header = Object.keys(data[0]).join(", ");
+      var summary = header + "\n";
+      var rowsToUse = data.slice(0, 10);
+      rowsToUse.forEach(row => {
+        var rowValues = Object.keys(row).map(key => row[key]);
+        summary += rowValues.join(", ") + "\n";
+      });
+      return summary;
+    }
+
     // CSV Drop Listener on the uploadedFilesList textarea
     const uploadedFilesListElem = document.getElementById("uploadedFilesList");
     uploadedFilesListElem.addEventListener("dragover", e => {
@@ -482,16 +501,20 @@ Using Sales Report and Product List Files:
               reader.onerror = reject;
               reader.readAsText(file);
             });
-            // Create an object with CSV file data
+            // Preprocess the CSV content to create a summary string
+            const processedText = preprocessCSVContent(fileText);
+            // Create an object with CSV file data (using processed content)
             const fileData = {
               name: file.name,
               id: `${file.name}-${Date.now()}`,
-              content: fileText
+              content: processedText
             };
             window.soldOrdersCSV.push(fileData);
             updateUploadedFilesList();
             await updateVectorStore();
-          } catch (err) { console.error(err); }
+          } catch (err) {
+            console.error(err);
+          }
         }
       }
     });
@@ -519,21 +542,13 @@ Using Sales Report and Product List Files:
     function restoreDataAfterRedirect() {
       try {
         let soCSV = localStorage.getItem("soldOrdersCSV");
-        if (soCSV) {
-          window.soldOrdersCSV = JSON.parse(soCSV);
-        }
+        if (soCSV) { window.soldOrdersCSV = JSON.parse(soCSV); }
         let liCSV = localStorage.getItem("listingsCSV");
-        if (liCSV) {
-          window.listingsCSV = JSON.parse(liCSV);
-        }
+        if (liCSV) { window.listingsCSV = JSON.parse(liCSV); }
         let storedShopListingsText = localStorage.getItem("shopListingsText");
-        if (storedShopListingsText) {
-          document.getElementById("shopListings").value = storedShopListingsText;
-        }
+        if (storedShopListingsText) { document.getElementById("shopListings").value = storedShopListingsText; }
         let storedQueue = localStorage.getItem("listingQueue");
-        if (storedQueue) {
-          window.listingQueue = JSON.parse(storedQueue);
-        }
+        if (storedQueue) { window.listingQueue = JSON.parse(storedQueue); }
         loadNextListingInQueue();
       } catch (err) {
         console.error("Error restoring data after redirect:", err);
@@ -552,11 +567,8 @@ Using Sales Report and Product List Files:
     function loadNextListingInQueue() {
       window.photoUpdateComplete = false;
       window.infoUpdateComplete = false;
-      if (window.listingQueue.length > 0) {
-        document.getElementById("shopListings").value = window.listingQueue[0];
-      } else {
-        document.getElementById("shopListings").value = "";
-      }
+      if (window.listingQueue.length > 0) { document.getElementById("shopListings").value = window.listingQueue[0]; }
+      else { document.getElementById("shopListings").value = ""; }
       updateListingQueueCount();
     }
     function afterBothUpdates() {
@@ -564,9 +576,7 @@ Using Sales Report and Product List Files:
       loadNextListingInQueue();
     }
     function checkIfBothUpdatesComplete() {
-      if (window.photoUpdateComplete && window.infoUpdateComplete) {
-        afterBothUpdates();
-      }
+      if (window.photoUpdateComplete && window.infoUpdateComplete) { afterBothUpdates(); }
     }
 
     function updateUploadedFilesList() {
@@ -626,8 +636,8 @@ Using Sales Report and Product List Files:
     }
 
     async function updateVectorStore() {
-      // Map CSV file objects to documents (each with a "text" property)
-      const documents = [...window.soldOrdersCSV, ...window.listingsCSV].map(file => ({ text: file.content || file.id }));
+      // Map CSV file objects to documents with a "text" property.
+      const documents = [...window.soldOrdersCSV, ...window.listingsCSV].map(file => ({ text: file.content ? file.content.trim() : file.id }));
       if (!documents.length) return console.log("No supported CSV files uploaded yet.");
       try {
         const vectorStorePayload = { 
@@ -635,6 +645,7 @@ Using Sales Report and Product List Files:
           documents,
           model: "text-embedding-ada-002"
         };
+        console.log("Vector store payload:", vectorStorePayload);
         const response = await fetch("/.netlify/functions/vectorStore", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
@@ -749,7 +760,7 @@ Using Sales Report and Product List Files:
               checkmark.style.fontSize = "18px";
               checkmark.style.color = "green";
               checkmark.style.position = "absolute";
-              checkmark.style.bottom = "-15px"; // 15px below the container
+              checkmark.style.bottom = "-15px";
               checkmark.style.left = "5px";
               previewBox.appendChild(checkmark);
             }
@@ -1040,9 +1051,7 @@ Using Sales Report and Product List Files:
       const bstr = atob(arr[1]);
       let n = bstr.length;
       const u8arr = new Uint8Array(n);
-      while (n--) {
-        u8arr[n] = bstr.charCodeAt(n);
-      }
+      while (n--) { u8arr[n] = bstr.charCodeAt(n); }
       return new Blob([u8arr], { type: mime });
     }
 
@@ -1215,12 +1224,8 @@ Important: Return ONLY the description as plain text.`;
           <td><input type="number" id="${id}_left" value="${parseInt(currentLeft)||0}"></td>`;
         let topInput = tr.querySelector(`#${id}_top`);
         let leftInput = tr.querySelector(`#${id}_left`);
-        topInput.addEventListener("input", () => {
-          el.style.top = topInput.value + "px";
-        });
-        leftInput.addEventListener("input", () => {
-          el.style.left = leftInput.value + "px";
-        });
+        topInput.addEventListener("input", () => { el.style.top = topInput.value + "px"; });
+        leftInput.addEventListener("input", () => { el.style.left = leftInput.value + "px"; });
         tbody.appendChild(tr);
       });
       table.appendChild(tbody);
@@ -1256,10 +1261,7 @@ Important: Return ONLY the description as plain text.`;
       let elements = document.querySelectorAll(selectors);
       let positions = {};
       elements.forEach(el => {
-        positions[el.id] = {
-          top: el.style.top || "0px",
-          left: el.style.left || "0px"
-        };
+        positions[el.id] = { top: el.style.top || "0px", left: el.style.left || "0px" };
       });
       localStorage.setItem("buttonPositions", JSON.stringify(positions));
       M.toast({ html: "Button positions saved." });
@@ -1271,10 +1273,7 @@ Important: Return ONLY the description as plain text.`;
         let positions = JSON.parse(stored);
         for (let id in positions) {
           let el = document.getElementById(id);
-          if (el) {
-            el.style.top = positions[id].top;
-            el.style.left = positions[id].left;
-          }
+          if (el) { el.style.top = positions[id].top; el.style.left = positions[id].left; }
         }
       }
     }
