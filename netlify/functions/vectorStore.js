@@ -8,13 +8,19 @@ exports.handler = async function(event) {
     // Parse the request payload
     const payload = JSON.parse(event.body || "{}");
 
-    // Decide whether to create/update or query the vector store.
-    // If payload contains "file_ids" (or action is explicitly "create"), then we create/update.
-    // Otherwise, if payload.action is "query", we perform a query.
-    const action = payload.action || (payload.file_ids ? "create" : "query");
+    // Validate the payload for create action:
+    if (payload.file_ids) {
+      if (!Array.isArray(payload.file_ids) || payload.file_ids.length === 0) {
+        throw new Error("file_ids must be a non-empty array when creating a vector store.");
+      }
+    }
 
-    if (action === "create") {
-      // Create or update the vector store with new CSV (and related) file IDs.
+    // Explicitly set action if not provided.
+    payload.action = payload.action || (payload.file_ids ? "create" : "query");
+
+    if (payload.action === "create") {
+      console.log("Creating vector store with payload:", payload);
+
       const response = await fetch("https://api.openai.com/v1/vector_stores", {
         method: "POST",
         headers: {
@@ -40,9 +46,7 @@ exports.handler = async function(event) {
         body: JSON.stringify(data)
       };
 
-    } else if (action === "query") {
-      // Query the existing vector store for relevant CSV context.
-      // Expected payload: { action: "query", store_id: "...", query: "user question", topK: 5 }
+    } else if (payload.action === "query") {
       const storeId = payload.store_id;
       if (!storeId) {
         throw new Error("Missing 'store_id' for vector store query.");
@@ -52,7 +56,7 @@ exports.handler = async function(event) {
         top_k: payload.topK || 5
       };
 
-      // Make the actual request
+      console.log(`Querying vector store ${storeId} with:`, queryObj);
       const response = await fetch(`https://api.openai.com/v1/vector_stores/${storeId}/query`, {
         method: "POST",
         headers: {
@@ -84,7 +88,6 @@ exports.handler = async function(event) {
         body: JSON.stringify({ error: "Unknown action. Provide 'file_ids' or set action='query'." })
       };
     }
-
   } catch (error) {
     console.error("Exception in vectorStore function:", error);
     return {
