@@ -164,7 +164,7 @@
   
   <div class="phrases-header configurable" id="userProvidedKeyPhrasesContainer">
     <span class="section-heading configurable">Search Key Phrases</span>
-    <!-- Clear button now deletes files from the vector store -->
+    <!-- Clear button deletes files from the vector store -->
     <button id="clearKeyPhrasesBtn" class="btn-small waves-effect waves-light configurable">Clear CSV Files</button>
     <!-- Renamed to "Retrieve Files" and updated function -->
     <button id="copyKeyPhrasesBtn" class="btn-small waves-effect waves-light configurable copy-btn">Retrieve Files</button>
@@ -188,7 +188,9 @@
         </div>
         <div class="button-container configurable" style="margin-top: -60px;">
           <button id="regenTitleBtn" class="btn-small waves-effect waves-light configurable regen-btn">Re-Gen</button>
-          <button id="copyTitleBtn" class="btn-small waves-effect waves-light configurable copy-btn"><i class="material-icons">content_copy</i></button>
+          <button id="copyTitleBtn" class="btn-small waves-effect waves-light configurable copy-btn">
+            <i class="material-icons">content_copy</i>
+          </button>
         </div>
         <button id="showTitleRulesBtn" class="btn waves-effect waves-light rules-button configurable" data-target="titleRulesModal" style="display:none;">Title Rules</button>
       </div>
@@ -203,7 +205,9 @@
         </div>
         <div class="button-container configurable">
           <button id="regenDescriptionBtn" class="btn-small waves-effect waves-light configurable regen-btn">Re-Gen</button>
-          <button id="copyDescriptionBtn" class="btn-small waves-effect waves-light configurable copy-btn"><i class="material-icons">content_copy</i></button>
+          <button id="copyDescriptionBtn" class="btn-small waves-effect waves-light configurable copy-btn">
+            <i class="material-icons">content_copy</i>
+          </button>
         </div>
         <button id="showDescriptionRulesBtn" class="btn waves-effect waves-light rules-button configurable" data-target="descriptionRulesModal" style="display:none;">Description Rules</button>
       </div>
@@ -553,6 +557,7 @@ Using Sales Report and Product List Files:
       });
     }
 
+    // NOTE: Purpose changed here -> "vector_store"
     async function uploadDocFile(file) {
       maybeToast("uploadDocFile: Reading file '" + file.name + "'");
       return new Promise((resolve, reject) => {
@@ -588,7 +593,12 @@ Using Sales Report and Product List Files:
             }
             
             if (!base64Content) throw new Error("File content is empty.");
-            const payload = { file: base64Content, fileName: newFileName, purpose: "user_data" };
+            // The important part: purpose changed to "vector_store"
+            const payload = { 
+              file: base64Content, 
+              fileName: newFileName, 
+              purpose: "vector_store" 
+            };
             const response = await fetch("/.netlify/functions/uploadFile", {
               method: "POST",
               headers: { "Content-Type": "application/json" },
@@ -1206,7 +1216,7 @@ Important: Return ONLY the description as plain text.`;
     }
     document.getElementById("clearKeyPhrasesBtn").addEventListener("click", clearStoreCSVFiles);
 
-    // NEW: list vector store files and display their base names in the .csv text area
+    // list vector store files and display their base names in the .csv text area
     async function listVectorStoreFiles() {
       let storeId = localStorage.getItem("vectorStoreId");
       if (!storeId) {
