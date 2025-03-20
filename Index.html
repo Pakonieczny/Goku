@@ -16,7 +16,6 @@
   <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/cropperjs/1.5.13/cropper.min.css" />
   <script src="https://cdnjs.cloudflare.com/ajax/libs/cropperjs/1.5.13/cropper.min.js"></script>
   <style>
-    /* Basic layout */
     html, body {
       margin: 0; padding: 0; width: 100vw;
       font-family: Arial, sans-serif;
@@ -27,8 +26,6 @@
     }
     h5, label, p { text-align: left; }
     input, textarea { width: 100%; box-sizing: border-box; }
-    
-    /* Wrap Listing Description and File Drop Zones */
     #descriptionAndFileUploadContainer {
       display: flex; align-items: center;
     }
@@ -44,13 +41,10 @@
     .listing-desc-container input {
       width: 500px; height: 30px; border: 1px solid #000; padding: 5px;
     }
-    
-    /* "User Provided Search Key Phrases" textarea */
     #searchKeyPhrases {
       resize: none; box-sizing: border-box; border: 1px solid grey;
     }
     #searchKeyPhrases[rows="14"] { height: auto; }
-    
     .flex-container { display: flex; gap: 10px; align-items: stretch; }
     .textbox-container { flex: 1; }
     .textbox-container textarea {
@@ -69,18 +63,12 @@
       display: inline-block;
     }
     .count-text { font-style: italic; font-size: 0.9em; margin-top: 5px; }
-    
-    /* Drag and Drop Box: "Image Drop" */
     #dropZone {
       width: 712px; height: 120px; border: 2px dashed #ccc;
       border-radius: 3px; display: inline-block; vertical-align: middle;
       text-align: center; line-height: 120px; position: relative;
     }
-    
-    /* Remove the separate drop zones for Etsy Orders/Listings */
     #fileDropZonesContainer { display: none; }
-    
-    /* Uploaded files list styling */
     #uploadedFilesList {
       width: 225px; height: 125px; resize: none; box-sizing: border-box;
       border: 1px solid grey; margin-left: 85px; position: relative;
@@ -93,8 +81,6 @@
     .modal-overlay {
       z-index: 9998 !important;
     }
-    
-    /* Static 10-Photo Preview Grid */
     #previewGridContainer {
       position: relative; 
       margin: 20px auto; 
@@ -144,20 +130,15 @@
     }
     .metadata-status { margin-top: 5px; text-align: center; font-size: 14px; min-height: 20px; }
     .metadata-progress { width: 90%; }
-    
     #container13 { position: relative; width: 250px; top: -150px; }
     #belowSearch { margin-top: -180px; margin-left: 10px; }
-    
     .title-container { margin-top: -50px; }
     #etsyListingTitleContainer { position: relative; width: 1000px; }
     #etsyListingTitleContainer textarea { width: 1000px; }
-    
     .description-container { margin-top: 0px; }
     #etsyListingDescriptionContainer { position: relative; width: 1000px; }
     #etsyListingDescriptionContainer textarea { width: 1000px; }
-    
     #userProvidedKeyPhrasesContainer { position: relative; top: 125px; left: 10px; }
-    
     #topButtons { margin: 10px 0; }
     #etsyShopListingsContainer { position: relative; margin-top: 10px; margin-left: 10px; }
     #listingQueueCount {
@@ -176,12 +157,10 @@
   </style>
 </head>
 <body>
-  <!-- Configure Buttons control (also available in modal) -->
   <button id="configureButtonsBtn" class="btn waves-effect waves-light configurable">
     Configure Buttons
   </button>
   
-  <!-- Wrap Listing Description and Uploaded Files List -->
   <div id="descriptionAndFileUploadContainer">
     <div class="listing-desc-container" id="listingDescContainer">
       <h5>Listing Description</h5>
@@ -190,7 +169,6 @@
     <textarea id="uploadedFilesList" class="materialize-textarea" rows="2" placeholder="Uploaded .csv, .doc, .docx files will appear here"></textarea>
   </div>
   
-  <!-- Etsy OAuth and Shop Listings Section -->
   <div id="topButtons">
     <button id="connectEtsyBtn" class="btn waves-effect waves-light configurable">
       Connect to Etsy
@@ -207,13 +185,11 @@
         <span id="listingQueueCount">0</span>
       </div>
       <div class="textbox-container configurable">
-        <textarea id="shopListings" class="materialize-textarea" rows="2" 
-          placeholder="Enter up to 250 comma-separated 10-digit listing IDs" style="width:500px;"></textarea>
+        <textarea id="shopListings" class="materialize-textarea" rows="2" placeholder="Enter up to 250 comma-separated 10-digit listing IDs" style="width:500px;"></textarea>
       </div>
     </div>
   </div>
   
-  <!-- Etsy Listing Generator UI -->
   <div class="phrases-header configurable" id="userProvidedKeyPhrasesContainer">
     <span class="section-heading configurable">Search Key Phrases</span>
     <button id="clearKeyPhrasesBtn" class="btn-small waves-effect waves-light configurable">
@@ -223,7 +199,6 @@
       Copy
     </button>
     <div id="dropZone" class="configurable">Image Drop</div>
-    <!-- "Analyze Photos" now batch processes metadata without opening the modal -->
     <button id="analyzeMetadataBtn" class="btn waves-effect waves-light configurable">
       Analyze Photos
     </button>
@@ -298,7 +273,6 @@
     </div>
   </div>
   
-  <!-- Metadata Modal (for individual photo clicks) -->
   <div id="metadataModal" class="modal">
     <div class="modal-content">
       <h4>Photo Metadata</h4>
@@ -311,7 +285,6 @@
     </div>
   </div>
   
-  <!-- Analyze Rules Modal -->
   <div id="analyzeRulesModal" class="modal">
     <div class="modal-content">
       <h4>Photo Analysis Rules</h4>
@@ -334,7 +307,6 @@ Default Photo Analysis Rules:
     </div>
   </div>
   
-  <!-- Title Rules Modal -->
   <div id="titleRulesModal" class="modal">
     <div class="modal-content">
       <h4>Title Rules</h4>
@@ -376,7 +348,6 @@ Prohibited Words:
     </div>
   </div>
   
-  <!-- Description Rules Modal -->
   <div id="descriptionRulesModal" class="modal">
     <div class="modal-content">
       <h4>Description Rules</h4>
@@ -403,7 +374,6 @@ Option 3:
     </div>
   </div>
   
-  <!-- Keyword Rules Modal -->
   <div id="keywordRulesModal" class="modal">
     <div class="modal-content">
       <h4>Keyword Rules</h4>
@@ -426,7 +396,6 @@ Using Sales Report and Product List Files:
     </div>
   </div>
   
-  <!-- Button Config Modal -->
   <div id="buttonConfigModal" class="modal">
     <div class="modal-content">
       <h4>Configure Button Positions</h4>
@@ -440,7 +409,6 @@ Using Sales Report and Product List Files:
     </div>
   </div>
   
-  <!-- Crop Modal -->
   <div id="photoCropModal" class="modal" style="width:650px; height:650px;">
     <div class="crop-container" style="position: relative; width: 100%; height: 100%;">
       <h4 style="text-align:center; margin: 0 0 10px 0;">Crop Photo</h4>
@@ -454,20 +422,14 @@ Using Sales Report and Product List Files:
     </div>
   </div>
   
-  <!-- Include jQuery and Materialize JS -->
   <script src="https://code.jquery.com/jquery-3.6.0.min.js"></script>
   <script src="https://cdnjs.cloudflare.com/ajax/libs/materialize/1.0.0/js/materialize.min.js"></script>
-  
-  <!-- Load metadataHandler module -->
   <script src="metadataHandler.js"></script>
-  
   <script>
-    // Helper function to strip markdown or JSON formatting (currently a passthrough)
     function stripMarkdownJSON(text) {
       return text;
     }
 
-    // Global variables attached to window for access in metadataHandler.js
     window.ETSY_SHOP_URL = "https://www.etsy.com/shop/custombrites";
     window.CLIENT_ID = "k75zdspz4r99txpqdji7i2em";
     window.REDIRECT_URI = "https://delicate-tanuki-616ac0.netlify.app/";
@@ -476,8 +438,8 @@ Using Sales Report and Product List Files:
     window.soldOrdersCSV = [];
     window.listingsCSV = [];
     window.photoNames = [];
-    window.previewImages = [];   // Global array for non-reserved photos
-    window.photoMeta = [];       // Global array for metadata of non-reserved photos
+    window.previewImages = [];
+    window.photoMeta = [];
     window.draggedIndex = null;
     window.photoIds = [];
     window.currentCropIndex = null;
@@ -500,7 +462,6 @@ Using Sales Report and Product List Files:
 • S H O P  • P O L I C I E S: Check our policies.
 `;
 
-    // Helper function to show metadata in a modal (for individual photo clicks)
     function showMetadata(index) {
       const metadata = (window.photoMeta && window.photoMeta[index]) ? window.photoMeta[index] : "No metadata available.";
       document.getElementById("metadataTextarea").value = metadata;
@@ -678,7 +639,6 @@ Using Sales Report and Product List Files:
       }
     }
 
-    // Drop zone: process all files and then update grid.
     const dropZone = document.getElementById("dropZone");
     dropZone.addEventListener("dragover", e => {
       e.preventDefault();
@@ -769,22 +729,18 @@ Using Sales Report and Product List Files:
             });
             previewBox.appendChild(cropBtn);
             
-            // If metadata exists, add a green checkmark icon.
+            // If metadata exists, add a green checkmark icon with adjusted styling.
             if (window.photoMeta[i] && window.photoMeta[i].trim() !== "") {
               let checkmark = document.createElement("span");
               checkmark.innerHTML = "&#10003;";
-              // Increase size by 15% (from 16px to ~18px) and adjust position:
-              checkmark.style.fontSize = "18px";
+              checkmark.style.fontSize = "17px";  // Increased by ~8%
               checkmark.style.color = "green";
               checkmark.style.position = "absolute";
-              // Instead of bottom/left, we use bottom/right with a transform adjustment:
-              checkmark.style.bottom = "2px";
-              checkmark.style.left = "2px";
-              checkmark.style.transform = "translate(5px, 15px)";
+              checkmark.style.bottom = "10px";  // 10px from the bottom
+              checkmark.style.left = "5px";     // 5px from the left
               previewBox.appendChild(checkmark);
             }
             
-            // Clicking the photo opens the metadata modal.
             previewBox.addEventListener("click", () => { showMetadata(i); });
             cell.appendChild(previewBox);
             
@@ -1459,14 +1415,12 @@ Important: Return ONLY the description as plain text.`;
       }
     }
 
-    // "Analyze Photos" button: batch process metadata for each non-reserved photo individually.
+    // "Analyze Photos" button: process each non-reserved photo (indices 0 to 6) one-by-one.
     document.getElementById("analyzeMetadataBtn").addEventListener("click", async () => {
       const count = Math.min(7, window.previewImages.length);
       for (let i = 0; i < count; i++) {
-        // Process each photo individually; the metadataHandler calls updateStaticPreviewGrid() upon completion.
         await metadataHandler.analyzeAndEmbedMetadata(i);
       }
-      // No modal opening here.
     });
 
     async function generateTagPhrases() {
@@ -1498,29 +1452,30 @@ Important: Return ONLY the description as plain text.`;
 
     async function getInitialPhrases(question, keywordRules) {
       let store_id = localStorage.getItem("vectorStoreId");
-      if (!store_id) {
-        console.warn("No store_id found in localStorage. CSV context may not be loaded!");
-      }
       let retrievedContext = "";
-      try {
-        let resp = await fetch("/.netlify/functions/vectorStore", {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({
-            action: "query",
-            store_id,
-            query: question,
-            topK: 5
-          })
-        });
-        if (resp.ok) {
-          let data = await resp.json();
-          retrievedContext = data?.data || "";
-        } else {
-          console.warn("Could not retrieve CSV context from vector store. HTTP status:", resp.status);
+      if (store_id) {
+        try {
+          let resp = await fetch("/.netlify/functions/vectorStore", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({
+              action: "query",
+              store_id,
+              query: question,
+              topK: 5
+            })
+          });
+          if (resp.ok) {
+            let data = await resp.json();
+            retrievedContext = data?.data || "";
+          } else {
+            console.warn("Could not retrieve CSV context from vector store. HTTP status:", resp.status);
+          }
+        } catch (err) {
+          console.error("Error retrieving CSV context:", err);
         }
-      } catch (err) {
-        console.error("Error retrieving CSV context:", err);
+      } else {
+        console.warn("No store_id found in localStorage. CSV context may not be loaded!");
       }
       let prompt = `
 Here is some relevant data from our CSV files:
@@ -1556,23 +1511,25 @@ Generate exactly 13 SEO key phrases (each ≤ 20 characters). Return as plain te
       for (let attempt = 1; attempt <= maxAttempts; attempt++) {
         let store_id = localStorage.getItem("vectorStoreId");
         let retrievedContext = "";
-        try {
-          let resp = await fetch("/.netlify/functions/vectorStore", {
-            method: "POST",
-            headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({
-              action: "query",
-              store_id,
-              query: question,
-              topK: 5
-            })
-          });
-          if (resp.ok) {
-            let data = await resp.json();
-            retrievedContext = data?.data || "";
+        if (store_id) {
+          try {
+            let resp = await fetch("/.netlify/functions/vectorStore", {
+              method: "POST",
+              headers: { "Content-Type": "application/json" },
+              body: JSON.stringify({
+                action: "query",
+                store_id,
+                query: question,
+                topK: 5
+              })
+            });
+            if (resp.ok) {
+              let data = await resp.json();
+              retrievedContext = data?.data || "";
+            }
+          } catch (err) {
+            console.warn("Could not retrieve CSV context for single phrase regeneration:", err);
           }
-        } catch (err) {
-          console.warn("Could not retrieve CSV context for single phrase regeneration:", err);
         }
         let prompt = `
 We have 12 valid phrases:
