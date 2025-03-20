@@ -1,4 +1,5 @@
 // netlify/functions/vectorStore.js
+
 exports.handler = async function(event) {
   try {
     const apiKey = process.env.OPENAI_API_KEY;
@@ -48,19 +49,20 @@ exports.handler = async function(event) {
       };
 
     } else if (action === "query") {
-      // For query mode, we expect a file_id for file search.
-      const fileId = payload.file_id;
-      if (!fileId) {
-        throw new Error("Missing 'file_id' for file search query.");
+      // For the vector store query, we expect a store_id and a query string.
+      const storeId = payload.store_id;
+      if (!storeId) {
+        throw new Error("Missing 'store_id' for vector store query.");
       }
+
       const queryObj = {
         query: payload.query || "",
         top_k: payload.topK || 5
       };
 
-      console.log(`Querying file ${fileId} with:`, queryObj);
+      console.log(`Querying vector store ${storeId} with:`, queryObj);
 
-      const response = await fetch(`https://api.openai.com/v1/files/${fileId}/search`, {
+      const response = await fetch(`https://api.openai.com/v1/vector_stores/${storeId}/query`, {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
@@ -71,7 +73,7 @@ exports.handler = async function(event) {
 
       if (!response.ok) {
         const errorData = await response.json().catch(() => ({}));
-        console.error("Error response from OpenAI file search:", errorData);
+        console.error("Error response from OpenAI vector_stores query:", errorData);
         return {
           statusCode: response.status,
           body: JSON.stringify({ error: errorData })
@@ -79,7 +81,7 @@ exports.handler = async function(event) {
       }
 
       const data = await response.json();
-      console.log("File search success. Matches:", data);
+      console.log("Vector store query success. Matches:", data);
       return {
         statusCode: 200,
         body: JSON.stringify(data)
@@ -88,7 +90,7 @@ exports.handler = async function(event) {
     } else {
       return {
         statusCode: 400,
-        body: JSON.stringify({ error: "Unknown action. Provide 'file_ids' for creation or use 'query' with a file_id." })
+        body: JSON.stringify({ error: "Unknown action. Provide 'file_ids' for creation or use 'query' with a store_id." })
       };
     }
   } catch (error) {
