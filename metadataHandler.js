@@ -22,7 +22,7 @@
   }
 
   // Analyzes the image at the given index, embeds metadata into its EXIF,
-  // and saves the metadata into the global photoMeta array.
+  // saves the metadata into the global photoMeta array, and immediately triggers an update of the grid.
   async function analyzeAndEmbedMetadata(imageIndex) {
     if (!window.previewImages || window.previewImages.length <= imageIndex) {
       console.error("No image available to analyze at index " + imageIndex);
@@ -53,6 +53,10 @@
       window.photoMeta = window.photoMeta || [];
       window.photoMeta[imageIndex] = metadata;
       console.log(`Metadata embedded into photo #${imageIndex + 1} successfully!`);
+      // Immediately update the grid so the checkmark appears for this photo.
+      if (typeof window.updateStaticPreviewGrid === "function") {
+        window.updateStaticPreviewGrid();
+      }
     } catch (error) {
       console.error("Error in metadataHandler:", error);
     }

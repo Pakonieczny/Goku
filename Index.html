@@ -769,16 +769,18 @@ Using Sales Report and Product List Files:
             });
             previewBox.appendChild(cropBtn);
             
-            // If metadata exists, add a small green checkmark at bottom-left.
+            // If metadata exists, add a green checkmark icon.
             if (window.photoMeta[i] && window.photoMeta[i].trim() !== "") {
               let checkmark = document.createElement("span");
-              checkmark.className = "metadata-checkmark";
-              checkmark.innerHTML = "&#10003;";  // Unicode checkmark
+              checkmark.innerHTML = "&#10003;";
+              // Increase size by 15% (from 16px to ~18px) and adjust position:
+              checkmark.style.fontSize = "18px";
               checkmark.style.color = "green";
-              checkmark.style.fontSize = "16px";
               checkmark.style.position = "absolute";
+              // Instead of bottom/left, we use bottom/right with a transform adjustment:
               checkmark.style.bottom = "2px";
               checkmark.style.left = "2px";
+              checkmark.style.transform = "translate(5px, 15px)";
               previewBox.appendChild(checkmark);
             }
             
@@ -1457,17 +1459,14 @@ Important: Return ONLY the description as plain text.`;
       }
     }
 
-    // "Analyze Photos" now batch processes metadata for all non-reserved photos (indices 0 to 6)
-    // without automatically opening the metadata modal.
+    // "Analyze Photos" button: batch process metadata for each non-reserved photo individually.
     document.getElementById("analyzeMetadataBtn").addEventListener("click", async () => {
-      const tasks = [];
       const count = Math.min(7, window.previewImages.length);
       for (let i = 0; i < count; i++) {
-        tasks.push(metadataHandler.analyzeAndEmbedMetadata(i));
+        // Process each photo individually; the metadataHandler calls updateStaticPreviewGrid() upon completion.
+        await metadataHandler.analyzeAndEmbedMetadata(i);
       }
-      await Promise.all(tasks);
-      // After processing, re-render the grid to show checkmarks.
-      updateStaticPreviewGrid();
+      // No modal opening here.
     });
 
     async function generateTagPhrases() {
