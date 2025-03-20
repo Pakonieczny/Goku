@@ -432,6 +432,7 @@ Using Sales Report and Product List Files:
     window.accessToken;
     window.soldOrdersCSV = [];
     window.listingsCSV = [];
+    window.uploadedCSVFileIds = []; // Global array to store uploaded CSV file IDs
     window.photoNames = [];
     window.previewImages = [];
     window.photoMeta = [];
@@ -459,11 +460,9 @@ Using Sales Report and Product List Files:
 
     // CSV Preprocessing function using PapaParse
     function preprocessCSVContent(csvText) {
-      // Parse the CSV text with header option
       var parsed = Papa.parse(csvText, { header: true });
       var data = parsed.data;
       if (!data || data.length === 0) return "";
-      // Create a summary by taking the header and first 10 rows
       var header = Object.keys(data[0]).join(", ");
       var summary = header + "\n";
       var rowsToUse = data.slice(0, 10);
@@ -494,23 +493,10 @@ Using Sales Report and Product List Files:
       for (let file of files) {
         if (/\.csv$/i.test(file.name)) {
           try {
-            // Read CSV file as text
-            const fileText = await new Promise((resolve, reject) => {
-              const reader = new FileReader();
-              reader.onload = event => resolve(event.target.result);
-              reader.onerror = reject;
-              reader.readAsText(file);
-            });
-            // Preprocess the CSV content to create a summary string
-            const processedText = preprocessCSVContent(fileText);
-            // Create an object with CSV file data (using processed content)
-            const fileData = {
-              name: file.name,
-              id: `${file.name}-${Date.now()}`,
-              content: processedText
-            };
-            window.soldOrdersCSV.push(fileData);
-            updateUploadedFilesList();
+            // Upload CSV file using uploadDocFile function
+            const fileData = await uploadDocFile(file);
+            window.uploadedCSVFileIds.push(fileData.id);
+            uploadedFilesListElem.value = window.uploadedCSVFileIds.join("\n");
             await updateVectorStore();
           } catch (err) {
             console.error(err);
@@ -581,8 +567,7 @@ Using Sales Report and Product List Files:
 
     function updateUploadedFilesList() {
       const uploadedFilesListElem = document.getElementById('uploadedFilesList');
-      const fileNames = window.soldOrdersCSV.map(file => file.name || file.fileName || 'Unnamed File');
-      uploadedFilesListElem.value = fileNames.join('\n');
+      uploadedFilesListElem.value = window.uploadedCSVFileIds.join("\n");
     }
 
     function loadReservedPhotos() {
@@ -636,13 +621,12 @@ Using Sales Report and Product List Files:
     }
 
     async function updateVectorStore() {
-      // Map CSV file objects to documents with a "text" property.
-      const documents = [...window.soldOrdersCSV, ...window.listingsCSV].map(file => ({ text: file.content ? file.content.trim() : file.id }));
-      if (!documents.length) return console.log("No supported CSV files uploaded yet.");
+      const fileIds = window.uploadedCSVFileIds || [];
+      if (fileIds.length === 0) return console.log("No CSV files uploaded yet.");
       try {
         const vectorStorePayload = { 
           name: "CSV Vector Store", 
-          documents,
+          file_ids: fileIds,
           model: "text-embedding-ada-002"
         };
         console.log("Vector store payload:", vectorStorePayload);
@@ -753,7 +737,6 @@ Using Sales Report and Product List Files:
             });
             previewBox.appendChild(cropBtn);
             
-            // Add green checkmark 15px below the photo
             if (window.photoMeta[i] && window.photoMeta[i].trim() !== "") {
               let checkmark = document.createElement("span");
               checkmark.innerHTML = "&#10003;";
@@ -1169,7 +1152,6 @@ Important: Return ONLY the description as plain text.`;
       let text = document.getElementById("listingDescription").value;
       navigator.clipboard.writeText(text).catch(err => console.error("Copy error:", err));
     });
-    // Repurposed Clear button: Delete all CSV files from stored memory.
     document.getElementById("clearKeyPhrasesBtn").addEventListener("click", () => {
       window.soldOrdersCSV = [];
       localStorage.removeItem("soldOrdersCSV");
