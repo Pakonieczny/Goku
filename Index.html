@@ -19,250 +19,121 @@
   <script src="https://cdnjs.cloudflare.com/ajax/libs/cropperjs/1.5.13/cropper.min.js"></script>
   <style>
     html, body {
-      margin: 0; 
-      padding: 0; 
-      width: 100vw;
+      margin: 0; padding: 0; width: 100vw;
       font-family: Arial, sans-serif;
     }
     .container {
-      width: 100vw; 
-      padding: 10px; 
-      box-sizing: border-box;
+      width: 100vw; padding: 10px; box-sizing: border-box;
       text-align: left;
     }
     h5, label, p { text-align: left; }
     input, textarea { width: 100%; box-sizing: border-box; }
     #descriptionAndFileUploadContainer {
-      display: flex; 
-      align-items: center;
+      display: flex; align-items: center;
     }
     .listing-desc-container {
-      position: relative; 
-      display: inline-block; 
-      width: 500px;
+      position: relative; display: inline-block; width: 500px;
     }
     .listing-desc-container h5 {
-      margin: 0 0 10px 0; 
-      font-size: 1.2rem; 
-      font-weight: 500;
+      margin: 0 0 10px 0; font-size: 1.2rem; font-weight: 500;
     }
     .listing-desc-container label.section-heading {
-      font-size: 1.2rem; 
-      font-weight: 500;
+      font-size: 1.2rem; font-weight: 500;
     }
     .listing-desc-container input {
-      width: 500px; 
-      height: 30px; 
-      border: 1px solid #000; 
-      padding: 5px;
+      width: 500px; height: 30px; border: 1px solid #000; padding: 5px;
     }
     #searchKeyPhrases {
-      resize: none; 
-      box-sizing: border-box; 
-      border: 1px solid grey;
+      resize: none; box-sizing: border-box; border: 1px solid grey;
     }
-    #searchKeyPhrases[rows="14"] { 
-      height: auto; 
-    }
+    #searchKeyPhrases[rows="14"] { height: auto; }
     /* Ensure the CSV textarea can receive drop events */
     #uploadedFilesList { pointer-events: auto; }
-    .flex-container { 
-      display: flex; 
-      gap: 10px; 
-      align-items: stretch; 
-    }
+    .flex-container { display: flex; gap: 10px; align-items: stretch; }
     .textbox-container { flex: 1; }
     .textbox-container textarea {
-      width: 100%; 
-      padding: 0.8rem; 
-      font-size: 1rem; 
-      line-height: 1.2;
-      resize: none; 
-      overflow: visible; 
-      box-sizing: border-box;
+      width: 100%; padding: 0.8rem; font-size: 1rem; line-height: 1.2;
+      resize: none; overflow: visible; box-sizing: border-box;
     }
     .button-container {
-      width: 200px; 
-      display: flex; 
-      flex-direction: column; 
-      gap: 10px;
+      width: 200px; display: flex; flex-direction: column; gap: 10px;
       align-self: flex-start;
     }
     #listingTitle { min-height: 45px; }
     #listingDescInput { width: 500px; height: 30px; border: 1px solid #000; padding: 5px; }
     #listingDescription { min-height: 150px; width: 500px; }
     .section-heading {
-      font-size: 1.2rem; 
-      font-weight: 500; 
-      margin-bottom: 5px;
+      font-size: 1.2rem; font-weight: 500; margin-bottom: 5px;
       display: inline-block;
     }
-    .count-text { 
-      font-style: italic; 
-      font-size: 0.9em; 
-      margin-top: 5px; 
-    }
+    .count-text { font-style: italic; font-size: 0.9em; margin-top: 5px; }
     #dropZone {
-      width: 712px; 
-      height: 120px; 
-      border: 2px dashed #ccc;
-      border-radius: 3px; 
-      display: inline-block; 
-      vertical-align: middle;
-      text-align: center; 
-      line-height: 120px; 
-      position: relative;
+      width: 712px; height: 120px; border: 2px dashed #ccc;
+      border-radius: 3px; display: inline-block; vertical-align: middle;
+      text-align: center; line-height: 120px; position: relative;
     }
     /* Hide any unused drop zones */
     #fileDropZonesContainer { display: none; }
     #uploadedFilesList {
-      width: 225px; 
-      height: 125px; 
-      resize: none; 
-      box-sizing: border-box;
-      border: 1px solid grey; 
-      margin-left: 85px; 
-      position: relative;
-      font-size: 0.875rem; 
-      z-index: 10;
+      width: 225px; height: 125px; resize: none; box-sizing: border-box;
+      border: 1px solid grey; margin-left: 85px; position: relative;
+      font-size: 0.875rem; z-index: 10;
     }
     .modal { z-index: 9999 !important; }
     .modal-overlay { z-index: 9998 !important; }
     #previewGridContainer {
-      position: relative; 
-      margin: 20px auto; 
-      width: auto;
-      max-width: 720px; 
-      text-align: center; 
-      z-index: 2000;
+      position: relative; margin: 20px auto; width: auto;
+      max-width: 720px; text-align: center; z-index: 2000;
     }
     #previewGridStatic {
-      display: grid; 
-      grid-template-columns: repeat(5, 120px);
-      grid-column-gap: 28px; 
-      grid-row-gap: 22px; 
-      margin: 0 auto;
+      display: grid; grid-template-columns: repeat(5, 120px);
+      grid-column-gap: 28px; grid-row-gap: 22px; margin: 0 auto;
     }
     .preview-cell {
-      position: relative; 
-      width: 120px; 
-      height: 158px;
-      border: 2px solid #ccc; 
-      border-radius: 3px;
-      display: flex; 
-      flex-direction: column;
-      align-items: center; 
-      justify-content: center;
-      font-size: 12px; 
-      color: #666;
+      position: relative; width: 120px; height: 158px;
+      border: 2px solid #ccc; border-radius: 3px;
+      display: flex; flex-direction: column;
+      align-items: center; justify-content: center;
+      font-size: 12px; color: #666;
     }
     .preview-cell.reserved { z-index: 2500; }
     .preview-box { position: relative; width: 100%; height: 100%; }
     .preview-box img {
-      width: 120px; 
-      height: 120px; 
-      object-fit: cover;
-      border-radius: 3px; 
-      display: block;
+      width: 120px; height: 120px; object-fit: cover;
+      border-radius: 3px; display: block;
     }
     .remove-btn {
-      position: absolute; 
-      top: -5px; 
-      left: -5px; 
-      width: 15px; 
-      height: 15px;
-      background-color: black; 
-      color: white; 
-      font-size: 10px;
-      text-align: center; 
-      cursor: pointer; 
-      z-index: 999; 
-      border-radius: 50%;
+      position: absolute; top: -5px; left: -5px; width: 15px; height: 15px;
+      background-color: black; color: white; font-size: 10px;
+      text-align: center; cursor: pointer; z-index: 999; border-radius: 50%;
     }
     .number-overlay {
-      position: absolute; 
-      top: 0; 
-      right: 0; 
-      width: 16px; 
-      height: 16px;
-      background-color: rgba(0,0,0,0.7); 
-      color: white;
-      display: flex; 
-      align-items: center; 
-      justify-content: center;
-      font-size: 10px; 
-      z-index: 999; 
-      border-radius: 3px;
+      position: absolute; top: 0; right: 0; width: 16px; height: 16px;
+      background-color: rgba(0,0,0,0.7); color: white;
+      display: flex; align-items: center; justify-content: center;
+      font-size: 10px; z-index: 999; border-radius: 3px;
     }
-    .metadata-status { 
-      margin-top: 5px; 
-      text-align: center; 
-      font-size: 14px; 
-      min-height: 20px; 
-    }
+    .metadata-status { margin-top: 5px; text-align: center; font-size: 14px; min-height: 20px; }
     .metadata-progress { width: 90%; }
-    #container13 { 
-      position: relative; 
-      width: 250px; 
-      top: -150px; 
-    }
-    #belowSearch { 
-      margin-top: -180px; 
-      margin-left: 10px; 
-    }
-    .title-container { 
-      margin-top: -50px; 
-    }
-    #etsyListingTitleContainer { 
-      position: relative; 
-      width: 1000px; 
-    }
-    #etsyListingTitleContainer textarea { 
-      width: 1000px; 
-    }
-    .description-container { 
-      margin-top: 0px; 
-    }
-    #etsyListingDescriptionContainer { 
-      position: relative; 
-      width: 1000px; 
-    }
-    #etsyListingDescriptionContainer textarea { 
-      width: 1000px; 
-    }
-    #userProvidedKeyPhrasesContainer { 
-      position: relative; 
-      top: 125px; 
-      left: 10px; 
-    }
-    #topButtons { 
-      margin: 10px 0; 
-    }
-    #etsyShopListingsContainer { 
-      position: relative; 
-      margin-top: 10px; 
-      margin-left: 10px; 
-    }
+    #container13 { position: relative; width: 250px; top: -150px; }
+    #belowSearch { margin-top: -180px; margin-left: 10px; }
+    .title-container { margin-top: -50px; }
+    #etsyListingTitleContainer { position: relative; width: 1000px; }
+    #etsyListingTitleContainer textarea { width: 1000px; }
+    .description-container { margin-top: 0px; }
+    #etsyListingDescriptionContainer { position: relative; width: 1000px; }
+    #etsyListingDescriptionContainer textarea { width: 1000px; }
+    #userProvidedKeyPhrasesContainer { position: relative; top: 125px; left: 10px; }
+    #topButtons { margin: 10px 0; }
+    #etsyShopListingsContainer { position: relative; margin-top: 10px; margin-left: 10px; }
     #listingQueueCount {
-      width: 25px; 
-      height: 25px; 
-      border: 1px solid #000;
-      display: inline-flex; 
-      align-items: center; 
-      justify-content: center;
-      font-weight: bold; 
-      margin-left: 5px;
+      width: 25px; height: 25px; border: 1px solid #000;
+      display: inline-flex; align-items: center; justify-content: center;
+      font-weight: bold; margin-left: 5px;
     }
-    .regen-btn, .copy-btn { 
-      width: 125px; 
-    }
-    .update-btn { 
-      background-color: #FFA500 !important; 
-      color: white !important; 
-    }
-    .drag-over { 
-      border: 2px dashed #2196f3 !important; 
-    }
+    .regen-btn, .copy-btn { width: 125px; }
+    .update-btn { background-color: #FFA500 !important; color: white !important; }
+    .drag-over { border: 2px dashed #2196f3 !important; }
   </style>
 </head>
 <body>
@@ -561,7 +432,7 @@ Using Sales Report and Product List Files:
     window.accessToken;
     window.soldOrdersCSV = [];
     window.listingsCSV = [];
-    window.uploadedCSVFileIds = []; // Array of uploaded CSV file IDs
+    window.uploadedCSVFileIds = []; // Global array to store uploaded CSV file IDs
     window.photoNames = [];
     window.previewImages = [];
     window.photoMeta = [];
@@ -626,6 +497,7 @@ Using Sales Report and Product List Files:
             const fileData = await uploadDocFile(file);
             window.uploadedCSVFileIds.push(fileData.id);
             uploadedFilesListElem.value = window.uploadedCSVFileIds.join("\n");
+            await updateVectorStore();
           } catch (err) {
             console.error(err);
           }
@@ -723,175 +595,573 @@ Using Sales Report and Product List Files:
     }
 
     async function uploadDocFile(file) {
-      return new Promise((resolve, reject) => {
-        const reader = new FileReader();
-        reader.onload = async (event) => {
-          try {
-            const dataURL = event.target.result;
-            let base64Content;
-            let newFileName = file.name;
-            let contentType = "text/plain";
-            if (/\.csv$/i.test(file.name)) {
-              const csvText = dataURL.split(",")[1] ? atob(dataURL.split(",")[1]) : "";
-              const parsed = Papa.parse(csvText, { header: true });
-              let summary = "";
-              if (parsed.data && parsed.data.length > 0) {
-                const header = Object.keys(parsed.data[0]).join(", ");
-                summary += header + "\n";
-                const rows = parsed.data.slice(0, 10);
-                rows.forEach(row => {
-                  summary += Object.values(row).join(", ") + "\n";
-                });
-              }
-              base64Content = btoa(summary);
-              newFileName = file.name.replace(/\.csv$/i, ".txt");
-            } else {
-              base64Content = dataURL.split(",")[1];
-              if (file.name.toLowerCase().endsWith(".docx")) {
-                contentType = "application/vnd.openxmlformats-officedocument.wordprocessingml.document";
-              } else if (file.name.toLowerCase().endsWith(".doc")) {
-                contentType = "application/msword";
-              }
-            }
-            
-            if (!base64Content) throw new Error("File content is empty.");
-            const payload = { file: base64Content, fileName: newFileName, purpose: "user_data" };
-            const response = await fetch("/.netlify/functions/uploadFile", {
-              method: "POST",
-              headers: { "Content-Type": "application/json" },
-              body: JSON.stringify(payload)
-            });
-            if (!response.ok) throw new Error("Upload failed with status " + response.status);
-            const fileData = await response.json();
-            fileData.name = fileData.name || newFileName;
-            fileData.id = fileData.id || newFileName || ('file-' + Date.now());
-            resolve(fileData);
-          } catch (err) { 
-            reject(err); 
-          }
-        };
-        reader.onerror = reject;
-        reader.readAsDataURL(file);
-      });
-    }
-
-    // Updated generateTagPhrases function using the file search endpoint.
-    async function generateTagPhrases() {
-      let question = document.getElementById("listingDescInput").value.trim();
-      if (!question) {
-        M.toast({ html: "Please enter a question in the Listing Description." });
-        return;
-      }
-      let keywordRules = stripMarkdownJSON(document.getElementById("keywordRulesTextarea").value);
-      let retrievedContext = "";
-      
-      // Use the first uploaded CSV file's id for file search.
-      let fileId = window.uploadedCSVFileIds.length > 0 ? window.uploadedCSVFileIds[0] : null;
-      if (fileId) {
-        try {
-          let resp = await fetch("/.netlify/functions/vectorStore", {
-            method: "POST",
-            headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({
-              action: "query",
-              file_id: fileId,
-              query: question,
-              topK: 5
-            })
-          });
-          if (resp.ok) {
-            let data = await resp.json();
-            if (data && data.data && data.data[0] && data.data[0].text) {
-              retrievedContext = "CSV Context: " + data.data[0].text.slice(0, 100) + "...";
-            }
-          } else {
-            console.warn("File search query failed; proceeding without CSV context.");
-          }
-        } catch (e) {
-          console.error("Error querying file search:", e);
-        }
-      } else {
-        console.warn("No CSV file uploaded; proceeding without CSV context.");
-      }
-      
-      let prompt = `
-Here is some relevant data derived from your CSV file:
-${retrievedContext}
-
-Listing Description (for emphasis): "${question}"
-Emphasis on SEO and generating effective Etsy tag phrases.
-
-Keyword Rules:
-${keywordRules}
-
-Generate exactly 13 SEO key phrases (each ≤ 20 characters). Return as plain text.
-      `;
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onload = async (event) => {
       try {
-        let payload = {
-          model: window.modelName,
-          messages: [
-            { role: "system", content: "Use the CSV context above to generate more accurate key phrases." },
-            { role: "user", content: prompt }
-          ],
-          temperature: 0.7,
-          max_tokens: 500
-        };
-        let data = await callOpenAI(payload);
-        let answer = data.choices[0].message.content || "";
-        let phrasesArray = answer
-          .split(/[\n,]+/)
-          .map(s => s.replace(/^\d+\.\s*/, "").trim())
-          .filter(p => p);
-        for (let i = 0; i < phrasesArray.length; i++) {
-          if (phrasesArray[i].length > 20) {
-            let otherValid = phrasesArray.filter((_, idx) => idx !== i && phrasesArray[idx].length <= 20);
-            let newPhrase = await regenerateSinglePhrase(question, keywordRules, otherValid);
-            phrasesArray[i] = newPhrase;
+        const dataURL = event.target.result;
+        let base64Content;
+        let newFileName = file.name;
+        let contentType = "text/plain"; // default to text/plain for converted CSV
+
+        if (/\.csv$/i.test(file.name)) {
+          // Parse CSV and generate a text summary
+          const csvText = dataURL.split(",")[1] ? atob(dataURL.split(",")[1]) : "";
+          const parsed = Papa.parse(csvText, { header: true });
+          let summary = "";
+          if (parsed.data && parsed.data.length > 0) {
+            // Create a summary: header and first 10 rows
+            const header = Object.keys(parsed.data[0]).join(", ");
+            summary += header + "\n";
+            const rows = parsed.data.slice(0, 10);
+            rows.forEach(row => {
+              summary += Object.values(row).join(", ") + "\n";
+            });
+          }
+          // Convert summary to base64
+          base64Content = btoa(summary);
+          // Change file name extension to .txt for compatibility
+          newFileName = file.name.replace(/\.csv$/i, ".txt");
+        } else {
+          // For other files, use the original content
+          base64Content = dataURL.split(",")[1];
+          // Set contentType based on file extension if needed
+          if (file.name.toLowerCase().endsWith(".docx")) {
+            contentType = "application/vnd.openxmlformats-officedocument.wordprocessingml.document";
+          } else if (file.name.toLowerCase().endsWith(".doc")) {
+            contentType = "application/msword";
           }
         }
-        if (phrasesArray.some(p => p.length > 20)) {
-          throw new Error("Could not fix some phrases under 20 chars. Please try again.");
+        
+        if (!base64Content) throw new Error("File content is empty.");
+
+        const payload = { file: base64Content, fileName: newFileName, purpose: "user_data" };
+        const response = await fetch("/.netlify/functions/uploadFile", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify(payload)
+        });
+        if (!response.ok) throw new Error("Upload failed with status " + response.status);
+        const fileData = await response.json();
+        fileData.name = fileData.name || newFileName;
+        // Ensure an ID is returned; if not, create one
+        fileData.id = fileData.id || newFileName || ('file-' + Date.now());
+        resolve(fileData);
+      } catch (err) { 
+        reject(err); 
+      }
+    };
+    reader.onerror = reject;
+    reader.readAsDataURL(file);
+  });
+}
+
+    async function updateVectorStore() {
+      const fileIds = window.uploadedCSVFileIds || [];
+      if (fileIds.length === 0) return console.log("No CSV files uploaded yet.");
+      try {
+        const vectorStorePayload = { 
+          name: "CSV Vector Store", 
+          file_ids: fileIds,
+          model: "text-embedding-ada-002"
+        };
+        console.log("Vector store payload:", vectorStorePayload);
+        const response = await fetch("/.netlify/functions/vectorStore", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify(vectorStorePayload)
+        });
+        if (!response.ok) throw new Error("Error creating vector store");
+        const data = await response.json();
+        console.log("Vector store created/updated:", data);
+        if (data && data.id) {
+          localStorage.setItem("vectorStoreId", data.id);
+          console.log("Saved store_id in localStorage:", data.id);
         }
-        document.getElementById("searchKeyPhrases").value = phrasesArray.join("\n");
-        M.toast({ html: "Tag Phrases generated successfully!" });
       } catch (err) {
         console.error(err);
-        M.toast({ html: "Error generating valid tag phrases: " + err.message });
       }
     }
 
-    async function regenerateSinglePhrase(question, keywordRules, currentValid, maxAttempts = 5) {
-      for (let attempt = 1; attempt <= maxAttempts; attempt++) {
-        let prompt = `
-We have 12 valid phrases:
-${currentValid.join(", ")}
-
-Now produce ONE new phrase (≤20 chars) that satisfies the same rules:
-
-Listing Description: "${question}"
-
-Keyword Rules:
-${keywordRules}
-Return only one phrase in plain text.
-        `;
-        let payload = {
-          model: window.modelName,
-          messages: [
-            { role: "system", content: "Generate a single phrase, up to 20 characters." },
-            { role: "user", content: prompt }
-          ],
-          temperature: 0.7,
-          max_tokens: 150
-        };
-        let data = await callOpenAI(payload);
-        let answerText = data.choices[0].message.content || "";
-        let candidate = answerText.trim().replace(/^\d+\.\s*/, "").split("\n")[0].trim();
-        if (candidate.length <= 20) {
-          return candidate;
+    const dropZone = document.getElementById("dropZone");
+    dropZone.addEventListener("dragover", e => {
+      e.preventDefault();
+      dropZone.style.borderColor = "#000";
+    });
+    dropZone.addEventListener("dragleave", e => {
+      e.preventDefault();
+      dropZone.style.borderColor = "#ccc";
+    });
+    dropZone.addEventListener("drop", async e => {
+      e.preventDefault();
+      dropZone.style.borderColor = "#ccc";
+      const files = e.dataTransfer.files;
+      const maxRemaining = 10 - window.previewImages.length;
+      for (let i = 0; i < Math.min(files.length, maxRemaining); i++) {
+        let file = files[i];
+        if (/image\/(jpeg|png)/.test(file.type)) {
+          try {
+            const dataURL = await new Promise((resolve, reject) => {
+              const reader = new FileReader();
+              reader.onload = event => resolve(event.target.result);
+              reader.onerror = reject;
+              reader.readAsDataURL(file);
+            });
+            const resizedDataURL = await resizeImage(dataURL, 3000, 3000);
+            window.previewImages.push(resizedDataURL);
+            window.photoNames.push(file.name);
+            window.photoIds.push('img-' + Date.now() + '-' + i);
+          } catch (err) { console.error(err); }
+        } else {
+          M.toast({ html: "Only JPEG/PNG images supported." });
         }
-        console.warn(`Attempt ${attempt}: Single phrase too long => "${candidate}"`);
       }
-      throw new Error("Failed to generate a single phrase under 20 chars after multiple attempts.");
+      updateStaticPreviewGrid();
+      updateUploadedFilesList();
+    });
+
+    function updateStaticPreviewGrid() {
+      for (let i = 0; i < 10; i++) {
+        let cell = document.getElementById("previewCell" + i);
+        if (!cell) continue;
+        cell.innerHTML = "Empty";
+        if (i < 7) {
+          if (i < window.previewImages.length && window.previewImages[i]) {
+            cell.innerHTML = "";
+            let previewBox = document.createElement("div");
+            previewBox.className = "preview-box";
+            previewBox.setAttribute("data-id", window.photoIds[i] || "");
+            previewBox.setAttribute("draggable", "true");
+            previewBox.addEventListener("dragstart", e => { window.draggedIndex = i; });
+            
+            let img = document.createElement("img");
+            img.src = window.previewImages[i];
+            previewBox.appendChild(img);
+            
+            let removeBtn = document.createElement("div");
+            removeBtn.className = "remove-btn";
+            removeBtn.textContent = "X";
+            removeBtn.addEventListener("click", ev => {
+              ev.stopPropagation();
+              window.previewImages.splice(i, 1);
+              window.photoNames.splice(i, 1);
+              window.photoMeta.splice(i, 1);
+              window.photoIds.splice(i, 1);
+              updateStaticPreviewGrid();
+            });
+            previewBox.appendChild(removeBtn);
+            
+            let numOverlay = document.createElement("div");
+            numOverlay.className = "number-overlay";
+            numOverlay.textContent = (i + 1).toString();
+            previewBox.appendChild(numOverlay);
+            
+            let cropBtn = document.createElement("button");
+            cropBtn.textContent = "Crop";
+            cropBtn.style.position = "absolute";
+            cropBtn.style.bottom = "2px";
+            cropBtn.style.right = "2px";
+            cropBtn.style.width = "20px";
+            cropBtn.style.height = "20px";
+            cropBtn.style.borderRadius = "50%";
+            cropBtn.style.backgroundColor = "green";
+            cropBtn.style.color = "white";
+            cropBtn.style.fontSize = "10px";
+            cropBtn.addEventListener("click", ev => {
+              ev.stopPropagation();
+              openCropModal(i);
+            });
+            previewBox.appendChild(cropBtn);
+            
+            if (window.photoMeta[i] && window.photoMeta[i].trim() !== "") {
+              let checkmark = document.createElement("span");
+              checkmark.innerHTML = "&#10003;";
+              checkmark.style.fontSize = "18px";
+              checkmark.style.color = "green";
+              checkmark.style.position = "absolute";
+              checkmark.style.bottom = "-15px";
+              checkmark.style.left = "5px";
+              previewBox.appendChild(checkmark);
+            }
+            
+            previewBox.addEventListener("click", () => { showMetadata(i); });
+            cell.appendChild(previewBox);
+            
+            let metadataStatus = document.createElement("div");
+            metadataStatus.className = "metadata-status";
+            metadataStatus.id = "metadataStatus" + i;
+            cell.appendChild(metadataStatus);
+          } else {
+            cell.innerHTML = "Empty";
+            let metadataStatus = document.createElement("div");
+            metadataStatus.className = "metadata-status";
+            metadataStatus.id = "metadataStatus" + i;
+            cell.appendChild(metadataStatus);
+          }
+        } else {
+          let rIndex = i - 7;
+          if (rIndex < window.reservedPhotos.length && window.reservedPhotos[rIndex] && window.reservedPhotos[rIndex].src) {
+            cell.innerHTML = "";
+            let previewBox = document.createElement("div");
+            previewBox.className = "preview-box";
+            previewBox.setAttribute("data-id", window.reservedPhotos[rIndex].id || "");
+            previewBox.setAttribute("draggable", "true");
+            previewBox.addEventListener("dragstart", e => { window.draggedIndex = i; });
+            let img = document.createElement("img");
+            img.src = window.reservedPhotos[rIndex].src;
+            previewBox.appendChild(img);
+            let removeBtn = document.createElement("div");
+            removeBtn.className = "remove-btn";
+            removeBtn.textContent = "X";
+            removeBtn.addEventListener("click", ev => {
+              ev.stopPropagation();
+              window.reservedPhotos.splice(rIndex, 1);
+              saveReservedPhotos();
+              updateStaticPreviewGrid();
+            });
+            previewBox.appendChild(removeBtn);
+            let numOverlay = document.createElement("div");
+            numOverlay.className = "number-overlay";
+            numOverlay.textContent = (i + 1).toString();
+            previewBox.appendChild(numOverlay);
+            previewBox.addEventListener("click", () => { showMetadata(i); });
+            cell.appendChild(previewBox);
+            let metadataStatus = document.createElement("div");
+            metadataStatus.className = "metadata-status";
+            metadataStatus.id = "metadataStatus" + i;
+            cell.appendChild(metadataStatus);
+          } else {
+            cell.innerHTML = "Empty";
+            let metadataStatus = document.createElement("div");
+            metadataStatus.className = "metadata-status";
+            metadataStatus.id = "metadataStatus" + i;
+            cell.appendChild(metadataStatus);
+          }
+        }
+      }
+    }
+
+    function initializeCellDragAndDrop() {
+      for (let i = 0; i < 10; i++) {
+        let cell = document.getElementById("previewCell" + i);
+        if (!cell.dataset.listenersAttached) {
+          cell.addEventListener("dragover", function(e) {
+            e.preventDefault();
+            this.classList.add("drag-over");
+          });
+          cell.addEventListener("dragleave", function(e) {
+            e.preventDefault();
+            this.classList.remove("drag-over");
+          });
+          cell.addEventListener("drop", async function(e) {
+            e.preventDefault();
+            this.classList.remove("drag-over");
+            let cellIndex = parseInt(this.id.replace("previewCell", ""));
+            if (cellIndex < 7) {
+              if (window.draggedIndex !== null && window.draggedIndex !== cellIndex) {
+                if (window.previewImages[window.draggedIndex]) {
+                  const [movedImage] = window.previewImages.splice(window.draggedIndex, 1);
+                  window.previewImages.splice(cellIndex, 0, movedImage);
+                  const [movedName] = window.photoNames.splice(window.draggedIndex, 1);
+                  window.photoNames.splice(cellIndex, 0, movedName);
+                  const [movedMeta] = window.photoMeta.splice(window.draggedIndex, 1);
+                  window.photoMeta.splice(cellIndex, 0, movedMeta);
+                  const [movedId] = window.photoIds.splice(window.draggedIndex, 1);
+                  window.photoIds.splice(cellIndex, 0, movedId);
+                  updateStaticPreviewGrid();
+                  window.draggedIndex = null;
+                }
+              }
+            } else {
+              let rIndex = cellIndex - 7;
+              if (e.dataTransfer.files && e.dataTransfer.files.length > 0) {
+                let file = e.dataTransfer.files[0];
+                if (/image\/(jpeg|png)/.test(file.type)) {
+                  const reader = new FileReader();
+                  reader.onload = async ev => {
+                    try {
+                      const dataURL = ev.target.result;
+                      const resizedDataURL = await resizeImage(dataURL, 3000, 3000);
+                      let newReserved = {
+                        src: resizedDataURL,
+                        name: file.name,
+                        meta: "",
+                        id: 'img-' + Date.now()
+                      };
+                      window.reservedPhotos[rIndex] = newReserved;
+                      saveReservedPhotos();
+                      updateStaticPreviewGrid();
+                    } catch (err) {
+                      console.error(err);
+                    }
+                  };
+                  reader.readAsDataURL(file);
+                }
+              } else if (window.draggedIndex !== null && window.draggedIndex !== cellIndex) {
+                if (window.draggedIndex < 7) {
+                  const [movedImage] = window.previewImages.splice(window.draggedIndex, 1);
+                  const [movedName] = window.photoNames.splice(window.draggedIndex, 1);
+                  const [movedMeta] = window.photoMeta.splice(window.draggedIndex, 1);
+                  const [movedId] = window.photoIds.splice(window.draggedIndex, 1);
+                  let newReserved = {
+                    src: movedImage,
+                    name: movedName,
+                    meta: movedMeta || "",
+                    id: movedId
+                  };
+                  window.reservedPhotos[rIndex] = newReserved;
+                  saveReservedPhotos();
+                } else {
+                  let oldRIndex = window.draggedIndex - 7;
+                  const [moved] = window.reservedPhotos.splice(oldRIndex, 1);
+                  window.reservedPhotos[rIndex] = moved;
+                  saveReservedPhotos();
+                }
+                updateStaticPreviewGrid();
+                window.draggedIndex = null;
+              }
+            }
+          });
+          cell.dataset.listenersAttached = "true";
+        }
+      }
+    }
+
+    function generateRandomString(length) {
+      const possible = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789';
+      let text = '';
+      for (let i = 0; i < length; i++) {
+        text += possible.charAt(Math.floor(Math.random() * possible.length));
+      }
+      return text;
+    }
+    function base64urlEncode(buffer) {
+      return btoa(String.fromCharCode(...new Uint8Array(buffer)))
+        .replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, '');
+    }
+    async function generateCodeChallenge(codeVerifier) {
+      let encoder = new TextEncoder();
+      let data = encoder.encode(codeVerifier);
+      let digest = await crypto.subtle.digest("SHA-256", data);
+      return base64urlEncode(digest);
+    }
+
+    document.getElementById("connectEtsyBtn").addEventListener("click", async () => {
+      persistDataBeforeRedirect();
+      let state = "randomState123";
+      let scope = "listings_w listings_r";
+      let codeVerifier = generateRandomString(64);
+      localStorage.setItem("etsy_code_verifier", codeVerifier);
+      let codeChallenge = await generateCodeChallenge(codeVerifier);
+      let etsyAuthUrl = `https://www.etsy.com/oauth/connect?response_type=code&client_id=${window.CLIENT_ID}` +
+        `&redirect_uri=${encodeURIComponent(window.REDIRECT_URI)}` +
+        `&scope=${encodeURIComponent(scope)}` +
+        `&state=${state}` +
+        `&code_challenge=${encodeURIComponent(codeChallenge)}` +
+        `&code_challenge_method=S256`;
+      window.location.href = etsyAuthUrl;
+    });
+
+    document.addEventListener("DOMContentLoaded", () => {
+      loadButtonPositions();
+      loadReservedPhotos();
+      restoreDataAfterRedirect();
+      let urlParams = new URLSearchParams(window.location.search);
+      let code = urlParams.get("code");
+      if (code) {
+        exchangeCodeForToken(code);
+        window.history.replaceState({}, document.title, window.REDIRECT_URI);
+      }
+      updateStaticPreviewGrid();
+      initializeCellDragAndDrop();
+      document.getElementById("shopListings").addEventListener("change", () => {
+        let rawInput = document.getElementById("shopListings").value;
+        window.listingQueue = parseListingNumbers(rawInput);
+        loadNextListingInQueue();
+      });
+    });
+
+    async function exchangeCodeForToken(code) {
+      let codeVerifier = localStorage.getItem("etsy_code_verifier");
+      if (!codeVerifier) {
+        M.toast({ html: "No code verifier found. Please try connecting again." });
+        return;
+      }
+      try {
+        let response = await fetch(`/.netlify/functions/exchangeToken?code=${encodeURIComponent(code)}&code_verifier=${encodeURIComponent(codeVerifier)}`);
+        let tokenData = await response.json();
+        if (tokenData.access_token) {
+          window.accessToken = tokenData.access_token;
+          M.toast({ html: "Connected to Etsy!" });
+        } else {
+          M.toast({ html: "Error obtaining token: " + JSON.stringify(tokenData) });
+        }
+      } catch (error) {
+        console.error(error);
+        M.toast({ html: "Error exchanging code for token" });
+      }
+    }
+
+    document.getElementById("uploadToEtsyBtn").addEventListener("click", async () => {
+      let listingInput = document.getElementById("shopListings").value.trim();
+      if (!listingInput) {
+        M.toast({ html: "Please provide a listing URL or ID in 'Etsy Shop Listings'." });
+        return;
+      }
+      let listingId = /^\d+$/.test(listingInput)
+        ? listingInput
+        : (listingInput.match(/\/listing\/(\d+)/) || [])[1];
+      if (!listingId) {
+        M.toast({ html: "Invalid listing URL or ID." });
+        return;
+      }
+      let userDescription = document.getElementById("listingDescription").value || "";
+      let finalDescription = userDescription + window.appendedDescriptionText; 
+      let payload = {
+        title: document.getElementById("listingTitle").value,
+        description: finalDescription,
+        tags: document.getElementById("searchKeyPhrases").value.split("\n").map(s => s.trim()).filter(s => s !== "")
+      };
+      let updateUrl = `/.netlify/functions/updateListing?listingId=${listingId}&token=${encodeURIComponent(window.accessToken)}`;
+      try {
+        let response = await fetch(updateUrl, {
+          method: "PUT",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify(payload)
+        });
+        if (!response.ok) {
+          let errorText = await response.text();
+          M.toast({ html: "Error updating listing: " + response.status + " - " + errorText });
+        } else {
+          M.toast({ html: "Listing info updated successfully!" });
+          window.infoUpdateComplete = true;
+          checkIfBothUpdatesComplete();
+        }
+      } catch (e) {
+        console.error(e);
+        M.toast({ html: "Exception: " + e.message });
+      }
+    });
+
+    document.getElementById("photoUploadNewBtn").addEventListener("click", async () => {
+      let listingInput = document.getElementById("shopListings").value.trim();
+      if (!listingInput) {
+        M.toast({ html: "Please provide a listing URL or ID in 'Etsy Shop Listings'." });
+        return;
+      }
+      let btn = document.getElementById("photoUploadNewBtn");
+      btn.disabled = true;
+      try {
+        await uploadPhotos();
+        await uploadReservedPhotos();
+        M.toast({ html: "Photos updated successfully!" });
+        window.photoUpdateComplete = true;
+        checkIfBothUpdatesComplete();
+      } catch (err) {
+        console.error(err);
+      } finally {
+        btn.disabled = false;
+      }
+    });
+
+    function dataURLtoBlob(dataurl) {
+      const arr = dataurl.split(',');
+      const mime = arr[0].match(/:(.*?);/)[1];
+      const bstr = atob(arr[1]);
+      let n = bstr.length;
+      const u8arr = new Uint8Array(n);
+      while (n--) { u8arr[n] = bstr.charCodeAt(n); }
+      return new Blob([u8arr], { type: mime });
+    }
+
+    document.getElementById("listingDescInput").addEventListener("keydown", async (e) => {
+      if (e.key === "Enter" && !e.shiftKey) {
+        e.preventDefault();
+        await generateTagPhrases();
+      }
+    });
+
+    document.getElementById("generateBtn").addEventListener("click", async () => {
+      await Promise.all([generateTitleOnly(), generateDescriptionOnly()]);
+    });
+    
+    async function generateTitleOnly() {
+      let etsyLink = window.ETSY_SHOP_URL;
+      let keyPhrases = document.getElementById("searchKeyPhrases").value.trim();
+      if (!keyPhrases) {
+        M.toast({ html: "Please provide the search key phrases." });
+        return;
+      }
+      let rulesText = document.getElementById("titleRulesTextarea").value;
+      let promptText = `
+You are ChatGPT using ${window.modelName}.
+Based on the inputs below, generate an Etsy Listing TITLE only.
+Input Context:
+Etsy Link: "${etsyLink}"
+Search KeyPhrases: "${keyPhrases}"
+--- Rules for TITLE ---
+${stripMarkdownJSON(rulesText)}
+Important: Return ONLY the title as plain text.`;
+      document.getElementById("listingTitle").value = "Generating title...";
+      let payload = {
+        model: window.modelName,
+        messages: [
+          { role: "system", content: "Return ONLY the title as plain text." },
+          { role: "user", content: promptText }
+        ],
+        temperature: 0.7
+      };
+      try {
+        let data = await callOpenAI(payload);
+        if (data.choices && data.choices.length > 0) {
+          let output = stripMarkdownJSON(data.choices[0].message.content);
+          document.getElementById("listingTitle").value = output || "No title generated.";
+          updateTitleCount(output);
+        } else {
+          document.getElementById("listingTitle").value = "No title generated.";
+        }
+      } catch (error) {
+        document.getElementById("listingTitle").value = "Error: " + error;
+      }
+    }
+
+    async function generateDescriptionOnly() {
+      let etsyLink = window.ETSY_SHOP_URL;
+      let keyPhrases = document.getElementById("searchKeyPhrases").value.trim();
+      if (!keyPhrases) {
+        M.toast({ html: "Please provide the search key phrases." });
+        return;
+      }
+      let rulesText = document.getElementById("descriptionRulesTextarea").value;
+      let promptText = `
+You are ChatGPT using ${window.modelName}.
+Based on the inputs below, generate an Etsy Listing DESCRIPTION only.
+Input Context:
+Etsy Link: "${etsyLink}"
+Search KeyPhrases: "${keyPhrases}"
+--- Rules for DESCRIPTION ---
+${stripMarkdownJSON(rulesText)}
+Important: Return ONLY the description as plain text.`;
+      document.getElementById("listingDescription").value = "Generating description...";
+      let payload = {
+        model: window.modelName,
+        messages: [
+          { role: "system", content: "Return ONLY the description as plain text." },
+          { role: "user", content: promptText }
+        ],
+        temperature: 0.7
+      };
+      try {
+        let data = await callOpenAI(payload);
+        if (data.choices && data.choices.length > 0) {
+          let output = stripMarkdownJSON(data.choices[0].message.content);
+          document.getElementById("listingDescription").value = output || "No description generated.";
+        } else {
+          document.getElementById("listingDescription").value = "No description generated.";
+        }
+      } catch (error) {
+        document.getElementById("listingDescription").value = "Error: " + error;
+      }
     }
 
     async function callOpenAI(payload) {
@@ -1186,145 +1456,6 @@ Return only one phrase in plain text.
       }
     });
 
-    document.getElementById("generateBtn").addEventListener("click", async () => {
-      await Promise.all([generateTitleOnly(), generateDescriptionOnly()]);
-    });
-    
-    async function generateTitleOnly() {
-      let etsyLink = window.ETSY_SHOP_URL;
-      let keyPhrases = document.getElementById("searchKeyPhrases").value.trim();
-      if (!keyPhrases) {
-        M.toast({ html: "Please provide the search key phrases." });
-        return;
-      }
-      let rulesText = document.getElementById("titleRulesTextarea").value;
-      let promptText = `
-You are ChatGPT using ${window.modelName}.
-Based on the inputs below, generate an Etsy Listing TITLE only.
-Input Context:
-Etsy Link: "${etsyLink}"
-Search KeyPhrases: "${keyPhrases}"
---- Rules for TITLE ---
-${stripMarkdownJSON(rulesText)}
-Important: Return ONLY the title as plain text.`;
-      document.getElementById("listingTitle").value = "Generating title...";
-      let payload = {
-        model: window.modelName,
-        messages: [
-          { role: "system", content: "Return ONLY the title as plain text." },
-          { role: "user", content: promptText }
-        ],
-        temperature: 0.7
-      };
-      try {
-        let data = await callOpenAI(payload);
-        if (data.choices && data.choices.length > 0) {
-          let output = stripMarkdownJSON(data.choices[0].message.content);
-          document.getElementById("listingTitle").value = output || "No title generated.";
-          updateTitleCount(output);
-        } else {
-          document.getElementById("listingTitle").value = "No title generated.";
-        }
-      } catch (error) {
-        document.getElementById("listingTitle").value = "Error: " + error;
-      }
-    }
-
-    async function generateDescriptionOnly() {
-      let etsyLink = window.ETSY_SHOP_URL;
-      let keyPhrases = document.getElementById("searchKeyPhrases").value.trim();
-      if (!keyPhrases) {
-        M.toast({ html: "Please provide the search key phrases." });
-        return;
-      }
-      let rulesText = document.getElementById("descriptionRulesTextarea").value;
-      let promptText = `
-You are ChatGPT using ${window.modelName}.
-Based on the inputs below, generate an Etsy Listing DESCRIPTION only.
-Input Context:
-Etsy Link: "${etsyLink}"
-Search KeyPhrases: "${keyPhrases}"
---- Rules for DESCRIPTION ---
-${stripMarkdownJSON(rulesText)}
-Important: Return ONLY the description as plain text.`;
-      document.getElementById("listingDescription").value = "Generating description...";
-      let payload = {
-        model: window.modelName,
-        messages: [
-          { role: "system", content: "Return ONLY the description as plain text." },
-          { role: "user", content: promptText }
-        ],
-        temperature: 0.7
-      };
-      try {
-        let data = await callOpenAI(payload);
-        if (data.choices && data.choices.length > 0) {
-          let output = stripMarkdownJSON(data.choices[0].message.content);
-          document.getElementById("listingDescription").value = output || "No description generated.";
-        } else {
-          document.getElementById("listingDescription").value = "No description generated.";
-        }
-      } catch (error) {
-        document.getElementById("listingDescription").value = "Error: " + error;
-      }
-    }
-
-    document.getElementById("connectEtsyBtn").addEventListener("click", async () => {
-      persistDataBeforeRedirect();
-      let state = "randomState123";
-      let scope = "listings_w listings_r";
-      let codeVerifier = generateRandomString(64);
-      localStorage.setItem("etsy_code_verifier", codeVerifier);
-      let codeChallenge = await generateCodeChallenge(codeVerifier);
-      let etsyAuthUrl = `https://www.etsy.com/oauth/connect?response_type=code&client_id=${window.CLIENT_ID}` +
-        `&redirect_uri=${encodeURIComponent(window.REDIRECT_URI)}` +
-        `&scope=${encodeURIComponent(scope)}` +
-        `&state=${state}` +
-        `&code_challenge=${encodeURIComponent(codeChallenge)}` +
-        `&code_challenge_method=S256`;
-      window.location.href = etsyAuthUrl;
-    });
-
-    document.addEventListener("DOMContentLoaded", () => {
-      loadButtonPositions();
-      loadReservedPhotos();
-      restoreDataAfterRedirect();
-      let urlParams = new URLSearchParams(window.location.search);
-      let code = urlParams.get("code");
-      if (code) {
-        exchangeCodeForToken(code);
-        window.history.replaceState({}, document.title, window.REDIRECT_URI);
-      }
-      updateStaticPreviewGrid();
-      initializeCellDragAndDrop();
-      document.getElementById("shopListings").addEventListener("change", () => {
-        let rawInput = document.getElementById("shopListings").value;
-        window.listingQueue = parseListingNumbers(rawInput);
-        loadNextListingInQueue();
-      });
-    });
-
-    async function exchangeCodeForToken(code) {
-      let codeVerifier = localStorage.getItem("etsy_code_verifier");
-      if (!codeVerifier) {
-        M.toast({ html: "No code verifier found. Please try connecting again." });
-        return;
-      }
-      try {
-        let response = await fetch(`/.netlify/functions/exchangeToken?code=${encodeURIComponent(code)}&code_verifier=${encodeURIComponent(codeVerifier)}`);
-        let tokenData = await response.json();
-        if (tokenData.access_token) {
-          window.accessToken = tokenData.access_token;
-          M.toast({ html: "Connected to Etsy!" });
-        } else {
-          M.toast({ html: "Error obtaining token: " + JSON.stringify(tokenData) });
-        }
-      } catch (error) {
-        console.error(error);
-        M.toast({ html: "Error exchanging code for token" });
-      }
-    }
-
     async function generateTagPhrases() {
       let question = document.getElementById("listingDescInput").value.trim();
       if (!question) {
@@ -1332,65 +1463,8 @@ Important: Return ONLY the description as plain text.`;
         return;
       }
       let keywordRules = stripMarkdownJSON(document.getElementById("keywordRulesTextarea").value);
-      let retrievedContext = "";
-      
-      // Use the first uploaded CSV file's id for file search.
-      let fileId = window.uploadedCSVFileIds.length > 0 ? window.uploadedCSVFileIds[0] : null;
-      if (fileId) {
-        try {
-          let resp = await fetch("/.netlify/functions/vectorStore", {
-            method: "POST",
-            headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({
-              action: "query",
-              file_id: fileId,
-              query: question,
-              topK: 5
-            })
-          });
-          if (resp.ok) {
-            let data = await resp.json();
-            if (data && data.data && data.data[0] && data.data[0].text) {
-              retrievedContext = "CSV Context: " + data.data[0].text.slice(0, 100) + "...";
-            }
-          } else {
-            console.warn("File search query failed; proceeding without CSV context.");
-          }
-        } catch (e) {
-          console.error("Error querying file search:", e);
-        }
-      } else {
-        console.warn("No CSV file uploaded; proceeding without CSV context.");
-      }
-      
-      let prompt = `
-Here is some relevant data derived from your CSV file:
-${retrievedContext}
-
-Listing Description (for emphasis): "${question}"
-Emphasis on SEO and generating effective Etsy tag phrases.
-
-Keyword Rules:
-${keywordRules}
-
-Generate exactly 13 SEO key phrases (each ≤ 20 characters). Return as plain text.
-      `;
       try {
-        let payload = {
-          model: window.modelName,
-          messages: [
-            { role: "system", content: "Use the CSV context above to generate more accurate key phrases." },
-            { role: "user", content: prompt }
-          ],
-          temperature: 0.7,
-          max_tokens: 500
-        };
-        let data = await callOpenAI(payload);
-        let answer = data.choices[0].message.content || "";
-        let phrasesArray = answer
-          .split(/[\n,]+/)
-          .map(s => s.replace(/^\d+\.\s*/, "").trim())
-          .filter(p => p);
+        let phrasesArray = await getInitialPhrases(question, keywordRules);
         for (let i = 0; i < phrasesArray.length; i++) {
           if (phrasesArray[i].length > 20) {
             let otherValid = phrasesArray.filter((_, idx) => idx !== i && phrasesArray[idx].length <= 20);
@@ -1409,15 +1483,95 @@ Generate exactly 13 SEO key phrases (each ≤ 20 characters). Return as plain te
       }
     }
 
+    async function getInitialPhrases(question, keywordRules) {
+      let store_id = localStorage.getItem("vectorStoreId");
+      let retrievedContext = "";
+      if (store_id) {
+        try {
+          let resp = await fetch("/.netlify/functions/vectorStore", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({
+              action: "query",
+              store_id,
+              query: question,
+              topK: 5
+            })
+          });
+          if (resp.ok) {
+            let data = await resp.json();
+            retrievedContext = data?.data || "";
+          } else {
+            console.warn("Could not retrieve CSV context from vector store. HTTP status:", resp.status);
+          }
+        } catch (err) {
+          console.error("Error retrieving CSV context:", err);
+        }
+      } else {
+        console.warn("No store_id found in localStorage. CSV context may not be loaded!");
+      }
+      let prompt = `
+Here is some relevant data from our CSV files:
+${retrievedContext}
+
+Listing Description (for emphasis): "${question}"
+Emphasis on SEO and generating effective Etsy tag phrases.
+
+Keyword Rules:
+${keywordRules}
+
+Generate exactly 13 SEO key phrases (each ≤ 20 characters). Return as plain text.
+      `;
+      let payload = {
+        model: window.modelName,
+        messages: [
+          { role: "system", content: "Use the CSV context above to generate more accurate key phrases." },
+          { role: "user", content: prompt }
+        ],
+        temperature: 0.7,
+        max_tokens: 500
+      };
+      let data = await callOpenAI(payload);
+      let answer = data.choices[0].message.content || "";
+      let phrasesArray = answer
+        .split(/[\n,]+/)
+        .map(s => s.replace(/^\d+\.\s*/, "").trim())
+        .filter(p => p);
+      return phrasesArray;
+    }
+
     async function regenerateSinglePhrase(question, keywordRules, currentValid, maxAttempts = 5) {
       for (let attempt = 1; attempt <= maxAttempts; attempt++) {
+        let store_id = localStorage.getItem("vectorStoreId");
+        let retrievedContext = "";
+        if (store_id) {
+          try {
+            let resp = await fetch("/.netlify/functions/vectorStore", {
+              method: "POST",
+              headers: { "Content-Type": "application/json" },
+              body: JSON.stringify({
+                action: "query",
+                store_id,
+                query: question,
+                topK: 5
+              })
+            });
+            if (resp.ok) {
+              let data = await resp.json();
+              retrievedContext = data?.data || "";
+            }
+          } catch (err) {
+            console.warn("Could not retrieve CSV context for single phrase regeneration:", err);
+          }
+        }
         let prompt = `
 We have 12 valid phrases:
 ${currentValid.join(", ")}
 
 Now produce ONE new phrase (≤20 chars) that satisfies the same rules:
 
-Listing Description: "${question}"
+Here is some relevant data from our CSV:
+${retrievedContext}
 
 Keyword Rules:
 ${keywordRules}
@@ -1434,7 +1588,10 @@ Return only one phrase in plain text.
         };
         let data = await callOpenAI(payload);
         let answerText = data.choices[0].message.content || "";
-        let candidate = answerText.trim().replace(/^\d+\.\s*/, "").split("\n")[0].trim();
+        let candidate = answerText.trim()
+          .replace(/^\d+\.\s*/, "")
+          .split("\n")[0]
+          .trim();
         if (candidate.length <= 20) {
           return candidate;
         }
@@ -1442,41 +1599,6 @@ Return only one phrase in plain text.
       }
       throw new Error("Failed to generate a single phrase under 20 chars after multiple attempts.");
     }
-
-    async function callOpenAI(payload) {
-      let response = await fetch("/.netlify/functions/openaiProxy", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(payload)
-      });
-      if (!response.ok) {
-        let errorData = await response.json();
-        throw new Error("API Error: " + (errorData.error ? errorData.error.message : response.statusText));
-      }
-      return await response.json();
-    }
-
-    function updateTitleCount(text) {
-      document.getElementById("titleCount").textContent = "Count: " + text.length;
-    }
-    document.getElementById("copyTitleBtn").addEventListener("click", () => {
-      let text = document.getElementById("listingTitle").value;
-      navigator.clipboard.writeText(text).catch(err => console.error("Copy error:", err));
-    });
-    document.getElementById("copyDescriptionBtn").addEventListener("click", () => {
-      let text = document.getElementById("listingDescription").value;
-      navigator.clipboard.writeText(text).catch(err => console.error("Copy error:", err));
-    });
-    document.getElementById("clearKeyPhrasesBtn").addEventListener("click", () => {
-      window.soldOrdersCSV = [];
-      localStorage.removeItem("soldOrdersCSV");
-      updateUploadedFilesList();
-      M.toast({ html: "CSV files deleted from stored memory." });
-    });
-    document.getElementById("copyKeyPhrasesBtn").addEventListener("click", () => {
-      let lines = document.getElementById("searchKeyPhrases").value.split(/\n+/).map(l => l.trim()).filter(l => l !== "");
-      navigator.clipboard.writeText(lines.join(", ")).catch(err => console.error("Error copying key phrases:", err));
-    });
   </script>
 </body>
 </html>
