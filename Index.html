@@ -595,30 +595,66 @@ Using Sales Report and Product List Files:
     }
 
     async function uploadDocFile(file) {
-      return new Promise((resolve, reject) => {
-        const reader = new FileReader();
-        reader.onload = async (event) => {
-          try {
-            const dataURL = event.target.result;
-            const base64Content = dataURL.split(",")[1];
-            if (!base64Content) throw new Error("File content is empty.");
-            const payload = { file: base64Content, fileName: file.name, purpose: "user_data" };
-            const response = await fetch("/.netlify/functions/uploadFile", {
-              method: "POST",
-              headers: { "Content-Type": "application/json" },
-              body: JSON.stringify(payload)
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onload = async (event) => {
+      try {
+        const dataURL = event.target.result;
+        let base64Content;
+        let newFileName = file.name;
+        let contentType = "text/plain"; // default to text/plain for converted CSV
+
+        if (/\.csv$/i.test(file.name)) {
+          // Parse CSV and generate a text summary
+          const csvText = dataURL.split(",")[1] ? atob(dataURL.split(",")[1]) : "";
+          const parsed = Papa.parse(csvText, { header: true });
+          let summary = "";
+          if (parsed.data && parsed.data.length > 0) {
+            // Create a summary: header and first 10 rows
+            const header = Object.keys(parsed.data[0]).join(", ");
+            summary += header + "\n";
+            const rows = parsed.data.slice(0, 10);
+            rows.forEach(row => {
+              summary += Object.values(row).join(", ") + "\n";
             });
-            if (!response.ok) throw new Error("Upload failed with status " + response.status);
-            const fileData = await response.json();
-            fileData.name = fileData.name || file.name;
-            fileData.id = fileData.id || file.name || ('file-' + Date.now());
-            resolve(fileData);
-          } catch (err) { reject(err); }
-        };
-        reader.onerror = reject;
-        reader.readAsDataURL(file);
-      });
-    }
+          }
+          // Convert summary to base64
+          base64Content = btoa(summary);
+          // Change file name extension to .txt for compatibility
+          newFileName = file.name.replace(/\.csv$/i, ".txt");
+        } else {
+          // For other files, use the original content
+          base64Content = dataURL.split(",")[1];
+          // Set contentType based on file extension if needed
+          if (file.name.toLowerCase().endsWith(".docx")) {
+            contentType = "application/vnd.openxmlformats-officedocument.wordprocessingml.document";
+          } else if (file.name.toLowerCase().endsWith(".doc")) {
+            contentType = "application/msword";
+          }
+        }
+        
+        if (!base64Content) throw new Error("File content is empty.");
+
+        const payload = { file: base64Content, fileName: newFileName, purpose: "user_data" };
+        const response = await fetch("/.netlify/functions/uploadFile", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify(payload)
+        });
+        if (!response.ok) throw new Error("Upload failed with status " + response.status);
+        const fileData = await response.json();
+        fileData.name = fileData.name || newFileName;
+        // Ensure an ID is returned; if not, create one
+        fileData.id = fileData.id || newFileName || ('file-' + Date.now());
+        resolve(fileData);
+      } catch (err) { 
+        reject(err); 
+      }
+    };
+    reader.onerror = reject;
+    reader.readAsDataURL(file);
+  });
+}
 
     async function updateVectorStore() {
   // Filter out any falsy IDs to ensure valid file_ids
