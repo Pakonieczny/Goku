@@ -630,8 +630,7 @@ Using Sales Report and Product List Files:
   try {
     const vectorStorePayload = { 
       name: "CSV Vector Store", 
-      file_ids: fileIds,
-      model: "text-embedding-ada-002"
+      file_ids: fileIds
     };
     console.log("Vector store payload:", vectorStorePayload);
     const response = await fetch("/.netlify/functions/vectorStore", {

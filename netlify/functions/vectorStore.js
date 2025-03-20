@@ -17,11 +17,10 @@ exports.handler = async function(event) {
       if (!payload.file_ids || !Array.isArray(payload.file_ids) || payload.file_ids.length === 0) {
         throw new Error("file_ids must be a non-empty array when creating a vector store.");
       }
-      // Build the payload using "file_ids"
+      // Build the payload using "file_ids" (remove "model" parameter)
       const newPayload = {
         name: payload.name || "CSV Vector Store",
-        file_ids: payload.file_ids, // Correct parameter for file IDs
-        model: "text-embedding-ada-002"
+        file_ids: payload.file_ids
       };
       console.log("Creating vector store with payload:", newPayload);
 
