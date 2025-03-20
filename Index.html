@@ -119,10 +119,10 @@
     #belowSearch { margin-top: -180px; margin-left: 10px; }
     .title-container { margin-top: -50px; }
     #etsyListingTitleContainer { position: relative; width: 1000px; }
-    #etsyListingTitleContainer textarea { width:1000px; }
+    #etsyListingTitleContainer textarea { width: 1000px; }
     .description-container { margin-top: 0px; }
     #etsyListingDescriptionContainer { position: relative; width: 1000px; }
-    #etsyListingDescriptionContainer textarea { width:1000px; }
+    #etsyListingDescriptionContainer textarea { width: 1000px; }
     #userProvidedKeyPhrasesContainer { position: relative; top: 125px; left: 10px; }
     #topButtons { margin: 10px 0; }
     #etsyShopListingsContainer { position: relative; margin-top: 10px; margin-left: 10px; }
@@ -137,12 +137,8 @@
   </style>
 </head>
 <body>
-  <!-- Configure Buttons -->
-  <button id="configureButtonsBtn" class="btn waves-effect waves-light configurable">
-    Configure Buttons
-  </button>
+  <button id="configureButtonsBtn" class="btn waves-effect waves-light configurable">Configure Buttons</button>
   
-  <!-- Listing Description and CSV Upload -->
   <div id="descriptionAndFileUploadContainer">
     <div class="listing-desc-container" id="listingDescContainer">
       <h5>Listing Description</h5>
@@ -151,17 +147,10 @@
     <textarea id="uploadedFilesList" class="materialize-textarea" rows="2" placeholder="Drop CSV files here"></textarea>
   </div>
   
-  <!-- Etsy OAuth and Shop Listings -->
   <div id="topButtons">
-    <button id="connectEtsyBtn" class="btn waves-effect waves-light configurable">
-      Connect to Etsy
-    </button>
-    <button id="photoUploadNewBtn" class="btn waves-effect waves-light configurable update-btn" style="margin-left: 10px;">
-      Update Photos
-    </button>
-    <button id="uploadToEtsyBtn" class="btn waves-effect waves-light configurable update-btn" style="margin-left: 10px;">
-      Update Info
-    </button>
+    <button id="connectEtsyBtn" class="btn waves-effect waves-light configurable">Connect to Etsy</button>
+    <button id="photoUploadNewBtn" class="btn waves-effect waves-light configurable update-btn" style="margin-left: 10px;">Update Photos</button>
+    <button id="uploadToEtsyBtn" class="btn waves-effect waves-light configurable update-btn" style="margin-left: 10px;">Update Info</button>
     <div id="etsyShopListingsContainer">
       <div class="section-heading configurable">
         Etsy Shop Listings
@@ -173,23 +162,14 @@
     </div>
   </div>
   
-  <!-- Etsy Listing Generator UI -->
   <div class="phrases-header configurable" id="userProvidedKeyPhrasesContainer">
     <span class="section-heading configurable">Search Key Phrases</span>
-    <!-- Clear button repurposed to delete all stored CSV files -->
-    <button id="clearKeyPhrasesBtn" class="btn-small waves-effect waves-light configurable">
-      Clear CSV Files
-    </button>
-    <button id="copyKeyPhrasesBtn" class="btn-small waves-effect waves-light configurable copy-btn">
-      Copy
-    </button>
+    <!-- Clear button now deletes files from the vector store -->
+    <button id="clearKeyPhrasesBtn" class="btn-small waves-effect waves-light configurable">Clear CSV Files</button>
+    <button id="copyKeyPhrasesBtn" class="btn-small waves-effect waves-light configurable copy-btn">Copy</button>
     <div id="dropZone" class="configurable">Image Drop</div>
-    <button id="analyzeMetadataBtn" class="btn waves-effect waves-light configurable">
-      Analyze Photos
-    </button>
-    <button id="showAnalyzeRulesBtn" class="btn waves-effect waves-light configurable" data-target="analyzeRulesModal" style="margin-top:25px;">
-      Analyze Rules
-    </button>
+    <button id="analyzeMetadataBtn" class="btn waves-effect waves-light configurable">Analyze Photos</button>
+    <button id="showAnalyzeRulesBtn" class="btn waves-effect waves-light configurable" data-target="analyzeRulesModal" style="margin-top:25px;">Analyze Rules</button>
   </div>
   <div id="container13" class="flex-container configurable">
     <div class="textbox-container configurable">
@@ -197,11 +177,8 @@
     </div>
   </div>
   
-  <!-- Below Search: Generate and Listing Title/Description -->
   <div id="belowSearch">
-    <button id="generateBtn" class="btn waves-effect waves-light configurable">
-      Generate
-    </button>
+    <button id="generateBtn" class="btn waves-effect waves-light configurable">Generate</button>
     <div class="title-container" id="etsyListingTitleContainer" style="margin-top: -50px;">
       <div class="section-heading configurable">Etsy Listing TITLE</div>
       <div class="flex-container configurable">
@@ -209,16 +186,10 @@
           <textarea id="listingTitle" class="materialize-textarea" rows="2" style="width:1000px;"></textarea>
         </div>
         <div class="button-container configurable" style="margin-top: -60px;">
-          <button id="regenTitleBtn" class="btn-small waves-effect waves-light configurable regen-btn">
-            Re-Gen
-          </button>
-          <button id="copyTitleBtn" class="btn-small waves-effect waves-light configurable copy-btn">
-            <i class="material-icons">content_copy</i>
-          </button>
+          <button id="regenTitleBtn" class="btn-small waves-effect waves-light configurable regen-btn">Re-Gen</button>
+          <button id="copyTitleBtn" class="btn-small waves-effect waves-light configurable copy-btn"><i class="material-icons">content_copy</i></button>
         </div>
-        <button id="showTitleRulesBtn" class="btn waves-effect waves-light rules-button configurable" data-target="titleRulesModal" style="display:none;">
-          Title Rules
-        </button>
+        <button id="showTitleRulesBtn" class="btn waves-effect waves-light rules-button configurable" data-target="titleRulesModal" style="display:none;">Title Rules</button>
       </div>
       <p id="titleCount" class="count-text configurable">Count: 0</p>
     </div>
@@ -230,21 +201,14 @@
           <textarea id="listingDescription" class="materialize-textarea" style="width:1000px;"></textarea>
         </div>
         <div class="button-container configurable">
-          <button id="regenDescriptionBtn" class="btn-small waves-effect waves-light configurable regen-btn">
-            Re-Gen
-          </button>
-          <button id="copyDescriptionBtn" class="btn-small waves-effect waves-light configurable copy-btn">
-            <i class="material-icons">content_copy</i>
-          </button>
+          <button id="regenDescriptionBtn" class="btn-small waves-effect waves-light configurable regen-btn">Re-Gen</button>
+          <button id="copyDescriptionBtn" class="btn-small waves-effect waves-light configurable copy-btn"><i class="material-icons">content_copy</i></button>
         </div>
-        <button id="showDescriptionRulesBtn" class="btn waves-effect waves-light rules-button configurable" data-target="descriptionRulesModal" style="display:none;">
-          Description Rules
-        </button>
+        <button id="showDescriptionRulesBtn" class="btn waves-effect waves-light rules-button configurable" data-target="descriptionRulesModal" style="display:none;">Description Rules</button>
       </div>
     </div>
   </div>
   
-  <!-- Preview Grid -->
   <div id="previewGridContainer">
     <div id="previewGridStatic">
       <div class="preview-cell" id="previewCell0">Empty</div>
@@ -267,9 +231,7 @@
       <textarea id="metadataTextarea" readonly style="width:100%; height:300px;"></textarea>
     </div>
     <div class="modal-footer">
-      <a href="#!" id="closeMetadataBtn" class="modal-close waves-effect waves-green btn">
-        Close
-      </a>
+      <a href="#!" id="closeMetadataBtn" class="modal-close waves-effect waves-green btn">Close</a>
     </div>
   </div>
   
@@ -290,9 +252,7 @@ Default Photo Analysis Rules:
       </textarea>
     </div>
     <div class="modal-footer">
-      <a href="#!" id="updateAnalyzeRulesBtn" class="modal-close waves-effect waves-green btn">
-        Update
-      </a>
+      <a href="#!" id="updateAnalyzeRulesBtn" class="modal-close waves-effect waves-green btn">Update</a>
     </div>
   </div>
   
@@ -332,9 +292,7 @@ Prohibited Words:
       </textarea>
     </div>
     <div class="modal-footer">
-      <a href="#!" id="updateTitleRulesBtn" class="modal-close waves-effect waves-green btn">
-        Update
-      </a>
+      <a href="#!" id="updateTitleRulesBtn" class="modal-close waves-effect waves-green btn">Update</a>
     </div>
   </div>
   
@@ -359,9 +317,7 @@ Option 3:
       </textarea>
     </div>
     <div class="modal-footer">
-      <a href="#!" id="updateDescriptionRulesBtn" class="modal-close waves-effect waves-green btn">
-        Update
-      </a>
+      <a href="#!" id="updateDescriptionRulesBtn" class="modal-close waves-effect waves-green btn">Update</a>
     </div>
   </div>
   
@@ -382,9 +338,7 @@ Using Sales Report and Product List Files:
       </textarea>
     </div>
     <div class="modal-footer">
-      <a href="#!" id="updateKeywordRulesBtn" class="modal-close waves-effect waves-green btn">
-        Update
-      </a>
+      <a href="#!" id="updateKeywordRulesBtn" class="modal-close waves-effect waves-green btn">Update</a>
     </div>
   </div>
   
@@ -396,18 +350,16 @@ Using Sales Report and Product List Files:
       <textarea id="uploadedFilesListModal" class="materialize-textarea" rows="2" placeholder="Uploaded files will appear here"></textarea>
     </div>
     <div class="modal-footer">
-      <a href="#!" id="saveButtonPositionsBtn" class="modal-close waves-effect waves-green btn">
-        Save Positions
-      </a>
+      <a href="#!" id="saveButtonPositionsBtn" class="modal-close waves-effect waves-green btn">Save Positions</a>
     </div>
   </div>
   
   <!-- Crop Modal -->
   <div id="photoCropModal" class="modal" style="width:650px; height:650px;">
-    <div class="crop-container" style="position: relative; width: 100%; height: 100%;">
-      <h4 style="text-align:center; margin: 0 0 10px 0;">Crop Photo</h4>
-      <div class="img-preview-container" style="width:400px; height:400px; margin: 0 auto; overflow: hidden;">
-        <img id="cropImage" src="" alt="Crop Image" style="display:block; margin:auto; max-width: none;">
+    <div class="crop-container" style="position: relative; width:100%; height:100%;">
+      <h4 style="text-align:center; margin:0 0 10px 0;">Crop Photo</h4>
+      <div class="img-preview-container" style="width:400px; height:400px; margin:0 auto; overflow:hidden;">
+        <img id="cropImage" src="" alt="Crop Image" style="display:block; margin:auto; max-width:none;">
       </div>
       <div style="text-align:center; margin-top:10px;">
         <button id="saveCropBtn" class="btn waves-effect waves-light" style="margin-right:10px;">Save</button>
@@ -418,25 +370,11 @@ Using Sales Report and Product List Files:
   
   <script src="https://code.jquery.com/jquery-3.6.0.min.js"></script>
   <script src="https://cdnjs.cloudflare.com/ajax/libs/materialize/1.0.0/js/materialize.min.js"></script>
-  <!-- Include metadataHandler.js if needed -->
   <script src="metadataHandler.js"></script>
   <script>
-    /*
-      To quickly DISABLE these debug toasts, set DEBUG_TOASTS to false.
-      Or search for "if (window.DEBUG_TOASTS)" to remove them all.
-    */
     window.DEBUG_TOASTS = true;
-
-    function maybeToast(message) {
-      // Helper function to easily remove or disable toasts
-      if (window.DEBUG_TOASTS) {
-        M.toast({ html: message });
-      }
-    }
-
-    function stripMarkdownJSON(text) {
-      return text;
-    }
+    function maybeToast(msg) { if (window.DEBUG_TOASTS) M.toast({html: msg}); }
+    function stripMarkdownJSON(text) { return text; }
 
     window.ETSY_SHOP_URL = "https://www.etsy.com/shop/custombrites";
     window.CLIENT_ID = "k75zdspz4r99txpqdji7i2em";
@@ -445,7 +383,7 @@ Using Sales Report and Product List Files:
     window.accessToken;
     window.soldOrdersCSV = [];
     window.listingsCSV = [];
-    window.uploadedCSVFileIds = []; // Global array to store uploaded CSV file IDs
+    window.uploadedCSVFileIds = [];
     window.photoNames = [];
     window.previewImages = [];
     window.photoMeta = [];
@@ -507,7 +445,6 @@ Using Sales Report and Product List Files:
         if (/\.csv$/i.test(file.name)) {
           try {
             maybeToast("Dropping CSV file: " + file.name + "... uploading now");
-            // Upload CSV file using uploadDocFile function
             const fileData = await uploadDocFile(file);
             maybeToast("CSV file uploaded with ID: " + (fileData.id || "N/A"));
             window.uploadedCSVFileIds.push(fileData.id);
@@ -625,15 +562,12 @@ Using Sales Report and Product List Files:
             const dataURL = event.target.result;
             let base64Content;
             let newFileName = file.name;
-            let contentType = "text/plain"; // default to text/plain for converted CSV
-
+            let contentType = "text/plain";
             if (/\.csv$/i.test(file.name)) {
-              // Parse CSV and generate a text summary
               const csvText = dataURL.split(",")[1] ? atob(dataURL.split(",")[1]) : "";
               const parsed = Papa.parse(csvText, { header: true });
               let summary = "";
               if (parsed.data && parsed.data.length > 0) {
-                // Create a summary: header and first 10 rows
                 const header = Object.keys(parsed.data[0]).join(", ");
                 summary += header + "\n";
                 const rows = parsed.data.slice(0, 10);
@@ -641,14 +575,10 @@ Using Sales Report and Product List Files:
                   summary += Object.values(row).join(", ") + "\n";
                 });
               }
-              // Convert summary to base64
               base64Content = btoa(summary);
-              // Change file name extension to .txt for compatibility
               newFileName = file.name.replace(/\.csv$/i, ".txt");
             } else {
-              // For other files, use the original content
               base64Content = dataURL.split(",")[1];
-              // Set contentType based on file extension if needed
               if (file.name.toLowerCase().endsWith(".docx")) {
                 contentType = "application/vnd.openxmlformats-officedocument.wordprocessingml.document";
               } else if (file.name.toLowerCase().endsWith(".doc")) {
@@ -657,7 +587,6 @@ Using Sales Report and Product List Files:
             }
             
             if (!base64Content) throw new Error("File content is empty.");
-
             const payload = { file: base64Content, fileName: newFileName, purpose: "user_data" };
             const response = await fetch("/.netlify/functions/uploadFile", {
               method: "POST",
@@ -669,7 +598,6 @@ Using Sales Report and Product List Files:
             }
             const fileData = await response.json();
             fileData.name = fileData.name || newFileName;
-            // Ensure an ID is returned; if not, create one
             fileData.id = fileData.id || newFileName || ('file-' + Date.now());
             maybeToast("uploadDocFile: Success. File ID: " + fileData.id);
             resolve(fileData);
@@ -1003,7 +931,7 @@ Using Sales Report and Product List Files:
       window.location.href = etsyAuthUrl;
     });
 
-    document.addEventListener("DOMContentLoaded", () => {
+    document.addEventListener("DOMContentLoaded", async () => {
       loadButtonPositions();
       loadReservedPhotos();
       restoreDataAfterRedirect();
@@ -1020,6 +948,8 @@ Using Sales Report and Product List Files:
         window.listingQueue = parseListingNumbers(rawInput);
         loadNextListingInQueue();
       });
+      // On load, list the CSV files from the vector store
+      await listVectorStoreFiles();
     });
 
     async function exchangeCodeForToken(code) {
@@ -1240,12 +1170,80 @@ Important: Return ONLY the description as plain text.`;
       let text = document.getElementById("listingDescription").value;
       navigator.clipboard.writeText(text).catch(err => console.error("Copy error:", err));
     });
-    document.getElementById("clearKeyPhrasesBtn").addEventListener("click", () => {
-      window.soldOrdersCSV = [];
-      localStorage.removeItem("soldOrdersCSV");
-      updateUploadedFilesList();
-      M.toast({ html: "CSV files deleted from stored memory." });
-    });
+    
+    // Update Clear CSV Files button to clear files from the vector store
+    async function clearStoreCSVFiles() {
+      let storeId = localStorage.getItem("vectorStoreId");
+      if (!storeId) {
+        M.toast({ html: "No vector store ID found. Nothing to clear." });
+        return;
+      }
+      maybeToast("Clearing CSV files from store " + storeId + "...");
+      let payload = {
+        action: "clear_csv_files",
+        store_id: storeId
+      };
+      try {
+        let resp = await fetch("/.netlify/functions/vectorStore", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify(payload)
+        });
+        if (!resp.ok) {
+          maybeToast("Error clearing CSV files, status " + resp.status);
+          return;
+        }
+        let data = await resp.json();
+        maybeToast("Cleared CSV files from the store: " + JSON.stringify(data));
+        // Refresh displayed file list
+        document.getElementById("uploadedFilesList").value = "";
+        await listVectorStoreFiles(); 
+      } catch (err) {
+        console.error(err);
+        maybeToast("clearStoreCSVFiles error: " + err.message);
+      }
+    }
+    document.getElementById("clearKeyPhrasesBtn").addEventListener("click", clearStoreCSVFiles);
+
+    // NEW: list vector store files and display their base names (without .csv/.txt)
+    async function listVectorStoreFiles() {
+      let storeId = localStorage.getItem("vectorStoreId");
+      if (!storeId) {
+        maybeToast("No vector store ID found in localStorage. Not listing files.");
+        return;
+      }
+      let payload = {
+        action: "list_files",
+        store_id: storeId
+      };
+      try {
+        maybeToast("Listing files from store " + storeId + "...");
+        let resp = await fetch("/.netlify/functions/vectorStore", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify(payload)
+        });
+        if (!resp.ok) {
+          maybeToast("listVectorStoreFiles: error " + resp.status);
+          return;
+        }
+        let data = await resp.json();
+        if (!data.data || !Array.isArray(data.data)) {
+          maybeToast("No files found in the store.");
+          return;
+        }
+        let displayNames = data.data.map(f => {
+          let fname = f.filename || "";
+          fname = fname.replace(/(\.csv|\.txt)$/i, "");
+          return fname;
+        });
+        document.getElementById("uploadedFilesList").value = displayNames.join("\n");
+      } catch (err) {
+        console.error(err);
+        maybeToast("Error listing store files: " + err.message);
+      }
+    }
+
     document.getElementById("copyKeyPhrasesBtn").addEventListener("click", () => {
       let lines = document.getElementById("searchKeyPhrases").value.split(/\n+/).map(l => l.trim()).filter(l => l !== "");
       navigator.clipboard.writeText(lines.join(", ")).catch(err => console.error("Error copying key phrases:", err));
