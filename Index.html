@@ -561,7 +561,7 @@ Using Sales Report and Product List Files:
     window.accessToken;
     window.soldOrdersCSV = [];
     window.listingsCSV = [];
-    window.uploadedCSVFileIds = []; // Global array to store uploaded CSV file IDs
+    window.uploadedCSVFileIds = []; // Array of uploaded CSV file IDs
     window.photoNames = [];
     window.previewImages = [];
     window.photoMeta = [];
@@ -626,7 +626,6 @@ Using Sales Report and Product List Files:
             const fileData = await uploadDocFile(file);
             window.uploadedCSVFileIds.push(fileData.id);
             uploadedFilesListElem.value = window.uploadedCSVFileIds.join("\n");
-            // Optionally, update your vector store here if needed.
           } catch (err) {
             console.error(err);
           }
@@ -776,7 +775,7 @@ Using Sales Report and Product List Files:
       });
     }
 
-    // Updated generateTagPhrases function using the vector store search API.
+    // Updated generateTagPhrases function using the file search endpoint.
     async function generateTagPhrases() {
       let question = document.getElementById("listingDescInput").value.trim();
       if (!question) {
@@ -786,16 +785,16 @@ Using Sales Report and Product List Files:
       let keywordRules = stripMarkdownJSON(document.getElementById("keywordRulesTextarea").value);
       let retrievedContext = "";
       
-      // Use store_id from localStorage (assumed to be set when vector store is created)
-      let storeId = localStorage.getItem("vectorStoreId");
-      if (storeId) {
+      // Instead of using vectorStoreId, use the uploaded CSV file id.
+      let fileId = window.uploadedCSVFileIds.length > 0 ? window.uploadedCSVFileIds[0] : null;
+      if (fileId) {
         try {
           let resp = await fetch("/.netlify/functions/vectorStore", {
             method: "POST",
             headers: { "Content-Type": "application/json" },
             body: JSON.stringify({
               action: "query",
-              store_id: storeId,
+              file_id: fileId,
               query: question,
               topK: 5
             })
@@ -806,17 +805,17 @@ Using Sales Report and Product List Files:
               retrievedContext = "CSV Context: " + data.data[0].text.slice(0, 100) + "...";
             }
           } else {
-            console.warn("Vector store query failed; proceeding without CSV context.");
+            console.warn("File search query failed; proceeding without CSV context.");
           }
         } catch (e) {
-          console.error("Error querying vector store:", e);
+          console.error("Error querying file search:", e);
         }
       } else {
-        console.warn("No vector store ID found; proceeding without CSV context.");
+        console.warn("No CSV file uploaded; proceeding without CSV context.");
       }
       
       let prompt = `
-Here is some relevant data derived from your CSV files:
+Here is some relevant data derived from your CSV file:
 ${retrievedContext}
 
 Listing Description (for emphasis): "${question}"
@@ -1326,289 +1325,6 @@ Important: Return ONLY the description as plain text.`;
       }
     }
 
-    // Helper functions for drag and drop and preview grid
-    function updateStaticPreviewGrid() {
-      for (let i = 0; i < 10; i++) {
-        let cell = document.getElementById("previewCell" + i);
-        if (!cell) continue;
-        cell.innerHTML = "Empty";
-        if (i < 7) {
-          if (i < window.previewImages.length && window.previewImages[i]) {
-            cell.innerHTML = "";
-            let previewBox = document.createElement("div");
-            previewBox.className = "preview-box";
-            previewBox.setAttribute("data-id", window.photoIds[i] || "");
-            previewBox.setAttribute("draggable", "true");
-            previewBox.addEventListener("dragstart", e => { window.draggedIndex = i; });
-            
-            let img = document.createElement("img");
-            img.src = window.previewImages[i];
-            previewBox.appendChild(img);
-            
-            let removeBtn = document.createElement("div");
-            removeBtn.className = "remove-btn";
-            removeBtn.textContent = "X";
-            removeBtn.addEventListener("click", ev => {
-              ev.stopPropagation();
-              window.previewImages.splice(i, 1);
-              window.photoNames.splice(i, 1);
-              window.photoMeta.splice(i, 1);
-              window.photoIds.splice(i, 1);
-              updateStaticPreviewGrid();
-            });
-            previewBox.appendChild(removeBtn);
-            
-            let numOverlay = document.createElement("div");
-            numOverlay.className = "number-overlay";
-            numOverlay.textContent = (i + 1).toString();
-            previewBox.appendChild(numOverlay);
-            
-            let cropBtn = document.createElement("button");
-            cropBtn.textContent = "Crop";
-            cropBtn.style.position = "absolute";
-            cropBtn.style.bottom = "2px";
-            cropBtn.style.right = "2px";
-            cropBtn.style.width = "20px";
-            cropBtn.style.height = "20px";
-            cropBtn.style.borderRadius = "50%";
-            cropBtn.style.backgroundColor = "green";
-            cropBtn.style.color = "white";
-            cropBtn.style.fontSize = "10px";
-            cropBtn.addEventListener("click", ev => {
-              ev.stopPropagation();
-              openCropModal(i);
-            });
-            previewBox.appendChild(cropBtn);
-            
-            if (window.photoMeta[i] && window.photoMeta[i].trim() !== "") {
-              let checkmark = document.createElement("span");
-              checkmark.innerHTML = "&#10003;";
-              checkmark.style.fontSize = "18px";
-              checkmark.style.color = "green";
-              checkmark.style.position = "absolute";
-              checkmark.style.bottom = "-15px";
-              checkmark.style.left = "5px";
-              previewBox.appendChild(checkmark);
-            }
-            
-            previewBox.addEventListener("click", () => { showMetadata(i); });
-            cell.appendChild(previewBox);
-            
-            let metadataStatus = document.createElement("div");
-            metadataStatus.className = "metadata-status";
-            metadataStatus.id = "metadataStatus" + i;
-            cell.appendChild(metadataStatus);
-          } else {
-            cell.innerHTML = "Empty";
-            let metadataStatus = document.createElement("div");
-            metadataStatus.className = "metadata-status";
-            metadataStatus.id = "metadataStatus" + i;
-            cell.appendChild(metadataStatus);
-          }
-        } else {
-          let rIndex = i - 7;
-          if (rIndex < window.reservedPhotos.length && window.reservedPhotos[rIndex] && window.reservedPhotos[rIndex].src) {
-            cell.innerHTML = "";
-            let previewBox = document.createElement("div");
-            previewBox.className = "preview-box";
-            previewBox.setAttribute("data-id", window.reservedPhotos[rIndex].id || "");
-            previewBox.setAttribute("draggable", "true");
-            previewBox.addEventListener("dragstart", e => { window.draggedIndex = i; });
-            let img = document.createElement("img");
-            img.src = window.reservedPhotos[rIndex].src;
-            previewBox.appendChild(img);
-            let removeBtn = document.createElement("div");
-            removeBtn.className = "remove-btn";
-            removeBtn.textContent = "X";
-            removeBtn.addEventListener("click", ev => {
-              ev.stopPropagation();
-              window.reservedPhotos.splice(rIndex, 1);
-              saveReservedPhotos();
-              updateStaticPreviewGrid();
-            });
-            previewBox.appendChild(removeBtn);
-            let numOverlay = document.createElement("div");
-            numOverlay.className = "number-overlay";
-            numOverlay.textContent = (i + 1).toString();
-            previewBox.appendChild(numOverlay);
-            previewBox.addEventListener("click", () => { showMetadata(i); });
-            cell.appendChild(previewBox);
-            let metadataStatus = document.createElement("div");
-            metadataStatus.className = "metadata-status";
-            metadataStatus.id = "metadataStatus" + i;
-            cell.appendChild(metadataStatus);
-          } else {
-            cell.innerHTML = "Empty";
-            let metadataStatus = document.createElement("div");
-            metadataStatus.className = "metadata-status";
-            metadataStatus.id = "metadataStatus" + i;
-            cell.appendChild(metadataStatus);
-          }
-        }
-      }
-    }
-
-    function initializeCellDragAndDrop() {
-      for (let i = 0; i < 10; i++) {
-        let cell = document.getElementById("previewCell" + i);
-        if (!cell.dataset.listenersAttached) {
-          cell.addEventListener("dragover", function(e) {
-            e.preventDefault();
-            this.classList.add("drag-over");
-          });
-          cell.addEventListener("dragleave", function(e) {
-            e.preventDefault();
-            this.classList.remove("drag-over");
-          });
-          cell.addEventListener("drop", async function(e) {
-            e.preventDefault();
-            this.classList.remove("drag-over");
-            let cellIndex = parseInt(this.id.replace("previewCell", ""));
-            if (cellIndex < 7) {
-              if (window.draggedIndex !== null && window.draggedIndex !== cellIndex) {
-                if (window.previewImages[window.draggedIndex]) {
-                  const [movedImage] = window.previewImages.splice(window.draggedIndex, 1);
-                  window.previewImages.splice(cellIndex, 0, movedImage);
-                  const [movedName] = window.photoNames.splice(window.draggedIndex, 1);
-                  window.photoNames.splice(cellIndex, 0, movedName);
-                  const [movedMeta] = window.photoMeta.splice(window.draggedIndex, 1);
-                  window.photoMeta.splice(cellIndex, 0, movedMeta);
-                  const [movedId] = window.photoIds.splice(window.draggedIndex, 1);
-                  window.photoIds.splice(cellIndex, 0, movedId);
-                  updateStaticPreviewGrid();
-                  window.draggedIndex = null;
-                }
-              }
-            } else {
-              let rIndex = cellIndex - 7;
-              if (e.dataTransfer.files && e.dataTransfer.files.length > 0) {
-                let file = e.dataTransfer.files[0];
-                if (/image\/(jpeg|png)/.test(file.type)) {
-                  const reader = new FileReader();
-                  reader.onload = async ev => {
-                    try {
-                      const dataURL = ev.target.result;
-                      const resizedDataURL = await resizeImage(dataURL, 3000, 3000);
-                      let newReserved = {
-                        src: resizedDataURL,
-                        name: file.name,
-                        meta: "",
-                        id: 'img-' + Date.now()
-                      };
-                      window.reservedPhotos[rIndex] = newReserved;
-                      saveReservedPhotos();
-                      updateStaticPreviewGrid();
-                    } catch (err) {
-                      console.error(err);
-                    }
-                  };
-                  reader.readAsDataURL(file);
-                }
-              } else if (window.draggedIndex !== null && window.draggedIndex !== cellIndex) {
-                if (window.draggedIndex < 7) {
-                  const [movedImage] = window.previewImages.splice(window.draggedIndex, 1);
-                  const [movedName] = window.photoNames.splice(window.draggedIndex, 1);
-                  const [movedMeta] = window.photoMeta.splice(window.draggedIndex, 1);
-                  const [movedId] = window.photoIds.splice(window.draggedIndex, 1);
-                  let newReserved = {
-                    src: movedImage,
-                    name: movedName,
-                    meta: movedMeta || "",
-                    id: movedId
-                  };
-                  window.reservedPhotos[rIndex] = newReserved;
-                  saveReservedPhotos();
-                } else {
-                  let oldRIndex = window.draggedIndex - 7;
-                  const [moved] = window.reservedPhotos.splice(oldRIndex, 1);
-                  window.reservedPhotos[rIndex] = moved;
-                  saveReservedPhotos();
-                }
-                updateStaticPreviewGrid();
-                window.draggedIndex = null;
-              }
-            }
-          });
-          cell.dataset.listenersAttached = "true";
-        }
-      }
-    }
-
-    function generateRandomString(length) {
-      const possible = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789';
-      let text = '';
-      for (let i = 0; i < length; i++) {
-        text += possible.charAt(Math.floor(Math.random() * possible.length));
-      }
-      return text;
-    }
-    function base64urlEncode(buffer) {
-      return btoa(String.fromCharCode(...new Uint8Array(buffer)))
-        .replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, '');
-    }
-    async function generateCodeChallenge(codeVerifier) {
-      let encoder = new TextEncoder();
-      let data = encoder.encode(codeVerifier);
-      let digest = await crypto.subtle.digest("SHA-256", data);
-      return base64urlEncode(digest);
-    }
-
-    document.getElementById("connectEtsyBtn").addEventListener("click", async () => {
-      persistDataBeforeRedirect();
-      let state = "randomState123";
-      let scope = "listings_w listings_r";
-      let codeVerifier = generateRandomString(64);
-      localStorage.setItem("etsy_code_verifier", codeVerifier);
-      let codeChallenge = await generateCodeChallenge(codeVerifier);
-      let etsyAuthUrl = `https://www.etsy.com/oauth/connect?response_type=code&client_id=${window.CLIENT_ID}` +
-        `&redirect_uri=${encodeURIComponent(window.REDIRECT_URI)}` +
-        `&scope=${encodeURIComponent(scope)}` +
-        `&state=${state}` +
-        `&code_challenge=${encodeURIComponent(codeChallenge)}` +
-        `&code_challenge_method=S256`;
-      window.location.href = etsyAuthUrl;
-    });
-
-    document.addEventListener("DOMContentLoaded", () => {
-      loadButtonPositions();
-      loadReservedPhotos();
-      restoreDataAfterRedirect();
-      let urlParams = new URLSearchParams(window.location.search);
-      let code = urlParams.get("code");
-      if (code) {
-        exchangeCodeForToken(code);
-        window.history.replaceState({}, document.title, window.REDIRECT_URI);
-      }
-      updateStaticPreviewGrid();
-      initializeCellDragAndDrop();
-      document.getElementById("shopListings").addEventListener("change", () => {
-        let rawInput = document.getElementById("shopListings").value;
-        window.listingQueue = parseListingNumbers(rawInput);
-        loadNextListingInQueue();
-      });
-    });
-
-    async function exchangeCodeForToken(code) {
-      let codeVerifier = localStorage.getItem("etsy_code_verifier");
-      if (!codeVerifier) {
-        M.toast({ html: "No code verifier found. Please try connecting again." });
-        return;
-      }
-      try {
-        let response = await fetch(`/.netlify/functions/exchangeToken?code=${encodeURIComponent(code)}&code_verifier=${encodeURIComponent(codeVerifier)}`);
-        let tokenData = await response.json();
-        if (tokenData.access_token) {
-          window.accessToken = tokenData.access_token;
-          M.toast({ html: "Connected to Etsy!" });
-        } else {
-          M.toast({ html: "Error obtaining token: " + JSON.stringify(tokenData) });
-        }
-      } catch (error) {
-        console.error(error);
-        M.toast({ html: "Error exchanging code for token" });
-      }
-    }
-
     async function generateTagPhrases() {
       let question = document.getElementById("listingDescInput").value.trim();
       if (!question) {
@@ -1618,15 +1334,16 @@ Important: Return ONLY the description as plain text.`;
       let keywordRules = stripMarkdownJSON(document.getElementById("keywordRulesTextarea").value);
       let retrievedContext = "";
       
-      let storeId = localStorage.getItem("vectorStoreId");
-      if (storeId) {
+      // Use the first uploaded CSV file's id for file search.
+      let fileId = window.uploadedCSVFileIds.length > 0 ? window.uploadedCSVFileIds[0] : null;
+      if (fileId) {
         try {
           let resp = await fetch("/.netlify/functions/vectorStore", {
             method: "POST",
             headers: { "Content-Type": "application/json" },
             body: JSON.stringify({
               action: "query",
-              store_id: storeId,
+              file_id: fileId,
               query: question,
               topK: 5
             })
@@ -1637,17 +1354,17 @@ Important: Return ONLY the description as plain text.`;
               retrievedContext = "CSV Context: " + data.data[0].text.slice(0, 100) + "...";
             }
           } else {
-            console.warn("Vector store query failed; proceeding without CSV context.");
+            console.warn("File search query failed; proceeding without CSV context.");
           }
         } catch (e) {
-          console.error("Error querying vector store:", e);
+          console.error("Error querying file search:", e);
         }
       } else {
-        console.warn("No vector store ID found; proceeding without CSV context.");
+        console.warn("No CSV file uploaded; proceeding without CSV context.");
       }
       
       let prompt = `
-Here is some relevant data derived from your CSV files:
+Here is some relevant data derived from your CSV file:
 ${retrievedContext}
 
 Listing Description (for emphasis): "${question}"
@@ -1760,7 +1477,6 @@ Return only one phrase in plain text.
       let lines = document.getElementById("searchKeyPhrases").value.split(/\n+/).map(l => l.trim()).filter(l => l !== "");
       navigator.clipboard.writeText(lines.join(", ")).catch(err => console.error("Error copying key phrases:", err));
     });
-
   </script>
 </body>
 </html>
