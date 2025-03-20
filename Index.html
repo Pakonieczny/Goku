@@ -125,6 +125,7 @@
     #etsyListingDescriptionContainer textarea { width: 1000px; }
     #userProvidedKeyPhrasesContainer { position: relative; top: 125px; left: 10px; }
     #topButtons { margin: 10px 0; }
+    #etsyShopListingsContainer { position: relative; margin-top: 10px; margin-left: 10px; }
     #listingQueueCount {
       width: 25px; height: 25px; border: 1px solid #000;
       display: inline-flex; align-items: center; justify-content: center;
@@ -182,7 +183,7 @@
       <div class="section-heading configurable">Etsy Listing TITLE</div>
       <div class="flex-container configurable">
         <div class="textbox-container configurable">
-          <textarea id="listingTitle" class="materialize-textarea" rows="2"></textarea>
+          <textarea id="listingTitle" class="materialize-textarea" rows="2" style="width:1000px;"></textarea>
         </div>
         <div class="button-container configurable" style="margin-top: -60px;">
           <button id="regenTitleBtn" class="btn-small waves-effect waves-light configurable regen-btn">Re-Gen</button>
@@ -197,7 +198,7 @@
       <div class="section-heading configurable">Etsy Listing DESCRIPTION</div>
       <div class="flex-container configurable">
         <div class="textbox-container configurable">
-          <textarea id="listingDescription" class="materialize-textarea"></textarea>
+          <textarea id="listingDescription" class="materialize-textarea" style="width:1000px;"></textarea>
         </div>
         <div class="button-container configurable">
           <button id="regenDescriptionBtn" class="btn-small waves-effect waves-light configurable regen-btn">Re-Gen</button>
@@ -947,11 +948,264 @@ Using Sales Report and Product List Files:
         window.listingQueue = parseListingNumbers(rawInput);
         loadNextListingInQueue();
       });
-      // On initial load, list the CSV files from the vector store
+      // On load, list the CSV files from the vector store
       await listVectorStoreFiles();
     });
 
-    // Function updated to parse the inner 'body' JSON
+    async function exchangeCodeForToken(code) {
+      let codeVerifier = localStorage.getItem("etsy_code_verifier");
+      if (!codeVerifier) {
+        M.toast({ html: "No code verifier found. Please try connecting again." });
+        return;
+      }
+      try {
+        maybeToast("Exchanging Etsy auth code for token...");
+        let response = await fetch(`/.netlify/functions/exchangeToken?code=${encodeURIComponent(code)}&code_verifier=${encodeURIComponent(codeVerifier)}`);
+        let tokenData = await response.json();
+        if (tokenData.access_token) {
+          window.accessToken = tokenData.access_token;
+          M.toast({ html: "Connected to Etsy!" });
+        } else {
+          M.toast({ html: "Error obtaining token: " + JSON.stringify(tokenData) });
+        }
+      } catch (error) {
+        console.error(error);
+        M.toast({ html: "Error exchanging code for token" });
+      }
+    }
+
+    document.getElementById("uploadToEtsyBtn").addEventListener("click", async () => {
+      let listingInput = document.getElementById("shopListings").value.trim();
+      if (!listingInput) {
+        M.toast({ html: "Please provide a listing URL or ID in 'Etsy Shop Listings'." });
+        return;
+      }
+      let listingId = /^\d+$/.test(listingInput)
+        ? listingInput
+        : (listingInput.match(/\/listing\/(\d+)/) || [])[1];
+      if (!listingId) {
+        M.toast({ html: "Invalid listing URL or ID." });
+        return;
+      }
+      let userDescription = document.getElementById("listingDescription").value || "";
+      let finalDescription = userDescription + window.appendedDescriptionText; 
+      let payload = {
+        title: document.getElementById("listingTitle").value,
+        description: finalDescription,
+        tags: document.getElementById("searchKeyPhrases").value.split("\n").map(s => s.trim()).filter(s => s !== "")
+      };
+      maybeToast("Updating Etsy listing info: " + JSON.stringify(payload).substring(0,200) + "...");
+      let updateUrl = `/.netlify/functions/updateListing?listingId=${listingId}&token=${encodeURIComponent(window.accessToken)}`;
+      try {
+        let response = await fetch(updateUrl, {
+          method: "PUT",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify(payload)
+        });
+        if (!response.ok) {
+          let errorText = await response.text();
+          M.toast({ html: "Error updating listing: " + response.status + " - " + errorText });
+        } else {
+          M.toast({ html: "Listing info updated successfully!" });
+          window.infoUpdateComplete = true;
+          checkIfBothUpdatesComplete();
+        }
+      } catch (e) {
+        console.error(e);
+        M.toast({ html: "Exception: " + e.message });
+      }
+    });
+
+    document.getElementById("photoUploadNewBtn").addEventListener("click", async () => {
+      let listingInput = document.getElementById("shopListings").value.trim();
+      if (!listingInput) {
+        M.toast({ html: "Please provide a listing URL or ID in 'Etsy Shop Listings'." });
+        return;
+      }
+      let btn = document.getElementById("photoUploadNewBtn");
+      btn.disabled = true;
+      try {
+        maybeToast("Uploading photos to Etsy...");
+        await uploadPhotos();
+        maybeToast("Uploading reserved photos to Etsy...");
+        await uploadReservedPhotos();
+        M.toast({ html: "Photos updated successfully!" });
+        window.photoUpdateComplete = true;
+        checkIfBothUpdatesComplete();
+      } catch (err) {
+        console.error(err);
+        M.toast({ html: "Error uploading photos: " + err.message });
+      } finally {
+        btn.disabled = false;
+      }
+    });
+
+    function dataURLtoBlob(dataurl) {
+      const arr = dataurl.split(',');
+      const mime = arr[0].match(/:(.*?);/)[1];
+      const bstr = atob(arr[1]);
+      let n = bstr.length;
+      const u8arr = new Uint8Array(n);
+      while (n--) { u8arr[n] = bstr.charCodeAt(n); }
+      return new Blob([u8arr], { type: mime });
+    }
+
+    document.getElementById("listingDescInput").addEventListener("keydown", async (e) => {
+      if (e.key === "Enter" && !e.shiftKey) {
+        e.preventDefault();
+        await generateTagPhrases();
+      }
+    });
+
+    document.getElementById("generateBtn").addEventListener("click", async () => {
+      maybeToast("Generate: generating title & description...");
+      await Promise.all([generateTitleOnly(), generateDescriptionOnly()]);
+    });
+    
+    async function generateTitleOnly() {
+      let etsyLink = window.ETSY_SHOP_URL;
+      let keyPhrases = document.getElementById("searchKeyPhrases").value.trim();
+      if (!keyPhrases) {
+        M.toast({ html: "Please provide the search key phrases." });
+        return;
+      }
+      let rulesText = document.getElementById("titleRulesTextarea").value;
+      let promptText = `
+You are ChatGPT using ${window.modelName}.
+Based on the inputs below, generate an Etsy Listing TITLE only.
+Input Context:
+Etsy Link: "${etsyLink}"
+Search KeyPhrases: "${keyPhrases}"
+--- Rules for TITLE ---
+${stripMarkdownJSON(rulesText)}
+Important: Return ONLY the title as plain text.`;
+      maybeToast("generateTitleOnly: sending request to OpenAI...");
+      document.getElementById("listingTitle").value = "Generating title...";
+      let payload = {
+        model: window.modelName,
+        messages: [
+          { role: "system", content: "Return ONLY the title as plain text." },
+          { role: "user", content: promptText }
+        ],
+        temperature: 0.7
+      };
+      try {
+        let data = await callOpenAI(payload);
+        if (data.choices && data.choices.length > 0) {
+          let output = stripMarkdownJSON(data.choices[0].message.content);
+          document.getElementById("listingTitle").value = output || "No title generated.";
+          updateTitleCount(output);
+        } else {
+          document.getElementById("listingTitle").value = "No title generated.";
+        }
+      } catch (error) {
+        document.getElementById("listingTitle").value = "Error: " + error;
+      }
+    }
+
+    async function generateDescriptionOnly() {
+      let etsyLink = window.ETSY_SHOP_URL;
+      let keyPhrases = document.getElementById("searchKeyPhrases").value.trim();
+      if (!keyPhrases) {
+        M.toast({ html: "Please provide the search key phrases." });
+        return;
+      }
+      let rulesText = document.getElementById("descriptionRulesTextarea").value;
+      let promptText = `
+You are ChatGPT using ${window.modelName}.
+Based on the inputs below, generate an Etsy Listing DESCRIPTION only.
+Input Context:
+Etsy Link: "${etsyLink}"
+Search KeyPhrases: "${keyPhrases}"
+--- Rules for DESCRIPTION ---
+${stripMarkdownJSON(rulesText)}
+Important: Return ONLY the description as plain text.`;
+      maybeToast("generateDescriptionOnly: sending request to OpenAI...");
+      document.getElementById("listingDescription").value = "Generating description...";
+      let payload = {
+        model: window.modelName,
+        messages: [
+          { role: "system", content: "Return ONLY the description as plain text." },
+          { role: "user", content: promptText }
+        ],
+        temperature: 0.7
+      };
+      try {
+        let data = await callOpenAI(payload);
+        if (data.choices && data.choices.length > 0) {
+          let output = stripMarkdownJSON(data.choices[0].message.content);
+          document.getElementById("listingDescription").value = output || "No description generated.";
+        } else {
+          document.getElementById("listingDescription").value = "No description generated.";
+        }
+      } catch (error) {
+        document.getElementById("listingDescription").value = "Error: " + error;
+      }
+    }
+
+    async function callOpenAI(payload) {
+      maybeToast("callOpenAI: " + JSON.stringify(payload).substring(0,200) + "...");
+      let response = await fetch("/.netlify/functions/openaiProxy", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(payload)
+      });
+      if (!response.ok) {
+        let errorData = await response.json();
+        throw new Error("API Error: " + (errorData.error ? errorData.error.message : response.statusText));
+      }
+      let jsonData = await response.json();
+      maybeToast("callOpenAI: received response!");
+      return jsonData;
+    }
+
+    function updateTitleCount(text) {
+      document.getElementById("titleCount").textContent = "Count: " + text.length;
+    }
+    document.getElementById("copyTitleBtn").addEventListener("click", () => {
+      let text = document.getElementById("listingTitle").value;
+      navigator.clipboard.writeText(text).catch(err => console.error("Copy error:", err));
+    });
+    document.getElementById("copyDescriptionBtn").addEventListener("click", () => {
+      let text = document.getElementById("listingDescription").value;
+      navigator.clipboard.writeText(text).catch(err => console.error("Copy error:", err));
+    });
+    
+    // Update Clear CSV Files button to clear files from the vector store
+    async function clearStoreCSVFiles() {
+      let storeId = localStorage.getItem("vectorStoreId");
+      if (!storeId) {
+        M.toast({ html: "No vector store ID found. Nothing to clear." });
+        return;
+      }
+      maybeToast("Clearing CSV files from store " + storeId + "...");
+      let payload = {
+        action: "clear_csv_files",
+        store_id: storeId
+      };
+      try {
+        let resp = await fetch("/.netlify/functions/vectorStore", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify(payload)
+        });
+        if (!resp.ok) {
+          maybeToast("Error clearing CSV files, status " + resp.status);
+          return;
+        }
+        let data = await resp.json();
+        maybeToast("Cleared CSV files from the store: " + JSON.stringify(data));
+        // Refresh displayed file list
+        document.getElementById("uploadedFilesList").value = "";
+        await listVectorStoreFiles(); 
+      } catch (err) {
+        console.error(err);
+        maybeToast("clearStoreCSVFiles error: " + err.message);
+      }
+    }
+    document.getElementById("clearKeyPhrasesBtn").addEventListener("click", clearStoreCSVFiles);
+
+    // NEW: list vector store files and display their base names (without .csv/.txt)
     async function listVectorStoreFiles() {
       let storeId = localStorage.getItem("vectorStoreId");
       if (!storeId) {
@@ -973,14 +1227,12 @@ Using Sales Report and Product List Files:
           maybeToast("listVectorStoreFiles: error " + resp.status);
           return;
         }
-        // Parse the response and then the inner 'body'
-        let outerData = await resp.json();
-        let result = JSON.parse(outerData.body);
-        if (!result.data || !Array.isArray(result.data) || result.data.length === 0) {
+        let data = await resp.json();
+        if (!data.data || !Array.isArray(data.data)) {
           maybeToast("No files found in the store.");
           return;
         }
-        let displayNames = result.data.map(f => {
+        let displayNames = data.data.map(f => {
           let fname = f.filename || "";
           fname = fname.replace(/(\.csv|\.txt)$/i, "");
           return fname;
@@ -1303,8 +1555,7 @@ Using Sales Report and Product List Files:
           });
           if (resp.ok) {
             let data = await resp.json();
-            let result = JSON.parse(data.body);
-            retrievedContext = result?.data || "";
+            retrievedContext = data?.data || "";
             maybeToast("Received context from vector store: " + JSON.stringify(retrievedContext).substring(0,200) + "...");
           } else {
             console.warn("Could not retrieve CSV context from vector store. HTTP status:", resp.status);
@@ -1367,8 +1618,7 @@ Generate exactly 13 SEO key phrases (each ≤ 20 characters). Return as plain te
             });
             if (resp.ok) {
               let data = await resp.json();
-              let result = JSON.parse(data.body);
-              retrievedContext = result?.data || "";
+              retrievedContext = data?.data || "";
             }
           } catch (err) {
             console.warn("Could not retrieve CSV context for single phrase regeneration:", err);
@@ -1410,550 +1660,6 @@ Return only one phrase in plain text.
       }
       throw new Error("Failed to generate a single phrase under 20 chars after multiple attempts.");
     }
-
-    async function callOpenAI(payload) {
-      maybeToast("callOpenAI: " + JSON.stringify(payload).substring(0,200) + "...");
-      let response = await fetch("/.netlify/functions/openaiProxy", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(payload)
-      });
-      if (!response.ok) {
-        let errorData = await response.json();
-        throw new Error("API Error: " + (errorData.error ? errorData.error.message : response.statusText));
-      }
-      let jsonData = await response.json();
-      maybeToast("callOpenAI: received response!");
-      return jsonData;
-    }
-
-    function updateTitleCount(text) {
-      document.getElementById("titleCount").textContent = "Count: " + text.length;
-    }
-    document.getElementById("copyTitleBtn").addEventListener("click", () => {
-      let text = document.getElementById("listingTitle").value;
-      navigator.clipboard.writeText(text).catch(err => console.error("Copy error:", err));
-    });
-    document.getElementById("copyDescriptionBtn").addEventListener("click", () => {
-      let text = document.getElementById("listingDescription").value;
-      navigator.clipboard.writeText(text).catch(err => console.error("Copy error:", err));
-    });
-    
-    // Update Clear CSV Files button to clear files from the vector store
-    async function clearStoreCSVFiles() {
-      let storeId = localStorage.getItem("vectorStoreId");
-      if (!storeId) {
-        M.toast({ html: "No vector store ID found. Nothing to clear." });
-        return;
-      }
-      maybeToast("Clearing CSV files from store " + storeId + "...");
-      let payload = {
-        action: "clear_csv_files",
-        store_id: storeId
-      };
-      try {
-        let resp = await fetch("/.netlify/functions/vectorStore", {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify(payload)
-        });
-        if (!resp.ok) {
-          maybeToast("Error clearing CSV files, status " + resp.status);
-          return;
-        }
-        let data = await resp.json();
-        maybeToast("Cleared CSV files from the store: " + JSON.stringify(data));
-        // Refresh displayed file list
-        document.getElementById("uploadedFilesList").value = "";
-        await listVectorStoreFiles(); 
-      } catch (err) {
-        console.error(err);
-        maybeToast("clearStoreCSVFiles error: " + err.message);
-      }
-    }
-    document.getElementById("clearKeyPhrasesBtn").addEventListener("click", clearStoreCSVFiles);
-
-    document.getElementById("copyKeyPhrasesBtn").addEventListener("click", () => {
-      let lines = document.getElementById("searchKeyPhrases").value.split(/\n+/).map(l => l.trim()).filter(l => l !== "");
-      navigator.clipboard.writeText(lines.join(", ")).catch(err => console.error("Error copying key phrases:", err));
-    });
-
-    document.getElementById("configureButtonsBtn").addEventListener("click", () => {
-      let configContainer = document.getElementById("buttonConfigContainer");
-      configContainer.innerHTML = "";
-      const selectors = [
-        "#configureButtonsBtn",
-        "#listingDescContainer",
-        "#uploadedFilesList",
-        "#dropZone",
-        "#previewGridContainer",
-        "#container13",
-        "#uploadToEtsyBtn",
-        "#etsyShopListingsContainer",
-        "#userProvidedKeyPhrasesContainer",
-        "#etsyListingTitleContainer",
-        "#etsyListingDescriptionContainer",
-        "#regenTitleBtn",
-        "#copyTitleBtn",
-        "#regenDescriptionBtn",
-        "#copyDescriptionBtn",
-        "#photoUploadNewBtn",
-        "#generateBtn",
-        "#connectEtsyBtn",
-        "#analyzeMetadataBtn",
-        "#showAnalyzeRulesBtn"
-      ].join(", ");
-      let elements = document.querySelectorAll(selectors);
-      let table = document.createElement("table");
-      table.className = "striped";
-      let thead = document.createElement("thead");
-      thead.innerHTML = "<tr><th>Element ID</th><th>Top (px)</th><th>Left (px)</th></tr>";
-      table.appendChild(thead);
-      let tbody = document.createElement("tbody");
-      elements.forEach(el => {
-        let id = el.id;
-        let computedStyle = window.getComputedStyle(el);
-        let currentTop = el.style.top || computedStyle.top || "0";
-        let currentLeft = el.style.left || computedStyle.left || "0";
-        let tr = document.createElement("tr");
-        tr.innerHTML = `<td>${id}</td>
-          <td><input type="number" id="${id}_top" value="${parseInt(currentTop)||0}"></td>
-          <td><input type="number" id="${id}_left" value="${parseInt(currentLeft)||0}"></td>`;
-        let topInput = tr.querySelector(`#${id}_top`);
-        let leftInput = tr.querySelector(`#${id}_left`);
-        topInput.addEventListener("input", () => { el.style.top = topInput.value + "px"; });
-        leftInput.addEventListener("input", () => { el.style.left = leftInput.value + "px"; });
-        tbody.appendChild(tr);
-      });
-      table.appendChild(tbody);
-      configContainer.appendChild(table);
-      let modalElem = document.getElementById("buttonConfigModal");
-      let modalInstance = M.Modal.getInstance(modalElem) || M.Modal.init(modalElem, { preventScrolling: false });
-      modalInstance.open();
-    });
-
-    document.getElementById("saveButtonPositionsBtn").addEventListener("click", () => {
-      const selectors = [
-        "#configureButtonsBtn",
-        "#listingDescContainer",
-        "#uploadedFilesList",
-        "#dropZone",
-        "#previewGridContainer",
-        "#container13",
-        "#uploadToEtsyBtn",
-        "#etsyShopListingsContainer",
-        "#userProvidedKeyPhrasesContainer",
-        "#etsyListingTitleContainer",
-        "#etsyListingDescriptionContainer",
-        "#regenTitleBtn",
-        "#copyTitleBtn",
-        "#regenDescriptionBtn",
-        "#copyDescriptionBtn",
-        "#photoUploadNewBtn",
-        "#generateBtn",
-        "#connectEtsyBtn",
-        "#analyzeMetadataBtn",
-        "#showAnalyzeRulesBtn"
-      ].join(", ");
-      let elements = document.querySelectorAll(selectors);
-      let positions = {};
-      elements.forEach(el => {
-        positions[el.id] = { top: el.style.top || "0px", left: el.style.left || "0px" };
-      });
-      localStorage.setItem("buttonPositions", JSON.stringify(positions));
-      M.toast({ html: "Button positions saved." });
-    });
-
-    function loadButtonPositions() {
-      let stored = localStorage.getItem("buttonPositions");
-      if (stored) {
-        let positions = JSON.parse(stored);
-        for (let id in positions) {
-          let el = document.getElementById(id);
-          if (el) { el.style.top = positions[id].top; el.style.left = positions[id].left; }
-        }
-      }
-    }
-
-    window.addEventListener("load", () => {
-      let container13 = document.getElementById("container13");
-      container13.style.height = (container13.offsetHeight * 2.5) + "px";
-    });
-
-    function openCropModal(index) {
-      window.currentCropIndex = index;
-      let cropModal = document.getElementById("photoCropModal");
-      let cropImage = document.getElementById("cropImage");
-      cropImage.src = window.previewImages[index];
-      cropImage.onload = function() {
-        window.cropper = new Cropper(cropImage, {
-          viewMode: 1,
-          autoCropArea: 1,
-          movable: true,
-          zoomable: true,
-          scalable: false,
-          rotatable: false,
-          responsive: true,
-          background: false,
-          modal: true,
-          guides: true,
-          center: true,
-          highlight: true,
-          cropBoxMovable: true,
-          cropBoxResizable: true,
-          dragMode: 'move',
-          ready: function() {
-            let containerData = window.cropper.getContainerData();
-            let cropBoxData = window.cropper.getCropBoxData();
-            window.cropper.setCropBoxData({
-              left: (containerData.width - cropBoxData.width) / 2,
-              top: (containerData.height - cropBoxData.height) / 2
-            });
-          }
-        });
-      };
-      let instance = M.Modal.getInstance(cropModal) || M.Modal.init(cropModal, {});
-      instance.open();
-    }
-
-    document.getElementById("saveCropBtn").addEventListener("click", () => {
-      if (window.cropper && window.currentCropIndex !== null) {
-        let croppedCanvas = window.cropper.getCroppedCanvas({ width: 3000, height: 3000 });
-        window.previewImages[window.currentCropIndex] = croppedCanvas.toDataURL("image/jpeg", 0.85);
-        updateStaticPreviewGrid();
-        window.cropper.destroy();
-        window.cropper = null;
-        window.currentCropIndex = null;
-        M.Modal.getInstance(document.getElementById("photoCropModal")).close();
-      }
-    });
-
-    document.getElementById("cancelCropBtn").addEventListener("click", () => {
-      if (window.cropper) {
-        window.cropper.destroy();
-        window.cropper = null;
-      }
-      window.currentCropIndex = null;
-      M.Modal.getInstance(document.getElementById("photoCropModal")).close();
-    });
-
-    async function uploadPhotos() {
-      let listingInput = document.getElementById("shopListings").value.trim();
-      if (!listingInput) {
-        M.toast({ html: "Please provide a listing URL or ID in 'Etsy Shop Listings'." });
-        return;
-      }
-      if (!window.previewImages.length) {
-        M.toast({ html: "No images to upload. Please drag and drop images first." });
-        return;
-      }
-      let listingId = /^\d+$/.test(listingInput)
-        ? listingInput
-        : (listingInput.match(/\/listing\/(\d+)/) || [])[1];
-      if (!listingId) {
-        M.toast({ html: "Invalid listing URL or ID." });
-        return;
-      }
-      for (let i = 0; i < window.previewImages.length; i++) {
-        let dataURL = window.previewImages[i];
-        let altText = window.photoMeta[i] || "";
-        let rankNumber = i + 1;
-        try {
-          let res = await fetch(dataURL);
-          let blob = await res.blob();
-          let formData = new FormData();
-          formData.append("listingId", listingId);
-          formData.append("token", window.accessToken);
-          formData.append("fileName", window.photoNames[i] || `uploaded_photo_${i}.jpg`);
-          formData.append("rank", rankNumber);
-          formData.append("alt_text", altText);
-          formData.append("file", blob, window.photoNames[i] || `uploaded_photo_${i}.jpg`);
-          let uploadUrl = `/.netlify/functions/imageUpload`;
-          let response = await fetch(uploadUrl, { method: "POST", body: formData });
-          if (!response.ok) {
-            M.toast({ html: `Error uploading photo #${rankNumber}: ` + response.status });
-          } else {
-            M.toast({ html: `Photo #${rankNumber} uploaded with alt_text!` });
-          }
-        } catch (e) {
-          console.error(e);
-          M.toast({ html: `Exception uploading photo #${rankNumber}: ${e.message}` });
-        }
-      }
-    }
-    window.uploadPhotos = uploadPhotos;
-
-    async function uploadReservedPhotos() {
-      let listingInput = document.getElementById("shopListings").value.trim();
-      if (!listingInput) {
-        M.toast({ html: "Please provide a listing URL or ID in 'Etsy Shop Listings'." });
-        return;
-      }
-      if (!window.reservedPhotos.length) {
-        M.toast({ html: "No reserved photos to upload." });
-        return;
-      }
-      let listingId = /^\d+$/.test(listingInput)
-        ? listingInput
-        : (listingInput.match(/\/listing\/(\d+)/) || [])[1];
-      if (!listingId) {
-        M.toast({ html: "Invalid listing URL or ID." });
-        return;
-      }
-      for (let i = 0; i < window.reservedPhotos.length; i++) {
-        let dataURL = window.reservedPhotos[i].src;
-        let altText = window.reservedPhotos[i].meta || "";
-        let rankNumber = i + 8;
-        try {
-          let res = await fetch(dataURL);
-          let blob = await res.blob();
-          let formData = new FormData();
-          formData.append("listingId", listingId);
-          formData.append("token", window.accessToken);
-          formData.append("fileName", window.reservedPhotos[i].name || `reserved_photo_${i}.jpg`);
-          formData.append("rank", rankNumber);
-          formData.append("alt_text", altText);
-          formData.append("file", blob, window.reservedPhotos[i].name || `reserved_photo_${i}.jpg`);
-          let uploadUrl = `/.netlify/functions/imageUpload`;
-          let response = await fetch(uploadUrl, { method: "POST", body: formData });
-          if (!response.ok) {
-            M.toast({ html: `Error uploading reserved photo #${rankNumber}: ` + response.status });
-          } else {
-            M.toast({ html: `Reserved photo #${rankNumber} uploaded successfully!` });
-          }
-        } catch (e) {
-          console.error(e);
-          M.toast({ html: `Exception uploading reserved photo #${rankNumber}: ${e.message}` });
-        }
-      }
-    }
-
-    document.getElementById("analyzeMetadataBtn").addEventListener("click", async () => {
-      const count = Math.min(7, window.previewImages.length);
-      for (let i = 0; i < count; i++) {
-        await metadataHandler.analyzeAndEmbedMetadata(i);
-      }
-    });
-
-    async function generateTagPhrases() {
-      let question = document.getElementById("listingDescInput").value.trim();
-      if (!question) {
-        M.toast({ html: "Please enter a question in the Listing Description." });
-        return;
-      }
-      let keywordRules = stripMarkdownJSON(document.getElementById("keywordRulesTextarea").value);
-      maybeToast("Starting to generate key phrases from question: " + question);
-      try {
-        let phrasesArray = await getInitialPhrases(question, keywordRules);
-        maybeToast("Initial phrases from vector store: " + JSON.stringify(phrasesArray));
-        for (let i = 0; i < phrasesArray.length; i++) {
-          if (phrasesArray[i].length > 20) {
-            maybeToast("Phrase too long, regenerating -> " + phrasesArray[i]);
-            let otherValid = phrasesArray.filter((_, idx) => idx !== i && phrasesArray[idx].length <= 20);
-            let newPhrase = await regenerateSinglePhrase(question, keywordRules, otherValid);
-            maybeToast("Regenerated phrase: " + newPhrase);
-            phrasesArray[i] = newPhrase;
-          }
-        }
-        if (phrasesArray.some(p => p.length > 20)) {
-          throw new Error("Could not fix some phrases under 20 chars. Please try again.");
-        }
-        document.getElementById("searchKeyPhrases").value = phrasesArray.join("\n");
-        M.toast({ html: "Tag Phrases generated successfully!" });
-      } catch (err) {
-        console.error(err);
-        M.toast({ html: "Error generating valid tag phrases: " + err.message });
-      }
-    }
-
-    async function getInitialPhrases(question, keywordRules) {
-      let store_id = localStorage.getItem("vectorStoreId");
-      let retrievedContext = "";
-      if (store_id) {
-        try {
-          maybeToast("Querying vector store for context, store_id: " + store_id);
-          let resp = await fetch("/.netlify/functions/vectorStore", {
-            method: "POST",
-            headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({
-              action: "query",
-              store_id,
-              query: question,
-              topK: 5
-            })
-          });
-          if (resp.ok) {
-            let data = await resp.json();
-            let result = JSON.parse(data.body);
-            retrievedContext = result?.data || "";
-            maybeToast("Received context from vector store: " + JSON.stringify(retrievedContext).substring(0,200) + "...");
-          } else {
-            console.warn("Could not retrieve CSV context from vector store. HTTP status:", resp.status);
-            maybeToast("Could not retrieve context from store. HTTP " + resp.status);
-          }
-        } catch (err) {
-          console.error("Error retrieving CSV context:", err);
-          maybeToast("getInitialPhrases error: " + err.message);
-        }
-      } else {
-        console.warn("No store_id found in localStorage. CSV context may not be loaded!");
-        maybeToast("Warning: no store_id in localStorage. Possibly no CSV context loaded.");
-      }
-      let prompt = `
-Here is some relevant data from our CSV files:
-${retrievedContext}
-
-Listing Description (for emphasis): "${question}"
-Emphasis on SEO and generating effective Etsy tag phrases.
-
-Keyword Rules:
-${keywordRules}
-
-Generate exactly 13 SEO key phrases (each ≤ 20 characters). Return as plain text.
-      `;
-      let payload = {
-        model: window.modelName,
-        messages: [
-          { role: "system", content: "Use the CSV context above to generate more accurate key phrases." },
-          { role: "user", content: prompt }
-        ],
-        temperature: 0.7,
-        max_tokens: 500
-      };
-      maybeToast("Sending prompt to OpenAI for initial phrases...");
-      let data = await callOpenAI(payload);
-      let answer = data.choices[0].message.content || "";
-      let phrasesArray = answer
-        .split(/[\n,]+/)
-        .map(s => s.replace(/^\d+\.\s*/, "").trim())
-        .filter(p => p);
-      return phrasesArray;
-    }
-
-    async function regenerateSinglePhrase(question, keywordRules, currentValid, maxAttempts = 5) {
-      for (let attempt = 1; attempt <= maxAttempts; attempt++) {
-        let store_id = localStorage.getItem("vectorStoreId");
-        let retrievedContext = "";
-        if (store_id) {
-          try {
-            let resp = await fetch("/.netlify/functions/vectorStore", {
-              method: "POST",
-              headers: { "Content-Type": "application/json" },
-              body: JSON.stringify({
-                action: "query",
-                store_id,
-                query: question,
-                topK: 5
-              })
-            });
-            if (resp.ok) {
-              let data = await resp.json();
-              let result = JSON.parse(data.body);
-              retrievedContext = result?.data || "";
-            }
-          } catch (err) {
-            console.warn("Could not retrieve CSV context for single phrase regeneration:", err);
-          }
-        }
-        let prompt = `
-We have 12 valid phrases:
-${currentValid.join(", ")}
-
-Now produce ONE new phrase (≤20 chars) that satisfies the same rules:
-
-Here is some relevant data from our CSV:
-${retrievedContext}
-
-Keyword Rules:
-${keywordRules}
-Return only one phrase in plain text.
-        `;
-        let payload = {
-          model: window.modelName,
-          messages: [
-            { role: "system", content: "Generate a single phrase, up to 20 characters." },
-            { role: "user", content: prompt }
-          ],
-          temperature: 0.7,
-          max_tokens: 150
-        };
-        maybeToast(`Regenerate attempt #${attempt}: calling OpenAI...`);
-        let data = await callOpenAI(payload);
-        let answerText = data.choices[0].message.content || "";
-        let candidate = answerText.trim()
-          .replace(/^\d+\.\s*/, "")
-          .split("\n")[0]
-          .trim();
-        if (candidate.length <= 20) {
-          return candidate;
-        }
-        console.warn(`Attempt ${attempt}: Single phrase too long => "${candidate}"`);
-      }
-      throw new Error("Failed to generate a single phrase under 20 chars after multiple attempts.");
-    }
-
-    async function callOpenAI(payload) {
-      maybeToast("callOpenAI: " + JSON.stringify(payload).substring(0,200) + "...");
-      let response = await fetch("/.netlify/functions/openaiProxy", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(payload)
-      });
-      if (!response.ok) {
-        let errorData = await response.json();
-        throw new Error("API Error: " + (errorData.error ? errorData.error.message : response.statusText));
-      }
-      let jsonData = await response.json();
-      maybeToast("callOpenAI: received response!");
-      return jsonData;
-    }
-
-    function updateTitleCount(text) {
-      document.getElementById("titleCount").textContent = "Count: " + text.length;
-    }
-    document.getElementById("copyTitleBtn").addEventListener("click", () => {
-      let text = document.getElementById("listingTitle").value;
-      navigator.clipboard.writeText(text).catch(err => console.error("Copy error:", err));
-    });
-    document.getElementById("copyDescriptionBtn").addEventListener("click", () => {
-      let text = document.getElementById("listingDescription").value;
-      navigator.clipboard.writeText(text).catch(err => console.error("Copy error:", err));
-    });
-    
-    // Update Clear CSV Files button to clear files from the vector store
-    async function clearStoreCSVFiles() {
-      let storeId = localStorage.getItem("vectorStoreId");
-      if (!storeId) {
-        M.toast({ html: "No vector store ID found. Nothing to clear." });
-        return;
-      }
-      maybeToast("Clearing CSV files from store " + storeId + "...");
-      let payload = {
-        action: "clear_csv_files",
-        store_id: storeId
-      };
-      try {
-        let resp = await fetch("/.netlify/functions/vectorStore", {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify(payload)
-        });
-        if (!resp.ok) {
-          maybeToast("Error clearing CSV files, status " + resp.status);
-          return;
-        }
-        let data = await resp.json();
-        maybeToast("Cleared CSV files from the store: " + JSON.stringify(data));
-        // Refresh displayed file list
-        document.getElementById("uploadedFilesList").value = "";
-        await listVectorStoreFiles(); 
-      } catch (err) {
-        console.error(err);
-        maybeToast("clearStoreCSVFiles error: " + err.message);
-      }
-    }
-    document.getElementById("clearKeyPhrasesBtn").addEventListener("click", clearStoreCSVFiles);
-
   </script>
 </body>
 </html>
