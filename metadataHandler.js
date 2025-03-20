@@ -22,10 +22,10 @@
   }
 
   // Analyzes the image at the given index, embeds metadata into its EXIF,
-  // updates the global previewImages and photoMeta arrays, and displays metadata in the modal.
+  // and saves the metadata into the global photoMeta array.
   async function analyzeAndEmbedMetadata(imageIndex) {
     if (!window.previewImages || window.previewImages.length <= imageIndex) {
-      M.toast({ html: "No image available to analyze." });
+      console.error("No image available to analyze at index " + imageIndex);
       return;
     }
     const dataUrl = window.previewImages[imageIndex];
@@ -43,23 +43,18 @@
       });
       if (!response.ok) {
         const errorText = await response.text();
-        M.toast({ html: "Error analyzing photo: " + errorText });
+        console.error("Error analyzing photo: " + errorText);
         return;
       }
       const result = await response.json();
-      const metadata = result.metadata || "No metadata returned.";
+      const metadata = result.metadata || "";
       const updatedDataURL = embedAltTextInDataURL(dataUrl, metadata);
       window.previewImages[imageIndex] = updatedDataURL;
       window.photoMeta = window.photoMeta || [];
       window.photoMeta[imageIndex] = metadata;
-      const metadataTextarea = document.getElementById("metadataTextarea");
-      if (metadataTextarea) {
-        metadataTextarea.value = metadata;
-      }
-      M.toast({ html: `Metadata embedded into photo #${imageIndex + 1} successfully!` });
+      console.log(`Metadata embedded into photo #${imageIndex + 1} successfully!`);
     } catch (error) {
       console.error("Error in metadataHandler:", error);
-      M.toast({ html: "Exception: " + error.message });
     }
   }
 

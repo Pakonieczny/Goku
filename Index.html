@@ -223,7 +223,7 @@
       Copy
     </button>
     <div id="dropZone" class="configurable">Image Drop</div>
-    <!-- When "Analyze Photos" is pressed, the metadata will be batch processed without opening the modal -->
+    <!-- "Analyze Photos" now batch processes metadata without opening the modal -->
     <button id="analyzeMetadataBtn" class="btn waves-effect waves-light configurable">
       Analyze Photos
     </button>
@@ -729,9 +729,11 @@ Using Sales Report and Product List Files:
             previewBox.setAttribute("data-id", window.photoIds[i] || "");
             previewBox.setAttribute("draggable", "true");
             previewBox.addEventListener("dragstart", e => { window.draggedIndex = i; });
+            
             let img = document.createElement("img");
             img.src = window.previewImages[i];
             previewBox.appendChild(img);
+            
             let removeBtn = document.createElement("div");
             removeBtn.className = "remove-btn";
             removeBtn.textContent = "X";
@@ -744,10 +746,12 @@ Using Sales Report and Product List Files:
               updateStaticPreviewGrid();
             });
             previewBox.appendChild(removeBtn);
+            
             let numOverlay = document.createElement("div");
             numOverlay.className = "number-overlay";
             numOverlay.textContent = (i + 1).toString();
             previewBox.appendChild(numOverlay);
+            
             let cropBtn = document.createElement("button");
             cropBtn.textContent = "Crop";
             cropBtn.style.position = "absolute";
@@ -764,9 +768,24 @@ Using Sales Report and Product List Files:
               openCropModal(i);
             });
             previewBox.appendChild(cropBtn);
-            // Clicking a photo opens the metadata modal.
+            
+            // If metadata exists, add a small green checkmark at bottom-left.
+            if (window.photoMeta[i] && window.photoMeta[i].trim() !== "") {
+              let checkmark = document.createElement("span");
+              checkmark.className = "metadata-checkmark";
+              checkmark.innerHTML = "&#10003;";  // Unicode checkmark
+              checkmark.style.color = "green";
+              checkmark.style.fontSize = "16px";
+              checkmark.style.position = "absolute";
+              checkmark.style.bottom = "2px";
+              checkmark.style.left = "2px";
+              previewBox.appendChild(checkmark);
+            }
+            
+            // Clicking the photo opens the metadata modal.
             previewBox.addEventListener("click", () => { showMetadata(i); });
             cell.appendChild(previewBox);
+            
             let metadataStatus = document.createElement("div");
             metadataStatus.className = "metadata-status";
             metadataStatus.id = "metadataStatus" + i;
@@ -1438,8 +1457,8 @@ Important: Return ONLY the description as plain text.`;
       }
     }
 
-    // Updated event listener for "Analyze Photos" button:
-    // Batch process metadata for all non-reserved photos (indices 0 to 6) without opening the modal.
+    // "Analyze Photos" now batch processes metadata for all non-reserved photos (indices 0 to 6)
+    // without automatically opening the metadata modal.
     document.getElementById("analyzeMetadataBtn").addEventListener("click", async () => {
       const tasks = [];
       const count = Math.min(7, window.previewImages.length);
@@ -1447,8 +1466,8 @@ Important: Return ONLY the description as plain text.`;
         tasks.push(metadataHandler.analyzeAndEmbedMetadata(i));
       }
       await Promise.all(tasks);
-      M.toast({ html: `Metadata processed for ${count} photos.` });
-      // Do not automatically open the modal here.
+      // After processing, re-render the grid to show checkmarks.
+      updateStaticPreviewGrid();
     });
 
     async function generateTagPhrases() {
