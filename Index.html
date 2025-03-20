@@ -72,6 +72,7 @@
       border-radius: 3px; display: inline-block; vertical-align: middle;
       text-align: center; line-height: 120px; position: relative;
     }
+    /* Hide any unused drop zones */
     #fileDropZonesContainer { display: none; }
     #uploadedFilesList {
       width: 225px; height: 125px; resize: none; box-sizing: border-box;
@@ -510,7 +511,7 @@ Using Sales Report and Product List Files:
             // Create a fileData object including the CSV text content.
             const fileData = {
               name: file.name,
-              id: file.name + "-" + Date.now(),  // or however you want to generate a unique id
+              id: file.name + "-" + Date.now(),  // Generate a unique id
               content: fileText
             };
             window.soldOrdersCSV.push(fileData);
@@ -624,11 +625,6 @@ Using Sales Report and Product List Files:
       });
     }
 
-    async function uploadCSVFile(file) {
-      // Now handled by the drop listener – this function is no longer used.
-      // (We read CSV as text above.)
-    }
-
     async function uploadDocFile(file) {
       return new Promise((resolve, reject) => {
         const reader = new FileReader();
@@ -656,11 +652,15 @@ Using Sales Report and Product List Files:
     }
 
     async function updateVectorStore() {
-      // Instead of mapping file IDs, map the CSV file content if available.
-      const documents = [...window.soldOrdersCSV, ...window.listingsCSV].map(file => file.content || file.id);
+      // Wrap each CSV file's content as an object with a "text" property.
+      const documents = [...window.soldOrdersCSV, ...window.listingsCSV].map(file => ({ text: file.content || file.id }));
       if (!documents.length) return console.log("No supported CSV files uploaded yet.");
       try {
-        const vectorStorePayload = { name: "CSV Vector Store", documents };
+        const vectorStorePayload = { 
+          name: "CSV Vector Store", 
+          documents,
+          model: "text-embedding-ada-002"
+        };
         const response = await fetch("/.netlify/functions/vectorStore", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
