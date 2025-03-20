@@ -785,7 +785,7 @@ Using Sales Report and Product List Files:
       let keywordRules = stripMarkdownJSON(document.getElementById("keywordRulesTextarea").value);
       let retrievedContext = "";
       
-      // Instead of using vectorStoreId, use the uploaded CSV file id.
+      // Use the first uploaded CSV file's id for file search.
       let fileId = window.uploadedCSVFileIds.length > 0 ? window.uploadedCSVFileIds[0] : null;
       if (fileId) {
         try {
