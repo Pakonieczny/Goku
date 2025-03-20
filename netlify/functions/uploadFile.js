@@ -30,6 +30,8 @@ exports.handler = async function(event, context) {
     const form = new FormData();
     form.append("file", buffer, { filename: fileName, contentType });
     form.append("purpose", purpose);
+    // Added metadata field: store the original file name under the key "name"
+    form.append("metadata", JSON.stringify({ name: fileName }));
     
     console.log("FormData prepared. Headers:", form.getHeaders());
     
