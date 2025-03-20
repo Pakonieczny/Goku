@@ -595,358 +595,142 @@ Using Sales Report and Product List Files:
     }
 
     async function uploadDocFile(file) {
-  return new Promise((resolve, reject) => {
-    const reader = new FileReader();
-    reader.onload = async (event) => {
-      try {
-        const dataURL = event.target.result;
-        let base64Content;
-        let newFileName = file.name;
-        let contentType = "text/plain"; // default to text/plain for converted CSV
-
-        if (/\.csv$/i.test(file.name)) {
-          // Parse CSV and generate a text summary
-          const csvText = dataURL.split(",")[1] ? atob(dataURL.split(",")[1]) : "";
-          const parsed = Papa.parse(csvText, { header: true });
-          let summary = "";
-          if (parsed.data && parsed.data.length > 0) {
-            // Create a summary: header and first 10 rows
-            const header = Object.keys(parsed.data[0]).join(", ");
-            summary += header + "\n";
-            const rows = parsed.data.slice(0, 10);
-            rows.forEach(row => {
-              summary += Object.values(row).join(", ") + "\n";
+      return new Promise((resolve, reject) => {
+        const reader = new FileReader();
+        reader.onload = async (event) => {
+          try {
+            const dataURL = event.target.result;
+            let base64Content;
+            let newFileName = file.name;
+            let contentType = "text/plain"; // default for converted CSV
+            if (/\.csv$/i.test(file.name)) {
+              // Convert CSV to text summary
+              const csvText = dataURL.split(",")[1] ? atob(dataURL.split(",")[1]) : "";
+              const summary = preprocessCSVContent(csvText);
+              base64Content = btoa(summary);
+              newFileName = file.name.replace(/\.csv$/i, ".txt");
+            } else {
+              base64Content = dataURL.split(",")[1];
+              if (file.name.toLowerCase().endsWith(".docx")) {
+                contentType = "application/vnd.openxmlformats-officedocument.wordprocessingml.document";
+              } else if (file.name.toLowerCase().endsWith(".doc")) {
+                contentType = "application/msword";
+              }
+            }
+            if (!base64Content) throw new Error("File content is empty.");
+            const payload = { file: base64Content, fileName: newFileName, purpose: "user_data" };
+            const response = await fetch("/.netlify/functions/uploadFile", {
+              method: "POST",
+              headers: { "Content-Type": "application/json" },
+              body: JSON.stringify(payload)
             });
-          }
-          // Convert summary to base64
-          base64Content = btoa(summary);
-          // Change file name extension to .txt for compatibility
-          newFileName = file.name.replace(/\.csv$/i, ".txt");
-        } else {
-          // For other files, use the original content
-          base64Content = dataURL.split(",")[1];
-          // Set contentType based on file extension if needed
-          if (file.name.toLowerCase().endsWith(".docx")) {
-            contentType = "application/vnd.openxmlformats-officedocument.wordprocessingml.document";
-          } else if (file.name.toLowerCase().endsWith(".doc")) {
-            contentType = "application/msword";
-          }
-        }
-        
-        if (!base64Content) throw new Error("File content is empty.");
-
-        const payload = { file: base64Content, fileName: newFileName, purpose: "user_data" };
-        const response = await fetch("/.netlify/functions/uploadFile", {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify(payload)
-        });
-        if (!response.ok) throw new Error("Upload failed with status " + response.status);
-        const fileData = await response.json();
-        fileData.name = fileData.name || newFileName;
-        // Ensure an ID is returned; if not, create one
-        fileData.id = fileData.id || newFileName || ('file-' + Date.now());
-        resolve(fileData);
-      } catch (err) { 
-        reject(err); 
-      }
-    };
-    reader.onerror = reject;
-    reader.readAsDataURL(file);
-  });
-}
+            if (!response.ok) throw new Error("Upload failed with status " + response.status);
+            const fileData = await response.json();
+            fileData.name = fileData.name || newFileName;
+            fileData.id = fileData.id || newFileName || ('file-' + Date.now());
+            resolve(fileData);
+          } catch (err) { reject(err); }
+        };
+        reader.onerror = reject;
+        reader.readAsDataURL(file);
+      });
+    }
 
     async function updateVectorStore() {
-  // Filter out any falsy IDs to ensure valid file_ids
-  const fileIds = (window.uploadedCSVFileIds || []).filter(id => id);
-  if (fileIds.length === 0) {
-    console.log("No valid CSV file IDs found. Skipping vector store creation.");
-    return;
-  }
-  try {
-    const vectorStorePayload = { 
-      name: "CSV Vector Store", 
-      file_ids: fileIds
-    };
-    console.log("Vector store payload:", vectorStorePayload);
-    const response = await fetch("/.netlify/functions/vectorStore", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify(vectorStorePayload)
-    });
-    if (!response.ok) throw new Error("Error creating vector store");
-    const data = await response.json();
-    console.log("Vector store created/updated:", data);
-    if (data && data.id) {
-      localStorage.setItem("vectorStoreId", data.id);
-      console.log("Saved store_id in localStorage:", data.id);
-    }
-  } catch (err) {
-    console.error(err);
-  }
-}
-
-    const dropZone = document.getElementById("dropZone");
-    dropZone.addEventListener("dragover", e => {
-      e.preventDefault();
-      dropZone.style.borderColor = "#000";
-    });
-    dropZone.addEventListener("dragleave", e => {
-      e.preventDefault();
-      dropZone.style.borderColor = "#ccc";
-    });
-    dropZone.addEventListener("drop", async e => {
-      e.preventDefault();
-      dropZone.style.borderColor = "#ccc";
-      const files = e.dataTransfer.files;
-      const maxRemaining = 10 - window.previewImages.length;
-      for (let i = 0; i < Math.min(files.length, maxRemaining); i++) {
-        let file = files[i];
-        if (/image\/(jpeg|png)/.test(file.type)) {
-          try {
-            const dataURL = await new Promise((resolve, reject) => {
-              const reader = new FileReader();
-              reader.onload = event => resolve(event.target.result);
-              reader.onerror = reject;
-              reader.readAsDataURL(file);
-            });
-            const resizedDataURL = await resizeImage(dataURL, 3000, 3000);
-            window.previewImages.push(resizedDataURL);
-            window.photoNames.push(file.name);
-            window.photoIds.push('img-' + Date.now() + '-' + i);
-          } catch (err) { console.error(err); }
-        } else {
-          M.toast({ html: "Only JPEG/PNG images supported." });
-        }
+      const fileIds = (window.uploadedCSVFileIds || []).filter(id => id);
+      if (fileIds.length === 0) {
+        console.log("No valid CSV file IDs found. Skipping vector store creation.");
+        return;
       }
-      updateStaticPreviewGrid();
-      updateUploadedFilesList();
-    });
+      try {
+        const vectorStorePayload = { 
+          name: "CSV Vector Store", 
+          file_ids: fileIds
+        };
+        console.log("Vector store payload:", vectorStorePayload);
+        const response = await fetch("/.netlify/functions/vectorStore", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify(vectorStorePayload)
+        });
+        if (!response.ok) throw new Error("Error creating vector store");
+        const data = await response.json();
+        console.log("Vector store created/updated:", data);
+        if (data && data.id) {
+          localStorage.setItem("vectorStoreId", data.id);
+          console.log("Saved store_id in localStorage:", data.id);
+        }
+      } catch (err) {
+        console.error(err);
+      }
+    }
 
-    function updateStaticPreviewGrid() {
-      for (let i = 0; i < 10; i++) {
-        let cell = document.getElementById("previewCell" + i);
-        if (!cell) continue;
-        cell.innerHTML = "Empty";
-        if (i < 7) {
-          if (i < window.previewImages.length && window.previewImages[i]) {
-            cell.innerHTML = "";
-            let previewBox = document.createElement("div");
-            previewBox.className = "preview-box";
-            previewBox.setAttribute("data-id", window.photoIds[i] || "");
-            previewBox.setAttribute("draggable", "true");
-            previewBox.addEventListener("dragstart", e => { window.draggedIndex = i; });
-            
-            let img = document.createElement("img");
-            img.src = window.previewImages[i];
-            previewBox.appendChild(img);
-            
-            let removeBtn = document.createElement("div");
-            removeBtn.className = "remove-btn";
-            removeBtn.textContent = "X";
-            removeBtn.addEventListener("click", ev => {
-              ev.stopPropagation();
-              window.previewImages.splice(i, 1);
-              window.photoNames.splice(i, 1);
-              window.photoMeta.splice(i, 1);
-              window.photoIds.splice(i, 1);
-              updateStaticPreviewGrid();
-            });
-            previewBox.appendChild(removeBtn);
-            
-            let numOverlay = document.createElement("div");
-            numOverlay.className = "number-overlay";
-            numOverlay.textContent = (i + 1).toString();
-            previewBox.appendChild(numOverlay);
-            
-            let cropBtn = document.createElement("button");
-            cropBtn.textContent = "Crop";
-            cropBtn.style.position = "absolute";
-            cropBtn.style.bottom = "2px";
-            cropBtn.style.right = "2px";
-            cropBtn.style.width = "20px";
-            cropBtn.style.height = "20px";
-            cropBtn.style.borderRadius = "50%";
-            cropBtn.style.backgroundColor = "green";
-            cropBtn.style.color = "white";
-            cropBtn.style.fontSize = "10px";
-            cropBtn.addEventListener("click", ev => {
-              ev.stopPropagation();
-              openCropModal(i);
-            });
-            previewBox.appendChild(cropBtn);
-            
-            if (window.photoMeta[i] && window.photoMeta[i].trim() !== "") {
-              let checkmark = document.createElement("span");
-              checkmark.innerHTML = "&#10003;";
-              checkmark.style.fontSize = "18px";
-              checkmark.style.color = "green";
-              checkmark.style.position = "absolute";
-              checkmark.style.bottom = "-15px";
-              checkmark.style.left = "5px";
-              previewBox.appendChild(checkmark);
+    // New helper function: Query each uploaded file using OpenAI file search endpoint
+    async function queryUploadedFiles(query, topK = 5) {
+      const fileIds = window.uploadedCSVFileIds || [];
+      let aggregatedContext = "";
+      for (const fileId of fileIds) {
+        try {
+          const response = await fetch(`https://api.openai.com/v1/files/${fileId}/search`, {
+            method: "POST",
+            headers: {
+              "Content-Type": "application/json",
+              // Ensure your API key is set securely; you might want to proxy this call
+              "Authorization": `Bearer ${window.OPENAI_API_KEY}`
+            },
+            body: JSON.stringify({ query, top_k: topK })
+          });
+          if (response.ok) {
+            const data = await response.json();
+            if (data && data.data && Array.isArray(data.data)) {
+              aggregatedContext += data.data.map(match => match.text).join("\n") + "\n";
             }
-            
-            previewBox.addEventListener("click", () => { showMetadata(i); });
-            cell.appendChild(previewBox);
-            
-            let metadataStatus = document.createElement("div");
-            metadataStatus.className = "metadata-status";
-            metadataStatus.id = "metadataStatus" + i;
-            cell.appendChild(metadataStatus);
           } else {
-            cell.innerHTML = "Empty";
-            let metadataStatus = document.createElement("div");
-            metadataStatus.className = "metadata-status";
-            metadataStatus.id = "metadataStatus" + i;
-            cell.appendChild(metadataStatus);
+            console.error(`Error querying file ${fileId}:`, response.status);
           }
-        } else {
-          let rIndex = i - 7;
-          if (rIndex < window.reservedPhotos.length && window.reservedPhotos[rIndex] && window.reservedPhotos[rIndex].src) {
-            cell.innerHTML = "";
-            let previewBox = document.createElement("div");
-            previewBox.className = "preview-box";
-            previewBox.setAttribute("data-id", window.reservedPhotos[rIndex].id || "");
-            previewBox.setAttribute("draggable", "true");
-            previewBox.addEventListener("dragstart", e => { window.draggedIndex = i; });
-            let img = document.createElement("img");
-            img.src = window.reservedPhotos[rIndex].src;
-            previewBox.appendChild(img);
-            let removeBtn = document.createElement("div");
-            removeBtn.className = "remove-btn";
-            removeBtn.textContent = "X";
-            removeBtn.addEventListener("click", ev => {
-              ev.stopPropagation();
-              window.reservedPhotos.splice(rIndex, 1);
-              saveReservedPhotos();
-              updateStaticPreviewGrid();
-            });
-            previewBox.appendChild(removeBtn);
-            let numOverlay = document.createElement("div");
-            numOverlay.className = "number-overlay";
-            numOverlay.textContent = (i + 1).toString();
-            previewBox.appendChild(numOverlay);
-            previewBox.addEventListener("click", () => { showMetadata(i); });
-            cell.appendChild(previewBox);
-            let metadataStatus = document.createElement("div");
-            metadataStatus.className = "metadata-status";
-            metadataStatus.id = "metadataStatus" + i;
-            cell.appendChild(metadataStatus);
-          } else {
-            cell.innerHTML = "Empty";
-            let metadataStatus = document.createElement("div");
-            metadataStatus.className = "metadata-status";
-            metadataStatus.id = "metadataStatus" + i;
-            cell.appendChild(metadataStatus);
-          }
+        } catch (error) {
+          console.error(`Exception querying file ${fileId}:`, error);
         }
       }
+      return aggregatedContext;
     }
 
-    function initializeCellDragAndDrop() {
-      for (let i = 0; i < 10; i++) {
-        let cell = document.getElementById("previewCell" + i);
-        if (!cell.dataset.listenersAttached) {
-          cell.addEventListener("dragover", function(e) {
-            e.preventDefault();
-            this.classList.add("drag-over");
-          });
-          cell.addEventListener("dragleave", function(e) {
-            e.preventDefault();
-            this.classList.remove("drag-over");
-          });
-          cell.addEventListener("drop", async function(e) {
-            e.preventDefault();
-            this.classList.remove("drag-over");
-            let cellIndex = parseInt(this.id.replace("previewCell", ""));
-            if (cellIndex < 7) {
-              if (window.draggedIndex !== null && window.draggedIndex !== cellIndex) {
-                if (window.previewImages[window.draggedIndex]) {
-                  const [movedImage] = window.previewImages.splice(window.draggedIndex, 1);
-                  window.previewImages.splice(cellIndex, 0, movedImage);
-                  const [movedName] = window.photoNames.splice(window.draggedIndex, 1);
-                  window.photoNames.splice(cellIndex, 0, movedName);
-                  const [movedMeta] = window.photoMeta.splice(window.draggedIndex, 1);
-                  window.photoMeta.splice(cellIndex, 0, movedMeta);
-                  const [movedId] = window.photoIds.splice(window.draggedIndex, 1);
-                  window.photoIds.splice(cellIndex, 0, movedId);
-                  updateStaticPreviewGrid();
-                  window.draggedIndex = null;
-                }
-              }
-            } else {
-              let rIndex = cellIndex - 7;
-              if (e.dataTransfer.files && e.dataTransfer.files.length > 0) {
-                let file = e.dataTransfer.files[0];
-                if (/image\/(jpeg|png)/.test(file.type)) {
-                  const reader = new FileReader();
-                  reader.onload = async ev => {
-                    try {
-                      const dataURL = ev.target.result;
-                      const resizedDataURL = await resizeImage(dataURL, 3000, 3000);
-                      let newReserved = {
-                        src: resizedDataURL,
-                        name: file.name,
-                        meta: "",
-                        id: 'img-' + Date.now()
-                      };
-                      window.reservedPhotos[rIndex] = newReserved;
-                      saveReservedPhotos();
-                      updateStaticPreviewGrid();
-                    } catch (err) {
-                      console.error(err);
-                    }
-                  };
-                  reader.readAsDataURL(file);
-                }
-              } else if (window.draggedIndex !== null && window.draggedIndex !== cellIndex) {
-                if (window.draggedIndex < 7) {
-                  const [movedImage] = window.previewImages.splice(window.draggedIndex, 1);
-                  const [movedName] = window.photoNames.splice(window.draggedIndex, 1);
-                  const [movedMeta] = window.photoMeta.splice(window.draggedIndex, 1);
-                  const [movedId] = window.photoIds.splice(window.draggedIndex, 1);
-                  let newReserved = {
-                    src: movedImage,
-                    name: movedName,
-                    meta: movedMeta || "",
-                    id: movedId
-                  };
-                  window.reservedPhotos[rIndex] = newReserved;
-                  saveReservedPhotos();
-                } else {
-                  let oldRIndex = window.draggedIndex - 7;
-                  const [moved] = window.reservedPhotos.splice(oldRIndex, 1);
-                  window.reservedPhotos[rIndex] = moved;
-                  saveReservedPhotos();
-                }
-                updateStaticPreviewGrid();
-                window.draggedIndex = null;
-              }
-            }
-          });
-          cell.dataset.listenersAttached = "true";
-        }
+    // Updated getInitialPhrases function using the file search endpoint
+    async function getInitialPhrases(question, keywordRules) {
+      let retrievedContext = "";
+      try {
+        retrievedContext = await queryUploadedFiles(question, 5);
+      } catch (error) {
+        console.error("Error retrieving CSV context:", error);
       }
-    }
+      let prompt = `
+Here is some relevant data from our CSV files:
+${retrievedContext}
 
-    function generateRandomString(length) {
-      const possible = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789';
-      let text = '';
-      for (let i = 0; i < length; i++) {
-        text += possible.charAt(Math.floor(Math.random() * possible.length));
-      }
-      return text;
-    }
-    function base64urlEncode(buffer) {
-      return btoa(String.fromCharCode(...new Uint8Array(buffer)))
-        .replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, '');
-    }
-    async function generateCodeChallenge(codeVerifier) {
-      let encoder = new TextEncoder();
-      let data = encoder.encode(codeVerifier);
-      let digest = await crypto.subtle.digest("SHA-256", data);
-      return base64urlEncode(digest);
+Listing Description (for emphasis): "${question}"
+Emphasis on SEO and generating effective Etsy tag phrases.
+
+Keyword Rules:
+${keywordRules}
+
+Generate exactly 13 SEO key phrases (each ≤ 20 characters). Return as plain text.
+      `;
+      let payload = {
+        model: window.modelName,
+        messages: [
+          { role: "system", content: "Use the CSV context above to generate more accurate key phrases." },
+          { role: "user", content: prompt }
+        ],
+        temperature: 0.7,
+        max_tokens: 500
+      };
+      let data = await callOpenAI(payload);
+      let answer = data.choices[0].message.content || "";
+      let phrasesArray = answer
+        .split(/[\n,]+/)
+        .map(s => s.replace(/^\d+\.\s*/, "").trim())
+        .filter(p => p);
+      return phrasesArray;
     }
 
     document.getElementById("connectEtsyBtn").addEventListener("click", async () => {
@@ -1486,83 +1270,14 @@ Important: Return ONLY the description as plain text.`;
       }
     }
 
-    async function getInitialPhrases(question, keywordRules) {
-      let store_id = localStorage.getItem("vectorStoreId");
-      let retrievedContext = "";
-      if (store_id) {
-        try {
-          let resp = await fetch("/.netlify/functions/vectorStore", {
-            method: "POST",
-            headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({
-              action: "query",
-              store_id,
-              query: question,
-              topK: 5
-            })
-          });
-          if (resp.ok) {
-            let data = await resp.json();
-            retrievedContext = data?.data || "";
-          } else {
-            console.warn("Could not retrieve CSV context from vector store. HTTP status:", resp.status);
-          }
-        } catch (err) {
-          console.error("Error retrieving CSV context:", err);
-        }
-      } else {
-        console.warn("No store_id found in localStorage. CSV context may not be loaded!");
-      }
-      let prompt = `
-Here is some relevant data from our CSV files:
-${retrievedContext}
-
-Listing Description (for emphasis): "${question}"
-Emphasis on SEO and generating effective Etsy tag phrases.
-
-Keyword Rules:
-${keywordRules}
-
-Generate exactly 13 SEO key phrases (each ≤ 20 characters). Return as plain text.
-      `;
-      let payload = {
-        model: window.modelName,
-        messages: [
-          { role: "system", content: "Use the CSV context above to generate more accurate key phrases." },
-          { role: "user", content: prompt }
-        ],
-        temperature: 0.7,
-        max_tokens: 500
-      };
-      let data = await callOpenAI(payload);
-      let answer = data.choices[0].message.content || "";
-      let phrasesArray = answer
-        .split(/[\n,]+/)
-        .map(s => s.replace(/^\d+\.\s*/, "").trim())
-        .filter(p => p);
-      return phrasesArray;
-    }
-
     async function regenerateSinglePhrase(question, keywordRules, currentValid, maxAttempts = 5) {
       for (let attempt = 1; attempt <= maxAttempts; attempt++) {
         let store_id = localStorage.getItem("vectorStoreId");
         let retrievedContext = "";
         if (store_id) {
           try {
-            let resp = await fetch("/.netlify/functions/vectorStore", {
-              method: "POST",
-              headers: { "Content-Type": "application/json" },
-              body: JSON.stringify({
-                action: "query",
-                store_id,
-                query: question,
-                topK: 5
-              })
-            });
-            if (resp.ok) {
-              let data = await resp.json();
-              retrievedContext = data?.data || "";
-            }
+            // Here, we could query the vector store if needed, but now we use file search instead.
+            retrievedContext = await queryUploadedFiles(question, 5);
           } catch (err) {
             console.warn("Could not retrieve CSV context for single phrase regeneration:", err);
           }
@@ -1601,6 +1316,25 @@ Return only one phrase in plain text.
         console.warn(`Attempt ${attempt}: Single phrase too long => "${candidate}"`);
       }
       throw new Error("Failed to generate a single phrase under 20 chars after multiple attempts.");
+    }
+
+    function generateRandomString(length) {
+      const possible = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789';
+      let text = '';
+      for (let i = 0; i < length; i++) {
+        text += possible.charAt(Math.floor(Math.random() * possible.length));
+      }
+      return text;
+    }
+    function base64urlEncode(buffer) {
+      return btoa(String.fromCharCode(...new Uint8Array(buffer)))
+        .replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, '');
+    }
+    async function generateCodeChallenge(codeVerifier) {
+      let encoder = new TextEncoder();
+      let data = encoder.encode(codeVerifier);
+      let digest = await crypto.subtle.digest("SHA-256", data);
+      return base64urlEncode(digest);
     }
   </script>
 </body>
