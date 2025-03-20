@@ -72,7 +72,6 @@
       border-radius: 3px; display: inline-block; vertical-align: middle;
       text-align: center; line-height: 120px; position: relative;
     }
-    /* Hide any unused drop zones */
     #fileDropZonesContainer { display: none; }
     #uploadedFilesList {
       width: 225px; height: 125px; resize: none; box-sizing: border-box;
@@ -501,7 +500,19 @@ Using Sales Report and Product List Files:
       for (let file of files) {
         if (/\.csv$/i.test(file.name)) {
           try {
-            const fileData = await uploadCSVFile(file);
+            // Read CSV file as text
+            const fileText = await new Promise((resolve, reject) => {
+              const reader = new FileReader();
+              reader.onload = event => resolve(event.target.result);
+              reader.onerror = reject;
+              reader.readAsText(file);
+            });
+            // Create a fileData object including the CSV text content.
+            const fileData = {
+              name: file.name,
+              id: file.name + "-" + Date.now(),  // or however you want to generate a unique id
+              content: fileText
+            };
             window.soldOrdersCSV.push(fileData);
             updateUploadedFilesList();
             await updateVectorStore();
@@ -614,29 +625,8 @@ Using Sales Report and Product List Files:
     }
 
     async function uploadCSVFile(file) {
-      return new Promise((resolve, reject) => {
-        const reader = new FileReader();
-        reader.onload = async (event) => {
-          try {
-            const dataURL = event.target.result;
-            const base64Content = dataURL.split(",")[1];
-            if (!base64Content) throw new Error("File content is empty.");
-            const payload = { file: base64Content, fileName: file.name, purpose: "user_data" };
-            const response = await fetch("/.netlify/functions/uploadFile", {
-              method: "POST",
-              headers: { "Content-Type": "application/json" },
-              body: JSON.stringify(payload)
-            });
-            if (!response.ok) throw new Error("Upload failed with status " + response.status);
-            const fileData = await response.json();
-            fileData.name = fileData.name || file.name;
-            fileData.id = fileData.id || file.name || ('file-' + Date.now());
-            resolve(fileData);
-          } catch (err) { reject(err); }
-        };
-        reader.onerror = reject;
-        reader.readAsDataURL(file);
-      });
+      // Now handled by the drop listener – this function is no longer used.
+      // (We read CSV as text above.)
     }
 
     async function uploadDocFile(file) {
@@ -666,10 +656,11 @@ Using Sales Report and Product List Files:
     }
 
     async function updateVectorStore() {
-      const allFileIds = [...window.soldOrdersCSV, ...window.listingsCSV].map(file => file.id);
-      if (!allFileIds.length) return console.log("No supported files uploaded yet.");
+      // Instead of mapping file IDs, map the CSV file content if available.
+      const documents = [...window.soldOrdersCSV, ...window.listingsCSV].map(file => file.content || file.id);
+      if (!documents.length) return console.log("No supported CSV files uploaded yet.");
       try {
-        const vectorStorePayload = { name: "CSV Vector Store", file_ids: allFileIds };
+        const vectorStorePayload = { name: "CSV Vector Store", documents };
         const response = await fetch("/.netlify/functions/vectorStore", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
@@ -777,14 +768,13 @@ Using Sales Report and Product List Files:
             });
             previewBox.appendChild(cropBtn);
             
-            // If metadata exists, add a green checkmark icon 15 pixels below the bottom.
+            // Add checkmark 15px below the photo (using negative bottom offset)
             if (window.photoMeta[i] && window.photoMeta[i].trim() !== "") {
               let checkmark = document.createElement("span");
               checkmark.innerHTML = "&#10003;";
-              checkmark.style.fontSize = "18px"; // 15% increase over 16px
+              checkmark.style.fontSize = "18px";
               checkmark.style.color = "green";
               checkmark.style.position = "absolute";
-              // To display 15px below the bottom, set bottom to -15px.
               checkmark.style.bottom = "-15px";
               checkmark.style.left = "5px";
               previewBox.appendChild(checkmark);

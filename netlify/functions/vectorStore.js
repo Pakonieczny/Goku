@@ -8,18 +8,16 @@ exports.handler = async function(event) {
     // Parse the request payload
     const payload = JSON.parse(event.body || "{}");
 
-    // Decide on action: if file_ids are provided (or action is explicitly "create"), we create/update.
-    const action = payload.action || (payload.file_ids ? "create" : "query");
+    // Determine action based on provided properties.
+    const action = payload.action || (payload.documents ? "create" : "query");
 
     if (action === "create") {
-      // Validate file_ids payload
-      if (!payload.file_ids || !Array.isArray(payload.file_ids) || payload.file_ids.length === 0) {
-        throw new Error("file_ids must be a non-empty array when creating a vector store.");
+      if (!payload.documents || !Array.isArray(payload.documents) || payload.documents.length === 0) {
+        throw new Error("documents must be a non-empty array when creating a vector store.");
       }
-      // Use a property name "documents" instead of "file_ids" if the API expects that.
       const newPayload = {
         name: payload.name || "CSV Vector Store",
-        documents: payload.file_ids  // sending file IDs as documents
+        documents: payload.documents
       };
       console.log("Creating vector store with payload:", newPayload);
 
@@ -49,7 +47,7 @@ exports.handler = async function(event) {
       };
 
     } else if (action === "query") {
-      // For query, we expect a store_id and a query string.
+      // Query: require store_id and perform query as before.
       const storeId = payload.store_id;
       if (!storeId) {
         throw new Error("Missing 'store_id' for vector store query.");
@@ -88,7 +86,7 @@ exports.handler = async function(event) {
     } else {
       return {
         statusCode: 400,
-        body: JSON.stringify({ error: "Unknown action. Provide 'file_ids' or set action='query'." })
+        body: JSON.stringify({ error: "Unknown action. Provide 'documents' or set action='query'." })
       };
     }
   } catch (error) {
