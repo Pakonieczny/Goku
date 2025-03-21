@@ -664,6 +664,23 @@ Using Sales Report and Product List Files:
       loadNextListingInQueue();
     });
 
+    // Add loadNextListingInQueue function
+    function loadNextListingInQueue() {
+      window.photoUpdateComplete = false;
+      window.infoUpdateComplete = false;
+      if (window.listingQueue.length > 0) {
+        document.getElementById("shopListings").value = window.listingQueue[0];
+      } else {
+        document.getElementById("shopListings").value = "";
+      }
+      updateListingQueueCount();
+    }
+
+    // Add updateListingQueueCount function
+    function updateListingQueueCount() {
+      document.getElementById("listingQueueCount").textContent = window.listingQueue.length;
+    }
+
     // Function to restore data after redirect.
     function restoreDataAfterRedirect() {
       try {
