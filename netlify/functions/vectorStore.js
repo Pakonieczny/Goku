@@ -117,7 +117,8 @@ exports.handler = async function(event) {
       const files = listData.data;
       let deletedIds = [];
       for (let f of files) {
-        const originalFilename = (f.metadata && f.metadata.name) || "";
+        // Use metadata name or, if not available, the filename
+        const originalFilename = (f.metadata && f.metadata.name) || f.filename || "";
         if (originalFilename.toLowerCase().endsWith(".csv") || originalFilename.toLowerCase().endsWith(".txt")) {
           const deleteUrl = `https://api.openai.com/v1/vector_stores/${storeId}/files/${f.id}`;
           console.log("Deleting file from store:", deleteUrl);
