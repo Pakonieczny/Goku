@@ -614,7 +614,7 @@ Using Sales Report and Product List Files:
       });
     }
 
-    // NOTE: Purpose changed here -> file remains as CSV
+    // Updated uploadDocFile function for CSV: converts entire CSV to .txt (text/plain)
     async function uploadDocFile(file) {
       maybeToast("uploadDocFile: Reading file '" + file.name + "'");
       return new Promise((resolve, reject) => {
@@ -625,14 +625,16 @@ Using Sales Report and Product List Files:
             const dataURL = event.target.result;
             let base64Content;
             let newFileName = file.name;
-            let contentType = "text/csv"; // Keep CSV as CSV
+            let contentType = "text/csv"; // default for CSV
             if (/\.csv$/i.test(file.name)) {
-              // Use the entire CSV content without summarizing
+              // Get the entire CSV content
               const csvBase64 = dataURL.split(",")[1];
               const csvText = csvBase64 ? atob(csvBase64) : "";
+              // Convert CSV text to base64 and change file extension to .txt
               base64Content = btoa(csvText);
-              // Keep the original .csv extension
-              newFileName = file.name;
+              newFileName = file.name.replace(/\.csv$/i, ".txt");
+              // Set MIME type to text/plain for retrieval support
+              contentType = "text/plain";
             } else {
               base64Content = dataURL.split(",")[1];
               if (file.name.toLowerCase().endsWith(".docx")) {
@@ -643,7 +645,7 @@ Using Sales Report and Product List Files:
             }
             
             if (!base64Content) throw new Error("File content is empty.");
-            // Using purpose "assistants" to allow downloading content if needed
+            // Using purpose "assistants" to allow retrieval
             const payload = { 
               file: base64Content, 
               fileName: newFileName, 
