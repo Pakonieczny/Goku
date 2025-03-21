@@ -141,7 +141,7 @@
       transform: translateX(-50%);
       z-index: 10000;
     }
-    /* Added to enable repositioning via the Configure Buttons modal */
+    /* Enable repositioning via the Configure Buttons modal */
     #etsyShopListingsContainer {
       position: relative;
     }
@@ -177,8 +177,6 @@
     <span class="section-heading configurable">Search Key Phrases</span>
     <!-- Clear button deletes files from the vector store -->
     <button id="clearKeyPhrasesBtn" class="btn-small waves-effect waves-light configurable">Clear CSV Files</button>
-  
-    </button>
     <div id="dropZone" class="configurable">Image Drop</div>
     <button id="analyzeMetadataBtn" class="btn waves-effect waves-light configurable">Analyze Photos</button>
     <button id="showAnalyzeRulesBtn" class="btn waves-effect waves-light configurable" data-target="analyzeRulesModal" style="margin-top:25px;">Analyze Rules</button>
@@ -399,7 +397,7 @@ Using Sales Report and Product List Files:
   <script src="https://cdnjs.cloudflare.com/ajax/libs/materialize/1.0.0/js/materialize.min.js"></script>
   <script src="metadataHandler.js"></script>
   <script>
-    // The temporary debug toast notifications have been removed.
+    // Temporary debug toast notifications have been removed.
 
     window.ETSY_SHOP_URL = "https://www.etsy.com/shop/custombrites";
     window.CLIENT_ID = "k75zdspz4r99txpqdji7i2em";
@@ -422,56 +420,49 @@ Using Sales Report and Product List Files:
     window.infoUpdateComplete = false;
 
     window.appendedDescriptionText = `
-
-----------------------------------
-
-D E T A I L S 
-Materials: 
- •  Sterling Silver
- •  14k Gold Filled
- •  14K Rose Gold Filled 
- •  14K Solid Gold
-
 • We use the Highest Quality materials from the US and Italy.
-• Your purchase will come packaged in a lovely Jewelry Box
-
------------------------------------
-
-P A C K A G I N G
-• Your purchase will come beautifully packaged. If you are ordering for a gift and would like each piece to be packaged separately please let me know. 
-
-• If this purchase is a gift, and you would like us to include a handwritten message, leave a note in the "gift message" box at checkout.
-
-------------------------------------
-
-E X P E D I T E D • S H I P P I N G
-You will be able to choose faster shipping options in the drop down menu when you check out. Ship times do NOT include production times (1-3 business days). However, if you select expedited shipping, we will try to get your order done faster.
-
-------------------------------------
-
-E X P L O R E • O U R • S H O P
-Don't forget to check out the rest of our shop! We specialize in making handmade custom jewelry for every occasion. We take pride in making sure each order is made exactly to the customers specifications. We love collaborating with our customers to create  special and unique pieces for themselves and their loved ones. Please don't hesitate to contact us with any questions you have.  
-
-http://custombrites.etsy.com
-
------------------------------------
-
-C H E C K • U S • O U T
-Make sure you follow us on all our social media platforms to get a behind the scenes look, special promo codes, and some daily inspiration :) 
-
-Instagram: https://www.instagram.com/britesjewelry
-Facebook: https://www.facebook.com/britesjewelry
-Pinterest Page : https://www.pinterest.com/britesjewelry
-
-------------------------------------
-
-S H O P  • P O L I C I E S
-Check out our shop polices page for more details about all our polices and please don't hesitate to contact us with any questions you have! Happy Shopping :)
-
-https://www.etsy.com/shop/CustomBrites/policy"
-
-https://www.etsy.com/your/shops/me/listing-editor/edit/1822973998
+• Your purchase will come packaged and ready for gift giving!
+• D E T A I L S: 13.4mm x 8.7mm Flying DragonFly, 14K Gold Filled, 14K Rose Gold Filled, Sterling Silver = Pendant + Chain.
+• P E R S O N A L I Z E: Custom chain length available.
+• S I M I L A R: Tiny Gold Bar Necklace, Initial Disc Necklace, Vertical Gold Bar Bracelet.
+• P A C K A G I N G: Beautiful packaging.
+• E X P E D I T E D: Faster shipping available.
+• E X P L O R E: http://custombrites.etsy.com
+• C H E C K: Follow us on social media.
+• S H O P  • P O L I C I E S: Check our policies.
 `;
+
+    // Helper functions to save/load UI positions to/from a remote server.
+    async function saveUIPositionsToServer(positions) {
+      try {
+        const response = await fetch("/.netlify/functions/saveUIPositions", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ positions })
+        });
+        if (!response.ok) {
+          throw new Error("Failed to save UI positions to server.");
+        }
+        M.toast({ html: "Button positions saved on server." });
+      } catch(err) {
+        console.error(err);
+        M.toast({ html: "Error saving positions to server: " + err.message });
+      }
+    }
+
+    async function loadUIPositionsFromServer() {
+      try {
+        const response = await fetch("/.netlify/functions/loadUIPositions");
+        if (!response.ok) {
+          throw new Error("Failed to load UI positions from server.");
+        }
+        const data = await response.json();
+        return data.positions;
+      } catch(err) {
+        console.error(err);
+        return null;
+      }
+    }
 
     // CSV Drop Listener on the uploadedFilesList textarea
     const uploadedFilesListElem = document.getElementById("uploadedFilesList");
@@ -625,7 +616,6 @@ https://www.etsy.com/your/shops/me/listing-editor/edit/1822973998
                 contentType = "application/msword";
               }
             }
-            
             if (!base64Content) throw new Error("File content is empty.");
             const payload = { 
               file: base64Content, 
@@ -740,11 +730,9 @@ https://www.etsy.com/your/shops/me/listing-editor/edit/1822973998
             previewBox.setAttribute("data-id", window.photoIds[i] || "");
             previewBox.setAttribute("draggable", "true");
             previewBox.addEventListener("dragstart", e => { window.draggedIndex = i; });
-            
             let img = document.createElement("img");
             img.src = window.previewImages[i];
             previewBox.appendChild(img);
-            
             let removeBtn = document.createElement("div");
             removeBtn.className = "remove-btn";
             removeBtn.textContent = "X";
@@ -757,12 +745,10 @@ https://www.etsy.com/your/shops/me/listing-editor/edit/1822973998
               updateStaticPreviewGrid();
             });
             previewBox.appendChild(removeBtn);
-            
             let numOverlay = document.createElement("div");
             numOverlay.className = "number-overlay";
             numOverlay.textContent = (i + 1).toString();
             previewBox.appendChild(numOverlay);
-            
             let cropBtn = document.createElement("button");
             cropBtn.textContent = "Crop";
             cropBtn.style.position = "absolute";
@@ -779,7 +765,6 @@ https://www.etsy.com/your/shops/me/listing-editor/edit/1822973998
               openCropModal(i);
             });
             previewBox.appendChild(cropBtn);
-            
             if (window.photoMeta[i] && window.photoMeta[i].trim() !== "") {
               let checkmark = document.createElement("span");
               checkmark.innerHTML = "&#10003;";
@@ -790,10 +775,8 @@ https://www.etsy.com/your/shops/me/listing-editor/edit/1822973998
               checkmark.style.left = "5px";
               previewBox.appendChild(checkmark);
             }
-            
             previewBox.addEventListener("click", () => { showMetadata(i); });
             cell.appendChild(previewBox);
-            
             let metadataStatus = document.createElement("div");
             metadataStatus.className = "metadata-status";
             metadataStatus.id = "metadataStatus" + i;
@@ -973,6 +956,14 @@ https://www.etsy.com/your/shops/me/listing-editor/edit/1822973998
       loadButtonPositions();
       loadReservedPhotos();
       restoreDataAfterRedirect();
+      // Load UI positions from the server so that positions persist across devices.
+      const remotePositions = await loadUIPositionsFromServer();
+      if (remotePositions) {
+        for (let id in remotePositions) {
+          let el = document.getElementById(id);
+          if (el) { el.style.top = remotePositions[id].top; el.style.left = remotePositions[id].left; }
+        }
+      }
       let urlParams = new URLSearchParams(window.location.search);
       let code = urlParams.get("code");
       if (code) {
@@ -1355,7 +1346,9 @@ Important: Return ONLY the description as plain text.`;
         positions[el.id] = { top: el.style.top || "0px", left: el.style.left || "0px" };
       });
       localStorage.setItem("buttonPositions", JSON.stringify(positions));
-      M.toast({ html: "Button positions saved." });
+      M.toast({ html: "Button positions saved locally." });
+      // Save positions to remote server as well.
+      saveUIPositionsToServer(positions);
     });
 
     function loadButtonPositions() {
@@ -1521,13 +1514,6 @@ Important: Return ONLY the description as plain text.`;
         }
       }
     }
-
-    document.getElementById("analyzeMetadataBtn").addEventListener("click", async () => {
-      const count = Math.min(7, window.previewImages.length);
-      for (let i = 0; i < count; i++) {
-        await metadataHandler.analyzeAndEmbedMetadata(i);
-      }
-    });
 
     async function generateTagPhrases() {
       let question = document.getElementById("listingDescInput").value.trim();
