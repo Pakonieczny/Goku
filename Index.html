@@ -593,7 +593,7 @@ Using Sales Report and Product List Files:
 • S H O P  • P O L I C I E S: Check our policies.
 `;
 
-    // Add persistDataBeforeRedirect function here
+    // On persistDataBeforeRedirect, store current queue to local storage.
     function persistDataBeforeRedirect() {
       try {
         localStorage.setItem("soldOrdersCSV", JSON.stringify(window.soldOrdersCSV));
@@ -606,7 +606,7 @@ Using Sales Report and Product List Files:
       }
     }
 
-    // Add the showMetadata function here
+    // Show metadata in modal
     function showMetadata(index) {
       const metadata = (window.photoMeta && window.photoMeta[index]) 
                          ? window.photoMeta[index] 
@@ -617,7 +617,7 @@ Using Sales Report and Product List Files:
       modalInstance.open();
     }
 
-    // CSV Drop Listener for the "uploadedFilesList" element
+    // CSV Drop Listener for uploadedFilesList element
     const csvDropZone = document.getElementById("uploadedFilesList");
     csvDropZone.addEventListener("dragover", e => {
       e.preventDefault();
@@ -657,7 +657,10 @@ Using Sales Report and Product List Files:
       return Array.from(new Set(cleaned)).slice(0, 250);
     }
 
-    // Attach event listeners to shopListings input.
+    // Attach event listeners to shopListings:
+    // - "paste": parse pasted text and update queue (but do not save immediately)
+    // - "change": update queue on manual change
+    // - "keydown": on Enter (without Shift) update local storage (overwrite saved numbers)
     document.getElementById("shopListings").addEventListener("paste", (e) => {
       e.preventDefault();
       let pasteData = (e.clipboardData || window.clipboardData).getData('text');
@@ -669,8 +672,18 @@ Using Sales Report and Product List Files:
       window.listingQueue = parseListingNumbers(rawInput);
       loadNextListingInQueue();
     });
+    document.getElementById("shopListings").addEventListener("keydown", (e) => {
+      if (e.key === "Enter" && !e.shiftKey) {
+        e.preventDefault();
+        let rawInput = document.getElementById("shopListings").value;
+        window.listingQueue = parseListingNumbers(rawInput);
+        // Save the updated listingQueue to local storage, overwriting any previous data.
+        localStorage.setItem("listingQueue", JSON.stringify(window.listingQueue));
+        loadNextListingInQueue();
+      }
+    });
 
-    // Update loadNextListingInQueue to show only the current listing (first number) in the textbox.
+    // loadNextListingInQueue displays only the first number from the queue and updates local storage.
     function loadNextListingInQueue() {
       window.photoUpdateComplete = false;
       window.infoUpdateComplete = false;
@@ -680,30 +693,36 @@ Using Sales Report and Product List Files:
         document.getElementById("shopListings").value = "";
       }
       updateListingQueueCount();
+      localStorage.setItem("listingQueue", JSON.stringify(window.listingQueue));
     }
 
-    // Update the counter to show total listings remaining
+    // updateListingQueueCount updates the counter element.
     function updateListingQueueCount() {
       document.getElementById("listingQueueCount").textContent = window.listingQueue.length;
     }
 
-    // Function to restore data after redirect.
+    // On page load, restore the listing queue from local storage (if available)
     function restoreDataAfterRedirect() {
       try {
         let soCSV = localStorage.getItem("soldOrdersCSV");
         if (soCSV) { window.soldOrdersCSV = JSON.parse(soCSV); }
         let liCSV = localStorage.getItem("listingsCSV");
         if (liCSV) { window.listingsCSV = JSON.parse(liCSV); }
-        let storedShopListingsText = localStorage.getItem("shopListingsText");
-        if (storedShopListingsText) { document.getElementById("shopListings").value = storedShopListingsText; }
+        // Load listingQueue from local storage if it exists.
         let storedQueue = localStorage.getItem("listingQueue");
-        if (storedQueue) { window.listingQueue = JSON.parse(storedQueue); }
+        if (storedQueue) {
+          window.listingQueue = JSON.parse(storedQueue);
+          // Display only the first number from the restored queue.
+          if (window.listingQueue.length > 0) {
+            document.getElementById("shopListings").value = window.listingQueue[0];
+          }
+        }
       } catch (err) {
         console.error("Error restoring data after redirect:", err);
       }
     }
 
-    // Load button positions. Use localStorage if available; if not, load defaults from uiPositions.js.
+    // Load button positions (from local storage or default from uiPositions.js)
     function loadButtonPositions() {
       let stored = localStorage.getItem("buttonPositions");
       if (stored) {
@@ -1058,7 +1077,7 @@ Return only one phrase in plain text.
       let text = document.getElementById("listingDescription").value;
       navigator.clipboard.writeText(text).catch(err => console.error("Copy error:", err));
     });
-
+    
     async function clearStoreCSVFiles() {
       let storeId = localStorage.getItem("vectorStoreId");
       if (!storeId) {
@@ -1627,6 +1646,16 @@ Return only one phrase in plain text.
         let rawInput = document.getElementById("shopListings").value;
         window.listingQueue = parseListingNumbers(rawInput);
         loadNextListingInQueue();
+      });
+      // Pressing Enter (without Shift) will update local storage and overwrite any saved listings.
+      document.getElementById("shopListings").addEventListener("keydown", (e) => {
+        if (e.key === "Enter" && !e.shiftKey) {
+          e.preventDefault();
+          let rawInput = document.getElementById("shopListings").value;
+          window.listingQueue = parseListingNumbers(rawInput);
+          localStorage.setItem("listingQueue", JSON.stringify(window.listingQueue));
+          loadNextListingInQueue();
+        }
       });
       await listVectorStoreFiles();
     });
