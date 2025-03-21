@@ -11,6 +11,7 @@ exports.handler = async function(event) {
       };
     }
     
+    // Note the added /content endpoint here
     const response = await fetch(`https://api.openai.com/v1/files/${fileId}/content`, {
       method: "GET",
       headers: {

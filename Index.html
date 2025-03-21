@@ -386,6 +386,17 @@ Using Sales Report and Product List Files:
     </div>
   </div>
 
+<!-- File Content Modal -->
+<div id="fileContentModal" class="modal">
+  <div class="modal-content">
+    <h4>File Content</h4>
+    <textarea id="fileContentModalText" style="width:100%; height:300px;" readonly></textarea>
+  </div>
+  <div class="modal-footer">
+    <a href="#!" class="modal-close waves-effect waves-green btn">Close</a>
+  </div>
+</div>
+
   <script src="https://code.jquery.com/jquery-3.6.0.min.js"></script>
   <script src="https://cdnjs.cloudflare.com/ajax/libs/materialize/1.0.0/js/materialize.min.js"></script>
   <script src="metadataHandler.js"></script>
@@ -441,6 +452,26 @@ Using Sales Report and Product List Files:
       });
       return summary;
     }
+
+async function showFileContentModal(fileId) {
+  try {
+    // Call your serverless function to get the file content
+    const response = await fetch(`/.netlify/functions/getFileContent?fileId=${fileId}`, {
+      method: "GET"
+    });
+    if (!response.ok) {
+      console.error("Error retrieving file content:", response.status, await response.text());
+      return;
+    }
+    const result = await response.json();
+    document.getElementById("fileContentModalText").value = result.content;
+    let fileContentModalElem = document.getElementById("fileContentModal");
+    let fileContentModal = M.Modal.getInstance(fileContentModalElem) || M.Modal.init(fileContentModalElem);
+    fileContentModal.open();
+  } catch (error) {
+    console.error("Exception while fetching file content:", error);
+  }
+}
 
     // CSV Drop Listener on the uploadedFilesList textarea
     const uploadedFilesListElem = document.getElementById("uploadedFilesList");
