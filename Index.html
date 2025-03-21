@@ -593,7 +593,7 @@ Using Sales Report and Product List Files:
 • S H O P  • P O L I C I E S: Check our policies.
 `;
 
-// Add persistDataBeforeRedirect function here
+    // Add persistDataBeforeRedirect function here
     function persistDataBeforeRedirect() {
       try {
         localStorage.setItem("soldOrdersCSV", JSON.stringify(window.soldOrdersCSV));
@@ -606,19 +606,6 @@ Using Sales Report and Product List Files:
       }
     }
 
-// ADD THIS HELPER FUNCTION:
-  function parseListingNumbers(rawInput) {
-    const parts = rawInput.split(",");
-    const cleaned = parts.map(p => p.trim()).filter(p => /^\d{10}$/.test(p));
-    return Array.from(new Set(cleaned)).slice(0, 250);
-  }
-  
-      document.getElementById("shopListings").addEventListener("input", () => {
-      const rawInput = document.getElementById("shopListings").value;
-      window.listingQueue = parseListingNumbers(rawInput);
-      loadNextListingInQueue();
-    });
-
     // Add the showMetadata function here
     function showMetadata(index) {
       const metadata = (window.photoMeta && window.photoMeta[index]) 
@@ -630,7 +617,7 @@ Using Sales Report and Product List Files:
       modalInstance.open();
     }
 
-// This code attaches drop events specifically for CSV files on the "uploadedFilesList" element.
+    // CSV Drop Listener for the "uploadedFilesList" element
     const csvDropZone = document.getElementById("uploadedFilesList");
     csvDropZone.addEventListener("dragover", e => {
       e.preventDefault();
@@ -661,6 +648,20 @@ Using Sales Report and Product List Files:
           }
         }
       }
+    });
+
+    // Helper function: parseListingNumbers
+    function parseListingNumbers(rawInput) {
+      const parts = rawInput.split(",");
+      const cleaned = parts.map(p => p.trim()).filter(p => /^\d{10}$/.test(p));
+      return Array.from(new Set(cleaned)).slice(0, 250);
+    }
+
+    // Attach event listener to shopListings input to process comma-separated 10-digit numbers
+    document.getElementById("shopListings").addEventListener("input", () => {
+      const rawInput = document.getElementById("shopListings").value;
+      window.listingQueue = parseListingNumbers(rawInput);
+      loadNextListingInQueue();
     });
 
     // Function to restore data after redirect.
@@ -1592,7 +1593,8 @@ Return only one phrase in plain text.
       }
       updateStaticPreviewGrid();
       initializeCellDragAndDrop();
-      document.getElementById("shopListings").addEventListener("change", () => {
+      // Changed event from "change" to "input" for shopListings to capture pasted values immediately.
+      document.getElementById("shopListings").addEventListener("input", () => {
         let rawInput = document.getElementById("shopListings").value;
         window.listingQueue = rawInput.split(",").map(p => p.trim()).filter(p => /^\d{10}$/.test(p));
         loadNextListingInQueue();
