@@ -659,8 +659,8 @@ Using Sales Report and Product List Files:
 
     // Attach event listener to shopListings input to process comma-separated 10-digit numbers
     document.getElementById("shopListings").addEventListener("input", () => {
-      const rawInput = document.getElementById("shopListings").value;
-      window.listingQueue = parseListingNumbers(rawInput);
+      let rawInput = document.getElementById("shopListings").value;
+      window.listingQueue = rawInput.split(",").map(p => p.trim()).filter(p => /^\d{10}$/.test(p));
       loadNextListingInQueue();
     });
 
@@ -668,13 +668,17 @@ Using Sales Report and Product List Files:
     function loadNextListingInQueue() {
       window.photoUpdateComplete = false;
       window.infoUpdateComplete = false;
-      if (window.listingQueue.length > 0) {
-        document.getElementById("shopListings").value = window.listingQueue[0];
-      } else {
-        document.getElementById("shopListings").value = "";
-      }
-      updateListingQueueCount();
+  
+    // If there are numbers in the queue, show only the first one in the text box.
+    if (window.listingQueue.length > 0) {
+      document.getElementById("shopListings").value = window.listingQueue[0];
+    } else {
+      document.getElementById("shopListings").value = "";
     }
+  
+  // Update the counter with the total number of listings remaining.
+  updateListingQueueCount();
+}
 
     // Add updateListingQueueCount function
     function updateListingQueueCount() {
