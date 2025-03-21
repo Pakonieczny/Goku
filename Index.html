@@ -134,6 +134,14 @@
     .regen-btn, .copy-btn { width: 125px; }
     .update-btn { background-color: #FFA500 !important; color: white !important; }
     .drag-over { border: 2px dashed #2196f3 !important; }
+    /* Floating button style */
+    #floatingViewFileBtn {
+      position: fixed;
+      bottom: 20px;
+      left: 50%;
+      transform: translateX(-50%);
+      z-index: 10000;
+    }
   </style>
 </head>
 <body>
@@ -385,18 +393,23 @@ Using Sales Report and Product List Files:
       <a href="#!" id="closeFileListBtn" class="modal-close waves-effect waves-green btn">Close</a>
     </div>
   </div>
-
-<!-- File Content Modal -->
-<div id="fileContentModal" class="modal">
-  <div class="modal-content">
-    <h4>File Content</h4>
-    <textarea id="fileContentModalText" style="width:100%; height:300px;" readonly></textarea>
+  
+  <!-- New File Content Modal (to view CSV file content) -->
+  <div id="fileContentModal" class="modal">
+    <div class="modal-content">
+      <h4>File Content</h4>
+      <textarea id="fileContentModalText" style="width:100%; height:300px;" readonly></textarea>
+    </div>
+    <div class="modal-footer">
+      <a href="#!" class="modal-close waves-effect waves-green btn">Close</a>
+    </div>
   </div>
-  <div class="modal-footer">
-    <a href="#!" class="modal-close waves-effect waves-green btn">Close</a>
-  </div>
-</div>
-
+  
+  <!-- Temporary Floating Button -->
+  <button id="floatingViewFileBtn" class="btn-floating btn-large red">
+    <i class="material-icons">visibility</i>
+  </button>
+  
   <script src="https://code.jquery.com/jquery-3.6.0.min.js"></script>
   <script src="https://cdnjs.cloudflare.com/ajax/libs/materialize/1.0.0/js/materialize.min.js"></script>
   <script src="metadataHandler.js"></script>
@@ -405,203 +418,27 @@ Using Sales Report and Product List Files:
     function maybeToast(msg) { if (window.DEBUG_TOASTS) M.toast({html: msg}); }
     function stripMarkdownJSON(text) { return text; }
 
-    window.ETSY_SHOP_URL = "https://www.etsy.com/shop/custombrites";
-    window.CLIENT_ID = "k75zdspz4r99txpqdji7i2em";
-    window.REDIRECT_URI = "https://delicate-tanuki-616ac0.netlify.app/";
-    window.modelName = "chatgpt-4o-latest";
-    window.accessToken;
-    window.soldOrdersCSV = [];
-    window.listingsCSV = [];
-    window.uploadedCSVFileIds = [];
-    window.photoNames = [];
-    window.previewImages = [];
-    window.photoMeta = [];
-    window.draggedIndex = null;
-    window.photoIds = [];
-    window.currentCropIndex = null;
-    window.cropper = null;
-    window.reservedPhotos = [];
-    window.listingQueue = [];
-    window.photoUpdateComplete = false;
-    window.infoUpdateComplete = false;
-
-    window.appendedDescriptionText = `
-• We use the Highest Quality materials from the US and Italy.
-• Your purchase will come packaged and ready for gift giving!
-• D E T A I L S: 13.4mm x 8.7mm Flying DragonFly, 14K Gold Filled, 14K Rose Gold Filled, Sterling Silver = Pendant + Chain.
-• P E R S O N A L I Z E: Custom chain length available.
-• S I M I L A R: Tiny Gold Bar Necklace, Initial Disc Necklace, Vertical Gold Bar Bracelet.
-• P A C K A G I N G: Beautiful packaging.
-• E X P E D I T E D: Faster shipping available.
-• E X P L O R E: http://custombrites.etsy.com
-• C H E C K: Follow us on social media.
-• S H O P  • P O L I C I E S: Check our policies.
-`;
-
-    // CSV Preprocessing function using PapaParse
-    function preprocessCSVContent(csvText) {
-      var parsed = Papa.parse(csvText, { header: true });
-      var data = parsed.data;
-      if (!data || data.length === 0) return "";
-      var header = Object.keys(data[0]).join(", ");
-      var summary = header + "\n";
-      var rowsToUse = data.slice(0, 10);
-      rowsToUse.forEach(row => {
-        var rowValues = Object.keys(row).map(key => row[key]);
-        summary += rowValues.join(", ") + "\n";
-      });
-      return summary;
-    }
-
-async function showFileContentModal(fileId) {
-  try {
-    // Call your serverless function to get the file content
-    const response = await fetch(`/.netlify/functions/getFileContent?fileId=${fileId}`, {
-      method: "GET"
-    });
-    if (!response.ok) {
-      console.error("Error retrieving file content:", response.status, await response.text());
-      return;
-    }
-    const result = await response.json();
-    document.getElementById("fileContentModalText").value = result.content;
-    let fileContentModalElem = document.getElementById("fileContentModal");
-    let fileContentModal = M.Modal.getInstance(fileContentModalElem) || M.Modal.init(fileContentModalElem);
-    fileContentModal.open();
-  } catch (error) {
-    console.error("Exception while fetching file content:", error);
-  }
-}
-
-    // CSV Drop Listener on the uploadedFilesList textarea
-    const uploadedFilesListElem = document.getElementById("uploadedFilesList");
-    uploadedFilesListElem.addEventListener("dragover", e => {
-      e.preventDefault();
-      e.stopPropagation();
-      uploadedFilesListElem.style.borderColor = "#000";
-    });
-    uploadedFilesListElem.addEventListener("dragleave", e => {
-      e.preventDefault();
-      e.stopPropagation();
-      uploadedFilesListElem.style.borderColor = "#ccc";
-    });
-    uploadedFilesListElem.addEventListener("drop", async e => {
-      e.preventDefault();
-      e.stopPropagation();
-      uploadedFilesListElem.style.borderColor = "#ccc";
-      const files = e.dataTransfer.files;
-      for (let file of files) {
-        if (/\.csv$/i.test(file.name)) {
-          try {
-            maybeToast("Dropping CSV file: " + file.name + "... uploading now");
-            const fileData = await uploadDocFile(file);
-            maybeToast("CSV file uploaded with ID: " + (fileData.id || "N/A"));
-            window.uploadedCSVFileIds.push(fileData.id);
-            uploadedFilesListElem.value = window.uploadedCSVFileIds.join("\n");
-            await updateVectorStore();
-          } catch (err) {
-            console.error(err);
-            maybeToast("Error uploading CSV: " + err.message);
-          }
+    // New function to retrieve file content from your serverless function (which handles API keys)
+    async function showFileContentModal(fileId) {
+      try {
+        const response = await fetch(`/.netlify/functions/getFileContent?fileId=${fileId}`, {
+          method: "GET"
+        });
+        if (!response.ok) {
+          console.error("Error retrieving file content:", response.status, await response.text());
+          return;
         }
-      }
-    });
-
-    function showMetadata(index) {
-      const metadata = (window.photoMeta && window.photoMeta[index]) ? window.photoMeta[index] : "No metadata available.";
-      document.getElementById("metadataTextarea").value = metadata;
-      let modalElem = document.getElementById("metadataModal");
-      let modalInstance = M.Modal.getInstance(modalElem) || M.Modal.init(modalElem);
-      modalInstance.open();
-    }
-
-    function persistDataBeforeRedirect() {
-      try {
-        localStorage.setItem("soldOrdersCSV", JSON.stringify(window.soldOrdersCSV));
-        localStorage.setItem("listingsCSV", JSON.stringify(window.listingsCSV));
-        const listingsInputValue = document.getElementById("shopListings").value || "";
-        localStorage.setItem("shopListingsText", listingsInputValue);
-        localStorage.setItem("listingQueue", JSON.stringify(window.listingQueue));
-      } catch (err) {
-        console.error("Error persisting data before redirect:", err);
+        const result = await response.json();
+        document.getElementById("fileContentModalText").value = result.content;
+        let fileContentModalElem = document.getElementById("fileContentModal");
+        let fileContentModal = M.Modal.getInstance(fileContentModalElem) || M.Modal.init(fileContentModalElem);
+        fileContentModal.open();
+      } catch (error) {
+        console.error("Exception while fetching file content:", error);
       }
     }
 
-    function restoreDataAfterRedirect() {
-      try {
-        let soCSV = localStorage.getItem("soldOrdersCSV");
-        if (soCSV) { window.soldOrdersCSV = JSON.parse(soCSV); }
-        let liCSV = localStorage.getItem("listingsCSV");
-        if (liCSV) { window.listingsCSV = JSON.parse(liCSV); }
-        let storedShopListingsText = localStorage.getItem("shopListingsText");
-        if (storedShopListingsText) { document.getElementById("shopListings").value = storedShopListingsText; }
-        let storedQueue = localStorage.getItem("listingQueue");
-        if (storedQueue) { window.listingQueue = JSON.parse(storedQueue); }
-        loadNextListingInQueue();
-      } catch (err) {
-        console.error("Error restoring data after redirect:", err);
-      }
-    }
-    
-    function parseListingNumbers(rawInput) {
-      let parts = rawInput.split(",");
-      let cleaned = parts.map(p => p.trim()).filter(p => /^\d{10}$/.test(p));
-      return Array.from(new Set(cleaned)).slice(0, 250);
-    }
-    function updateListingQueueCount() {
-      const countBox = document.getElementById("listingQueueCount");
-      countBox.textContent = window.listingQueue.length;
-    }
-    function loadNextListingInQueue() {
-      window.photoUpdateComplete = false;
-      window.infoUpdateComplete = false;
-      if (window.listingQueue.length > 0) {
-        document.getElementById("shopListings").value = window.listingQueue[0];
-      } else {
-        document.getElementById("shopListings").value = "";
-      }
-      updateListingQueueCount();
-    }
-    function afterBothUpdates() {
-      window.listingQueue.shift();
-      loadNextListingInQueue();
-    }
-    function checkIfBothUpdatesComplete() {
-      if (window.photoUpdateComplete && window.infoUpdateComplete) {
-        afterBothUpdates();
-      }
-    }
-
-    function updateUploadedFilesList() {
-      const uploadedFilesListElem = document.getElementById('uploadedFilesList');
-      uploadedFilesListElem.value = window.uploadedCSVFileIds.join("\n");
-    }
-
-    function loadReservedPhotos() {
-      const stored = localStorage.getItem("reservedPhotos");
-      window.reservedPhotos = stored ? JSON.parse(stored) : [];
-    }
-    function saveReservedPhotos() {
-      localStorage.setItem("reservedPhotos", JSON.stringify(window.reservedPhotos));
-    }
-
-    async function resizeImage(dataURL, width, height) {
-      return new Promise((resolve, reject) => {
-        const img = new Image();
-        img.onload = () => {
-          const canvas = document.createElement("canvas");
-          canvas.width = width;
-          canvas.height = height;
-          const ctx = canvas.getContext("2d");
-          ctx.drawImage(img, 0, 0, width, height);
-          resolve(canvas.toDataURL("image/jpeg", 0.85));
-        };
-        img.onerror = reject;
-        img.src = dataURL;
-      });
-    }
-
-    // NOTE: Purpose changed here -> "vector_store"
+    // Updated uploadDocFile function that keeps CSV files as CSV instead of converting to .txt.
     async function uploadDocFile(file) {
       maybeToast("uploadDocFile: Reading file '" + file.name + "'");
       return new Promise((resolve, reject) => {
@@ -612,18 +449,15 @@ async function showFileContentModal(fileId) {
             const dataURL = event.target.result;
             let base64Content;
             let newFileName = file.name;
-            let contentType = "text/plain";
+            let contentType = "text/csv"; // keep CSV as CSV
             if (/\.csv$/i.test(file.name)) {
-              // Get the entire CSV content from the data URL
+              // Use entire CSV content without summarization
               const csvBase64 = dataURL.split(",")[1];
               const csvText = csvBase64 ? atob(csvBase64) : "";
-  
-              // Re-encode the full CSV text as base64 for the .txt file
-                base64Content = btoa(csvText);
-              // Change the file extension from .csv to .txt
-              newFileName = file.name.replace(/\.csv$/i, ".txt");
-            }
-             else {
+              base64Content = btoa(csvText);
+              // Keep the original .csv extension
+              newFileName = file.name;
+            } else {
               base64Content = dataURL.split(",")[1];
               if (file.name.toLowerCase().endsWith(".docx")) {
                 contentType = "application/vnd.openxmlformats-officedocument.wordprocessingml.document";
@@ -633,11 +467,11 @@ async function showFileContentModal(fileId) {
             }
             
             if (!base64Content) throw new Error("File content is empty.");
-            // The important part: purpose changed to "user_data"
+            // The important part: purpose remains as defined (e.g., "assistant" if needed)
             const payload = { 
               file: base64Content, 
               fileName: newFileName, 
-              purpose: "assistants" 
+              purpose: "assistant" 
             };
             const response = await fetch("/.netlify/functions/uploadFile", {
               method: "POST",
@@ -1341,6 +1175,14 @@ Important: Return ONLY the description as plain text.`;
       } catch (err) {
         console.error(err);
         M.toast({ html: "Error listing files: " + err.message });
+      }
+    });
+
+    // Floating button event listener: prompt for file ID and show its content in a modal.
+    document.getElementById("floatingViewFileBtn").addEventListener("click", () => {
+      const fileId = prompt("Enter the file ID to view its content:");
+      if (fileId) {
+        showFileContentModal(fileId);
       }
     });
 
