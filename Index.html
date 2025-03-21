@@ -471,7 +471,7 @@ Using Sales Report and Product List Files:
 • S H O P  • P O L I C I E S: Check our policies.
 `;
 
-    // CSV Preprocessing function using PapaParse
+    // CSV Preprocessing function using PapaParse (not used in upload)
     function preprocessCSVContent(csvText) {
       var parsed = Papa.parse(csvText, { header: true });
       var data = parsed.data;
@@ -614,7 +614,9 @@ Using Sales Report and Product List Files:
       });
     }
 
-    // Updated uploadDocFile function for CSV: converts entire CSV to .txt with MIME type text/plain
+    // Updated uploadDocFile function for CSV:
+    // Parse the CSV and reformat each row as a plain text line (columns joined by spaces),
+    // then re-encode as base64, change extension to .txt, and set MIME type to text/plain.
     async function uploadDocFile(file) {
       maybeToast("uploadDocFile: Reading file '" + file.name + "'");
       return new Promise((resolve, reject) => {
@@ -627,13 +629,14 @@ Using Sales Report and Product List Files:
             let newFileName = file.name;
             let contentType = "text/csv"; // default for CSV
             if (/\.csv$/i.test(file.name)) {
-              // Get the entire CSV content
+              // Get the entire CSV content and parse it using PapaParse
               const csvBase64 = dataURL.split(",")[1];
               const csvText = csvBase64 ? atob(csvBase64) : "";
-              // Convert CSV text to base64 and change file extension to .txt
-              base64Content = btoa(csvText);
+              const parsed = Papa.parse(csvText, { header: false });
+              // Convert each row to a plain text line (columns joined by a space)
+              const plainText = parsed.data.map(row => row.join(" ")).join("\n");
+              base64Content = btoa(plainText);
               newFileName = file.name.replace(/\.csv$/i, ".txt");
-              // Set MIME type to text/plain for retrieval support
               contentType = "text/plain";
             } else {
               base64Content = dataURL.split(",")[1];
