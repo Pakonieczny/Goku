@@ -166,7 +166,7 @@
     <span class="section-heading configurable">Search Key Phrases</span>
     <!-- Clear button deletes files from the vector store -->
     <button id="clearKeyPhrasesBtn" class="btn-small waves-effect waves-light configurable">Clear CSV Files</button>
-    <!-- New "Retrieve Files" button -->
+    <!-- Updated Retrieve Files button with new ID -->
     <button id="retrieveFilesBtn" class="btn-small waves-effect waves-light">
       Retrieve Files
     </button>
@@ -403,7 +403,7 @@ Using Sales Report and Product List Files:
     window.photoUpdateComplete = false;
     window.infoUpdateComplete = false;
 
-    window.appendedDescriptionText = \`
+    window.appendedDescriptionText = `
 • We use the Highest Quality materials from the US and Italy.
 • Your purchase will come packaged and ready for gift giving!
 • D E T A I L S: 13.4mm x 8.7mm Flying DragonFly, 14K Gold Filled, 14K Rose Gold Filled, Sterling Silver = Pendant + Chain.
@@ -414,7 +414,7 @@ Using Sales Report and Product List Files:
 • E X P L O R E: http://custombrites.etsy.com
 • C H E C K: Follow us on social media.
 • S H O P  • P O L I C I E S: Check our policies.
-\`;
+`;
 
     // CSV Preprocessing function using PapaParse
     function preprocessCSVContent(csvText) {
@@ -422,11 +422,11 @@ Using Sales Report and Product List Files:
       var data = parsed.data;
       if (!data || data.length === 0) return "";
       var header = Object.keys(data[0]).join(", ");
-      var summary = header + "\\n";
+      var summary = header + "\n";
       var rowsToUse = data.slice(0, 10);
       rowsToUse.forEach(row => {
         var rowValues = Object.keys(row).map(key => row[key]);
-        summary += rowValues.join(", ") + "\\n";
+        summary += rowValues.join(", ") + "\n";
       });
       return summary;
     }
@@ -449,13 +449,13 @@ Using Sales Report and Product List Files:
       uploadedFilesListElem.style.borderColor = "#ccc";
       const files = e.dataTransfer.files;
       for (let file of files) {
-        if (/\\.csv$/i.test(file.name)) {
+        if (/\.csv$/i.test(file.name)) {
           try {
             maybeToast("Dropping CSV file: " + file.name + "... uploading now");
             const fileData = await uploadDocFile(file);
             maybeToast("CSV file uploaded with ID: " + (fileData.id || "N/A"));
             window.uploadedCSVFileIds.push(fileData.id);
-            uploadedFilesListElem.value = window.uploadedCSVFileIds.join("\\n");
+            uploadedFilesListElem.value = window.uploadedCSVFileIds.join("\n");
             await updateVectorStore();
           } catch (err) {
             console.error(err);
@@ -503,7 +503,7 @@ Using Sales Report and Product List Files:
     
     function parseListingNumbers(rawInput) {
       let parts = rawInput.split(",");
-      let cleaned = parts.map(p => p.trim()).filter(p => /^\\d{10}$/.test(p));
+      let cleaned = parts.map(p => p.trim()).filter(p => /^\d{10}$/.test(p));
       return Array.from(new Set(cleaned)).slice(0, 250);
     }
     function updateListingQueueCount() {
@@ -532,7 +532,7 @@ Using Sales Report and Product List Files:
 
     function updateUploadedFilesList() {
       const uploadedFilesListElem = document.getElementById('uploadedFilesList');
-      uploadedFilesListElem.value = window.uploadedCSVFileIds.join("\\n");
+      uploadedFilesListElem.value = window.uploadedCSVFileIds.join("\n");
     }
 
     function loadReservedPhotos() {
@@ -571,20 +571,20 @@ Using Sales Report and Product List Files:
             let base64Content;
             let newFileName = file.name;
             let contentType = "text/plain";
-            if (/\\.csv$/i.test(file.name)) {
+            if (/\.csv$/i.test(file.name)) {
               const csvText = dataURL.split(",")[1] ? atob(dataURL.split(",")[1]) : "";
               const parsed = Papa.parse(csvText, { header: true });
               let summary = "";
               if (parsed.data && parsed.data.length > 0) {
                 const header = Object.keys(parsed.data[0]).join(", ");
-                summary += header + "\\n";
+                summary += header + "\n";
                 const rows = parsed.data.slice(0, 10);
                 rows.forEach(row => {
-                  summary += Object.values(row).join(", ") + "\\n";
+                  summary += Object.values(row).join(", ") + "\n";
                 });
               }
               base64Content = btoa(summary);
-              newFileName = file.name.replace(/\\.csv$/i, ".txt");
+              newFileName = file.name.replace(/\.csv$/i, ".txt");
             } else {
               base64Content = dataURL.split(",")[1];
               if (file.name.toLowerCase().endsWith(".docx")) {
@@ -677,7 +677,7 @@ Using Sales Report and Product List Files:
       const maxRemaining = 10 - window.previewImages.length;
       for (let i = 0; i < Math.min(files.length, maxRemaining); i++) {
         let file = files[i];
-        if (/image\\/(jpeg|png)/.test(file.type)) {
+        if (/image\/(jpeg|png)/.test(file.type)) {
           try {
             maybeToast("Dropping image " + file.name);
             const dataURL = await new Promise((resolve, reject) => {
@@ -858,7 +858,7 @@ Using Sales Report and Product List Files:
               let rIndex = cellIndex - 7;
               if (e.dataTransfer.files && e.dataTransfer.files.length > 0) {
                 let file = e.dataTransfer.files[0];
-                if (/image\\/(jpeg|png)/.test(file.type)) {
+                if (/image\/(jpeg|png)/.test(file.type)) {
                   const reader = new FileReader();
                   reader.onload = async ev => {
                     try {
@@ -919,7 +919,7 @@ Using Sales Report and Product List Files:
     }
     function base64urlEncode(buffer) {
       return btoa(String.fromCharCode(...new Uint8Array(buffer)))
-        .replace(/\\+/g, '-').replace(/\\//g, '_').replace(/=+$/, '');
+        .replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, '');
     }
     async function generateCodeChallenge(codeVerifier) {
       let encoder = new TextEncoder();
@@ -935,12 +935,12 @@ Using Sales Report and Product List Files:
       let codeVerifier = generateRandomString(64);
       localStorage.setItem("etsy_code_verifier", codeVerifier);
       let codeChallenge = await generateCodeChallenge(codeVerifier);
-      let etsyAuthUrl = \`https://www.etsy.com/oauth/connect?response_type=code&client_id=\${window.CLIENT_ID}\` +
-        \`&redirect_uri=\${encodeURIComponent(window.REDIRECT_URI)}\` +
-        \`&scope=\${encodeURIComponent(scope)}\` +
-        \`&state=\${state}\` +
-        \`&code_challenge=\${encodeURIComponent(codeChallenge)}\` +
-        \`&code_challenge_method=S256\`;
+      let etsyAuthUrl = `https://www.etsy.com/oauth/connect?response_type=code&client_id=${window.CLIENT_ID}` +
+        `&redirect_uri=${encodeURIComponent(window.REDIRECT_URI)}` +
+        `&scope=${encodeURIComponent(scope)}` +
+        `&state=${state}` +
+        `&code_challenge=${encodeURIComponent(codeChallenge)}` +
+        `&code_challenge_method=S256`;
       window.location.href = etsyAuthUrl;
     });
 
@@ -973,7 +973,7 @@ Using Sales Report and Product List Files:
       }
       try {
         maybeToast("Exchanging Etsy auth code for token...");
-        let response = await fetch(\`/.netlify/functions/exchangeToken?code=\${encodeURIComponent(code)}&code_verifier=\${encodeURIComponent(codeVerifier)}\`);
+        let response = await fetch(`/.netlify/functions/exchangeToken?code=${encodeURIComponent(code)}&code_verifier=${encodeURIComponent(codeVerifier)}`);
         let tokenData = await response.json();
         if (tokenData.access_token) {
           window.accessToken = tokenData.access_token;
@@ -993,9 +993,9 @@ Using Sales Report and Product List Files:
         M.toast({ html: "Please provide a listing URL or ID in 'Etsy Shop Listings'." });
         return;
       }
-      let listingId = /^\\d+$/.test(listingInput)
+      let listingId = /^\d+$/.test(listingInput)
         ? listingInput
-        : (listingInput.match(/\\/listing\\/(\\d+)/) || [])[1];
+        : (listingInput.match(/\/listing\/(\d+)/) || [])[1];
       if (!listingId) {
         M.toast({ html: "Invalid listing URL or ID." });
         return;
@@ -1005,10 +1005,10 @@ Using Sales Report and Product List Files:
       let payload = {
         title: document.getElementById("listingTitle").value,
         description: finalDescription,
-        tags: document.getElementById("searchKeyPhrases").value.split("\\n").map(s => s.trim()).filter(s => s !== "")
+        tags: document.getElementById("searchKeyPhrases").value.split("\n").map(s => s.trim()).filter(s => s !== "")
       };
       maybeToast("Updating Etsy listing info: " + JSON.stringify(payload).substring(0,200) + "...");
-      let updateUrl = \`/.netlify/functions/updateListing?listingId=\${listingId}&token=\${encodeURIComponent(window.accessToken)}\`;
+      let updateUrl = `/.netlify/functions/updateListing?listingId=${listingId}&token=${encodeURIComponent(window.accessToken)}`;
       try {
         let response = await fetch(updateUrl, {
           method: "PUT",
@@ -1083,15 +1083,15 @@ Using Sales Report and Product List Files:
         return;
       }
       let rulesText = document.getElementById("titleRulesTextarea").value;
-      let promptText = \`
-You are ChatGPT using \${window.modelName}.
+      let promptText = `
+You are ChatGPT using ${window.modelName}.
 Based on the inputs below, generate an Etsy Listing TITLE only.
 Input Context:
-Etsy Link: "\${etsyLink}"
-Search KeyPhrases: "\${keyPhrases}"
+Etsy Link: "${etsyLink}"
+Search KeyPhrases: "${keyPhrases}"
 --- Rules for TITLE ---
-\${stripMarkdownJSON(rulesText)}
-Important: Return ONLY the title as plain text.\`;
+${stripMarkdownJSON(rulesText)}
+Important: Return ONLY the title as plain text.`;
       maybeToast("generateTitleOnly: sending request to OpenAI...");
       document.getElementById("listingTitle").value = "Generating title...";
       let payload = {
@@ -1124,15 +1124,15 @@ Important: Return ONLY the title as plain text.\`;
         return;
       }
       let rulesText = document.getElementById("descriptionRulesTextarea").value;
-      let promptText = \`
-You are ChatGPT using \${window.modelName}.
+      let promptText = `
+You are ChatGPT using ${window.modelName}.
 Based on the inputs below, generate an Etsy Listing DESCRIPTION only.
 Input Context:
-Etsy Link: "\${etsyLink}"
-Search KeyPhrases: "\${keyPhrases}"
+Etsy Link: "${etsyLink}"
+Search KeyPhrases: "${keyPhrases}"
 --- Rules for DESCRIPTION ---
-\${stripMarkdownJSON(rulesText)}
-Important: Return ONLY the description as plain text.\`;
+${stripMarkdownJSON(rulesText)}
+Important: Return ONLY the description as plain text.`;
       maybeToast("generateDescriptionOnly: sending request to OpenAI...");
       document.getElementById("listingDescription").value = "Generating description...";
       let payload = {
@@ -1218,7 +1218,7 @@ Important: Return ONLY the description as plain text.\`;
     }
     document.getElementById("clearKeyPhrasesBtn").addEventListener("click", clearStoreCSVFiles);
 
-    // list vector store files and display their base names in the .csv text area
+    // list vector store files and display their base names in the .csv textarea
     async function listVectorStoreFiles() {
       let storeId = localStorage.getItem("vectorStoreId");
       if (!storeId) {
@@ -1247,10 +1247,10 @@ Important: Return ONLY the description as plain text.\`;
         }
         let displayNames = data.data.map(f => {
           let fname = f.filename || "";
-          fname = fname.replace(/(\\.csv|\\.txt)$/i, "");
+          fname = fname.replace(/(\.csv|\.txt)$/i, "");
           return fname;
         });
-        document.getElementById("uploadedFilesList").value = displayNames.join("\\n");
+        document.getElementById("uploadedFilesList").value = displayNames.join("\n");
       } catch (err) {
         console.error(err);
         maybeToast("Error listing store files: " + err.message);
@@ -1296,10 +1296,10 @@ Important: Return ONLY the description as plain text.\`;
         // 5) Extract & clean up the filenames, then place them in the .csv textarea
         const displayNames = data.data.map(fileObj => {
           let fname = fileObj.filename || "";
-          return fname.replace(/(\\.csv|\\.txt)$/i, "");
+          return fname.replace(/(\.csv|\.txt)$/i, "");
         });
 
-        document.getElementById("uploadedFilesList").value = displayNames.join("\\n");
+        document.getElementById("uploadedFilesList").value = displayNames.join("\n");
         M.toast({ html: "File names retrieved and placed in the CSV text area!" });
 
       } catch (err) {
@@ -1346,11 +1346,11 @@ Important: Return ONLY the description as plain text.\`;
         let currentTop = el.style.top || computedStyle.top || "0";
         let currentLeft = el.style.left || computedStyle.left || "0";
         let tr = document.createElement("tr");
-        tr.innerHTML = \`<td>\${id}</td>
-          <td><input type="number" id="\${id}_top" value="\${parseInt(currentTop)||0}"></td>
-          <td><input type="number" id="\${id}_left" value="\${parseInt(currentLeft)||0}"></td>\`;
-        let topInput = tr.querySelector(\`#\${id}_top\`);
-        let leftInput = tr.querySelector(\`#\${id}_left\`);
+        tr.innerHTML = `<td>${id}</td>
+          <td><input type="number" id="${id}_top" value="${parseInt(currentTop)||0}"></td>
+          <td><input type="number" id="${id}_left" value="${parseInt(currentLeft)||0}"></td>`;
+        let topInput = tr.querySelector(`#${id}_top`);
+        let leftInput = tr.querySelector(`#${id}_left`);
         topInput.addEventListener("input", () => { el.style.top = topInput.value + "px"; });
         leftInput.addEventListener("input", () => { el.style.left = leftInput.value + "px"; });
         tbody.appendChild(tr);
@@ -1477,9 +1477,9 @@ Important: Return ONLY the description as plain text.\`;
         M.toast({ html: "No images to upload. Please drag and drop images first." });
         return;
       }
-      let listingId = /^\\d+$/.test(listingInput)
+      let listingId = /^\d+$/.test(listingInput)
         ? listingInput
-        : (listingInput.match(/\\/listing\\/(\\d+)/) || [])[1];
+        : (listingInput.match(/\/listing\/(\d+)/) || [])[1];
       if (!listingId) {
         M.toast({ html: "Invalid listing URL or ID." });
         return;
@@ -1494,20 +1494,20 @@ Important: Return ONLY the description as plain text.\`;
           let formData = new FormData();
           formData.append("listingId", listingId);
           formData.append("token", window.accessToken);
-          formData.append("fileName", window.photoNames[i] || \`uploaded_photo_\${i}.jpg\`);
+          formData.append("fileName", window.photoNames[i] || `uploaded_photo_${i}.jpg`);
           formData.append("rank", rankNumber);
           formData.append("alt_text", altText);
-          formData.append("file", blob, window.photoNames[i] || \`uploaded_photo_\${i}.jpg\`);
-          let uploadUrl = \`/.netlify/functions/imageUpload\`;
+          formData.append("file", blob, window.photoNames[i] || `uploaded_photo_${i}.jpg`);
+          let uploadUrl = `/.netlify/functions/imageUpload`;
           let response = await fetch(uploadUrl, { method: "POST", body: formData });
           if (!response.ok) {
-            M.toast({ html: \`Error uploading photo #\${rankNumber}: \` + response.status });
+            M.toast({ html: `Error uploading photo #${rankNumber}: ` + response.status });
           } else {
-            M.toast({ html: \`Photo #\${rankNumber} uploaded with alt_text!\` });
+            M.toast({ html: `Photo #${rankNumber} uploaded with alt_text!` });
           }
         } catch (e) {
           console.error(e);
-          M.toast({ html: \`Exception uploading photo #\${rankNumber}: \${e.message}\` });
+          M.toast({ html: `Exception uploading photo #${rankNumber}: ${e.message}` });
         }
       }
     }
@@ -1523,9 +1523,9 @@ Important: Return ONLY the description as plain text.\`;
         M.toast({ html: "No reserved photos to upload." });
         return;
       }
-      let listingId = /^\\d+$/.test(listingInput)
+      let listingId = /^\d+$/.test(listingInput)
         ? listingInput
-        : (listingInput.match(/\\/listing\\/(\\d+)/) || [])[1];
+        : (listingInput.match(/\/listing\/(\d+)/) || [])[1];
       if (!listingId) {
         M.toast({ html: "Invalid listing URL or ID." });
         return;
@@ -1540,20 +1540,20 @@ Important: Return ONLY the description as plain text.\`;
           let formData = new FormData();
           formData.append("listingId", listingId);
           formData.append("token", window.accessToken);
-          formData.append("fileName", window.reservedPhotos[i].name || \`reserved_photo_\${i}.jpg\`);
+          formData.append("fileName", window.reservedPhotos[i].name || `reserved_photo_${i}.jpg`);
           formData.append("rank", rankNumber);
           formData.append("alt_text", altText);
-          formData.append("file", blob, window.reservedPhotos[i].name || \`reserved_photo_\${i}.jpg\`);
-          let uploadUrl = \`/.netlify/functions/imageUpload\`;
+          formData.append("file", blob, window.reservedPhotos[i].name || `reserved_photo_${i}.jpg`);
+          let uploadUrl = `/.netlify/functions/imageUpload`;
           let response = await fetch(uploadUrl, { method: "POST", body: formData });
           if (!response.ok) {
-            M.toast({ html: \`Error uploading reserved photo #\${rankNumber}: \` + response.status });
+            M.toast({ html: `Error uploading reserved photo #${rankNumber}: ` + response.status });
           } else {
-            M.toast({ html: \`Reserved photo #\${rankNumber} uploaded successfully!\` });
+            M.toast({ html: `Reserved photo #${rankNumber} uploaded successfully!` });
           }
         } catch (e) {
           console.error(e);
-          M.toast({ html: \`Exception uploading reserved photo #\${rankNumber}: \${e.message}\` });
+          M.toast({ html: `Exception uploading reserved photo #${rankNumber}: ${e.message}` });
         }
       }
     }
@@ -1588,7 +1588,7 @@ Important: Return ONLY the description as plain text.\`;
         if (phrasesArray.some(p => p.length > 20)) {
           throw new Error("Could not fix some phrases under 20 chars. Please try again.");
         }
-        document.getElementById("searchKeyPhrases").value = phrasesArray.join("\\n");
+        document.getElementById("searchKeyPhrases").value = phrasesArray.join("\n");
         M.toast({ html: "Tag Phrases generated successfully!" });
       } catch (err) {
         console.error(err);
@@ -1628,18 +1628,18 @@ Important: Return ONLY the description as plain text.\`;
         console.warn("No store_id found in localStorage. CSV context may not be loaded!");
         maybeToast("Warning: no store_id in localStorage. Possibly no CSV context loaded.");
       }
-      let prompt = \`
+      let prompt = `
 Here is some relevant data from our CSV files:
-\${retrievedContext}
+${retrievedContext}
 
-Listing Description (for emphasis): "\${question}"
+Listing Description (for emphasis): "${question}"
 Emphasis on SEO and generating effective Etsy tag phrases.
 
 Keyword Rules:
-\${keywordRules}
+${keywordRules}
 
 Generate exactly 13 SEO key phrases (each ≤ 20 characters). Return as plain text.
-      \`;
+      `;
       let payload = {
         model: window.modelName,
         messages: [
@@ -1653,8 +1653,8 @@ Generate exactly 13 SEO key phrases (each ≤ 20 characters). Return as plain te
       let data = await callOpenAI(payload);
       let answer = data.choices[0].message.content || "";
       let phrasesArray = answer
-        .split(/[\\n,]+/)
-        .map(s => s.replace(/^\\d+\\.\\s*/, "").trim())
+        .split(/[\n,]+/)
+        .map(s => s.replace(/^\d+\.\s*/, "").trim())
         .filter(p => p);
       return phrasesArray;
     }
@@ -1683,19 +1683,19 @@ Generate exactly 13 SEO key phrases (each ≤ 20 characters). Return as plain te
             console.warn("Could not retrieve CSV context for single phrase regeneration:", err);
           }
         }
-        let prompt = \`
+        let prompt = `
 We have 12 valid phrases:
-\${currentValid.join(", ")}
+${currentValid.join(", ")}
 
 Now produce ONE new phrase (≤20 chars) that satisfies the same rules:
 
 Here is some relevant data from our CSV:
-\${retrievedContext}
+${retrievedContext}
 
 Keyword Rules:
-\${keywordRules}
+${keywordRules}
 Return only one phrase in plain text.
-        \`;
+        `;
         let payload = {
           model: window.modelName,
           messages: [
@@ -1705,17 +1705,17 @@ Return only one phrase in plain text.
           temperature: 0.7,
           max_tokens: 150
         };
-        maybeToast(\`Regenerate attempt #\${attempt}: calling OpenAI...\`);
+        maybeToast(`Regenerate attempt #${attempt}: calling OpenAI...`);
         let data = await callOpenAI(payload);
         let answerText = data.choices[0].message.content || "";
         let candidate = answerText.trim()
-          .replace(/^\\d+\\.\\s*/, "")
-          .split("\\n")[0]
+          .replace(/^\d+\.\s*/, "")
+          .split("\n")[0]
           .trim();
         if (candidate.length <= 20) {
           return candidate;
         }
-        console.warn(\`Attempt \${attempt}: Single phrase too long => "\${candidate}"\`);
+        console.warn(`Attempt ${attempt}: Single phrase too long => "${candidate}"`);
       }
       throw new Error("Failed to generate a single phrase under 20 chars after multiple attempts.");
     }
