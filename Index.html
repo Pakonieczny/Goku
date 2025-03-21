@@ -606,6 +606,19 @@ Using Sales Report and Product List Files:
       }
     }
 
+// ADD THIS HELPER FUNCTION:
+  function parseListingNumbers(rawInput) {
+    const parts = rawInput.split(",");
+    const cleaned = parts.map(p => p.trim()).filter(p => /^\d{10}$/.test(p));
+    return Array.from(new Set(cleaned)).slice(0, 250);
+  }
+  
+      document.getElementById("shopListings").addEventListener("input", () => {
+      const rawInput = document.getElementById("shopListings").value;
+      window.listingQueue = parseListingNumbers(rawInput);
+      loadNextListingInQueue();
+    });
+
     // Add the showMetadata function here
     function showMetadata(index) {
       const metadata = (window.photoMeta && window.photoMeta[index]) 
