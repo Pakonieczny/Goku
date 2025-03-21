@@ -650,21 +650,27 @@ Using Sales Report and Product List Files:
       }
     });
 
-    // Helper function: parseListingNumbers
+    // Helper function: parseListingNumbers using regex to split by comma with optional whitespace
     function parseListingNumbers(rawInput) {
-      const parts = rawInput.split(",");
-      const cleaned = parts.map(p => p.trim()).filter(p => /^\d{10}$/.test(p));
+      const parts = rawInput.split(/\s*,\s*/);
+      const cleaned = parts.filter(p => /^\d{10}$/.test(p));
       return Array.from(new Set(cleaned)).slice(0, 250);
     }
 
-    // Attach event listener to shopListings input to process comma-separated 10-digit numbers
-    document.getElementById("shopListings").addEventListener("input", () => {
-      const rawInput = document.getElementById("shopListings").value;
+    // Attach event listeners to shopListings input.
+    document.getElementById("shopListings").addEventListener("paste", (e) => {
+      e.preventDefault();
+      let pasteData = (e.clipboardData || window.clipboardData).getData('text');
+      window.listingQueue = parseListingNumbers(pasteData);
+      loadNextListingInQueue();
+    });
+    document.getElementById("shopListings").addEventListener("change", () => {
+      let rawInput = document.getElementById("shopListings").value;
       window.listingQueue = parseListingNumbers(rawInput);
       loadNextListingInQueue();
     });
 
-    // Update loadNextListingInQueue to show only the current listing
+    // Update loadNextListingInQueue to show only the current listing (first number) in the textbox.
     function loadNextListingInQueue() {
       window.photoUpdateComplete = false;
       window.infoUpdateComplete = false;
@@ -1610,10 +1616,16 @@ Return only one phrase in plain text.
       }
       updateStaticPreviewGrid();
       initializeCellDragAndDrop();
-      // Changed event from "change" to "input" for shopListings to capture pasted values immediately.
-      document.getElementById("shopListings").addEventListener("input", () => {
+      // Attach paste and change events to process multiple comma-separated numbers
+      document.getElementById("shopListings").addEventListener("paste", (e) => {
+        e.preventDefault();
+        let pasteData = (e.clipboardData || window.clipboardData).getData('text');
+        window.listingQueue = parseListingNumbers(pasteData);
+        loadNextListingInQueue();
+      });
+      document.getElementById("shopListings").addEventListener("change", () => {
         let rawInput = document.getElementById("shopListings").value;
-        window.listingQueue = rawInput.split(",").map(p => p.trim()).filter(p => /^\d{10}$/.test(p));
+        window.listingQueue = parseListingNumbers(rawInput);
         loadNextListingInQueue();
       });
       await listVectorStoreFiles();
