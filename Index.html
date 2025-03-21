@@ -2,7 +2,7 @@
 <html>
 <head>
   <meta charset="UTF-8">
-  <title></title> <!-- Title is set dynamically from staticText -->
+  <title>Etsy Listing Generator & Shop Listings</title>
   <!-- Favicon -->
   <link rel="icon" type="image/png" href="assets/favicon.png">
   <!-- Import Google Material Icons and Materialize CSS -->
@@ -144,83 +144,83 @@
   </style>
 </head>
 <body>
-  <!-- This button opens the button configuration modal -->
-  <button id="configureButtonsBtn" class="btn waves-effect waves-light configurable"></button>
+  <button id="configureButtonsBtn" class="btn waves-effect waves-light configurable">Configure Buttons</button>
   
-  <!-- Listing Description and CSV file drop area -->
   <div id="descriptionAndFileUploadContainer">
     <div class="listing-desc-container" id="listingDescContainer">
-      <h5></h5> <!-- dynamic text set on DOMContentLoaded -->
-      <input id="listingDescInput" type="text" placeholder="">
+      <h5>Listing Description</h5>
+      <input id="listingDescInput" type="text" placeholder="Enter your question here">
     </div>
-    <textarea id="uploadedFilesList" class="materialize-textarea" rows="2" placeholder=""></textarea>
+    <textarea id="uploadedFilesList" class="materialize-textarea" rows="2" placeholder="Drop CSV files here"></textarea>
   </div>
   
-  <!-- Etsy Connection and Listing Buttons -->
   <div id="topButtons">
-    <button id="connectEtsyBtn" class="btn waves-effect waves-light configurable"></button>
-    <button id="photoUploadNewBtn" class="btn waves-effect waves-light configurable update-btn" style="margin-left: 10px;"></button>
-    <button id="uploadToEtsyBtn" class="btn waves-effect waves-light configurable update-btn" style="margin-left: 10px;"></button>
+    <button id="connectEtsyBtn" class="btn waves-effect waves-light configurable">Connect to Etsy</button>
+    <button id="photoUploadNewBtn" class="btn waves-effect waves-light configurable update-btn" style="margin-left: 10px;">Update Photos</button>
+    <button id="uploadToEtsyBtn" class="btn waves-effect waves-light configurable update-btn" style="margin-left: 10px;">Update Info</button>
     <div id="etsyShopListingsContainer">
-      <div class="section-heading configurable"></div>
+      <div class="section-heading configurable">
+        Etsy Shop Listings
+        <span id="listingQueueCount">0</span>
+      </div>
       <div class="textbox-container configurable">
-        <textarea id="shopListings" class="materialize-textarea" rows="2" placeholder="" style="width:500px;"></textarea>
+        <textarea id="shopListings" class="materialize-textarea" rows="2" placeholder="Enter up to 250 comma-separated 10-digit listing IDs" style="width:500px;"></textarea>
       </div>
     </div>
   </div>
   
-  <!-- Key Phrases and DropZone -->
   <div class="phrases-header configurable" id="userProvidedKeyPhrasesContainer">
-    <span class="section-heading configurable"></span>
-    <button id="clearKeyPhrasesBtn" class="btn-small waves-effect waves-light configurable"></button>
-    <div id="dropZone" class="configurable"></div>
-    <button id="analyzeMetadataBtn" class="btn waves-effect waves-light configurable"></button>
-    <button id="showAnalyzeRulesBtn" class="btn waves-effect waves-light configurable" data-target="analyzeRulesModal" style="margin-top:25px;"></button>
-  </div>
+    <span class="section-heading configurable">Search Key Phrases</span>
+    <!-- Clear button deletes files from the vector store -->
+    <button id="clearKeyPhrasesBtn" class="btn-small waves-effect waves-light configurable">Clear CSV Files</button>
   
-  <!-- CSV Data or Additional Search Key Phrases -->
+    </button>
+    <div id="dropZone" class="configurable">Image Drop</div>
+    <button id="analyzeMetadataBtn" class="btn waves-effect waves-light configurable">Analyze Photos</button>
+    <button id="showAnalyzeRulesBtn" class="btn waves-effect waves-light configurable" data-target="analyzeRulesModal" style="margin-top:25px;">Analyze Rules</button>
+  </div>
   <div id="container13" class="flex-container configurable">
     <div class="textbox-container configurable">
       <textarea id="searchKeyPhrases" class="materialize-textarea" rows="14"></textarea>
     </div>
   </div>
   
-  <!-- Generate listings section (title & description) -->
   <div id="belowSearch">
-    <button id="generateBtn" class="btn waves-effect waves-light configurable"></button>
+    <button id="generateBtn" class="btn waves-effect waves-light configurable">Generate</button>
     <div class="title-container" id="etsyListingTitleContainer" style="margin-top: -50px;">
-      <div class="section-heading configurable"></div>
+      <div class="section-heading configurable">Etsy Listing TITLE</div>
       <div class="flex-container configurable">
         <div class="textbox-container configurable">
           <textarea id="listingTitle" class="materialize-textarea" rows="2"></textarea>
         </div>
         <div class="button-container configurable" style="margin-top: -60px;">
-          <button id="regenTitleBtn" class="btn-small waves-effect waves-light configurable regen-btn"></button>
+          <button id="regenTitleBtn" class="btn-small waves-effect waves-light configurable regen-btn">Re-Gen</button>
           <button id="copyTitleBtn" class="btn-small waves-effect waves-light configurable copy-btn">
             <i class="material-icons">content_copy</i>
           </button>
         </div>
-        <button id="showTitleRulesBtn" class="btn waves-effect waves-light rules-button configurable" data-target="titleRulesModal" style="display:none;"></button>
+        <button id="showTitleRulesBtn" class="btn waves-effect waves-light rules-button configurable" data-target="titleRulesModal" style="display:none;">Title Rules</button>
       </div>
-      <p id="titleCount" class="count-text configurable"></p>
+      <p id="titleCount" class="count-text configurable">Count: 0</p>
     </div>
     
     <div class="description-container" id="etsyListingDescriptionContainer" style="margin-top: 0px;">
-      <div class="section-heading configurable"></div>
+      <div class="section-heading configurable">Etsy Listing DESCRIPTION</div>
       <div class="flex-container configurable">
         <div class="textbox-container configurable">
           <textarea id="listingDescription" class="materialize-textarea"></textarea>
         </div>
         <div class="button-container configurable">
-          <button id="regenDescriptionBtn" class="btn-small waves-effect waves-light configurable regen-btn"></button>
-          <button id="copyDescriptionBtn" class="btn-small waves-effect waves-light configurable copy-btn"></button>
+          <button id="regenDescriptionBtn" class="btn-small waves-effect waves-light configurable regen-btn">Re-Gen</button>
+          <button id="copyDescriptionBtn" class="btn-small waves-effect waves-light configurable copy-btn">
+            <i class="material-icons">content_copy</i>
+          </button>
         </div>
-        <button id="showDescriptionRulesBtn" class="btn waves-effect waves-light rules-button configurable" data-target="descriptionRulesModal" style="display:none;"></button>
+        <button id="showDescriptionRulesBtn" class="btn waves-effect waves-light rules-button configurable" data-target="descriptionRulesModal" style="display:none;">Description Rules</button>
       </div>
     </div>
   </div>
   
-  <!-- Preview Grid Container -->
   <div id="previewGridContainer">
     <div id="previewGridStatic">
       <div class="preview-cell" id="previewCell0">Empty</div>
@@ -239,80 +239,143 @@
   <!-- Metadata Modal -->
   <div id="metadataModal" class="modal">
     <div class="modal-content">
-      <h4></h4>
+      <h4>Photo Metadata</h4>
       <textarea id="metadataTextarea" readonly style="width:100%; height:300px;"></textarea>
     </div>
     <div class="modal-footer">
-      <a href="#!" id="closeMetadataBtn" class="modal-close waves-effect waves-green btn"></a>
+      <a href="#!" id="closeMetadataBtn" class="modal-close waves-effect waves-green btn">Close</a>
     </div>
   </div>
   
   <!-- Analyze Rules Modal -->
   <div id="analyzeRulesModal" class="modal">
     <div class="modal-content">
-      <h4></h4>
-      <textarea id="analyzeRulesTextarea" style="width:100%; height:300px;"></textarea>
+      <h4>Photo Analysis Rules</h4>
+      <textarea id="analyzeRulesTextarea" style="width:100%; height:300px;">
+Default Photo Analysis Rules:
+1. Use SEO-friendly descriptive long-tail key phrases without special characters, focus on describing the jewelry and charm pendant, also focus and tailor Key Phrases and description to appropriate client based on the type of jewelry.
+2. Emphasize charm details, focus image description on the type of jewelry and pendant description (what it is, occasion, metal, size, style).
+3. Focus solely on the jewelry details especially the charm description.
+4. Ignore environment, model, and clothing.
+5. Organize into a short paragraph.
+6. Limit the description to 300 characters.
+7. Do not mention earrings unless explicitly identified.
+8. Do not mix necklace and earring descriptions.
+      </textarea>
     </div>
     <div class="modal-footer">
-      <a href="#!" id="updateAnalyzeRulesBtn" class="modal-close waves-effect waves-green btn"></a>
+      <a href="#!" id="updateAnalyzeRulesBtn" class="modal-close waves-effect waves-green btn">Update</a>
     </div>
   </div>
   
   <!-- Title Rules Modal -->
   <div id="titleRulesModal" class="modal">
     <div class="modal-content">
-      <h4></h4>
-      <textarea id="titleRulesTextarea" style="width:100%; height:300px;"></textarea>
+      <h4>Title Rules</h4>
+      <textarea id="titleRulesTextarea" style="width:100%; height:300px;">
+Title Structure & Formatting:
+- Create 5-7 SEO optimized long-tail key phrases (3-5 words each).
+- The title must begin with the product type (e.g., "Angel Earrings", "Daisy Necklace").
+- Ensure grammatical flow and no punctuation.
+- If the product is a charm/pendant, the first word should describe that type.
+- For necklaces, the second word must be "necklace"; for earrings, "Earring".
+
+Word Usage & Frequency:
+- No word may appear more than three times.
+- "earrings" must be plural and follow a noun.
+- "stud" may only appear in approved phrases and must precede "earrings".
+
+Required Words:
+- "Charm" must appear exactly once.
+
+Use of "For":
+- "for" must appear at least twice in a grammatically correct manner.
+
+Title Length & Word Order:
+- Titles must be between 125 and 140 characters.
+- Adjectives must follow nouns.
+- Avoid plurals for "stud" and "animal"; use plurals for "hoops" and "earrings" correctly.
+
+SEO Optimization:
+- The title’s word order should form at least eight natural SEO phrases.
+
+Prohibited Words:
+- Exclude: "accessories", "unique", "simple", "minimalist", "whimsical", "cute", "filled", "gold filled", "silver", "solid gold", "gold vermeil", "rosegold", "14k", "handmade", "quirky", "delicate", "accessory", "for", "dangle", "gold plated", "jewelry", "custom", "celestial", "design", "lightweight".
+      </textarea>
     </div>
     <div class="modal-footer">
-      <a href="#!" id="updateTitleRulesBtn" class="modal-close waves-effect waves-green btn"></a>
+      <a href="#!" id="updateTitleRulesBtn" class="modal-close waves-effect waves-green btn">Update</a>
     </div>
   </div>
   
   <!-- Description Rules Modal -->
   <div id="descriptionRulesModal" class="modal">
     <div class="modal-content">
-      <h4></h4>
-      <textarea id="descriptionRulesTextarea" style="width:100%; height:300px;"></textarea>
+      <h4>Description Rules</h4>
+      <textarea id="descriptionRulesTextarea" style="width:100%; height:300px;">
+Rules for Description:
+- Merge the key phrases with your output.
+- Modify the description to match the jewelry type.
+- Keep the output paragraph to 80 words.
+
+Option 1:
+"This stunning gold Playing Card Charm is the perfect gift for her, featuring an intricately designed Ace of Spades charm. Ideal for jewelry lovers, this pendant is perfect for personalized pieces."
+
+Option 2:
+"This playful Allosaurus charm is the perfect add-on for charm necklaces or huggie hoops. It adds a whimsical touch to any collection, making it a delightful gift."
+
+Option 3:
+"This charming gold Alligator Necklace is a delightful gift for animal lovers. Featuring a beautifully designed crocodile pendant, it adds a unique touch to any collection."
+      </textarea>
     </div>
     <div class="modal-footer">
-      <a href="#!" id="updateDescriptionRulesBtn" class="modal-close waves-effect waves-green btn"></a>
+      <a href="#!" id="updateDescriptionRulesBtn" class="modal-close waves-effect waves-green btn">Update</a>
     </div>
   </div>
   
   <!-- Keyword Rules Modal -->
   <div id="keywordRulesModal" class="modal">
     <div class="modal-content">
-      <h4></h4>
-      <textarea id="keywordRulesTextarea" style="width:100%; height:300px;"></textarea>
+      <h4>Keyword Rules</h4>
+      <textarea id="keywordRulesTextarea" style="width:100%; height:300px;">
+Using Sales Report and Product List Files:
+- Extrapolate the best tag phrases based on performance.
+- Focus on key terms like "Necklace", "Earrings", "Studs", "Hoops".
+- Emphasize sales success; higher performing listings have more valuable keywords.
+- Generate exactly 13 tag phrases, each ≤ 20 characters.
+- Include "Gift for Her".
+- "Charm" must appear at least once in a multi-word phrase (max 4 times total).
+- "Necklace" appears no more than 3 times, "Gift" no more than 3 times, "Lover" no more than 2 times.
+- Exclude: "Gift for Him", "Statement Piece", "Unique", "Spiritual Gift", "Outdoor Style", "accessories", "simple", "minimalist", "whimsical", "cute", "filled", "gold filled", "silver", "solid gold", "gold vermeil", "rosegold", "14k", "handmade", "quirky", "delicate", "accessory", "for", "dangle", "gold plated", "jewelry", "custom", "celestial", "design", "lightweight", "Fine Chain Necklace", "Small", "Large", "Nice", "Long", "Dark", "Short", "and", "but", "light", "heavy", "Wanderlust", "Theme", "Minimal Chain Gift", "Tiny Pendant Chain", "Charm Look", "Charm Wear", "Chain Necklace", "Small Pendant Chain", "Everyday"
+      </textarea>
     </div>
     <div class="modal-footer">
-      <a href="#!" id="updateKeywordRulesBtn" class="modal-close waves-effect waves-green btn"></a>
+      <a href="#!" id="updateKeywordRulesBtn" class="modal-close waves-effect waves-green btn">Update</a>
     </div>
   </div>
   
   <!-- Button Config Modal -->
   <div id="buttonConfigModal" class="modal">
     <div class="modal-content">
-      <h4></h4>
+      <h4>Configure Button Positions</h4>
       <div id="buttonConfigContainer"></div>
-      <textarea id="uploadedFilesListModal" class="materialize-textarea" rows="2" placeholder=""></textarea>
+      <textarea id="uploadedFilesListModal" class="materialize-textarea" rows="2" placeholder="Uploaded files will appear here"></textarea>
     </div>
     <div class="modal-footer">
-      <a href="#!" id="saveButtonPositionsBtn" class="modal-close waves-effect waves-green btn"></a>
+      <a href="#!" id="saveButtonPositionsBtn" class="modal-close waves-effect waves-green btn">Save Positions</a>
     </div>
   </div>
   
   <!-- Crop Modal -->
   <div id="photoCropModal" class="modal" style="width:650px; height:650px;">
     <div class="crop-container" style="position: relative; width:100%; height:100%;">
-      <h4 style="text-align:center; margin:0 0 10px 0;"></h4>
+      <h4 style="text-align:center; margin:0 0 10px 0;">Crop Photo</h4>
       <div class="img-preview-container" style="width:400px; height:400px; margin:0 auto; overflow:hidden;">
         <img id="cropImage" src="" alt="Crop Image" style="display:block; margin:auto; max-width:none;">
       </div>
       <div style="text-align:center; margin-top:10px;">
-        <button id="saveCropBtn" class="btn waves-effect waves-light" style="margin-right:10px;"></button>
-        <button id="cancelCropBtn" class="btn waves-effect waves-light" style="background-color:#f44336;"></button>
+        <button id="saveCropBtn" class="btn waves-effect waves-light" style="margin-right:10px;">Save</button>
+        <button id="cancelCropBtn" class="btn waves-effect waves-light" style="background-color:#f44336;">Cancel</button>
       </div>
     </div>
   </div>
@@ -320,32 +383,20 @@
   <!-- New File Content Modal (to view CSV file content) -->
   <div id="fileContentModal" class="modal">
     <div class="modal-content">
-      <h4></h4>
+      <h4>File Content</h4>
       <textarea id="fileContentModalText" style="width:100%; height:300px;" readonly></textarea>
     </div>
     <div class="modal-footer">
-      <a href="#!" class="modal-close waves-effect waves-green btn"></a>
+      <a href="#!" class="modal-close waves-effect waves-green btn">Close</a>
     </div>
   </div>
   
-  <!-- Load the external static text file -->
-  <script src="staticText.js"></script>
-
-  <!-- jQuery -->
   <script src="https://code.jquery.com/jquery-3.6.0.min.js"></script>
-  
-  <!-- Materialize JS -->
   <script src="https://cdnjs.cloudflare.com/ajax/libs/materialize/1.0.0/js/materialize.min.js"></script>
-  
-  <!-- Additional JS: metadataHandler or other custom logic -->
   <script src="metadataHandler.js"></script>
-  
-  <!-- Inline script to populate text elements from staticText and maintain existing logic -->
   <script>
-    // The next line ensures we can refer to appendedDescriptionText from staticText.
-    // We'll merge it into the window object so original code can reference it if needed.
-    window.appendedDescriptionText = window.staticText.appendedDescriptionText;
-    
+    // The temporary debug toast notifications have been removed.
+
     window.ETSY_SHOP_URL = "https://www.etsy.com/shop/custombrites";
     window.CLIENT_ID = "k75zdspz4r99txpqdji7i2em";
     window.REDIRECT_URI = "https://delicate-tanuki-616ac0.netlify.app/";
@@ -366,145 +417,18 @@
     window.photoUpdateComplete = false;
     window.infoUpdateComplete = false;
 
-    /**
-     * DOMContentLoaded to set dynamic text from staticText
-     */
-    document.addEventListener("DOMContentLoaded", function() {
-      // Set document title
-      document.title = window.staticText.appTitle;
-      
-      // Configure Buttons
-      document.getElementById("configureButtonsBtn").textContent = window.staticText.configureButtons;
-      
-      // Listing Description container
-      var listingDescContainer = document.getElementById("listingDescContainer");
-      if (listingDescContainer) {
-        var h5 = listingDescContainer.querySelector("h5");
-        if (h5) { h5.textContent = window.staticText.listingDescriptionHeader; }
-      }
-      document.getElementById("listingDescInput").placeholder = window.staticText.questionPlaceholder;
-      document.getElementById("uploadedFilesList").placeholder = window.staticText.dropCSVPlaceholder;
-      
-      // Top Buttons
-      document.getElementById("connectEtsyBtn").textContent = window.staticText.connectToEtsy;
-      document.getElementById("photoUploadNewBtn").textContent = window.staticText.updatePhotos;
-      document.getElementById("uploadToEtsyBtn").textContent = window.staticText.updateInfo;
-      
-      // Etsy Shop Listings
-      var etsyShopListingsContainer = document.getElementById("etsyShopListingsContainer");
-      if (etsyShopListingsContainer) {
-        var heading = etsyShopListingsContainer.querySelector(".section-heading");
-        if (heading) { heading.textContent = window.staticText.etsyShopListings; }
-      }
-      document.getElementById("shopListings").placeholder = window.staticText.shopListingsPlaceholder;
-      
-      // Search Key Phrases Section
-      var keyPhrasesContainer = document.getElementById("userProvidedKeyPhrasesContainer");
-      if (keyPhrasesContainer) {
-        var spHeading = keyPhrasesContainer.querySelector(".section-heading");
-        if (spHeading) { spHeading.textContent = window.staticText.searchKeyPhrases; }
-      }
-      document.getElementById("clearKeyPhrasesBtn").textContent = window.staticText.clearCSV;
-      document.getElementById("dropZone").textContent = window.staticText.dropCSVPlaceholder;
-      document.getElementById("analyzeMetadataBtn").textContent = window.staticText.analyzePhotos;
-      document.getElementById("showAnalyzeRulesBtn").textContent = window.staticText.analyzeRules;
-      
-      // Generate Button
-      document.getElementById("generateBtn").textContent = window.staticText.generate;
-      
-      // Etsy Listing Title Section
-      var etsyListingTitleContainer = document.getElementById("etsyListingTitleContainer");
-      if (etsyListingTitleContainer) {
-        var titleHeading = etsyListingTitleContainer.querySelector(".section-heading");
-        if (titleHeading) { titleHeading.textContent = window.staticText.etsyListingTitle; }
-      }
-      document.getElementById("regenTitleBtn").textContent = window.staticText.reGen;
-      document.getElementById("copyTitleBtn").title = window.staticText.copy;
-      document.getElementById("titleCount").textContent = window.staticText.titleCountText;
-      
-      // Etsy Listing Description Section
-      var etsyListingDescriptionContainer = document.getElementById("etsyListingDescriptionContainer");
-      if (etsyListingDescriptionContainer) {
-        var descHeading = etsyListingDescriptionContainer.querySelector(".section-heading");
-        if (descHeading) { descHeading.textContent = window.staticText.etsyListingDescription; }
-      }
-      document.getElementById("regenDescriptionBtn").textContent = window.staticText.reGen;
-      document.getElementById("copyDescriptionBtn").textContent = window.staticText.copy;
-      
-      // Metadata Modal
-      var metadataModal = document.getElementById("metadataModal");
-      if (metadataModal) {
-        var metaTitle = metadataModal.querySelector("h4");
-        if (metaTitle) { metaTitle.textContent = window.staticText.modal.photoMetadata.title; }
-        var metaClose = metadataModal.querySelector("#closeMetadataBtn");
-        if (metaClose) { metaClose.textContent = window.staticText.modal.photoMetadata.close; }
-      }
-      
-      // Analyze Rules Modal
-      var analyzeRulesModal = document.getElementById("analyzeRulesModal");
-      if (analyzeRulesModal) {
-        var arTitle = analyzeRulesModal.querySelector("h4");
-        if (arTitle) { arTitle.textContent = window.staticText.modal.analyzeRules.title; }
-        document.getElementById("analyzeRulesTextarea").value = window.staticText.modal.analyzeRules.defaultText;
-        document.getElementById("updateAnalyzeRulesBtn").textContent = window.staticText.analyzeRules;
-      }
-      
-      // Title Rules Modal
-      var titleRulesModal = document.getElementById("titleRulesModal");
-      if (titleRulesModal) {
-        var trTitle = titleRulesModal.querySelector("h4");
-        if (trTitle) { trTitle.textContent = window.staticText.modal.titleRules.title; }
-        document.getElementById("titleRulesTextarea").value = window.staticText.modal.titleRules.defaultText;
-        document.getElementById("updateTitleRulesBtn").textContent = window.staticText.reGen;
-      }
-      
-      // Description Rules Modal
-      var descriptionRulesModal = document.getElementById("descriptionRulesModal");
-      if (descriptionRulesModal) {
-        var drTitle = descriptionRulesModal.querySelector("h4");
-        if (drTitle) { drTitle.textContent = window.staticText.modal.descriptionRules.title; }
-        document.getElementById("descriptionRulesTextarea").value = window.staticText.modal.descriptionRules.defaultText;
-      }
-      
-      // Keyword Rules Modal
-      var keywordRulesModal = document.getElementById("keywordRulesModal");
-      if (keywordRulesModal) {
-        var krTitle = keywordRulesModal.querySelector("h4");
-        if (krTitle) { krTitle.textContent = window.staticText.modal.keywordRules.title; }
-        document.getElementById("keywordRulesTextarea").value = window.staticText.modal.keywordRules.defaultText;
-      }
-      
-      // Button Config Modal
-      var buttonConfigModal = document.getElementById("buttonConfigModal");
-      if (buttonConfigModal) {
-        var bcTitle = buttonConfigModal.querySelector("h4");
-        if (bcTitle) { bcTitle.textContent = window.staticText.buttonConfig.title; }
-        document.getElementById("uploadedFilesListModal").placeholder = window.staticText.buttonConfig.placeholder;
-        document.getElementById("saveButtonPositionsBtn").textContent = window.staticText.buttonConfig.saveButton;
-      }
-      
-      // Photo Crop Modal
-      var photoCropModal = document.getElementById("photoCropModal");
-      if (photoCropModal) {
-        var pcTitle = photoCropModal.querySelector("h4");
-        if (pcTitle) { pcTitle.textContent = window.staticText.photoCrop.title; }
-        document.getElementById("saveCropBtn").textContent = window.staticText.photoCrop.save;
-        document.getElementById("cancelCropBtn").textContent = window.staticText.photoCrop.cancel;
-      }
-      
-      // File Content Modal
-      var fileContentModal = document.getElementById("fileContentModal");
-      if (fileContentModal) {
-        var fcTitle = fileContentModal.querySelector("h4");
-        if (fcTitle) { fcTitle.textContent = window.staticText.fileContent.title; }
-        var fcClose = fileContentModal.querySelector(".modal-footer a");
-        if (fcClose) { fcClose.textContent = window.staticText.fileContent.close; }
-      }
-    });
-  </script>
-
-  <!-- The remainder of your original JS follows below (unchanged) -->
-  <script>
+    window.appendedDescriptionText = `
+• We use the Highest Quality materials from the US and Italy.
+• Your purchase will come packaged and ready for gift giving!
+• D E T A I L S: 13.4mm x 8.7mm Flying DragonFly, 14K Gold Filled, 14K Rose Gold Filled, Sterling Silver = Pendant + Chain.
+• P E R S O N A L I Z E: Custom chain length available.
+• S I M I L A R: Tiny Gold Bar Necklace, Initial Disc Necklace, Vertical Gold Bar Bracelet.
+• P A C K A G I N G: Beautiful packaging.
+• E X P E D I T E D: Faster shipping available.
+• E X P L O R E: http://custombrites.etsy.com
+• C H E C K: Follow us on social media.
+• S H O P  • P O L I C I E S: Check our policies.
+`;
 
     // CSV Drop Listener on the uploadedFilesList textarea
     const uploadedFilesListElem = document.getElementById("uploadedFilesList");
@@ -582,7 +506,7 @@
     }
     function updateListingQueueCount() {
       const countBox = document.getElementById("listingQueueCount");
-      if (countBox) { countBox.textContent = window.listingQueue.length; }
+      countBox.textContent = window.listingQueue.length;
     }
     function loadNextListingInQueue() {
       window.photoUpdateComplete = false;
@@ -1109,246 +1033,104 @@
       }
     });
 
-    async function uploadPhotos() {
-      let listingInput = document.getElementById("shopListings").value.trim();
-      if (!listingInput) {
-        M.toast({ html: "Please provide a listing URL or ID in 'Etsy Shop Listings'." });
-        return;
-      }
-      if (!window.previewImages.length) {
-        M.toast({ html: "No images to upload. Please drag and drop images first." });
-        return;
-      }
-      let listingId = /^\d+$/.test(listingInput)
-        ? listingInput
-        : (listingInput.match(/\/listing\/(\d+)/) || [])[1];
-      if (!listingId) {
-        M.toast({ html: "Invalid listing URL or ID." });
-        return;
-      }
-      for (let i = 0; i < window.previewImages.length; i++) {
-        let dataURL = window.previewImages[i];
-        let altText = window.photoMeta[i] || "";
-        let rankNumber = i + 1;
-        try {
-          let res = await fetch(dataURL);
-          let blob = await res.blob();
-          let formData = new FormData();
-          formData.append("listingId", listingId);
-          formData.append("token", window.accessToken);
-          formData.append("fileName", window.photoNames[i] || `uploaded_photo_${i}.jpg`);
-          formData.append("rank", rankNumber);
-          formData.append("alt_text", altText);
-          formData.append("file", blob, window.photoNames[i] || `uploaded_photo_${i}.jpg`);
-          let uploadUrl = `/.netlify/functions/imageUpload`;
-          let response = await fetch(uploadUrl, { method: "POST", body: formData });
-          if (!response.ok) {
-            M.toast({ html: `Error uploading photo #${rankNumber}: ` + response.status });
-          } else {
-            M.toast({ html: `Photo #${rankNumber} uploaded with alt_text!` });
-          }
-        } catch (e) {
-          console.error(e);
-          M.toast({ html: `Exception uploading photo #${rankNumber}: ${e.message}` });
-        }
-      }
-    }
-    window.uploadPhotos = uploadPhotos;
-
-    async function uploadReservedPhotos() {
-      let listingInput = document.getElementById("shopListings").value.trim();
-      if (!listingInput) {
-        M.toast({ html: "Please provide a listing URL or ID in 'Etsy Shop Listings'." });
-        return;
-      }
-      if (!window.reservedPhotos.length) {
-        M.toast({ html: "No reserved photos to upload." });
-        return;
-      }
-      let listingId = /^\d+$/.test(listingInput)
-        ? listingInput
-        : (listingInput.match(/\/listing\/(\d+)/) || [])[1];
-      if (!listingId) {
-        M.toast({ html: "Invalid listing URL or ID." });
-        return;
-      }
-      for (let i = 0; i < window.reservedPhotos.length; i++) {
-        let dataURL = window.reservedPhotos[i].src;
-        let altText = window.reservedPhotos[i].meta || "";
-        let rankNumber = i + 8;
-        try {
-          let res = await fetch(dataURL);
-          let blob = await res.blob();
-          let formData = new FormData();
-          formData.append("listingId", listingId);
-          formData.append("token", window.accessToken);
-          formData.append("fileName", window.reservedPhotos[i].name || `reserved_photo_${i}.jpg`);
-          formData.append("rank", rankNumber);
-          formData.append("alt_text", altText);
-          formData.append("file", blob, window.reservedPhotos[i].name || `reserved_photo_${i}.jpg`);
-          let uploadUrl = `/.netlify/functions/imageUpload`;
-          let response = await fetch(uploadUrl, { method: "POST", body: formData });
-          if (!response.ok) {
-            M.toast({ html: `Error uploading reserved photo #${rankNumber}: ` + response.status });
-          } else {
-            M.toast({ html: `Reserved photo #${rankNumber} uploaded successfully!` });
-          }
-        } catch (e) {
-          console.error(e);
-          M.toast({ html: `Exception uploading reserved photo #${rankNumber}: ${e.message}` });
-        }
-      }
+    function dataURLtoBlob(dataurl) {
+      const arr = dataurl.split(',');
+      const mime = arr[0].match(/:(.*?);/)[1];
+      const bstr = atob(arr[1]);
+      let n = bstr.length;
+      const u8arr = new Uint8Array(n);
+      while (n--) { u8arr[n] = bstr.charCodeAt(n); }
+      return new Blob([u8arr], { type: mime });
     }
 
-    document.getElementById("analyzeMetadataBtn").addEventListener("click", async () => {
-      const count = Math.min(7, window.previewImages.length);
-      for (let i = 0; i < count; i++) {
-        await metadataHandler.analyzeAndEmbedMetadata(i);
+    document.getElementById("listingDescInput").addEventListener("keydown", async (e) => {
+      if (e.key === "Enter" && !e.shiftKey) {
+        e.preventDefault();
+        await generateTagPhrases();
       }
     });
 
-    async function generateTagPhrases() {
-      let question = document.getElementById("listingDescInput").value.trim();
-      if (!question) {
-        M.toast({ html: "Please enter a question in the Listing Description." });
+    document.getElementById("generateBtn").addEventListener("click", async () => {
+      await Promise.all([generateTitleOnly(), generateDescriptionOnly()]);
+    });
+    
+    async function generateTitleOnly() {
+      let etsyLink = window.ETSY_SHOP_URL;
+      let keyPhrases = document.getElementById("searchKeyPhrases").value.trim();
+      if (!keyPhrases) {
+        M.toast({ html: "Please provide the search key phrases." });
         return;
       }
-      try {
-        let phrasesArray = await getInitialPhrases(question, document.getElementById("keywordRulesTextarea").value);
-        for (let i = 0; i < phrasesArray.length; i++) {
-          if (phrasesArray[i].length > 20) {
-            let otherValid = phrasesArray.filter((_, idx) => idx !== i && phrasesArray[idx].length <= 20);
-            let newPhrase = await regenerateSinglePhrase(question, document.getElementById("keywordRulesTextarea").value, otherValid);
-            phrasesArray[i] = newPhrase;
-          }
-        }
-        if (phrasesArray.some(p => p.length > 20)) {
-          throw new Error("Could not fix some phrases under 20 chars. Please try again.");
-        }
-        document.getElementById("searchKeyPhrases").value = phrasesArray.join("\n");
-        M.toast({ html: "Tag Phrases generated successfully!" });
-      } catch (err) {
-        console.error(err);
-        M.toast({ html: "Error generating valid tag phrases: " + err.message });
-      }
-    }
-
-    async function getInitialPhrases(question, keywordRules) {
-      let store_id = localStorage.getItem("vectorStoreId");
-      let retrievedContext = "";
-      if (store_id) {
-        try {
-          let resp = await fetch("/.netlify/functions/vectorStore", {
-            method: "POST",
-            headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({
-              action: "query",
-              store_id,
-              query: question,
-              topK: 5
-            })
-          });
-          if (resp.ok) {
-            let data = await resp.json();
-            retrievedContext = data?.data || "";
-          } else {
-            M.toast({ html: "Could not retrieve context from store. HTTP " + resp.status });
-          }
-        } catch (err) {
-          console.error("Error retrieving CSV context:", err);
-          M.toast({ html: "Error retrieving context: " + err.message });
-        }
-      } else {
-        M.toast({ html: "Warning: no vector store ID in localStorage. Possibly no CSV context loaded." });
-      }
-      let prompt = `
-Here is some relevant data from our CSV files:
-${retrievedContext}
-
-Listing Description (for emphasis): "${question}"
-Emphasis on SEO and generating effective Etsy tag phrases.
-
-Keyword Rules:
-${keywordRules}
-
-Generate exactly 13 SEO key phrases (each ≤ 20 characters). Return as plain text.
-      `;
+      let rulesText = document.getElementById("titleRulesTextarea").value;
+      let promptText = `
+You are ChatGPT using ${window.modelName}.
+Based on the inputs below, generate an Etsy Listing TITLE only.
+Input Context:
+Etsy Link: "${etsyLink}"
+Search KeyPhrases: "${keyPhrases}"
+--- Rules for TITLE ---
+${rulesText}
+Important: Return ONLY the title as plain text.`;
+      document.getElementById("listingTitle").value = "Generating title...";
       let payload = {
         model: window.modelName,
         messages: [
-          { role: "system", content: "Use the CSV context above to generate more accurate key phrases." },
-          { role: "user", content: prompt }
+          { role: "system", content: "Return ONLY the title as plain text." },
+          { role: "user", content: promptText }
         ],
-        temperature: 0.7,
-        max_tokens: 500
+        temperature: 0.7
       };
-      let data = await callOpenAI(payload);
-      let answer = data.choices[0].message.content || "";
-      let phrasesArray = answer
-        .split(/[\n,]+/)
-        .map(s => s.replace(/^\d+\.\s*/, "").trim())
-        .filter(p => p);
-      return phrasesArray;
+      try {
+        let data = await callOpenAI(payload);
+        if (data.choices && data.choices.length > 0) {
+          let output = data.choices[0].message.content;
+          document.getElementById("listingTitle").value = output || "No title generated.";
+          updateTitleCount(output);
+        } else {
+          document.getElementById("listingTitle").value = "No title generated.";
+        }
+      } catch (error) {
+        document.getElementById("listingTitle").value = "Error: " + error;
+      }
     }
 
-    async function regenerateSinglePhrase(question, keywordRules, currentValid, maxAttempts = 5) {
-      for (let attempt = 1; attempt <= maxAttempts; attempt++) {
-        let store_id = localStorage.getItem("vectorStoreId");
-        let retrievedContext = "";
-        if (store_id) {
-          try {
-            let resp = await fetch("/.netlify/functions/vectorStore", {
-              method: "POST",
-              headers: { "Content-Type": "application/json" },
-              body: JSON.stringify({
-                action: "query",
-                store_id,
-                query: question,
-                topK: 5
-              })
-            });
-            if (resp.ok) {
-              let data = await resp.json();
-              retrievedContext = data?.data || "";
-            }
-          } catch (err) {
-            console.warn("Could not retrieve CSV context for single phrase regeneration:", err);
-          }
-        }
-        let prompt = `
-We have 12 valid phrases:
-${currentValid.join(", ")}
-
-Now produce ONE new phrase (≤20 chars) that satisfies the same rules:
-
-Here is some relevant data from our CSV:
-${retrievedContext}
-
-Keyword Rules:
-${keywordRules}
-Return only one phrase in plain text.
-        `;
-        let payload = {
-          model: window.modelName,
-          messages: [
-            { role: "system", content: "Generate a single phrase, up to 20 characters." },
-            { role: "user", content: prompt }
-          ],
-          temperature: 0.7,
-          max_tokens: 150
-        };
-        let data = await callOpenAI(payload);
-        let answerText = data.choices[0].message.content || "";
-        let candidate = answerText.trim()
-          .replace(/^\d+\.\s*/, "")
-          .split("\n")[0]
-          .trim();
-        if (candidate.length <= 20) {
-          return candidate;
-        }
-        console.warn(`Attempt ${attempt}: Single phrase too long => "${candidate}"`);
+    async function generateDescriptionOnly() {
+      let etsyLink = window.ETSY_SHOP_URL;
+      let keyPhrases = document.getElementById("searchKeyPhrases").value.trim();
+      if (!keyPhrases) {
+        M.toast({ html: "Please provide the search key phrases." });
+        return;
       }
-      throw new Error("Failed to generate a single phrase under 20 chars after multiple attempts.");
+      let rulesText = document.getElementById("descriptionRulesTextarea").value;
+      let promptText = `
+You are ChatGPT using ${window.modelName}.
+Based on the inputs below, generate an Etsy Listing DESCRIPTION only.
+Input Context:
+Etsy Link: "${etsyLink}"
+Search KeyPhrases: "${keyPhrases}"
+--- Rules for DESCRIPTION ---
+${rulesText}
+Important: Return ONLY the description as plain text.`;
+      document.getElementById("listingDescription").value = "Generating description...";
+      let payload = {
+        model: window.modelName,
+        messages: [
+          { role: "system", content: "Return ONLY the description as plain text." },
+          { role: "user", content: promptText }
+        ],
+        temperature: 0.7
+      };
+      try {
+        let data = await callOpenAI(payload);
+        if (data.choices && data.choices.length > 0) {
+          let output = data.choices[0].message.content;
+          document.getElementById("listingDescription").value = output || "No description generated.";
+        } else {
+          document.getElementById("listingDescription").value = "No description generated.";
+        }
+      } catch (error) {
+        document.getElementById("listingDescription").value = "Error: " + error;
+      }
     }
 
     async function callOpenAI(payload) {
@@ -1606,94 +1388,246 @@ Return only one phrase in plain text.
       M.Modal.getInstance(document.getElementById("photoCropModal")).close();
     });
 
-    document.getElementById("listingDescInput").addEventListener("keydown", async (e) => {
-      if (e.key === "Enter" && !e.shiftKey) {
-        e.preventDefault();
-        await generateTagPhrases();
-      }
-    });
-
-    document.getElementById("generateBtn").addEventListener("click", async () => {
-      await Promise.all([generateTitleOnly(), generateDescriptionOnly()]);
-    });
-    
-    async function generateTitleOnly() {
-      let etsyLink = window.ETSY_SHOP_URL;
-      let keyPhrases = document.getElementById("searchKeyPhrases").value.trim();
-      if (!keyPhrases) {
-        M.toast({ html: "Please provide the search key phrases." });
+    async function uploadPhotos() {
+      let listingInput = document.getElementById("shopListings").value.trim();
+      if (!listingInput) {
+        M.toast({ html: "Please provide a listing URL or ID in 'Etsy Shop Listings'." });
         return;
       }
-      let rulesText = document.getElementById("titleRulesTextarea").value;
-      let promptText = `
-You are ChatGPT using ${window.modelName}.
-Based on the inputs below, generate an Etsy Listing TITLE only.
-Input Context:
-Etsy Link: "${etsyLink}"
-Search KeyPhrases: "${keyPhrases}"
---- Rules for TITLE ---
-${rulesText}
-Important: Return ONLY the title as plain text.`;
-      document.getElementById("listingTitle").value = "Generating title...";
-      let payload = {
-        model: window.modelName,
-        messages: [
-          { role: "system", content: "Return ONLY the title as plain text." },
-          { role: "user", content: promptText }
-        ],
-        temperature: 0.7
-      };
-      try {
-        let data = await callOpenAI(payload);
-        if (data.choices && data.choices.length > 0) {
-          let output = data.choices[0].message.content;
-          document.getElementById("listingTitle").value = output || "No title generated.";
-          updateTitleCount(output);
-        } else {
-          document.getElementById("listingTitle").value = "No title generated.";
+      if (!window.previewImages.length) {
+        M.toast({ html: "No images to upload. Please drag and drop images first." });
+        return;
+      }
+      let listingId = /^\d+$/.test(listingInput)
+        ? listingInput
+        : (listingInput.match(/\/listing\/(\d+)/) || [])[1];
+      if (!listingId) {
+        M.toast({ html: "Invalid listing URL or ID." });
+        return;
+      }
+      for (let i = 0; i < window.previewImages.length; i++) {
+        let dataURL = window.previewImages[i];
+        let altText = window.photoMeta[i] || "";
+        let rankNumber = i + 1;
+        try {
+          let res = await fetch(dataURL);
+          let blob = await res.blob();
+          let formData = new FormData();
+          formData.append("listingId", listingId);
+          formData.append("token", window.accessToken);
+          formData.append("fileName", window.photoNames[i] || `uploaded_photo_${i}.jpg`);
+          formData.append("rank", rankNumber);
+          formData.append("alt_text", altText);
+          formData.append("file", blob, window.photoNames[i] || `uploaded_photo_${i}.jpg`);
+          let uploadUrl = `/.netlify/functions/imageUpload`;
+          let response = await fetch(uploadUrl, { method: "POST", body: formData });
+          if (!response.ok) {
+            M.toast({ html: `Error uploading photo #${rankNumber}: ` + response.status });
+          } else {
+            M.toast({ html: `Photo #${rankNumber} uploaded with alt_text!` });
+          }
+        } catch (e) {
+          console.error(e);
+          M.toast({ html: `Exception uploading photo #${rankNumber}: ${e.message}` });
         }
-      } catch (error) {
-        document.getElementById("listingTitle").value = "Error: " + error;
+      }
+    }
+    window.uploadPhotos = uploadPhotos;
+
+    async function uploadReservedPhotos() {
+      let listingInput = document.getElementById("shopListings").value.trim();
+      if (!listingInput) {
+        M.toast({ html: "Please provide a listing URL or ID in 'Etsy Shop Listings'." });
+        return;
+      }
+      if (!window.reservedPhotos.length) {
+        M.toast({ html: "No reserved photos to upload." });
+        return;
+      }
+      let listingId = /^\d+$/.test(listingInput)
+        ? listingInput
+        : (listingInput.match(/\/listing\/(\d+)/) || [])[1];
+      if (!listingId) {
+        M.toast({ html: "Invalid listing URL or ID." });
+        return;
+      }
+      for (let i = 0; i < window.reservedPhotos.length; i++) {
+        let dataURL = window.reservedPhotos[i].src;
+        let altText = window.reservedPhotos[i].meta || "";
+        let rankNumber = i + 8;
+        try {
+          let res = await fetch(dataURL);
+          let blob = await res.blob();
+          let formData = new FormData();
+          formData.append("listingId", listingId);
+          formData.append("token", window.accessToken);
+          formData.append("fileName", window.reservedPhotos[i].name || `reserved_photo_${i}.jpg`);
+          formData.append("rank", rankNumber);
+          formData.append("alt_text", altText);
+          formData.append("file", blob, window.reservedPhotos[i].name || `reserved_photo_${i}.jpg`);
+          let uploadUrl = `/.netlify/functions/imageUpload`;
+          let response = await fetch(uploadUrl, { method: "POST", body: formData });
+          if (!response.ok) {
+            M.toast({ html: `Error uploading reserved photo #${rankNumber}: ` + response.status });
+          } else {
+            M.toast({ html: `Reserved photo #${rankNumber} uploaded successfully!` });
+          }
+        } catch (e) {
+          console.error(e);
+          M.toast({ html: `Exception uploading reserved photo #${rankNumber}: ${e.message}` });
+        }
       }
     }
 
-    async function generateDescriptionOnly() {
-      let etsyLink = window.ETSY_SHOP_URL;
-      let keyPhrases = document.getElementById("searchKeyPhrases").value.trim();
-      if (!keyPhrases) {
-        M.toast({ html: "Please provide the search key phrases." });
+    document.getElementById("analyzeMetadataBtn").addEventListener("click", async () => {
+      const count = Math.min(7, window.previewImages.length);
+      for (let i = 0; i < count; i++) {
+        await metadataHandler.analyzeAndEmbedMetadata(i);
+      }
+    });
+
+    async function generateTagPhrases() {
+      let question = document.getElementById("listingDescInput").value.trim();
+      if (!question) {
+        M.toast({ html: "Please enter a question in the Listing Description." });
         return;
       }
-      let rulesText = document.getElementById("descriptionRulesTextarea").value;
-      let promptText = `
-You are ChatGPT using ${window.modelName}.
-Based on the inputs below, generate an Etsy Listing DESCRIPTION only.
-Input Context:
-Etsy Link: "${etsyLink}"
-Search KeyPhrases: "${keyPhrases}"
---- Rules for DESCRIPTION ---
-${rulesText}
-Important: Return ONLY the description as plain text.`;
-      document.getElementById("listingDescription").value = "Generating description...";
+      try {
+        let phrasesArray = await getInitialPhrases(question, document.getElementById("keywordRulesTextarea").value);
+        for (let i = 0; i < phrasesArray.length; i++) {
+          if (phrasesArray[i].length > 20) {
+            let otherValid = phrasesArray.filter((_, idx) => idx !== i && phrasesArray[idx].length <= 20);
+            let newPhrase = await regenerateSinglePhrase(question, document.getElementById("keywordRulesTextarea").value, otherValid);
+            phrasesArray[i] = newPhrase;
+          }
+        }
+        if (phrasesArray.some(p => p.length > 20)) {
+          throw new Error("Could not fix some phrases under 20 chars. Please try again.");
+        }
+        document.getElementById("searchKeyPhrases").value = phrasesArray.join("\n");
+        M.toast({ html: "Tag Phrases generated successfully!" });
+      } catch (err) {
+        console.error(err);
+        M.toast({ html: "Error generating valid tag phrases: " + err.message });
+      }
+    }
+
+    async function getInitialPhrases(question, keywordRules) {
+      let store_id = localStorage.getItem("vectorStoreId");
+      let retrievedContext = "";
+      if (store_id) {
+        try {
+          let resp = await fetch("/.netlify/functions/vectorStore", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({
+              action: "query",
+              store_id,
+              query: question,
+              topK: 5
+            })
+          });
+          if (resp.ok) {
+            let data = await resp.json();
+            retrievedContext = data?.data || "";
+          } else {
+            M.toast({ html: "Could not retrieve context from store. HTTP " + resp.status });
+          }
+        } catch (err) {
+          console.error("Error retrieving CSV context:", err);
+          M.toast({ html: "Error retrieving context: " + err.message });
+        }
+      } else {
+        M.toast({ html: "Warning: no vector store ID in localStorage. Possibly no CSV context loaded." });
+      }
+      let prompt = `
+Here is some relevant data from our CSV files:
+${retrievedContext}
+
+Listing Description (for emphasis): "${question}"
+Emphasis on SEO and generating effective Etsy tag phrases.
+
+Keyword Rules:
+${keywordRules}
+
+Generate exactly 13 SEO key phrases (each ≤ 20 characters). Return as plain text.
+      `;
       let payload = {
         model: window.modelName,
         messages: [
-          { role: "system", content: "Return ONLY the description as plain text." },
-          { role: "user", content: promptText }
+          { role: "system", content: "Use the CSV context above to generate more accurate key phrases." },
+          { role: "user", content: prompt }
         ],
-        temperature: 0.7
+        temperature: 0.7,
+        max_tokens: 500
       };
-      try {
-        let data = await callOpenAI(payload);
-        if (data.choices && data.choices.length > 0) {
-          let output = data.choices[0].message.content;
-          document.getElementById("listingDescription").value = output || "No description generated.";
-        } else {
-          document.getElementById("listingDescription").value = "No description generated.";
+      let data = await callOpenAI(payload);
+      let answer = data.choices[0].message.content || "";
+      let phrasesArray = answer
+        .split(/[\n,]+/)
+        .map(s => s.replace(/^\d+\.\s*/, "").trim())
+        .filter(p => p);
+      return phrasesArray;
+    }
+
+    async function regenerateSinglePhrase(question, keywordRules, currentValid, maxAttempts = 5) {
+      for (let attempt = 1; attempt <= maxAttempts; attempt++) {
+        let store_id = localStorage.getItem("vectorStoreId");
+        let retrievedContext = "";
+        if (store_id) {
+          try {
+            let resp = await fetch("/.netlify/functions/vectorStore", {
+              method: "POST",
+              headers: { "Content-Type": "application/json" },
+              body: JSON.stringify({
+                action: "query",
+                store_id,
+                query: question,
+                topK: 5
+              })
+            });
+            if (resp.ok) {
+              let data = await resp.json();
+              retrievedContext = data?.data || "";
+            }
+          } catch (err) {
+            console.warn("Could not retrieve CSV context for single phrase regeneration:", err);
+          }
         }
-      } catch (error) {
-        document.getElementById("listingDescription").value = "Error: " + error;
+        let prompt = `
+We have 12 valid phrases:
+${currentValid.join(", ")}
+
+Now produce ONE new phrase (≤20 chars) that satisfies the same rules:
+
+Here is some relevant data from our CSV:
+${retrievedContext}
+
+Keyword Rules:
+${keywordRules}
+Return only one phrase in plain text.
+        `;
+        let payload = {
+          model: window.modelName,
+          messages: [
+            { role: "system", content: "Generate a single phrase, up to 20 characters." },
+            { role: "user", content: prompt }
+          ],
+          temperature: 0.7,
+          max_tokens: 150
+        };
+        let data = await callOpenAI(payload);
+        let answerText = data.choices[0].message.content || "";
+        let candidate = answerText.trim()
+          .replace(/^\d+\.\s*/, "")
+          .split("\n")[0]
+          .trim();
+        if (candidate.length <= 20) {
+          return candidate;
+        }
+        console.warn(`Attempt ${attempt}: Single phrase too long => "${candidate}"`);
       }
+      throw new Error("Failed to generate a single phrase under 20 chars after multiple attempts.");
     }
   </script>
 </body>
