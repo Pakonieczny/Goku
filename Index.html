@@ -19,120 +19,278 @@
   <script src="https://cdnjs.cloudflare.com/ajax/libs/cropperjs/1.5.13/cropper.min.js"></script>
   <style>
     html, body {
-      margin: 0; padding: 0; width: 100vw;
+      margin: 0;
+      padding: 0;
+      width: 100vw;
       font-family: Arial, sans-serif;
     }
     .container {
-      width: 100vw; padding: 10px; box-sizing: border-box;
+      width: 100vw;
+      padding: 10px;
+      box-sizing: border-box;
       text-align: left;
     }
-    h5, label, p { text-align: left; }
-    input, textarea { width: 100%; box-sizing: border-box; }
+    h5, label, p {
+      text-align: left;
+    }
+    input, textarea {
+      width: 100%;
+      box-sizing: border-box;
+    }
     #descriptionAndFileUploadContainer {
-      display: flex; align-items: center;
+      display: flex;
+      align-items: center;
     }
     .listing-desc-container {
-      position: relative; display: inline-block; width: 500px;
+      position: relative;
+      display: inline-block;
+      width: 500px;
     }
     .listing-desc-container h5 {
-      margin: 0 0 10px 0; font-size: 1.2rem; font-weight: 500;
+      margin: 0 0 10px 0;
+      font-size: 1.2rem;
+      font-weight: 500;
     }
     .listing-desc-container label.section-heading {
-      font-size: 1.2rem; font-weight: 500;
+      font-size: 1.2rem;
+      font-weight: 500;
     }
     .listing-desc-container input {
-      width: 500px; height: 30px; border: 1px solid #000; padding: 5px;
+      width: 500px;
+      height: 30px;
+      border: 1px solid #000;
+      padding: 5px;
     }
     #searchKeyPhrases {
-      resize: none; box-sizing: border-box; border: 1px solid grey;
+      resize: none;
+      box-sizing: border-box;
+      border: 1px solid grey;
     }
-    #searchKeyPhrases[rows="14"] { height: auto; }
+    #searchKeyPhrases[rows="14"] {
+      height: auto;
+    }
     /* Ensure the CSV textarea can receive drop events */
-    #uploadedFilesList { pointer-events: auto; }
-    .flex-container { display: flex; gap: 10px; align-items: stretch; }
-    .textbox-container { flex: 1; }
+    #uploadedFilesList {
+      pointer-events: auto;
+    }
+    .flex-container {
+      display: flex;
+      gap: 10px;
+      align-items: stretch;
+    }
+    .textbox-container {
+      flex: 1;
+    }
     .textbox-container textarea {
-      width: 100%; padding: 0.8rem; font-size: 1rem; line-height: 1.2;
-      resize: none; overflow: visible; box-sizing: border-box;
+      width: 100%;
+      padding: 0.8rem;
+      font-size: 1rem;
+      line-height: 1.2;
+      resize: none;
+      overflow: visible;
+      box-sizing: border-box;
     }
     .button-container {
-      width: 200px; display: flex; flex-direction: column; gap: 10px;
+      width: 200px;
+      display: flex;
+      flex-direction: column;
+      gap: 10px;
       align-self: flex-start;
     }
-    #listingTitle { min-height: 45px; }
-    #listingDescInput { width: 500px; height: 30px; border: 1px solid #000; padding: 5px; }
-    #listingDescription { min-height: 150px; width: 500px; }
+    #listingTitle {
+      min-height: 45px;
+    }
+    #listingDescInput {
+      width: 500px;
+      height: 30px;
+      border: 1px solid #000;
+      padding: 5px;
+    }
+    #listingDescription {
+      min-height: 150px;
+      width: 500px;
+    }
     .section-heading {
-      font-size: 1.2rem; font-weight: 500; margin-bottom: 5px;
+      font-size: 1.2rem;
+      font-weight: 500;
+      margin-bottom: 5px;
       display: inline-block;
     }
-    .count-text { font-style: italic; font-size: 0.9em; margin-top: 5px; }
+    .count-text {
+      font-style: italic;
+      font-size: 0.9em;
+      margin-top: 5px;
+    }
     #dropZone {
-      width: 712px; height: 120px; border: 2px dashed #ccc;
-      border-radius: 3px; display: inline-block; vertical-align: middle;
-      text-align: center; line-height: 120px; position: relative;
+      width: 712px;
+      height: 120px;
+      border: 2px dashed #ccc;
+      border-radius: 3px;
+      display: inline-block;
+      vertical-align: middle;
+      text-align: center;
+      line-height: 120px;
+      position: relative;
     }
     /* Hide any unused drop zones */
-    #fileDropZonesContainer { display: none; }
-    #uploadedFilesList {
-      width: 225px; height: 125px; resize: none; box-sizing: border-box;
-      border: 1px solid grey; margin-left: 85px; position: relative;
-      font-size: 0.875rem; z-index: 10;
+    #fileDropZonesContainer {
+      display: none;
     }
-    .modal { z-index: 9999 !important; }
-    .modal-overlay { z-index: 9998 !important; }
+    #uploadedFilesList {
+      width: 225px;
+      height: 125px;
+      resize: none;
+      box-sizing: border-box;
+      border: 1px solid grey;
+      margin-left: 85px;
+      position: relative;
+      font-size: 0.875rem;
+      z-index: 10;
+    }
+    .modal {
+      z-index: 9999 !important;
+    }
+    .modal-overlay {
+      z-index: 9998 !important;
+    }
     #previewGridContainer {
-      position: relative; margin: 20px auto; width: auto;
-      max-width: 720px; text-align: center; z-index: 2000;
+      position: relative;
+      margin: 20px auto;
+      width: auto;
+      max-width: 720px;
+      text-align: center;
+      z-index: 2000;
     }
     #previewGridStatic {
-      display: grid; grid-template-columns: repeat(5, 120px);
-      grid-column-gap: 28px; grid-row-gap: 22px; margin: 0 auto;
+      display: grid;
+      grid-template-columns: repeat(5, 120px);
+      grid-column-gap: 28px;
+      grid-row-gap: 22px;
+      margin: 0 auto;
     }
     .preview-cell {
-      position: relative; width: 120px; height: 158px;
-      border: 2px solid #ccc; border-radius: 3px;
-      display: flex; flex-direction: column;
-      align-items: center; justify-content: center;
-      font-size: 12px; color: #666;
+      position: relative;
+      width: 120px;
+      height: 158px;
+      border: 2px solid #ccc;
+      border-radius: 3px;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      font-size: 12px;
+      color: #666;
     }
-    .preview-cell.reserved { z-index: 2500; }
-    .preview-box { position: relative; width: 100%; height: 100%; }
+    .preview-cell.reserved {
+      z-index: 2500;
+    }
+    .preview-box {
+      position: relative;
+      width: 100%;
+      height: 100%;
+    }
     .preview-box img {
-      width: 120px; height: 120px; object-fit: cover;
-      border-radius: 3px; display: block;
+      width: 120px;
+      height: 120px;
+      object-fit: cover;
+      border-radius: 3px;
+      display: block;
     }
     .remove-btn {
-      position: absolute; top: -5px; left: -5px; width: 15px; height: 15px;
-      background-color: black; color: white; font-size: 10px;
-      text-align: center; cursor: pointer; z-index: 999; border-radius: 50%;
+      position: absolute;
+      top: -5px;
+      left: -5px;
+      width: 15px;
+      height: 15px;
+      background-color: black;
+      color: white;
+      font-size: 10px;
+      text-align: center;
+      cursor: pointer;
+      z-index: 999;
+      border-radius: 50%;
     }
     .number-overlay {
-      position: absolute; top: 0; right: 0; width: 16px; height: 16px;
-      background-color: rgba(0,0,0,0.7); color: white;
-      display: flex; align-items: center; justify-content: center;
-      font-size: 10px; z-index: 999; border-radius: 3px;
+      position: absolute;
+      top: 0;
+      right: 0;
+      width: 16px;
+      height: 16px;
+      background-color: rgba(0,0,0,0.7);
+      color: white;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 10px;
+      z-index: 999;
+      border-radius: 3px;
     }
-    .metadata-status { margin-top: 5px; text-align: center; font-size: 14px; min-height: 20px; }
-    .metadata-progress { width: 90%; }
-    #container13 { position: relative; width: 250px; top: -150px; }
-    #belowSearch { margin-top: -180px; margin-left: 10px; }
-    .title-container { margin-top: -50px; }
-    #etsyListingTitleContainer { position: relative; width: 1000px; }
-    #etsyListingTitleContainer textarea { width: 1000px; }
-    .description-container { margin-top: 0px; }
-    #etsyListingDescriptionContainer { position: relative; width: 1000px; }
-    #etsyListingDescriptionContainer textarea { width: 1000px; }
-    #userProvidedKeyPhrasesContainer { position: relative; top: 125px; left: 10px; }
-    #topButtons { margin: 10px 0; }
+    .metadata-status {
+      margin-top: 5px;
+      text-align: center;
+      font-size: 14px;
+      min-height: 20px;
+    }
+    .metadata-progress {
+      width: 90%;
+    }
+    #container13 {
+      position: relative;
+      width: 250px;
+      top: -150px;
+    }
+    #belowSearch {
+      margin-top: -180px;
+      margin-left: 10px;
+    }
+    .title-container {
+      margin-top: -50px;
+    }
+    #etsyListingTitleContainer {
+      position: relative;
+      width: 1000px;
+    }
+    #etsyListingTitleContainer textarea {
+      width: 1000px;
+    }
+    .description-container {
+      margin-top: 0px;
+    }
+    #etsyListingDescriptionContainer {
+      position: relative;
+      width: 1000px;
+    }
+    #etsyListingDescriptionContainer textarea {
+      width: 1000px;
+    }
+    #userProvidedKeyPhrasesContainer {
+      position: relative;
+      top: 125px;
+      left: 10px;
+    }
+    #topButtons {
+      margin: 10px 0;
+    }
     #listingQueueCount {
-      width: 25px; height: 25px; border: 1px solid #000;
-      display: inline-flex; align-items: center; justify-content: center;
-      font-weight: bold; margin-left: 5px;
+      width: 25px;
+      height: 25px;
+      border: 1px solid #000;
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      font-weight: bold;
+      margin-left: 5px;
     }
-    .regen-btn, .copy-btn { width: 125px; }
-    .update-btn { background-color: #FFA500 !important; color: white !important; }
-    .drag-over { border: 2px dashed #2196f3 !important; }
+    .regen-btn, .copy-btn {
+      width: 125px;
+    }
+    .update-btn {
+      background-color: #FFA500 !important;
+      color: white !important;
+    }
+    .drag-over {
+      border: 2px dashed #2196f3 !important;
+    }
     /* Floating button style */
     #floatingViewFileBtn {
       position: fixed;
@@ -141,13 +299,16 @@
       transform: translateX(-50%);
       z-index: 10000;
     }
-    /* Enable repositioning via the Configure Buttons modal */
+    /* Added to enable repositioning via the Configure Buttons modal */
     #etsyShopListingsContainer {
       position: relative;
     }
   </style>
 </head>
 <body>
+  <!-- Include default UI positions (uiPositions.js) -->
+  <script src="uiPositions.js"></script>
+
   <button id="configureButtonsBtn" class="btn waves-effect waves-light configurable">Configure Buttons</button>
   
   <div id="descriptionAndFileUploadContainer">
@@ -397,7 +558,7 @@ Using Sales Report and Product List Files:
   <script src="https://cdnjs.cloudflare.com/ajax/libs/materialize/1.0.0/js/materialize.min.js"></script>
   <script src="metadataHandler.js"></script>
   <script>
-    // Temporary debug toast notifications have been removed.
+    // The temporary debug toast notifications have been removed.
 
     window.ETSY_SHOP_URL = "https://www.etsy.com/shop/custombrites";
     window.CLIENT_ID = "k75zdspz4r99txpqdji7i2em";
@@ -432,140 +593,516 @@ Using Sales Report and Product List Files:
 • S H O P  • P O L I C I E S: Check our policies.
 `;
 
-    // Helper functions to save/load UI positions to/from a remote server.
-    async function saveUIPositionsToServer(positions) {
-      try {
-        const response = await fetch("/.netlify/functions/saveUIPositions", {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ positions })
-        });
-        if (!response.ok) {
-          throw new Error("Failed to save UI positions to server.");
-        }
-        M.toast({ html: "Button positions saved on server." });
-      } catch(err) {
-        console.error(err);
-        M.toast({ html: "Error saving positions to server: " + err.message });
-      }
-    }
-
-    async function loadUIPositionsFromServer() {
-      try {
-        const response = await fetch("/.netlify/functions/loadUIPositions");
-        if (!response.ok) {
-          throw new Error("Failed to load UI positions from server.");
-        }
-        const data = await response.json();
-        return data.positions;
-      } catch(err) {
-        console.error(err);
-        return null;
-      }
-    }
-
-    // CSV Drop Listener on the uploadedFilesList textarea
-    const uploadedFilesListElem = document.getElementById("uploadedFilesList");
-    uploadedFilesListElem.addEventListener("dragover", e => {
-      e.preventDefault();
-      e.stopPropagation();
-      uploadedFilesListElem.style.borderColor = "#000";
-    });
-    uploadedFilesListElem.addEventListener("dragleave", e => {
-      e.preventDefault();
-      e.stopPropagation();
-      uploadedFilesListElem.style.borderColor = "#ccc";
-    });
-    uploadedFilesListElem.addEventListener("drop", async e => {
-      e.preventDefault();
-      e.stopPropagation();
-      uploadedFilesListElem.style.borderColor = "#ccc";
-      const files = e.dataTransfer.files;
-      for (let file of files) {
-        if (/\.csv$/i.test(file.name)) {
-          try {
-            const fileData = await uploadDocFile(file);
-            M.toast({ html: "CSV file uploaded with ID: " + (fileData.id || "N/A") });
-            window.uploadedCSVFileIds.push(fileData.id);
-            uploadedFilesListElem.value = window.uploadedCSVFileIds.join("\n");
-            await updateVectorStore();
-          } catch (err) {
-            console.error(err);
-            M.toast({ html: "Error uploading CSV: " + err.message });
+    // Load button positions. Use localStorage if available; if not, load defaults from uiPositions.js.
+    function loadButtonPositions() {
+      let stored = localStorage.getItem("buttonPositions");
+      if (stored) {
+        let positions = JSON.parse(stored);
+        for (let id in positions) {
+          let el = document.getElementById(id);
+          if (el) { 
+            el.style.top = positions[id].top; 
+            el.style.left = positions[id].left; 
           }
         }
+      } else if (window.defaultUIPositions) {
+        let positions = window.defaultUIPositions;
+        for (let id in positions) {
+          let el = document.getElementById(id);
+          if (el) { 
+            el.style.top = positions[id].top; 
+            el.style.left = positions[id].left; 
+          }
+        }
+        localStorage.setItem("buttonPositions", JSON.stringify(positions));
+      }
+    }
+
+    window.addEventListener("load", () => {
+      let container13 = document.getElementById("container13");
+      container13.style.height = (container13.offsetHeight * 2.5) + "px";
+    });
+
+    function openCropModal(index) {
+      window.currentCropIndex = index;
+      let cropModal = document.getElementById("photoCropModal");
+      let cropImage = document.getElementById("cropImage");
+      cropImage.src = window.previewImages[index];
+      cropImage.onload = function() {
+        window.cropper = new Cropper(cropImage, {
+          viewMode: 1,
+          autoCropArea: 1,
+          movable: true,
+          zoomable: true,
+          scalable: false,
+          rotatable: false,
+          responsive: true,
+          background: false,
+          modal: true,
+          guides: true,
+          center: true,
+          highlight: true,
+          cropBoxMovable: true,
+          cropBoxResizable: true,
+          dragMode: 'move',
+          ready: function() {
+            let containerData = window.cropper.getContainerData();
+            let cropBoxData = window.cropper.getCropBoxData();
+            window.cropper.setCropBoxData({
+              left: (containerData.width - cropBoxData.width) / 2,
+              top: (containerData.height - cropBoxData.height) / 2
+            });
+          }
+        });
+      };
+      let instance = M.Modal.getInstance(cropModal) || M.Modal.init(cropModal, {});
+      instance.open();
+    }
+
+    document.getElementById("saveCropBtn").addEventListener("click", () => {
+      if (window.cropper && window.currentCropIndex !== null) {
+        let croppedCanvas = window.cropper.getCroppedCanvas({ width: 3000, height: 3000 });
+        window.previewImages[window.currentCropIndex] = croppedCanvas.toDataURL("image/jpeg", 0.85);
+        updateStaticPreviewGrid();
+        window.cropper.destroy();
+        window.cropper = null;
+        window.currentCropIndex = null;
+        M.Modal.getInstance(document.getElementById("photoCropModal")).close();
       }
     });
 
-    function showMetadata(index) {
-      const metadata = (window.photoMeta && window.photoMeta[index]) ? window.photoMeta[index] : "No metadata available.";
-      document.getElementById("metadataTextarea").value = metadata;
-      let modalElem = document.getElementById("metadataModal");
-      let modalInstance = M.Modal.getInstance(modalElem) || M.Modal.init(modalElem);
-      modalInstance.open();
-    }
+    document.getElementById("cancelCropBtn").addEventListener("click", () => {
+      if (window.cropper) {
+        window.cropper.destroy();
+        window.cropper = null;
+      }
+      window.currentCropIndex = null;
+      M.Modal.getInstance(document.getElementById("photoCropModal")).close();
+    });
 
-    function persistDataBeforeRedirect() {
-      try {
-        localStorage.setItem("soldOrdersCSV", JSON.stringify(window.soldOrdersCSV));
-        localStorage.setItem("listingsCSV", JSON.stringify(window.listingsCSV));
-        const listingsInputValue = document.getElementById("shopListings").value || "";
-        localStorage.setItem("shopListingsText", listingsInputValue);
-        localStorage.setItem("listingQueue", JSON.stringify(window.listingQueue));
-      } catch (err) {
-        console.error("Error persisting data before redirect:", err);
+    async function uploadPhotos() {
+      let listingInput = document.getElementById("shopListings").value.trim();
+      if (!listingInput) {
+        M.toast({ html: "Please provide a listing URL or ID in 'Etsy Shop Listings'." });
+        return;
+      }
+      if (!window.previewImages.length) {
+        M.toast({ html: "No images to upload. Please drag and drop images first." });
+        return;
+      }
+      let listingId = /^\d+$/.test(listingInput)
+        ? listingInput
+        : (listingInput.match(/\/listing\/(\d+)/) || [])[1];
+      if (!listingId) {
+        M.toast({ html: "Invalid listing URL or ID." });
+        return;
+      }
+      for (let i = 0; i < window.previewImages.length; i++) {
+        let dataURL = window.previewImages[i];
+        let altText = window.photoMeta[i] || "";
+        let rankNumber = i + 1;
+        try {
+          let res = await fetch(dataURL);
+          let blob = await res.blob();
+          let formData = new FormData();
+          formData.append("listingId", listingId);
+          formData.append("token", window.accessToken);
+          formData.append("fileName", window.photoNames[i] || `uploaded_photo_${i}.jpg`);
+          formData.append("rank", rankNumber);
+          formData.append("alt_text", altText);
+          formData.append("file", blob, window.photoNames[i] || `uploaded_photo_${i}.jpg`);
+          let uploadUrl = `/.netlify/functions/imageUpload`;
+          let response = await fetch(uploadUrl, { method: "POST", body: formData });
+          if (!response.ok) {
+            M.toast({ html: `Error uploading photo #${rankNumber}: ` + response.status });
+          } else {
+            M.toast({ html: `Photo #${rankNumber} uploaded with alt_text!` });
+          }
+        } catch (e) {
+          console.error(e);
+          M.toast({ html: `Exception uploading photo #${rankNumber}: ${e.message}` });
+        }
+      }
+    }
+    window.uploadPhotos = uploadPhotos;
+
+    async function uploadReservedPhotos() {
+      let listingInput = document.getElementById("shopListings").value.trim();
+      if (!listingInput) {
+        M.toast({ html: "Please provide a listing URL or ID in 'Etsy Shop Listings'." });
+        return;
+      }
+      if (!window.reservedPhotos.length) {
+        M.toast({ html: "No reserved photos to upload." });
+        return;
+      }
+      let listingId = /^\d+$/.test(listingInput)
+        ? listingInput
+        : (listingInput.match(/\/listing\/(\d+)/) || [])[1];
+      if (!listingId) {
+        M.toast({ html: "Invalid listing URL or ID." });
+        return;
+      }
+      for (let i = 0; i < window.reservedPhotos.length; i++) {
+        let dataURL = window.reservedPhotos[i].src;
+        let altText = window.reservedPhotos[i].meta || "";
+        let rankNumber = i + 8;
+        try {
+          let res = await fetch(dataURL);
+          let blob = await res.blob();
+          let formData = new FormData();
+          formData.append("listingId", listingId);
+          formData.append("token", window.accessToken);
+          formData.append("fileName", window.reservedPhotos[i].name || `reserved_photo_${i}.jpg`);
+          formData.append("rank", rankNumber);
+          formData.append("alt_text", altText);
+          formData.append("file", blob, window.reservedPhotos[i].name || `reserved_photo_${i}.jpg`);
+          let uploadUrl = `/.netlify/functions/imageUpload`;
+          let response = await fetch(uploadUrl, { method: "POST", body: formData });
+          if (!response.ok) {
+            M.toast({ html: `Error uploading reserved photo #${rankNumber}: ` + response.status });
+          } else {
+            M.toast({ html: `Reserved photo #${rankNumber} uploaded successfully!` });
+          }
+        } catch (e) {
+          console.error(e);
+          M.toast({ html: `Exception uploading reserved photo #${rankNumber}: ${e.message}` });
+        }
       }
     }
 
-    function restoreDataAfterRedirect() {
+    document.getElementById("analyzeMetadataBtn").addEventListener("click", async () => {
+      const count = Math.min(7, window.previewImages.length);
+      for (let i = 0; i < count; i++) {
+        await metadataHandler.analyzeAndEmbedMetadata(i);
+      }
+    });
+
+    async function generateTagPhrases() {
+      let question = document.getElementById("listingDescInput").value.trim();
+      if (!question) {
+        M.toast({ html: "Please enter a question in the Listing Description." });
+        return;
+      }
       try {
-        let soCSV = localStorage.getItem("soldOrdersCSV");
-        if (soCSV) { window.soldOrdersCSV = JSON.parse(soCSV); }
-        let liCSV = localStorage.getItem("listingsCSV");
-        if (liCSV) { window.listingsCSV = JSON.parse(liCSV); }
-        let storedShopListingsText = localStorage.getItem("shopListingsText");
-        if (storedShopListingsText) { document.getElementById("shopListings").value = storedShopListingsText; }
-        let storedQueue = localStorage.getItem("listingQueue");
-        if (storedQueue) { window.listingQueue = JSON.parse(storedQueue); }
-        loadNextListingInQueue();
+        let phrasesArray = await getInitialPhrases(question, document.getElementById("keywordRulesTextarea").value);
+        for (let i = 0; i < phrasesArray.length; i++) {
+          if (phrasesArray[i].length > 20) {
+            let otherValid = phrasesArray.filter((_, idx) => idx !== i && phrasesArray[idx].length <= 20);
+            let newPhrase = await regenerateSinglePhrase(question, document.getElementById("keywordRulesTextarea").value, otherValid);
+            phrasesArray[i] = newPhrase;
+          }
+        }
+        if (phrasesArray.some(p => p.length > 20)) {
+          throw new Error("Could not fix some phrases under 20 chars. Please try again.");
+        }
+        document.getElementById("searchKeyPhrases").value = phrasesArray.join("\n");
+        M.toast({ html: "Tag Phrases generated successfully!" });
       } catch (err) {
-        console.error("Error restoring data after redirect:", err);
+        console.error(err);
+        M.toast({ html: "Error generating valid tag phrases: " + err.message });
       }
     }
-    
-    function parseListingNumbers(rawInput) {
-      let parts = rawInput.split(",");
-      let cleaned = parts.map(p => p.trim()).filter(p => /^\d{10}$/.test(p));
-      return Array.from(new Set(cleaned)).slice(0, 250);
-    }
-    function updateListingQueueCount() {
-      const countBox = document.getElementById("listingQueueCount");
-      countBox.textContent = window.listingQueue.length;
-    }
-    function loadNextListingInQueue() {
-      window.photoUpdateComplete = false;
-      window.infoUpdateComplete = false;
-      if (window.listingQueue.length > 0) {
-        document.getElementById("shopListings").value = window.listingQueue[0];
+
+    async function getInitialPhrases(question, keywordRules) {
+      let store_id = localStorage.getItem("vectorStoreId");
+      let retrievedContext = "";
+      if (store_id) {
+        try {
+          let resp = await fetch("/.netlify/functions/vectorStore", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({
+              action: "query",
+              store_id,
+              query: question,
+              topK: 5
+            })
+          });
+          if (resp.ok) {
+            let data = await resp.json();
+            retrievedContext = data?.data || "";
+          } else {
+            M.toast({ html: "Could not retrieve context from store. HTTP " + resp.status });
+          }
+        } catch (err) {
+          console.error("Error retrieving CSV context:", err);
+          M.toast({ html: "Error retrieving context: " + err.message });
+        }
       } else {
-        document.getElementById("shopListings").value = "";
+        M.toast({ html: "Warning: no vector store ID in localStorage. Possibly no CSV context loaded." });
       }
-      updateListingQueueCount();
+      let prompt = `
+Here is some relevant data from our CSV files:
+${retrievedContext}
+
+Listing Description (for emphasis): "${question}"
+Emphasis on SEO and generating effective Etsy tag phrases.
+
+Keyword Rules:
+${keywordRules}
+
+Generate exactly 13 SEO key phrases (each ≤ 20 characters). Return as plain text.
+      `;
+      let payload = {
+        model: window.modelName,
+        messages: [
+          { role: "system", content: "Use the CSV context above to generate more accurate key phrases." },
+          { role: "user", content: prompt }
+        ],
+        temperature: 0.7,
+        max_tokens: 500
+      };
+      let data = await callOpenAI(payload);
+      let answer = data.choices[0].message.content || "";
+      let phrasesArray = answer
+        .split(/[\n,]+/)
+        .map(s => s.replace(/^\d+\.\s*/, "").trim())
+        .filter(p => p);
+      return phrasesArray;
     }
-    function afterBothUpdates() {
-      window.listingQueue.shift();
-      loadNextListingInQueue();
+
+    async function regenerateSinglePhrase(question, keywordRules, currentValid, maxAttempts = 5) {
+      for (let attempt = 1; attempt <= maxAttempts; attempt++) {
+        let store_id = localStorage.getItem("vectorStoreId");
+        let retrievedContext = "";
+        if (store_id) {
+          try {
+            let resp = await fetch("/.netlify/functions/vectorStore", {
+              method: "POST",
+              headers: { "Content-Type": "application/json" },
+              body: JSON.stringify({
+                action: "query",
+                store_id,
+                query: question,
+                topK: 5
+              })
+            });
+            if (resp.ok) {
+              let data = await resp.json();
+              retrievedContext = data?.data || "";
+            }
+          } catch (err) {
+            console.warn("Could not retrieve CSV context for single phrase regeneration:", err);
+          }
+        }
+        let prompt = `
+We have 12 valid phrases:
+${currentValid.join(", ")}
+
+Now produce ONE new phrase (≤20 chars) that satisfies the same rules:
+
+Here is some relevant data from our CSV:
+${retrievedContext}
+
+Keyword Rules:
+${keywordRules}
+Return only one phrase in plain text.
+        `;
+        let payload = {
+          model: window.modelName,
+          messages: [
+            { role: "system", content: "Generate a single phrase, up to 20 characters." },
+            { role: "user", content: prompt }
+          ],
+          temperature: 0.7,
+          max_tokens: 150
+        };
+        let data = await callOpenAI(payload);
+        let answerText = data.choices[0].message.content || "";
+        let candidate = answerText.trim()
+          .replace(/^\d+\.\s*/, "")
+          .split("\n")[0]
+          .trim();
+        if (candidate.length <= 20) {
+          return candidate;
+        }
+        console.warn(`Attempt ${attempt}: Single phrase too long => "${candidate}"`);
+      }
+      throw new Error("Failed to generate a single phrase under 20 chars after multiple attempts.");
     }
-    function checkIfBothUpdatesComplete() {
-      if (window.photoUpdateComplete && window.infoUpdateComplete) {
-        afterBothUpdates();
+
+    async function callOpenAI(payload) {
+      let response = await fetch("/.netlify/functions/openaiProxy", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(payload)
+      });
+      if (!response.ok) {
+        let errorData = await response.json();
+        throw new Error("API Error: " + (errorData.error ? errorData.error.message : response.statusText));
+      }
+      let jsonData = await response.json();
+      return jsonData;
+    }
+
+    function updateTitleCount(text) {
+      document.getElementById("titleCount").textContent = "Count: " + text.length;
+    }
+    document.getElementById("copyTitleBtn").addEventListener("click", () => {
+      let text = document.getElementById("listingTitle").value;
+      navigator.clipboard.writeText(text).catch(err => console.error("Copy error:", err));
+    });
+    document.getElementById("copyDescriptionBtn").addEventListener("click", () => {
+      let text = document.getElementById("listingDescription").value;
+      navigator.clipboard.writeText(text).catch(err => console.error("Copy error:", err));
+    });
+    
+    async function clearStoreCSVFiles() {
+      let storeId = localStorage.getItem("vectorStoreId");
+      if (!storeId) {
+        M.toast({ html: "No vector store ID found. Nothing to clear." });
+        return;
+      }
+      let payload = {
+        action: "clear_csv_files",
+        store_id: storeId
+      };
+      try {
+        let resp = await fetch("/.netlify/functions/vectorStore", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify(payload)
+        });
+        if (!resp.ok) {
+          M.toast({ html: "Error clearing CSV files, status " + resp.status });
+          return;
+        }
+        let data = await resp.json();
+        M.toast({ html: "Cleared CSV files from the store: " + JSON.stringify(data) });
+        window.uploadedCSVFileIds = [];
+        localStorage.removeItem("uploadedCSVFileIds");
+        document.getElementById("uploadedFilesList").value = "";
+        await listVectorStoreFiles(); 
+      } catch (err) {
+        console.error(err);
+        M.toast({ html: "clearStoreCSVFiles error: " + err.message });
+      }
+    }
+    document.getElementById("clearKeyPhrasesBtn").addEventListener("click", clearStoreCSVFiles);
+
+    async function listVectorStoreFiles() {
+      let storeId = localStorage.getItem("vectorStoreId");
+      if (!storeId) {
+        M.toast({ html: "No vector store ID found in localStorage. Not listing files." });
+        return;
+      }
+      let payload = {
+        action: "list_files",
+        store_id: storeId
+      };
+      try {
+        let resp = await fetch("/.netlify/functions/vectorStore", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify(payload)
+        });
+        if (!resp.ok) {
+          M.toast({ html: "listVectorStoreFiles: error " + resp.status });
+          return;
+        }
+        let data = await resp.json();
+        if (!data.data || !Array.isArray(data.data)) {
+          M.toast({ html: "No files found in the store." });
+          return;
+        }
+        let displayNames = data.data.map(f => {
+          let fname = f.filename || "";
+          fname = fname.replace(/(\.csv|\.txt)$/i, "");
+          return fname;
+        });
+        document.getElementById("uploadedFilesList").value = displayNames.join("\n");
+      } catch (err) {
+        console.error(err);
+        M.toast({ html: "Error listing store files: " + err.message });
       }
     }
 
-    function updateUploadedFilesList() {
-      const uploadedFilesListElem = document.getElementById('uploadedFilesList');
-      uploadedFilesListElem.value = window.uploadedCSVFileIds.join("\n");
-    }
+    document.getElementById("configureButtonsBtn").addEventListener("click", () => {
+      let configContainer = document.getElementById("buttonConfigContainer");
+      configContainer.innerHTML = "";
+      const selectors = [
+        "#configureButtonsBtn",
+        "#listingDescContainer",
+        "#uploadedFilesList",
+        "#dropZone",
+        "#previewGridContainer",
+        "#container13",
+        "#uploadToEtsyBtn",
+        "#etsyShopListingsContainer",
+        "#userProvidedKeyPhrasesContainer",
+        "#etsyListingTitleContainer",
+        "#etsyListingDescriptionContainer",
+        "#regenTitleBtn",
+        "#copyTitleBtn",
+        "#regenDescriptionBtn",
+        "#copyDescriptionBtn",
+        "#photoUploadNewBtn",
+        "#generateBtn",
+        "#connectEtsyBtn",
+        "#analyzeMetadataBtn",
+        "#showAnalyzeRulesBtn"
+      ].join(", ");
+      let elements = document.querySelectorAll(selectors);
+      let table = document.createElement("table");
+      table.className = "striped";
+      let thead = document.createElement("thead");
+      thead.innerHTML = "<tr><th>Element ID</th><th>Top (px)</th><th>Left (px)</th></tr>";
+      table.appendChild(thead);
+      let tbody = document.createElement("tbody");
+      elements.forEach(el => {
+        let id = el.id;
+        let computedStyle = window.getComputedStyle(el);
+        let currentTop = el.style.top || computedStyle.top || "0";
+        let currentLeft = el.style.left || computedStyle.left || "0";
+        let tr = document.createElement("tr");
+        tr.innerHTML = `<td>${id}</td>
+          <td><input type="number" id="${id}_top" value="${parseInt(currentTop)||0}"></td>
+          <td><input type="number" id="${id}_left" value="${parseInt(currentLeft)||0}"></td>`;
+        let topInput = tr.querySelector(`#${id}_top`);
+        let leftInput = tr.querySelector(`#${id}_left`);
+        topInput.addEventListener("input", () => { el.style.top = topInput.value + "px"; });
+        leftInput.addEventListener("input", () => { el.style.left = leftInput.value + "px"; });
+        tbody.appendChild(tr);
+      });
+      table.appendChild(tbody);
+      configContainer.appendChild(table);
+      let modalElem = document.getElementById("buttonConfigModal");
+      let modalInstance = M.Modal.getInstance(modalElem) || M.Modal.init(modalElem, { preventScrolling: false });
+      modalInstance.open();
+    });
+
+    document.getElementById("saveButtonPositionsBtn").addEventListener("click", () => {
+      const selectors = [
+        "#configureButtonsBtn",
+        "#listingDescContainer",
+        "#uploadedFilesList",
+        "#dropZone",
+        "#previewGridContainer",
+        "#container13",
+        "#uploadToEtsyBtn",
+        "#etsyShopListingsContainer",
+        "#userProvidedKeyPhrasesContainer",
+        "#etsyListingTitleContainer",
+        "#etsyListingDescriptionContainer",
+        "#regenTitleBtn",
+        "#copyTitleBtn",
+        "#regenDescriptionBtn",
+        "#copyDescriptionBtn",
+        "#photoUploadNewBtn",
+        "#generateBtn",
+        "#connectEtsyBtn",
+        "#analyzeMetadataBtn",
+        "#showAnalyzeRulesBtn"
+      ].join(", ");
+      let elements = document.querySelectorAll(selectors);
+      let positions = {};
+      elements.forEach(el => {
+        positions[el.id] = { top: el.style.top || "0px", left: el.style.left || "0px" };
+      });
+      localStorage.setItem("buttonPositions", JSON.stringify(positions));
+      M.toast({ html: "Button positions saved." });
+    });
 
     function loadReservedPhotos() {
       const stored = localStorage.getItem("reservedPhotos");
@@ -599,7 +1136,7 @@ Using Sales Report and Product List Files:
             const dataURL = event.target.result;
             let base64Content;
             let newFileName = file.name;
-            let contentType = "text/csv"; // default for CSV
+            let contentType = "text/csv";
             if (/\.csv$/i.test(file.name)) {
               const csvBase64 = dataURL.split(",")[1];
               const csvText = csvBase64 ? atob(csvBase64) : "";
@@ -714,7 +1251,7 @@ Using Sales Report and Product List Files:
         }
       }
       updateStaticPreviewGrid();
-      updateUploadedFilesList();
+      document.getElementById("uploadedFilesList").value = window.uploadedCSVFileIds.join("\n");
     });
 
     function updateStaticPreviewGrid() {
@@ -956,14 +1493,6 @@ Using Sales Report and Product List Files:
       loadButtonPositions();
       loadReservedPhotos();
       restoreDataAfterRedirect();
-      // Load UI positions from the server so that positions persist across devices.
-      const remotePositions = await loadUIPositionsFromServer();
-      if (remotePositions) {
-        for (let id in remotePositions) {
-          let el = document.getElementById(id);
-          if (el) { el.style.top = remotePositions[id].top; el.style.left = remotePositions[id].left; }
-        }
-      }
       let urlParams = new URLSearchParams(window.location.search);
       let code = urlParams.get("code");
       if (code) {
@@ -974,7 +1503,7 @@ Using Sales Report and Product List Files:
       initializeCellDragAndDrop();
       document.getElementById("shopListings").addEventListener("change", () => {
         let rawInput = document.getElementById("shopListings").value;
-        window.listingQueue = parseListingNumbers(rawInput);
+        window.listingQueue = rawInput.split(",").map(p => p.trim()).filter(p => /^\d{10}$/.test(p));
         loadNextListingInQueue();
       });
       await listVectorStoreFiles(); 
@@ -1035,7 +1564,10 @@ Using Sales Report and Product List Files:
         } else {
           M.toast({ html: "Listing info updated successfully!" });
           window.infoUpdateComplete = true;
-          checkIfBothUpdatesComplete();
+          if (window.photoUpdateComplete && window.infoUpdateComplete) {
+            window.listingQueue.shift();
+            loadNextListingInQueue();
+          }
         }
       } catch (e) {
         console.error(e);
@@ -1058,7 +1590,10 @@ Using Sales Report and Product List Files:
         await uploadReservedPhotos();
         M.toast({ html: "Photos updated successfully!" });
         window.photoUpdateComplete = true;
-        checkIfBothUpdatesComplete();
+        if (window.photoUpdateComplete && window.infoUpdateComplete) {
+          window.listingQueue.shift();
+          loadNextListingInQueue();
+        }
       } catch (err) {
         console.error(err);
         M.toast({ html: "Error uploading photos: " + err.message });
@@ -1073,7 +1608,9 @@ Using Sales Report and Product List Files:
       const bstr = atob(arr[1]);
       let n = bstr.length;
       const u8arr = new Uint8Array(n);
-      while (n--) { u8arr[n] = bstr.charCodeAt(n); }
+      while (n--) {
+        u8arr[n] = bstr.charCodeAt(n);
+      }
       return new Blob([u8arr], { type: mime });
     }
 
@@ -1184,6 +1721,7 @@ Important: Return ONLY the description as plain text.`;
     function updateTitleCount(text) {
       document.getElementById("titleCount").textContent = "Count: " + text.length;
     }
+
     document.getElementById("copyTitleBtn").addEventListener("click", () => {
       let text = document.getElementById("listingTitle").value;
       navigator.clipboard.writeText(text).catch(err => console.error("Copy error:", err));
@@ -1192,472 +1730,6 @@ Important: Return ONLY the description as plain text.`;
       let text = document.getElementById("listingDescription").value;
       navigator.clipboard.writeText(text).catch(err => console.error("Copy error:", err));
     });
-    
-    async function clearStoreCSVFiles() {
-      let storeId = localStorage.getItem("vectorStoreId");
-      if (!storeId) {
-        M.toast({ html: "No vector store ID found. Nothing to clear." });
-        return;
-      }
-      let payload = {
-        action: "clear_csv_files",
-        store_id: storeId
-      };
-      try {
-        let resp = await fetch("/.netlify/functions/vectorStore", {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify(payload)
-        });
-        if (!resp.ok) {
-          M.toast({ html: "Error clearing CSV files, status " + resp.status });
-          return;
-        }
-        let data = await resp.json();
-        M.toast({ html: "Cleared CSV files from the store: " + JSON.stringify(data) });
-        window.uploadedCSVFileIds = [];
-        localStorage.removeItem("uploadedCSVFileIds");
-        document.getElementById("uploadedFilesList").value = "";
-        await listVectorStoreFiles(); 
-      } catch (err) {
-        console.error(err);
-        M.toast({ html: "clearStoreCSVFiles error: " + err.message });
-      }
-    }
-    document.getElementById("clearKeyPhrasesBtn").addEventListener("click", clearStoreCSVFiles);
-
-    async function listVectorStoreFiles() {
-      let storeId = localStorage.getItem("vectorStoreId");
-      if (!storeId) {
-        M.toast({ html: "No vector store ID found in localStorage. Not listing files." });
-        return;
-      }
-      let payload = {
-        action: "list_files",
-        store_id: storeId
-      };
-      try {
-        let resp = await fetch("/.netlify/functions/vectorStore", {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify(payload)
-        });
-        if (!resp.ok) {
-          M.toast({ html: "listVectorStoreFiles: error " + resp.status });
-          return;
-        }
-        let data = await resp.json();
-        if (!data.data || !Array.isArray(data.data)) {
-          M.toast({ html: "No files found in the store." });
-          return;
-        }
-        let displayNames = data.data.map(f => {
-          let fname = f.filename || "";
-          fname = fname.replace(/(\.csv|\.txt)$/i, "");
-          return fname;
-        });
-        document.getElementById("uploadedFilesList").value = displayNames.join("\n");
-      } catch (err) {
-        console.error(err);
-        M.toast({ html: "Error listing store files: " + err.message });
-      }
-    }
-
-    document.getElementById("configureButtonsBtn").addEventListener("click", () => {
-      let configContainer = document.getElementById("buttonConfigContainer");
-      configContainer.innerHTML = "";
-      const selectors = [
-        "#configureButtonsBtn",
-        "#listingDescContainer",
-        "#uploadedFilesList",
-        "#dropZone",
-        "#previewGridContainer",
-        "#container13",
-        "#uploadToEtsyBtn",
-        "#etsyShopListingsContainer",
-        "#userProvidedKeyPhrasesContainer",
-        "#etsyListingTitleContainer",
-        "#etsyListingDescriptionContainer",
-        "#regenTitleBtn",
-        "#copyTitleBtn",
-        "#regenDescriptionBtn",
-        "#copyDescriptionBtn",
-        "#photoUploadNewBtn",
-        "#generateBtn",
-        "#connectEtsyBtn",
-        "#analyzeMetadataBtn",
-        "#showAnalyzeRulesBtn"
-      ].join(", ");
-      let elements = document.querySelectorAll(selectors);
-      let table = document.createElement("table");
-      table.className = "striped";
-      let thead = document.createElement("thead");
-      thead.innerHTML = "<tr><th>Element ID</th><th>Top (px)</th><th>Left (px)</th></tr>";
-      table.appendChild(thead);
-      let tbody = document.createElement("tbody");
-      elements.forEach(el => {
-        let id = el.id;
-        let computedStyle = window.getComputedStyle(el);
-        let currentTop = el.style.top || computedStyle.top || "0";
-        let currentLeft = el.style.left || computedStyle.left || "0";
-        let tr = document.createElement("tr");
-        tr.innerHTML = `<td>${id}</td>
-          <td><input type="number" id="${id}_top" value="${parseInt(currentTop)||0}"></td>
-          <td><input type="number" id="${id}_left" value="${parseInt(currentLeft)||0}"></td>`;
-        let topInput = tr.querySelector(`#${id}_top`);
-        let leftInput = tr.querySelector(`#${id}_left`);
-        topInput.addEventListener("input", () => { el.style.top = topInput.value + "px"; });
-        leftInput.addEventListener("input", () => { el.style.left = leftInput.value + "px"; });
-        tbody.appendChild(tr);
-      });
-      table.appendChild(tbody);
-      configContainer.appendChild(table);
-      let modalElem = document.getElementById("buttonConfigModal");
-      let modalInstance = M.Modal.getInstance(modalElem) || M.Modal.init(modalElem, { preventScrolling: false });
-      modalInstance.open();
-    });
-
-    document.getElementById("saveButtonPositionsBtn").addEventListener("click", () => {
-      const selectors = [
-        "#configureButtonsBtn",
-        "#listingDescContainer",
-        "#uploadedFilesList",
-        "#dropZone",
-        "#previewGridContainer",
-        "#container13",
-        "#uploadToEtsyBtn",
-        "#etsyShopListingsContainer",
-        "#userProvidedKeyPhrasesContainer",
-        "#etsyListingTitleContainer",
-        "#etsyListingDescriptionContainer",
-        "#regenTitleBtn",
-        "#copyTitleBtn",
-        "#regenDescriptionBtn",
-        "#copyDescriptionBtn",
-        "#photoUploadNewBtn",
-        "#generateBtn",
-        "#connectEtsyBtn",
-        "#analyzeMetadataBtn",
-        "#showAnalyzeRulesBtn"
-      ].join(", ");
-      let elements = document.querySelectorAll(selectors);
-      let positions = {};
-      elements.forEach(el => {
-        positions[el.id] = { top: el.style.top || "0px", left: el.style.left || "0px" };
-      });
-      localStorage.setItem("buttonPositions", JSON.stringify(positions));
-      M.toast({ html: "Button positions saved locally." });
-      // Save positions to remote server as well.
-      saveUIPositionsToServer(positions);
-    });
-
-    function loadButtonPositions() {
-      let stored = localStorage.getItem("buttonPositions");
-      if (stored) {
-        let positions = JSON.parse(stored);
-        for (let id in positions) {
-          let el = document.getElementById(id);
-          if (el) { el.style.top = positions[id].top; el.style.left = positions[id].left; }
-        }
-      }
-    }
-
-    window.addEventListener("load", () => {
-      let container13 = document.getElementById("container13");
-      container13.style.height = (container13.offsetHeight * 2.5) + "px";
-    });
-
-    function openCropModal(index) {
-      window.currentCropIndex = index;
-      let cropModal = document.getElementById("photoCropModal");
-      let cropImage = document.getElementById("cropImage");
-      cropImage.src = window.previewImages[index];
-      cropImage.onload = function() {
-        window.cropper = new Cropper(cropImage, {
-          viewMode: 1,
-          autoCropArea: 1,
-          movable: true,
-          zoomable: true,
-          scalable: false,
-          rotatable: false,
-          responsive: true,
-          background: false,
-          modal: true,
-          guides: true,
-          center: true,
-          highlight: true,
-          cropBoxMovable: true,
-          cropBoxResizable: true,
-          dragMode: 'move',
-          ready: function() {
-            let containerData = window.cropper.getContainerData();
-            let cropBoxData = window.cropper.getCropBoxData();
-            window.cropper.setCropBoxData({
-              left: (containerData.width - cropBoxData.width) / 2,
-              top: (containerData.height - cropBoxData.height) / 2
-            });
-          }
-        });
-      };
-      let instance = M.Modal.getInstance(cropModal) || M.Modal.init(cropModal, {});
-      instance.open();
-    }
-
-    document.getElementById("saveCropBtn").addEventListener("click", () => {
-      if (window.cropper && window.currentCropIndex !== null) {
-        let croppedCanvas = window.cropper.getCroppedCanvas({ width: 3000, height: 3000 });
-        window.previewImages[window.currentCropIndex] = croppedCanvas.toDataURL("image/jpeg", 0.85);
-        updateStaticPreviewGrid();
-        window.cropper.destroy();
-        window.cropper = null;
-        window.currentCropIndex = null;
-        M.Modal.getInstance(document.getElementById("photoCropModal")).close();
-      }
-    });
-
-    document.getElementById("cancelCropBtn").addEventListener("click", () => {
-      if (window.cropper) {
-        window.cropper.destroy();
-        window.cropper = null;
-      }
-      window.currentCropIndex = null;
-      M.Modal.getInstance(document.getElementById("photoCropModal")).close();
-    });
-
-    async function uploadPhotos() {
-      let listingInput = document.getElementById("shopListings").value.trim();
-      if (!listingInput) {
-        M.toast({ html: "Please provide a listing URL or ID in 'Etsy Shop Listings'." });
-        return;
-      }
-      if (!window.previewImages.length) {
-        M.toast({ html: "No images to upload. Please drag and drop images first." });
-        return;
-      }
-      let listingId = /^\d+$/.test(listingInput)
-        ? listingInput
-        : (listingInput.match(/\/listing\/(\d+)/) || [])[1];
-      if (!listingId) {
-        M.toast({ html: "Invalid listing URL or ID." });
-        return;
-      }
-      for (let i = 0; i < window.previewImages.length; i++) {
-        let dataURL = window.previewImages[i];
-        let altText = window.photoMeta[i] || "";
-        let rankNumber = i + 1;
-        try {
-          let res = await fetch(dataURL);
-          let blob = await res.blob();
-          let formData = new FormData();
-          formData.append("listingId", listingId);
-          formData.append("token", window.accessToken);
-          formData.append("fileName", window.photoNames[i] || `uploaded_photo_${i}.jpg`);
-          formData.append("rank", rankNumber);
-          formData.append("alt_text", altText);
-          formData.append("file", blob, window.photoNames[i] || `uploaded_photo_${i}.jpg`);
-          let uploadUrl = `/.netlify/functions/imageUpload`;
-          let response = await fetch(uploadUrl, { method: "POST", body: formData });
-          if (!response.ok) {
-            M.toast({ html: `Error uploading photo #${rankNumber}: ` + response.status });
-          } else {
-            M.toast({ html: `Photo #${rankNumber} uploaded with alt_text!` });
-          }
-        } catch (e) {
-          console.error(e);
-          M.toast({ html: `Exception uploading photo #${rankNumber}: ${e.message}` });
-        }
-      }
-    }
-    window.uploadPhotos = uploadPhotos;
-
-    async function uploadReservedPhotos() {
-      let listingInput = document.getElementById("shopListings").value.trim();
-      if (!listingInput) {
-        M.toast({ html: "Please provide a listing URL or ID in 'Etsy Shop Listings'." });
-        return;
-      }
-      if (!window.reservedPhotos.length) {
-        M.toast({ html: "No reserved photos to upload." });
-        return;
-      }
-      let listingId = /^\d+$/.test(listingInput)
-        ? listingInput
-        : (listingInput.match(/\/listing\/(\d+)/) || [])[1];
-      if (!listingId) {
-        M.toast({ html: "Invalid listing URL or ID." });
-        return;
-      }
-      for (let i = 0; i < window.reservedPhotos.length; i++) {
-        let dataURL = window.reservedPhotos[i].src;
-        let altText = window.reservedPhotos[i].meta || "";
-        let rankNumber = i + 8;
-        try {
-          let res = await fetch(dataURL);
-          let blob = await res.blob();
-          let formData = new FormData();
-          formData.append("listingId", listingId);
-          formData.append("token", window.accessToken);
-          formData.append("fileName", window.reservedPhotos[i].name || `reserved_photo_${i}.jpg`);
-          formData.append("rank", rankNumber);
-          formData.append("alt_text", altText);
-          formData.append("file", blob, window.reservedPhotos[i].name || `reserved_photo_${i}.jpg`);
-          let uploadUrl = `/.netlify/functions/imageUpload`;
-          let response = await fetch(uploadUrl, { method: "POST", body: formData });
-          if (!response.ok) {
-            M.toast({ html: `Error uploading reserved photo #${rankNumber}: ` + response.status });
-          } else {
-            M.toast({ html: `Reserved photo #${rankNumber} uploaded successfully!` });
-          }
-        } catch (e) {
-          console.error(e);
-          M.toast({ html: `Exception uploading reserved photo #${rankNumber}: ${e.message}` });
-        }
-      }
-    }
-
-    async function generateTagPhrases() {
-      let question = document.getElementById("listingDescInput").value.trim();
-      if (!question) {
-        M.toast({ html: "Please enter a question in the Listing Description." });
-        return;
-      }
-      try {
-        let phrasesArray = await getInitialPhrases(question, document.getElementById("keywordRulesTextarea").value);
-        for (let i = 0; i < phrasesArray.length; i++) {
-          if (phrasesArray[i].length > 20) {
-            let otherValid = phrasesArray.filter((_, idx) => idx !== i && phrasesArray[idx].length <= 20);
-            let newPhrase = await regenerateSinglePhrase(question, document.getElementById("keywordRulesTextarea").value, otherValid);
-            phrasesArray[i] = newPhrase;
-          }
-        }
-        if (phrasesArray.some(p => p.length > 20)) {
-          throw new Error("Could not fix some phrases under 20 chars. Please try again.");
-        }
-        document.getElementById("searchKeyPhrases").value = phrasesArray.join("\n");
-        M.toast({ html: "Tag Phrases generated successfully!" });
-      } catch (err) {
-        console.error(err);
-        M.toast({ html: "Error generating valid tag phrases: " + err.message });
-      }
-    }
-
-    async function getInitialPhrases(question, keywordRules) {
-      let store_id = localStorage.getItem("vectorStoreId");
-      let retrievedContext = "";
-      if (store_id) {
-        try {
-          let resp = await fetch("/.netlify/functions/vectorStore", {
-            method: "POST",
-            headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({
-              action: "query",
-              store_id,
-              query: question,
-              topK: 5
-            })
-          });
-          if (resp.ok) {
-            let data = await resp.json();
-            retrievedContext = data?.data || "";
-          } else {
-            M.toast({ html: "Could not retrieve context from store. HTTP " + resp.status });
-          }
-        } catch (err) {
-          console.error("Error retrieving CSV context:", err);
-          M.toast({ html: "Error retrieving context: " + err.message });
-        }
-      } else {
-        M.toast({ html: "Warning: no vector store ID in localStorage. Possibly no CSV context loaded." });
-      }
-      let prompt = `
-Here is some relevant data from our CSV files:
-${retrievedContext}
-
-Listing Description (for emphasis): "${question}"
-Emphasis on SEO and generating effective Etsy tag phrases.
-
-Keyword Rules:
-${keywordRules}
-
-Generate exactly 13 SEO key phrases (each ≤ 20 characters). Return as plain text.
-      `;
-      let payload = {
-        model: window.modelName,
-        messages: [
-          { role: "system", content: "Use the CSV context above to generate more accurate key phrases." },
-          { role: "user", content: prompt }
-        ],
-        temperature: 0.7,
-        max_tokens: 500
-      };
-      let data = await callOpenAI(payload);
-      let answer = data.choices[0].message.content || "";
-      let phrasesArray = answer
-        .split(/[\n,]+/)
-        .map(s => s.replace(/^\d+\.\s*/, "").trim())
-        .filter(p => p);
-      return phrasesArray;
-    }
-
-    async function regenerateSinglePhrase(question, keywordRules, currentValid, maxAttempts = 5) {
-      for (let attempt = 1; attempt <= maxAttempts; attempt++) {
-        let store_id = localStorage.getItem("vectorStoreId");
-        let retrievedContext = "";
-        if (store_id) {
-          try {
-            let resp = await fetch("/.netlify/functions/vectorStore", {
-              method: "POST",
-              headers: { "Content-Type": "application/json" },
-              body: JSON.stringify({
-                action: "query",
-                store_id,
-                query: question,
-                topK: 5
-              })
-            });
-            if (resp.ok) {
-              let data = await resp.json();
-              retrievedContext = data?.data || "";
-            }
-          } catch (err) {
-            console.warn("Could not retrieve CSV context for single phrase regeneration:", err);
-          }
-        }
-        let prompt = `
-We have 12 valid phrases:
-${currentValid.join(", ")}
-
-Now produce ONE new phrase (≤20 chars) that satisfies the same rules:
-
-Here is some relevant data from our CSV:
-${retrievedContext}
-
-Keyword Rules:
-${keywordRules}
-Return only one phrase in plain text.
-        `;
-        let payload = {
-          model: window.modelName,
-          messages: [
-            { role: "system", content: "Generate a single phrase, up to 20 characters." },
-            { role: "user", content: prompt }
-          ],
-          temperature: 0.7,
-          max_tokens: 150
-        };
-        let data = await callOpenAI(payload);
-        let answerText = data.choices[0].message.content || "";
-        let candidate = answerText.trim()
-          .replace(/^\d+\.\s*/, "")
-          .split("\n")[0]
-          .trim();
-        if (candidate.length <= 20) {
-          return candidate;
-        }
-        console.warn(`Attempt ${attempt}: Single phrase too long => "${candidate}"`);
-      }
-      throw new Error("Failed to generate a single phrase under 20 chars after multiple attempts.");
-    }
   </script>
 </body>
 </html>
