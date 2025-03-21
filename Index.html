@@ -593,6 +593,19 @@ Using Sales Report and Product List Files:
 • S H O P  • P O L I C I E S: Check our policies.
 `;
 
+// Add persistDataBeforeRedirect function here
+    function persistDataBeforeRedirect() {
+      try {
+        localStorage.setItem("soldOrdersCSV", JSON.stringify(window.soldOrdersCSV));
+        localStorage.setItem("listingsCSV", JSON.stringify(window.listingsCSV));
+        const listingsInputValue = document.getElementById("shopListings").value || "";
+        localStorage.setItem("shopListingsText", listingsInputValue);
+        localStorage.setItem("listingQueue", JSON.stringify(window.listingQueue));
+      } catch (err) {
+        console.error("Error persisting data before redirect:", err);
+      }
+    }
+
     // Function to restore data after redirect.
     function restoreDataAfterRedirect() {
       try {
