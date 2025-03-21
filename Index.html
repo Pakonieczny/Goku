@@ -134,6 +134,14 @@
     .regen-btn, .copy-btn { width: 125px; }
     .update-btn { background-color: #FFA500 !important; color: white !important; }
     .drag-over { border: 2px dashed #2196f3 !important; }
+    /* Floating button style */
+    #floatingViewFileBtn {
+      position: fixed;
+      bottom: 20px;
+      left: 50%;
+      transform: translateX(-50%);
+      z-index: 10000;
+    }
   </style>
 </head>
 <body>
@@ -385,17 +393,22 @@ Using Sales Report and Product List Files:
       <a href="#!" id="closeFileListBtn" class="modal-close waves-effect waves-green btn">Close</a>
     </div>
   </div>
-
-  <!-- File Content Modal -->
-<div id="fileContentModal" class="modal">
-  <div class="modal-content">
-    <h4>File Content</h4>
-    <textarea id="fileContentModalText" style="width:100%; height:300px;" readonly></textarea>
+  
+  <!-- New File Content Modal (to view .txt file content) -->
+  <div id="fileContentModal" class="modal">
+    <div class="modal-content">
+      <h4>File Content</h4>
+      <textarea id="fileContentModalText" style="width:100%; height:300px;" readonly></textarea>
+    </div>
+    <div class="modal-footer">
+      <a href="#!" class="modal-close waves-effect waves-green btn">Close</a>
+    </div>
   </div>
-  <div class="modal-footer">
-    <a href="#!" class="modal-close waves-effect waves-green btn">Close</a>
-  </div>
-</div>
+  
+  <!-- Temporary Floating Button -->
+  <button id="floatingViewFileBtn" class="btn-floating btn-large red">
+    <i class="material-icons">visibility</i>
+  </button>
   
   <script src="https://code.jquery.com/jquery-3.6.0.min.js"></script>
   <script src="https://cdnjs.cloudflare.com/ajax/libs/materialize/1.0.0/js/materialize.min.js"></script>
@@ -404,6 +417,30 @@ Using Sales Report and Product List Files:
     window.DEBUG_TOASTS = true;
     function maybeToast(msg) { if (window.DEBUG_TOASTS) M.toast({html: msg}); }
     function stripMarkdownJSON(text) { return text; }
+
+    // New function to retrieve file content from OpenAI's File API and show in a modal.
+    async function showFileContentModal(fileId) {
+      try {
+        const response = await fetch(`https://api.openai.com/v1/files/${fileId}`, {
+          method: "GET",
+          headers: {
+            "Authorization": `Bearer YOUR_OPENAI_API_KEY`,
+            "Content-Type": "application/json"
+          }
+        });
+        if (!response.ok) {
+          console.error("Error retrieving file content:", response.status, await response.text());
+          return;
+        }
+        const content = await response.text();
+        document.getElementById("fileContentModalText").value = content;
+        let fileContentModalElem = document.getElementById("fileContentModal");
+        let fileContentModal = M.Modal.getInstance(fileContentModalElem) || M.Modal.init(fileContentModalElem);
+        fileContentModal.open();
+      } catch (error) {
+        console.error("Exception while fetching file content:", error);
+      }
+    }
 
     window.ETSY_SHOP_URL = "https://www.etsy.com/shop/custombrites";
     window.CLIENT_ID = "k75zdspz4r99txpqdji7i2em";
@@ -451,30 +488,6 @@ Using Sales Report and Product List Files:
         summary += rowValues.join(", ") + "\n";
       });
       return summary;
-    }
-
-// New function to view file content in a modal
-    async function showFileContentModal(fileId) {
-      try {
-        const response = await fetch(`https://api.openai.com/v1/files/${fileId}`, {
-          method: "GET",
-          headers: {
-            "Authorization": `Bearer YOUR_OPENAI_API_KEY`,
-            "Content-Type": "application/json"
-          }
-        });
-        if (!response.ok) {
-          console.error("Error retrieving file content:", response.status, await response.text());
-          return;
-        }
-        const content = await response.text();
-        document.getElementById("fileContentModalText").value = content;
-        let fileContentModalElem = document.getElementById("fileContentModal");
-        let fileContentModal = M.Modal.getInstance(fileContentModalElem) || M.Modal.init(fileContentModalElem);
-        fileContentModal.open();
-      } catch (error) {
-        console.error("Exception while fetching file content:", error);
-      }
     }
 
     // CSV Drop Listener on the uploadedFilesList textarea
@@ -1349,6 +1362,14 @@ Important: Return ONLY the description as plain text.`;
       } catch (err) {
         console.error(err);
         M.toast({ html: "Error listing files: " + err.message });
+      }
+    });
+
+    // Floating button event listener: prompt for file ID and show its content in a modal.
+    document.getElementById("floatingViewFileBtn").addEventListener("click", () => {
+      const fileId = prompt("Enter the file ID to view its content:");
+      if (fileId) {
+        showFileContentModal(fileId);
       }
     });
 
