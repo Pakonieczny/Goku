@@ -610,7 +610,7 @@ Using Sales Report and Product List Files:
             const payload = { 
               file: base64Content, 
               fileName: newFileName, 
-              purpose: "assistant" 
+              purpose: "assistants" 
             };
             const response = await fetch("/.netlify/functions/uploadFile", {
               method: "POST",
