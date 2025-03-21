@@ -19,32 +19,47 @@
   <script src="https://cdnjs.cloudflare.com/ajax/libs/cropperjs/1.5.13/cropper.min.js"></script>
   <style>
     html, body {
-      margin: 0; padding: 0; width: 100vw;
+      margin: 0;
+      padding: 0;
+      width: 100vw;
       font-family: Arial, sans-serif;
     }
     .container {
-      width: 100vw; padding: 10px; box-sizing: border-box;
+      width: 100vw;
+      padding: 10px;
+      box-sizing: border-box;
       text-align: left;
     }
     h5, label, p { text-align: left; }
     input, textarea { width: 100%; box-sizing: border-box; }
     #descriptionAndFileUploadContainer {
-      display: flex; align-items: center;
+      display: flex;
+      align-items: center;
     }
     .listing-desc-container {
-      position: relative; display: inline-block; width: 500px;
+      position: relative;
+      display: inline-block;
+      width: 500px;
     }
     .listing-desc-container h5 {
-      margin: 0 0 10px 0; font-size: 1.2rem; font-weight: 500;
+      margin: 0 0 10px 0;
+      font-size: 1.2rem;
+      font-weight: 500;
     }
     .listing-desc-container label.section-heading {
-      font-size: 1.2rem; font-weight: 500;
+      font-size: 1.2rem;
+      font-weight: 500;
     }
     .listing-desc-container input {
-      width: 500px; height: 30px; border: 1px solid #000; padding: 5px;
+      width: 500px;
+      height: 30px;
+      border: 1px solid #000;
+      padding: 5px;
     }
     #searchKeyPhrases {
-      resize: none; box-sizing: border-box; border: 1px solid grey;
+      resize: none;
+      box-sizing: border-box;
+      border: 1px solid grey;
     }
     #searchKeyPhrases[rows="14"] { height: auto; }
     /* Ensure the CSV textarea can receive drop events */
@@ -52,68 +67,129 @@
     .flex-container { display: flex; gap: 10px; align-items: stretch; }
     .textbox-container { flex: 1; }
     .textbox-container textarea {
-      width: 100%; padding: 0.8rem; font-size: 1rem; line-height: 1.2;
-      resize: none; overflow: visible; box-sizing: border-box;
+      width: 100%;
+      padding: 0.8rem;
+      font-size: 1rem;
+      line-height: 1.2;
+      resize: none;
+      overflow: visible;
+      box-sizing: border-box;
     }
     .button-container {
-      width: 200px; display: flex; flex-direction: column; gap: 10px;
+      width: 200px;
+      display: flex;
+      flex-direction: column;
+      gap: 10px;
       align-self: flex-start;
     }
     #listingTitle { min-height: 45px; }
     #listingDescInput { width: 500px; height: 30px; border: 1px solid #000; padding: 5px; }
     #listingDescription { min-height: 150px; width: 500px; }
     .section-heading {
-      font-size: 1.2rem; font-weight: 500; margin-bottom: 5px;
+      font-size: 1.2rem;
+      font-weight: 500;
+      margin-bottom: 5px;
       display: inline-block;
     }
     .count-text { font-style: italic; font-size: 0.9em; margin-top: 5px; }
     #dropZone {
-      width: 712px; height: 120px; border: 2px dashed #ccc;
-      border-radius: 3px; display: inline-block; vertical-align: middle;
-      text-align: center; line-height: 120px; position: relative;
+      width: 712px;
+      height: 120px;
+      border: 2px dashed #ccc;
+      border-radius: 3px;
+      display: inline-block;
+      vertical-align: middle;
+      text-align: center;
+      line-height: 120px;
+      position: relative;
     }
     /* Hide any unused drop zones */
     #fileDropZonesContainer { display: none; }
     #uploadedFilesList {
-      width: 225px; height: 125px; resize: none; box-sizing: border-box;
-      border: 1px solid grey; margin-left: 85px; position: relative;
-      font-size: 0.875rem; z-index: 10;
+      width: 225px;
+      height: 125px;
+      resize: none;
+      box-sizing: border-box;
+      border: 1px solid grey;
+      margin-left: 85px;
+      position: relative;
+      font-size: 0.875rem;
+      z-index: 10;
     }
     .modal { z-index: 9999 !important; }
     .modal-overlay { z-index: 9998 !important; }
     #previewGridContainer {
-      position: relative; margin: 20px auto; width: auto;
-      max-width: 720px; text-align: center; z-index: 2000;
+      position: relative;
+      margin: 20px auto;
+      width: auto;
+      max-width: 720px;
+      text-align: center;
+      z-index: 2000;
     }
     #previewGridStatic {
-      display: grid; grid-template-columns: repeat(5, 120px);
-      grid-column-gap: 28px; grid-row-gap: 22px; margin: 0 auto;
+      display: grid;
+      grid-template-columns: repeat(5, 120px);
+      grid-column-gap: 28px;
+      grid-row-gap: 22px;
+      margin: 0 auto;
     }
     .preview-cell {
-      position: relative; width: 120px; height: 158px;
-      border: 2px solid #ccc; border-radius: 3px;
-      display: flex; flex-direction: column;
-      align-items: center; justify-content: center;
-      font-size: 12px; color: #666;
+      position: relative;
+      width: 120px;
+      height: 158px;
+      border: 2px solid #ccc;
+      border-radius: 3px;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      font-size: 12px;
+      color: #666;
     }
     .preview-cell.reserved { z-index: 2500; }
     .preview-box { position: relative; width: 100%; height: 100%; }
     .preview-box img {
-      width: 120px; height: 120px; object-fit: cover;
-      border-radius: 3px; display: block;
+      width: 120px;
+      height: 120px;
+      object-fit: cover;
+      border-radius: 3px;
+      display: block;
     }
     .remove-btn {
-      position: absolute; top: -5px; left: -5px; width: 15px; height: 15px;
-      background-color: black; color: white; font-size: 10px;
-      text-align: center; cursor: pointer; z-index: 999; border-radius: 50%;
+      position: absolute;
+      top: -5px;
+      left: -5px;
+      width: 15px;
+      height: 15px;
+      background-color: black;
+      color: white;
+      font-size: 10px;
+      text-align: center;
+      cursor: pointer;
+      z-index: 999;
+      border-radius: 50%;
     }
     .number-overlay {
-      position: absolute; top: 0; right: 0; width: 16px; height: 16px;
-      background-color: rgba(0,0,0,0.7); color: white;
-      display: flex; align-items: center; justify-content: center;
-      font-size: 10px; z-index: 999; border-radius: 3px;
+      position: absolute;
+      top: 0;
+      right: 0;
+      width: 16px;
+      height: 16px;
+      background-color: rgba(0,0,0,0.7);
+      color: white;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 10px;
+      z-index: 999;
+      border-radius: 3px;
     }
-    .metadata-status { margin-top: 5px; text-align: center; font-size: 14px; min-height: 20px; }
+    .metadata-status {
+      margin-top: 5px;
+      text-align: center;
+      font-size: 14px;
+      min-height: 20px;
+    }
     .metadata-progress { width: 90%; }
     #container13 { position: relative; width: 250px; top: -150px; }
     #belowSearch { margin-top: -180px; margin-left: 10px; }
@@ -126,12 +202,20 @@
     #userProvidedKeyPhrasesContainer { position: relative; top: 125px; left: 10px; }
     #topButtons { margin: 10px 0; }
     #listingQueueCount {
-      width: 25px; height: 25px; border: 1px solid #000;
-      display: inline-flex; align-items: center; justify-content: center;
-      font-weight: bold; margin-left: 5px;
+      width: 25px;
+      height: 25px;
+      border: 1px solid #000;
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      font-weight: bold;
+      margin-left: 5px;
     }
     .regen-btn, .copy-btn { width: 125px; }
-    .update-btn { background-color: #FFA500 !important; color: white !important; }
+    .update-btn {
+      background-color: #FFA500 !important;
+      color: white !important;
+    }
     .drag-over { border: 2px dashed #2196f3 !important; }
     /* Floating button style */
     #floatingViewFileBtn {
@@ -142,6 +226,8 @@
       z-index: 10000;
     }
   </style>
+  <!-- Load external text content for modals and appended text -->
+  <script src="textContent.js"></script>
 </head>
 <body>
   <button id="configureButtonsBtn" class="btn waves-effect waves-light configurable">Configure Buttons</button>
@@ -171,10 +257,7 @@
   
   <div class="phrases-header configurable" id="userProvidedKeyPhrasesContainer">
     <span class="section-heading configurable">Search Key Phrases</span>
-    <!-- Clear button deletes files from the vector store -->
     <button id="clearKeyPhrasesBtn" class="btn-small waves-effect waves-light configurable">Clear CSV Files</button>
-  
-    </button>
     <div id="dropZone" class="configurable">Image Drop</div>
     <button id="analyzeMetadataBtn" class="btn waves-effect waves-light configurable">Analyze Photos</button>
     <button id="showAnalyzeRulesBtn" class="btn waves-effect waves-light configurable" data-target="analyzeRulesModal" style="margin-top:25px;">Analyze Rules</button>
@@ -236,167 +319,25 @@
     </div>
   </div>
   
-  <!-- Metadata Modal -->
-  <div id="metadataModal" class="modal">
-    <div class="modal-content">
-      <h4>Photo Metadata</h4>
-      <textarea id="metadataTextarea" readonly style="width:100%; height:300px;"></textarea>
-    </div>
-    <div class="modal-footer">
-      <a href="#!" id="closeMetadataBtn" class="modal-close waves-effect waves-green btn">Close</a>
-    </div>
-  </div>
+  <!-- Container for modals loaded from textContent.js -->
+  <div id="modalsContainer"></div>
   
-  <!-- Analyze Rules Modal -->
-  <div id="analyzeRulesModal" class="modal">
-    <div class="modal-content">
-      <h4>Photo Analysis Rules</h4>
-      <textarea id="analyzeRulesTextarea" style="width:100%; height:300px;">
-Default Photo Analysis Rules:
-1. Use SEO-friendly descriptive long-tail key phrases without special characters, focus on describing the jewelry and charm pendant, also focus and tailor Key Phrases and description to appropriate client based on the type of jewelry.
-2. Emphasize charm details, focus image description on the type of jewelry and pendant description (what it is, occasion, metal, size, style).
-3. Focus solely on the jewelry details especially the charm description.
-4. Ignore environment, model, and clothing.
-5. Organize into a short paragraph.
-6. Limit the description to 300 characters.
-7. Do not mention earrings unless explicitly identified.
-8. Do not mix necklace and earring descriptions.
-      </textarea>
-    </div>
-    <div class="modal-footer">
-      <a href="#!" id="updateAnalyzeRulesBtn" class="modal-close waves-effect waves-green btn">Update</a>
-    </div>
-  </div>
-  
-  <!-- Title Rules Modal -->
-  <div id="titleRulesModal" class="modal">
-    <div class="modal-content">
-      <h4>Title Rules</h4>
-      <textarea id="titleRulesTextarea" style="width:100%; height:300px;">
-Title Structure & Formatting:
-- Create 5-7 SEO optimized long-tail key phrases (3-5 words each).
-- The title must begin with the product type (e.g., "Angel Earrings", "Daisy Necklace").
-- Ensure grammatical flow and no punctuation.
-- If the product is a charm/pendant, the first word should describe that type.
-- For necklaces, the second word must be "necklace"; for earrings, "Earring".
-
-Word Usage & Frequency:
-- No word may appear more than three times.
-- "earrings" must be plural and follow a noun.
-- "stud" may only appear in approved phrases and must precede "earrings".
-
-Required Words:
-- "Charm" must appear exactly once.
-
-Use of "For":
-- "for" must appear at least twice in a grammatically correct manner.
-
-Title Length & Word Order:
-- Titles must be between 125 and 140 characters.
-- Adjectives must follow nouns.
-- Avoid plurals for "stud" and "animal"; use plurals for "hoops" and "earrings" correctly.
-
-SEO Optimization:
-- The title’s word order should form at least eight natural SEO phrases.
-
-Prohibited Words:
-- Exclude: "accessories", "unique", "simple", "minimalist", "whimsical", "cute", "filled", "gold filled", "silver", "solid gold", "gold vermeil", "rosegold", "14k", "handmade", "quirky", "delicate", "accessory", "for", "dangle", "gold plated", "jewelry", "custom", "celestial", "design", "lightweight".
-      </textarea>
-    </div>
-    <div class="modal-footer">
-      <a href="#!" id="updateTitleRulesBtn" class="modal-close waves-effect waves-green btn">Update</a>
-    </div>
-  </div>
-  
-  <!-- Description Rules Modal -->
-  <div id="descriptionRulesModal" class="modal">
-    <div class="modal-content">
-      <h4>Description Rules</h4>
-      <textarea id="descriptionRulesTextarea" style="width:100%; height:300px;">
-Rules for Description:
-- Merge the key phrases with your output.
-- Modify the description to match the jewelry type.
-- Keep the output paragraph to 80 words.
-
-Option 1:
-"This stunning gold Playing Card Charm is the perfect gift for her, featuring an intricately designed Ace of Spades charm. Ideal for jewelry lovers, this pendant is perfect for personalized pieces."
-
-Option 2:
-"This playful Allosaurus charm is the perfect add-on for charm necklaces or huggie hoops. It adds a whimsical touch to any collection, making it a delightful gift."
-
-Option 3:
-"This charming gold Alligator Necklace is a delightful gift for animal lovers. Featuring a beautifully designed crocodile pendant, it adds a unique touch to any collection."
-      </textarea>
-    </div>
-    <div class="modal-footer">
-      <a href="#!" id="updateDescriptionRulesBtn" class="modal-close waves-effect waves-green btn">Update</a>
-    </div>
-  </div>
-  
-  <!-- Keyword Rules Modal -->
-  <div id="keywordRulesModal" class="modal">
-    <div class="modal-content">
-      <h4>Keyword Rules</h4>
-      <textarea id="keywordRulesTextarea" style="width:100%; height:300px;">
-Using Sales Report and Product List Files:
-- Extrapolate the best tag phrases based on performance.
-- Focus on key terms like "Necklace", "Earrings", "Studs", "Hoops".
-- Emphasize sales success; higher performing listings have more valuable keywords.
-- Generate exactly 13 tag phrases, each ≤ 20 characters.
-- Include "Gift for Her".
-- "Charm" must appear at least once in a multi-word phrase (max 4 times total).
-- "Necklace" appears no more than 3 times, "Gift" no more than 3 times, "Lover" no more than 2 times.
-- Exclude: "Gift for Him", "Statement Piece", "Unique", "Spiritual Gift", "Outdoor Style", "accessories", "simple", "minimalist", "whimsical", "cute", "filled", "gold filled", "silver", "solid gold", "gold vermeil", "rosegold", "14k", "handmade", "quirky", "delicate", "accessory", "for", "dangle", "gold plated", "jewelry", "custom", "celestial", "design", "lightweight", "Fine Chain Necklace", "Small", "Large", "Nice", "Long", "Dark", "Short", "and", "but", "light", "heavy", "Wanderlust", "Theme", "Minimal Chain Gift", "Tiny Pendant Chain", "Charm Look", "Charm Wear", "Chain Necklace", "Small Pendant Chain", "Everyday"
-      </textarea>
-    </div>
-    <div class="modal-footer">
-      <a href="#!" id="updateKeywordRulesBtn" class="modal-close waves-effect waves-green btn">Update</a>
-    </div>
-  </div>
-  
-  <!-- Button Config Modal -->
-  <div id="buttonConfigModal" class="modal">
-    <div class="modal-content">
-      <h4>Configure Button Positions</h4>
-      <div id="buttonConfigContainer"></div>
-      <textarea id="uploadedFilesListModal" class="materialize-textarea" rows="2" placeholder="Uploaded files will appear here"></textarea>
-    </div>
-    <div class="modal-footer">
-      <a href="#!" id="saveButtonPositionsBtn" class="modal-close waves-effect waves-green btn">Save Positions</a>
-    </div>
-  </div>
-  
-  <!-- Crop Modal -->
-  <div id="photoCropModal" class="modal" style="width:650px; height:650px;">
-    <div class="crop-container" style="position: relative; width:100%; height:100%;">
-      <h4 style="text-align:center; margin:0 0 10px 0;">Crop Photo</h4>
-      <div class="img-preview-container" style="width:400px; height:400px; margin:0 auto; overflow:hidden;">
-        <img id="cropImage" src="" alt="Crop Image" style="display:block; margin:auto; max-width:none;">
-      </div>
-      <div style="text-align:center; margin-top:10px;">
-        <button id="saveCropBtn" class="btn waves-effect waves-light" style="margin-right:10px;">Save</button>
-        <button id="cancelCropBtn" class="btn waves-effect waves-light" style="background-color:#f44336;">Cancel</button>
-      </div>
-    </div>
-  </div>
-  
-  <!-- New File Content Modal (to view CSV file content) -->
-  <div id="fileContentModal" class="modal">
-    <div class="modal-content">
-      <h4>File Content</h4>
-      <textarea id="fileContentModalText" style="width:100%; height:300px;" readonly></textarea>
-    </div>
-    <div class="modal-footer">
-      <a href="#!" class="modal-close waves-effect waves-green btn">Close</a>
-    </div>
-  </div>
-  
+  <!-- External Scripts -->
   <script src="https://code.jquery.com/jquery-3.6.0.min.js"></script>
   <script src="https://cdnjs.cloudflare.com/ajax/libs/materialize/1.0.0/js/materialize.min.js"></script>
   <script src="metadataHandler.js"></script>
   <script>
-    // The temporary debug toast notifications have been removed.
+    // Inject modal HTML from textContent.js
+    document.getElementById('modalsContainer').innerHTML =
+      textContent.analyzeRulesModal +
+      textContent.titleRulesModal +
+      textContent.descriptionRulesModal +
+      textContent.keywordRulesModal;
 
+    // Set appended description text from textContent.js
+    window.appendedDescriptionText = textContent.appendedDescriptionText;
+    
+    // Initialize global variables for Etsy integration and file handling.
     window.ETSY_SHOP_URL = "https://www.etsy.com/shop/custombrites";
     window.CLIENT_ID = "k75zdspz4r99txpqdji7i2em";
     window.REDIRECT_URI = "https://delicate-tanuki-616ac0.netlify.app/";
@@ -416,21 +357,8 @@ Using Sales Report and Product List Files:
     window.listingQueue = [];
     window.photoUpdateComplete = false;
     window.infoUpdateComplete = false;
-
-    window.appendedDescriptionText = `
-• We use the Highest Quality materials from the US and Italy.
-• Your purchase will come packaged and ready for gift giving!
-• D E T A I L S: 13.4mm x 8.7mm Flying DragonFly, 14K Gold Filled, 14K Rose Gold Filled, Sterling Silver = Pendant + Chain.
-• P E R S O N A L I Z E: Custom chain length available.
-• S I M I L A R: Tiny Gold Bar Necklace, Initial Disc Necklace, Vertical Gold Bar Bracelet.
-• P A C K A G I N G: Beautiful packaging.
-• E X P E D I T E D: Faster shipping available.
-• E X P L O R E: http://custombrites.etsy.com
-• C H E C K: Follow us on social media.
-• S H O P  • P O L I C I E S: Check our policies.
-`;
-
-    // CSV Drop Listener on the uploadedFilesList textarea
+    
+    // CSV file drop handler
     const uploadedFilesListElem = document.getElementById("uploadedFilesList");
     uploadedFilesListElem.addEventListener("dragover", e => {
       e.preventDefault();
@@ -462,7 +390,8 @@ Using Sales Report and Product List Files:
         }
       }
     });
-
+    
+    // Function to show photo metadata
     function showMetadata(index) {
       const metadata = (window.photoMeta && window.photoMeta[index]) ? window.photoMeta[index] : "No metadata available.";
       document.getElementById("metadataTextarea").value = metadata;
@@ -470,7 +399,8 @@ Using Sales Report and Product List Files:
       let modalInstance = M.Modal.getInstance(modalElem) || M.Modal.init(modalElem);
       modalInstance.open();
     }
-
+    
+    // Data persistence functions
     function persistDataBeforeRedirect() {
       try {
         localStorage.setItem("soldOrdersCSV", JSON.stringify(window.soldOrdersCSV));
@@ -482,7 +412,6 @@ Using Sales Report and Product List Files:
         console.error("Error persisting data before redirect:", err);
       }
     }
-
     function restoreDataAfterRedirect() {
       try {
         let soCSV = localStorage.getItem("soldOrdersCSV");
@@ -527,12 +456,12 @@ Using Sales Report and Product List Files:
         afterBothUpdates();
       }
     }
-
+    
     function updateUploadedFilesList() {
       const uploadedFilesListElem = document.getElementById('uploadedFilesList');
       uploadedFilesListElem.value = window.uploadedCSVFileIds.join("\n");
     }
-
+    
     function loadReservedPhotos() {
       const stored = localStorage.getItem("reservedPhotos");
       window.reservedPhotos = stored ? JSON.parse(stored) : [];
@@ -540,7 +469,7 @@ Using Sales Report and Product List Files:
     function saveReservedPhotos() {
       localStorage.setItem("reservedPhotos", JSON.stringify(window.reservedPhotos));
     }
-
+    
     async function resizeImage(dataURL, width, height) {
       return new Promise((resolve, reject) => {
         const img = new Image();
@@ -556,7 +485,7 @@ Using Sales Report and Product List Files:
         img.src = dataURL;
       });
     }
-
+    
     async function uploadDocFile(file) {
       return new Promise((resolve, reject) => {
         const reader = new FileReader();
@@ -582,12 +511,11 @@ Using Sales Report and Product List Files:
                 contentType = "application/msword";
               }
             }
-            
             if (!base64Content) throw new Error("File content is empty.");
             const payload = { 
               file: base64Content, 
               fileName: newFileName, 
-              purpose: "user_data" 
+              purpose: "assistants" 
             };
             const response = await fetch("/.netlify/functions/uploadFile", {
               method: "POST",
@@ -605,13 +533,11 @@ Using Sales Report and Product List Files:
             reject(err); 
           }
         };
-        reader.onerror = (err) => {
-          reject(err);
-        };
+        reader.onerror = (err) => { reject(err); };
         reader.readAsDataURL(file);
       });
     }
-
+    
     async function updateVectorStore() {
       const fileIds = window.uploadedCSVFileIds || [];
       if (fileIds.length === 0) {
@@ -643,7 +569,7 @@ Using Sales Report and Product List Files:
         console.error(err);
       }
     }
-
+    
     const dropZone = document.getElementById("dropZone");
     dropZone.addEventListener("dragover", e => {
       e.preventDefault();
@@ -683,7 +609,7 @@ Using Sales Report and Product List Files:
       updateStaticPreviewGrid();
       updateUploadedFilesList();
     });
-
+    
     function updateStaticPreviewGrid() {
       for (let i = 0; i < 10; i++) {
         let cell = document.getElementById("previewCell" + i);
@@ -697,11 +623,9 @@ Using Sales Report and Product List Files:
             previewBox.setAttribute("data-id", window.photoIds[i] || "");
             previewBox.setAttribute("draggable", "true");
             previewBox.addEventListener("dragstart", e => { window.draggedIndex = i; });
-            
             let img = document.createElement("img");
             img.src = window.previewImages[i];
             previewBox.appendChild(img);
-            
             let removeBtn = document.createElement("div");
             removeBtn.className = "remove-btn";
             removeBtn.textContent = "X";
@@ -714,12 +638,10 @@ Using Sales Report and Product List Files:
               updateStaticPreviewGrid();
             });
             previewBox.appendChild(removeBtn);
-            
             let numOverlay = document.createElement("div");
             numOverlay.className = "number-overlay";
             numOverlay.textContent = (i + 1).toString();
             previewBox.appendChild(numOverlay);
-            
             let cropBtn = document.createElement("button");
             cropBtn.textContent = "Crop";
             cropBtn.style.position = "absolute";
@@ -736,7 +658,6 @@ Using Sales Report and Product List Files:
               openCropModal(i);
             });
             previewBox.appendChild(cropBtn);
-            
             if (window.photoMeta[i] && window.photoMeta[i].trim() !== "") {
               let checkmark = document.createElement("span");
               checkmark.innerHTML = "&#10003;";
@@ -747,10 +668,8 @@ Using Sales Report and Product List Files:
               checkmark.style.left = "5px";
               previewBox.appendChild(checkmark);
             }
-            
             previewBox.addEventListener("click", () => { showMetadata(i); });
             cell.appendChild(previewBox);
-            
             let metadataStatus = document.createElement("div");
             metadataStatus.className = "metadata-status";
             metadataStatus.id = "metadataStatus" + i;
@@ -804,7 +723,7 @@ Using Sales Report and Product List Files:
         }
       }
     }
-
+    
     function initializeCellDragAndDrop() {
       for (let i = 0; i < 10; i++) {
         let cell = document.getElementById("previewCell" + i);
@@ -890,7 +809,7 @@ Using Sales Report and Product List Files:
         }
       }
     }
-
+    
     function generateRandomString(length) {
       const possible = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789';
       let text = '';
@@ -909,7 +828,7 @@ Using Sales Report and Product List Files:
       let digest = await crypto.subtle.digest("SHA-256", data);
       return base64urlEncode(digest);
     }
-
+    
     document.getElementById("connectEtsyBtn").addEventListener("click", async () => {
       persistDataBeforeRedirect();
       let state = "randomState123";
@@ -925,7 +844,7 @@ Using Sales Report and Product List Files:
         `&code_challenge_method=S256`;
       window.location.href = etsyAuthUrl;
     });
-
+    
     document.addEventListener("DOMContentLoaded", async () => {
       loadButtonPositions();
       loadReservedPhotos();
@@ -945,7 +864,7 @@ Using Sales Report and Product List Files:
       });
       await listVectorStoreFiles(); 
     });
-
+    
     async function exchangeCodeForToken(code) {
       let codeVerifier = localStorage.getItem("etsy_code_verifier");
       if (!codeVerifier) {
@@ -966,7 +885,7 @@ Using Sales Report and Product List Files:
         M.toast({ html: "Error exchanging code for token" });
       }
     }
-
+    
     document.getElementById("uploadToEtsyBtn").addEventListener("click", async () => {
       let listingInput = document.getElementById("shopListings").value.trim();
       if (!listingInput) {
@@ -1008,7 +927,7 @@ Using Sales Report and Product List Files:
         M.toast({ html: "Exception: " + e.message });
       }
     });
-
+    
     document.getElementById("photoUploadNewBtn").addEventListener("click", async () => {
       let listingInput = document.getElementById("shopListings").value.trim();
       if (!listingInput) {
@@ -1032,7 +951,7 @@ Using Sales Report and Product List Files:
         btn.disabled = false;
       }
     });
-
+    
     function dataURLtoBlob(dataurl) {
       const arr = dataurl.split(',');
       const mime = arr[0].match(/:(.*?);/)[1];
@@ -1042,14 +961,14 @@ Using Sales Report and Product List Files:
       while (n--) { u8arr[n] = bstr.charCodeAt(n); }
       return new Blob([u8arr], { type: mime });
     }
-
+    
     document.getElementById("listingDescInput").addEventListener("keydown", async (e) => {
       if (e.key === "Enter" && !e.shiftKey) {
         e.preventDefault();
         await generateTagPhrases();
       }
     });
-
+    
     document.getElementById("generateBtn").addEventListener("click", async () => {
       await Promise.all([generateTitleOnly(), generateDescriptionOnly()]);
     });
@@ -1093,7 +1012,7 @@ Important: Return ONLY the title as plain text.`;
         document.getElementById("listingTitle").value = "Error: " + error;
       }
     }
-
+    
     async function generateDescriptionOnly() {
       let etsyLink = window.ETSY_SHOP_URL;
       let keyPhrases = document.getElementById("searchKeyPhrases").value.trim();
@@ -1132,7 +1051,7 @@ Important: Return ONLY the description as plain text.`;
         document.getElementById("listingDescription").value = "Error: " + error;
       }
     }
-
+    
     async function callOpenAI(payload) {
       let response = await fetch("/.netlify/functions/openaiProxy", {
         method: "POST",
@@ -1146,7 +1065,7 @@ Important: Return ONLY the description as plain text.`;
       let jsonData = await response.json();
       return jsonData;
     }
-
+    
     function updateTitleCount(text) {
       document.getElementById("titleCount").textContent = "Count: " + text.length;
     }
@@ -1191,7 +1110,7 @@ Important: Return ONLY the description as plain text.`;
       }
     }
     document.getElementById("clearKeyPhrasesBtn").addEventListener("click", clearStoreCSVFiles);
-
+    
     async function listVectorStoreFiles() {
       let storeId = localStorage.getItem("vectorStoreId");
       if (!storeId) {
@@ -1228,264 +1147,7 @@ Important: Return ONLY the description as plain text.`;
         M.toast({ html: "Error listing store files: " + err.message });
       }
     }
-
-    document.getElementById("configureButtonsBtn").addEventListener("click", () => {
-      let configContainer = document.getElementById("buttonConfigContainer");
-      configContainer.innerHTML = "";
-      const selectors = [
-        "#configureButtonsBtn",
-        "#listingDescContainer",
-        "#uploadedFilesList",
-        "#dropZone",
-        "#previewGridContainer",
-        "#container13",
-        "#uploadToEtsyBtn",
-        "#etsyShopListingsContainer",
-        "#userProvidedKeyPhrasesContainer",
-        "#etsyListingTitleContainer",
-        "#etsyListingDescriptionContainer",
-        "#regenTitleBtn",
-        "#copyTitleBtn",
-        "#regenDescriptionBtn",
-        "#copyDescriptionBtn",
-        "#photoUploadNewBtn",
-        "#generateBtn",
-        "#connectEtsyBtn",
-        "#analyzeMetadataBtn",
-        "#showAnalyzeRulesBtn"
-      ].join(", ");
-      let elements = document.querySelectorAll(selectors);
-      let table = document.createElement("table");
-      table.className = "striped";
-      let thead = document.createElement("thead");
-      thead.innerHTML = "<tr><th>Element ID</th><th>Top (px)</th><th>Left (px)</th></tr>";
-      table.appendChild(thead);
-      let tbody = document.createElement("tbody");
-      elements.forEach(el => {
-        let id = el.id;
-        let computedStyle = window.getComputedStyle(el);
-        let currentTop = el.style.top || computedStyle.top || "0";
-        let currentLeft = el.style.left || computedStyle.left || "0";
-        let tr = document.createElement("tr");
-        tr.innerHTML = `<td>${id}</td>
-          <td><input type="number" id="${id}_top" value="${parseInt(currentTop)||0}"></td>
-          <td><input type="number" id="${id}_left" value="${parseInt(currentLeft)||0}"></td>`;
-        let topInput = tr.querySelector(`#${id}_top`);
-        let leftInput = tr.querySelector(`#${id}_left`);
-        topInput.addEventListener("input", () => { el.style.top = topInput.value + "px"; });
-        leftInput.addEventListener("input", () => { el.style.left = leftInput.value + "px"; });
-        tbody.appendChild(tr);
-      });
-      table.appendChild(tbody);
-      configContainer.appendChild(table);
-      let modalElem = document.getElementById("buttonConfigModal");
-      let modalInstance = M.Modal.getInstance(modalElem) || M.Modal.init(modalElem, { preventScrolling: false });
-      modalInstance.open();
-    });
-
-    document.getElementById("saveButtonPositionsBtn").addEventListener("click", () => {
-      const selectors = [
-        "#configureButtonsBtn",
-        "#listingDescContainer",
-        "#uploadedFilesList",
-        "#dropZone",
-        "#previewGridContainer",
-        "#container13",
-        "#uploadToEtsyBtn",
-        "#etsyShopListingsContainer",
-        "#userProvidedKeyPhrasesContainer",
-        "#etsyListingTitleContainer",
-        "#etsyListingDescriptionContainer",
-        "#regenTitleBtn",
-        "#copyTitleBtn",
-        "#regenDescriptionBtn",
-        "#copyDescriptionBtn",
-        "#photoUploadNewBtn",
-        "#generateBtn",
-        "#connectEtsyBtn",
-        "#analyzeMetadataBtn",
-        "#showAnalyzeRulesBtn"
-      ].join(", ");
-      let elements = document.querySelectorAll(selectors);
-      let positions = {};
-      elements.forEach(el => {
-        positions[el.id] = { top: el.style.top || "0px", left: el.style.left || "0px" };
-      });
-      localStorage.setItem("buttonPositions", JSON.stringify(positions));
-      M.toast({ html: "Button positions saved." });
-    });
-
-    function loadButtonPositions() {
-      let stored = localStorage.getItem("buttonPositions");
-      if (stored) {
-        let positions = JSON.parse(stored);
-        for (let id in positions) {
-          let el = document.getElementById(id);
-          if (el) { el.style.top = positions[id].top; el.style.left = positions[id].left; }
-        }
-      }
-    }
-
-    window.addEventListener("load", () => {
-      let container13 = document.getElementById("container13");
-      container13.style.height = (container13.offsetHeight * 2.5) + "px";
-    });
-
-    function openCropModal(index) {
-      window.currentCropIndex = index;
-      let cropModal = document.getElementById("photoCropModal");
-      let cropImage = document.getElementById("cropImage");
-      cropImage.src = window.previewImages[index];
-      cropImage.onload = function() {
-        window.cropper = new Cropper(cropImage, {
-          viewMode: 1,
-          autoCropArea: 1,
-          movable: true,
-          zoomable: true,
-          scalable: false,
-          rotatable: false,
-          responsive: true,
-          background: false,
-          modal: true,
-          guides: true,
-          center: true,
-          highlight: true,
-          cropBoxMovable: true,
-          cropBoxResizable: true,
-          dragMode: 'move',
-          ready: function() {
-            let containerData = window.cropper.getContainerData();
-            let cropBoxData = window.cropper.getCropBoxData();
-            window.cropper.setCropBoxData({
-              left: (containerData.width - cropBoxData.width) / 2,
-              top: (containerData.height - cropBoxData.height) / 2
-            });
-          }
-        });
-      };
-      let instance = M.Modal.getInstance(cropModal) || M.Modal.init(cropModal, {});
-      instance.open();
-    }
-
-    document.getElementById("saveCropBtn").addEventListener("click", () => {
-      if (window.cropper && window.currentCropIndex !== null) {
-        let croppedCanvas = window.cropper.getCroppedCanvas({ width: 3000, height: 3000 });
-        window.previewImages[window.currentCropIndex] = croppedCanvas.toDataURL("image/jpeg", 0.85);
-        updateStaticPreviewGrid();
-        window.cropper.destroy();
-        window.cropper = null;
-        window.currentCropIndex = null;
-        M.Modal.getInstance(document.getElementById("photoCropModal")).close();
-      }
-    });
-
-    document.getElementById("cancelCropBtn").addEventListener("click", () => {
-      if (window.cropper) {
-        window.cropper.destroy();
-        window.cropper = null;
-      }
-      window.currentCropIndex = null;
-      M.Modal.getInstance(document.getElementById("photoCropModal")).close();
-    });
-
-    async function uploadPhotos() {
-      let listingInput = document.getElementById("shopListings").value.trim();
-      if (!listingInput) {
-        M.toast({ html: "Please provide a listing URL or ID in 'Etsy Shop Listings'." });
-        return;
-      }
-      if (!window.previewImages.length) {
-        M.toast({ html: "No images to upload. Please drag and drop images first." });
-        return;
-      }
-      let listingId = /^\d+$/.test(listingInput)
-        ? listingInput
-        : (listingInput.match(/\/listing\/(\d+)/) || [])[1];
-      if (!listingId) {
-        M.toast({ html: "Invalid listing URL or ID." });
-        return;
-      }
-      for (let i = 0; i < window.previewImages.length; i++) {
-        let dataURL = window.previewImages[i];
-        let altText = window.photoMeta[i] || "";
-        let rankNumber = i + 1;
-        try {
-          let res = await fetch(dataURL);
-          let blob = await res.blob();
-          let formData = new FormData();
-          formData.append("listingId", listingId);
-          formData.append("token", window.accessToken);
-          formData.append("fileName", window.photoNames[i] || `uploaded_photo_${i}.jpg`);
-          formData.append("rank", rankNumber);
-          formData.append("alt_text", altText);
-          formData.append("file", blob, window.photoNames[i] || `uploaded_photo_${i}.jpg`);
-          let uploadUrl = `/.netlify/functions/imageUpload`;
-          let response = await fetch(uploadUrl, { method: "POST", body: formData });
-          if (!response.ok) {
-            M.toast({ html: `Error uploading photo #${rankNumber}: ` + response.status });
-          } else {
-            M.toast({ html: `Photo #${rankNumber} uploaded with alt_text!` });
-          }
-        } catch (e) {
-          console.error(e);
-          M.toast({ html: `Exception uploading photo #${rankNumber}: ${e.message}` });
-        }
-      }
-    }
-    window.uploadPhotos = uploadPhotos;
-
-    async function uploadReservedPhotos() {
-      let listingInput = document.getElementById("shopListings").value.trim();
-      if (!listingInput) {
-        M.toast({ html: "Please provide a listing URL or ID in 'Etsy Shop Listings'." });
-        return;
-      }
-      if (!window.reservedPhotos.length) {
-        M.toast({ html: "No reserved photos to upload." });
-        return;
-      }
-      let listingId = /^\d+$/.test(listingInput)
-        ? listingInput
-        : (listingInput.match(/\/listing\/(\d+)/) || [])[1];
-      if (!listingId) {
-        M.toast({ html: "Invalid listing URL or ID." });
-        return;
-      }
-      for (let i = 0; i < window.reservedPhotos.length; i++) {
-        let dataURL = window.reservedPhotos[i].src;
-        let altText = window.reservedPhotos[i].meta || "";
-        let rankNumber = i + 8;
-        try {
-          let res = await fetch(dataURL);
-          let blob = await res.blob();
-          let formData = new FormData();
-          formData.append("listingId", listingId);
-          formData.append("token", window.accessToken);
-          formData.append("fileName", window.reservedPhotos[i].name || `reserved_photo_${i}.jpg`);
-          formData.append("rank", rankNumber);
-          formData.append("alt_text", altText);
-          formData.append("file", blob, window.reservedPhotos[i].name || `reserved_photo_${i}.jpg`);
-          let uploadUrl = `/.netlify/functions/imageUpload`;
-          let response = await fetch(uploadUrl, { method: "POST", body: formData });
-          if (!response.ok) {
-            M.toast({ html: `Error uploading reserved photo #${rankNumber}: ` + response.status });
-          } else {
-            M.toast({ html: `Reserved photo #${rankNumber} uploaded successfully!` });
-          }
-        } catch (e) {
-          console.error(e);
-          M.toast({ html: `Exception uploading reserved photo #${rankNumber}: ${e.message}` });
-        }
-      }
-    }
-
-    document.getElementById("analyzeMetadataBtn").addEventListener("click", async () => {
-      const count = Math.min(7, window.previewImages.length);
-      for (let i = 0; i < count; i++) {
-        await metadataHandler.analyzeAndEmbedMetadata(i);
-      }
-    });
-
+    
     async function generateTagPhrases() {
       let question = document.getElementById("listingDescInput").value.trim();
       if (!question) {
@@ -1511,7 +1173,7 @@ Important: Return ONLY the description as plain text.`;
         M.toast({ html: "Error generating valid tag phrases: " + err.message });
       }
     }
-
+    
     async function getInitialPhrases(question, keywordRules) {
       let store_id = localStorage.getItem("vectorStoreId");
       let retrievedContext = "";
@@ -1569,7 +1231,7 @@ Generate exactly 13 SEO key phrases (each ≤ 20 characters). Return as plain te
         .filter(p => p);
       return phrasesArray;
     }
-
+    
     async function regenerateSinglePhrase(question, keywordRules, currentValid, maxAttempts = 5) {
       for (let attempt = 1; attempt <= maxAttempts; attempt++) {
         let store_id = localStorage.getItem("vectorStoreId");
@@ -1629,6 +1291,98 @@ Return only one phrase in plain text.
       }
       throw new Error("Failed to generate a single phrase under 20 chars after multiple attempts.");
     }
+    
+    async function uploadPhotos() {
+      let listingInput = document.getElementById("shopListings").value.trim();
+      if (!listingInput) {
+        M.toast({ html: "Please provide a listing URL or ID in 'Etsy Shop Listings'." });
+        return;
+      }
+      if (!window.previewImages.length) {
+        M.toast({ html: "No images to upload. Please drag and drop images first." });
+        return;
+      }
+      let listingId = /^\d+$/.test(listingInput)
+        ? listingInput
+        : (listingInput.match(/\/listing\/(\d+)/) || [])[1];
+      if (!listingId) {
+        M.toast({ html: "Invalid listing URL or ID." });
+        return;
+      }
+      for (let i = 0; i < window.previewImages.length; i++) {
+        let dataURL = window.previewImages[i];
+        let altText = window.photoMeta[i] || "";
+        let rankNumber = i + 1;
+        try {
+          let res = await fetch(dataURL);
+          let blob = await res.blob();
+          let formData = new FormData();
+          formData.append("listingId", listingId);
+          formData.append("token", window.accessToken);
+          formData.append("fileName", window.photoNames[i] || `uploaded_photo_${i}.jpg`);
+          formData.append("rank", rankNumber);
+          formData.append("alt_text", altText);
+          formData.append("file", blob, window.photoNames[i] || `uploaded_photo_${i}.jpg`);
+          let uploadUrl = `/.netlify/functions/imageUpload`;
+          let response = await fetch(uploadUrl, { method: "POST", body: formData });
+          if (!response.ok) {
+            M.toast({ html: `Error uploading photo #${rankNumber}: ` + response.status });
+          } else {
+            M.toast({ html: `Photo #${rankNumber} uploaded with alt_text!` });
+          }
+        } catch (e) {
+          console.error(e);
+          M.toast({ html: `Exception uploading photo #${rankNumber}: ${e.message}` });
+        }
+      }
+    }
+    window.uploadPhotos = uploadPhotos;
+    
+    async function uploadReservedPhotos() {
+      let listingInput = document.getElementById("shopListings").value.trim();
+      if (!listingInput) {
+        M.toast({ html: "Please provide a listing URL or ID in 'Etsy Shop Listings'." });
+        return;
+      }
+      if (!window.reservedPhotos.length) {
+        M.toast({ html: "No reserved photos to upload." });
+        return;
+      }
+      let listingId = /^\d+$/.test(listingInput)
+        ? listingInput
+        : (listingInput.match(/\/listing\/(\d+)/) || [])[1];
+      if (!listingId) {
+        M.toast({ html: "Invalid listing URL or ID." });
+        return;
+      }
+      for (let i = 0; i < window.reservedPhotos.length; i++) {
+        let dataURL = window.reservedPhotos[i].src;
+        let altText = window.reservedPhotos[i].meta || "";
+        let rankNumber = i + 8;
+        try {
+          let res = await fetch(dataURL);
+          let blob = await res.blob();
+          let formData = new FormData();
+          formData.append("listingId", listingId);
+          formData.append("token", window.accessToken);
+          formData.append("fileName", window.reservedPhotos[i].name || `reserved_photo_${i}.jpg`);
+          formData.append("rank", rankNumber);
+          formData.append("alt_text", altText);
+          formData.append("file", blob, window.reservedPhotos[i].name || `reserved_photo_${i}.jpg`);
+          let uploadUrl = `/.netlify/functions/imageUpload`;
+          let response = await fetch(uploadUrl, { method: "POST", body: formData });
+          if (!response.ok) {
+            M.toast({ html: `Error uploading reserved photo #${rankNumber}: ` + response.status });
+          } else {
+            M.toast({ html: `Reserved photo #${rankNumber} uploaded successfully!` });
+          }
+        } catch (e) {
+          console.error(e);
+          M.toast({ html: `Exception uploading reserved photo #${rankNumber}: ${e.message}` });
+        }
+      }
+    }
+    
   </script>
 </body>
 </html>
