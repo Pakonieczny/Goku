@@ -597,7 +597,7 @@ Using Sales Report and Product List Files:
             const payload = { 
               file: base64Content, 
               fileName: newFileName, 
-              purpose: "vector_store" 
+              purpose: "user_data" 
             };
             const response = await fetch("/.netlify/functions/uploadFile", {
               method: "POST",
