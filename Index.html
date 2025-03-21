@@ -643,11 +643,11 @@ Using Sales Report and Product List Files:
             }
             
             if (!base64Content) throw new Error("File content is empty.");
-            // Using purpose "assistant" to allow downloading content if needed
+            // Using purpose "assistants" to allow downloading content if needed
             const payload = { 
               file: base64Content, 
               fileName: newFileName, 
-              purpose: "assistant" 
+              purpose: "assistants" 
             };
             const response = await fetch("/.netlify/functions/uploadFile", {
               method: "POST",
