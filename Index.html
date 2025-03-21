@@ -614,20 +614,16 @@ async function showFileContentModal(fileId) {
             let newFileName = file.name;
             let contentType = "text/plain";
             if (/\.csv$/i.test(file.name)) {
-              const csvText = dataURL.split(",")[1] ? atob(dataURL.split(",")[1]) : "";
-              const parsed = Papa.parse(csvText, { header: true });
-              let summary = "";
-              if (parsed.data && parsed.data.length > 0) {
-                const header = Object.keys(parsed.data[0]).join(", ");
-                summary += header + "\n";
-                const rows = parsed.data.slice(0, 10);
-                rows.forEach(row => {
-                  summary += Object.values(row).join(", ") + "\n";
-                });
-              }
-              base64Content = btoa(summary);
+              // Get the entire CSV content from the data URL
+              const csvBase64 = dataURL.split(",")[1];
+              const csvText = csvBase64 ? atob(csvBase64) : "";
+  
+              // Re-encode the full CSV text as base64 for the .txt file
+                base64Content = btoa(csvText);
+              // Change the file extension from .csv to .txt
               newFileName = file.name.replace(/\.csv$/i, ".txt");
-            } else {
+            }
+             else {
               base64Content = dataURL.split(",")[1];
               if (file.name.toLowerCase().endsWith(".docx")) {
                 contentType = "application/vnd.openxmlformats-officedocument.wordprocessingml.document";
