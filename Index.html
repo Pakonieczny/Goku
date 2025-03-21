@@ -593,6 +593,22 @@ Using Sales Report and Product List Files:
 • S H O P  • P O L I C I E S: Check our policies.
 `;
 
+    // Function to restore data after redirect.
+    function restoreDataAfterRedirect() {
+      try {
+        let soCSV = localStorage.getItem("soldOrdersCSV");
+        if (soCSV) { window.soldOrdersCSV = JSON.parse(soCSV); }
+        let liCSV = localStorage.getItem("listingsCSV");
+        if (liCSV) { window.listingsCSV = JSON.parse(liCSV); }
+        let storedShopListingsText = localStorage.getItem("shopListingsText");
+        if (storedShopListingsText) { document.getElementById("shopListings").value = storedShopListingsText; }
+        let storedQueue = localStorage.getItem("listingQueue");
+        if (storedQueue) { window.listingQueue = JSON.parse(storedQueue); }
+      } catch (err) {
+        console.error("Error restoring data after redirect:", err);
+      }
+    }
+
     // Load button positions. Use localStorage if available; if not, load defaults from uiPositions.js.
     function loadButtonPositions() {
       let stored = localStorage.getItem("buttonPositions");
@@ -939,6 +955,7 @@ Return only one phrase in plain text.
     function updateTitleCount(text) {
       document.getElementById("titleCount").textContent = "Count: " + text.length;
     }
+
     document.getElementById("copyTitleBtn").addEventListener("click", () => {
       let text = document.getElementById("listingTitle").value;
       navigator.clipboard.writeText(text).catch(err => console.error("Copy error:", err));
@@ -947,7 +964,7 @@ Return only one phrase in plain text.
       let text = document.getElementById("listingDescription").value;
       navigator.clipboard.writeText(text).catch(err => console.error("Copy error:", err));
     });
-    
+
     async function clearStoreCSVFiles() {
       let storeId = localStorage.getItem("vectorStoreId");
       if (!storeId) {
@@ -973,7 +990,7 @@ Return only one phrase in plain text.
         window.uploadedCSVFileIds = [];
         localStorage.removeItem("uploadedCSVFileIds");
         document.getElementById("uploadedFilesList").value = "";
-        await listVectorStoreFiles(); 
+        await listVectorStoreFiles();
       } catch (err) {
         console.error(err);
         M.toast({ html: "clearStoreCSVFiles error: " + err.message });
@@ -1021,6 +1038,9 @@ Return only one phrase in plain text.
     document.getElementById("configureButtonsBtn").addEventListener("click", () => {
       let configContainer = document.getElementById("buttonConfigContainer");
       configContainer.innerHTML = "";
+      // First, read saved positions from localStorage.
+      let savedPositions = JSON.parse(localStorage.getItem("buttonPositions") || "{}");
+      // Define the selectors we want to display.
       const selectors = [
         "#configureButtonsBtn",
         "#listingDescContainer",
@@ -1052,9 +1072,10 @@ Return only one phrase in plain text.
       let tbody = document.createElement("tbody");
       elements.forEach(el => {
         let id = el.id;
-        let computedStyle = window.getComputedStyle(el);
-        let currentTop = el.style.top || computedStyle.top || "0";
-        let currentLeft = el.style.left || computedStyle.left || "0";
+        // Use the saved position if available; otherwise use computed style.
+        let pos = savedPositions[id] || {};
+        let currentTop = pos.top || (el.style.top || window.getComputedStyle(el).top || "0");
+        let currentLeft = pos.left || (el.style.left || window.getComputedStyle(el).left || "0");
         let tr = document.createElement("tr");
         tr.innerHTML = `<td>${id}</td>
           <td><input type="number" id="${id}_top" value="${parseInt(currentTop)||0}"></td>
@@ -1506,7 +1527,7 @@ Return only one phrase in plain text.
         window.listingQueue = rawInput.split(",").map(p => p.trim()).filter(p => /^\d{10}$/.test(p));
         loadNextListingInQueue();
       });
-      await listVectorStoreFiles(); 
+      await listVectorStoreFiles();
     });
 
     async function exchangeCodeForToken(code) {
@@ -1544,7 +1565,7 @@ Return only one phrase in plain text.
         return;
       }
       let userDescription = document.getElementById("listingDescription").value || "";
-      let finalDescription = userDescription + window.appendedDescriptionText; 
+      let finalDescription = userDescription + window.appendedDescriptionText;
       let payload = {
         title: document.getElementById("listingTitle").value,
         description: finalDescription,
