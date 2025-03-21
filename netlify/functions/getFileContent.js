@@ -11,7 +11,7 @@ exports.handler = async function(event) {
       };
     }
     
-    const response = await fetch(`https://api.openai.com/v1/files/${fileId}`, {
+    const response = await fetch(`https://api.openai.com/v1/files/${fileId}/content`, {
       method: "GET",
       headers: {
         "Authorization": `Bearer ${process.env.OPENAI_API_KEY}`,
