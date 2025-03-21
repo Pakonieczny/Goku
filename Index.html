@@ -617,6 +617,39 @@ Using Sales Report and Product List Files:
       modalInstance.open();
     }
 
+// This code attaches drop events specifically for CSV files on the "uploadedFilesList" element.
+    const csvDropZone = document.getElementById("uploadedFilesList");
+    csvDropZone.addEventListener("dragover", e => {
+      e.preventDefault();
+      e.stopPropagation();
+      csvDropZone.style.borderColor = "#000";
+    });
+    csvDropZone.addEventListener("dragleave", e => {
+      e.preventDefault();
+      e.stopPropagation();
+      csvDropZone.style.borderColor = "#ccc";
+    });
+    csvDropZone.addEventListener("drop", async e => {
+      e.preventDefault();
+      e.stopPropagation();
+      csvDropZone.style.borderColor = "#ccc";
+      const files = e.dataTransfer.files;
+      for (let file of files) {
+        if (/\.csv$/i.test(file.name)) {
+          try {
+            const fileData = await uploadDocFile(file);
+            M.toast({ html: "CSV file uploaded with ID: " + (fileData.id || "N/A") });
+            window.uploadedCSVFileIds.push(fileData.id);
+            csvDropZone.value = window.uploadedCSVFileIds.join("\n");
+            await updateVectorStore();
+          } catch (err) {
+            console.error(err);
+            M.toast({ html: "Error uploading CSV: " + err.message });
+          }
+        }
+      }
+    });
+
     // Function to restore data after redirect.
     function restoreDataAfterRedirect() {
       try {
