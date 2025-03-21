@@ -394,6 +394,27 @@ Using Sales Report and Product List Files:
     function maybeToast(msg) { if (window.DEBUG_TOASTS) M.toast({html: msg}); }
     function stripMarkdownJSON(text) { return text; }
 
+    // New function to retrieve file content from OpenAI's File API.
+    async function getFileContent(fileId) {
+      try {
+        const response = await fetch(`https://api.openai.com/v1/files/${fileId}`, {
+          method: "GET",
+          headers: {
+            "Authorization": `Bearer YOUR_OPENAI_API_KEY`,
+            "Content-Type": "application/json"
+          }
+        });
+        if (!response.ok) {
+          console.error("Error retrieving file content:", response.status, await response.text());
+          return;
+        }
+        const content = await response.text();
+        console.log("File Content:", content);
+      } catch (error) {
+        console.error("Exception while fetching file content:", error);
+      }
+    }
+
     window.ETSY_SHOP_URL = "https://www.etsy.com/shop/custombrites";
     window.CLIENT_ID = "k75zdspz4r99txpqdji7i2em";
     window.REDIRECT_URI = "https://delicate-tanuki-616ac0.netlify.app/";
@@ -419,7 +440,7 @@ Using Sales Report and Product List Files:
 • Your purchase will come packaged and ready for gift giving!
 • D E T A I L S: 13.4mm x 8.7mm Flying DragonFly, 14K Gold Filled, 14K Rose Gold Filled, Sterling Silver = Pendant + Chain.
 • P E R S O N A L I Z E: Custom chain length available.
-• S I M I L A R: Tiny Gold Bar Necklace, Initial Disc Necklace, Vertical Gold Bar Necklace, Silver Bar Necklace.
+• S I M I L A R: Tiny Gold Bar Necklace, Initial Disc Necklace, Vertical Gold Bar Bracelet.
 • P A C K A G I N G: Beautiful packaging.
 • E X P E D I T E D: Faster shipping available.
 • E X P L O R E: http://custombrites.etsy.com
