@@ -1,3 +1,4 @@
+// netlify/functions/uploadFile.js
 const fetch = require("node-fetch");
 const FormData = require("form-data");
 
@@ -24,6 +25,8 @@ exports.handler = async function(event, context) {
       contentType = "application/vnd.openxmlformats-officedocument.wordprocessingml.document";
     } else if (fileName.toLowerCase().endsWith(".doc")) {
       contentType = "application/msword";
+    } else if (fileName.toLowerCase().endsWith(".txt")) {
+      contentType = "text/plain";
     }
     
     // Prepare form-data.
