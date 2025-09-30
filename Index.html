@@ -1763,7 +1763,9 @@ Return only one phrase in plain text.
               body: JSON.stringify(payload)
             });
             if (!response.ok) {
-              throw new Error("Upload failed with status " + response.status);
+              let serverText = "";
+              try { serverText = await response.text(); } catch {}
+              throw new Error(`Upload failed ${response.status}${serverText ? " — " + serverText : ""}`);
             }
             const fileData = await response.json();
             fileData.name = fileData.name || newFileName;
