@@ -337,7 +337,7 @@
       z-index: 2500;
     }
 
-    /* Neutralize wrapper layouts so children don't fight absolute placement */
+    /* keep the neutralize rule, but without .listing-desc-container */
     .neutralize-wrapper,
     #descriptionAndFileUploadContainer,
     #topButtons,
@@ -345,13 +345,15 @@
     #etsyShopListingsContainer,
     #previewGridContainer,
     #previewGridStatic,
-    .listing-desc-container,
     .flex-container,
     .title-container,
     .description-container {
       position: static !important;
       display: contents !important;
     }
+
+    /* make the movable container a real box again */
+    #listingDescContainer { display: block !important; }
 
   </style>
 </head>
