@@ -1,20 +1,21 @@
 // netlify/functions/uploadFile.js
-// End-to-end upload via OpenAI Uploads API:
-// 1) Create upload (/v1/uploads)
-// 2) Add one or more parts (/v1/uploads/{id}/parts)
-// 3) Complete upload (/v1/uploads/{id}/complete) -> returns a usable File
+// Uploads API (robust):
+// 1) POST /v1/uploads                → create Upload
+// 2) POST /v1/uploads/{id}/parts     → add binary Part(s) (<=64MB each)
+// 3) POST /v1/uploads/{id}/complete  → returns a File object
 //
-// Notes:
-// - Each Part <= 64 MB; total upload <= ~8 GB (per OpenAI spec).
-// - We send base64-encoded chunks in a multipart field named "data" (per API examples).
-// - Returns the created File plus helpful request IDs for tracing.
-// - Honors optional org/project headers if you set env vars: OPENAI_ORG_ID / OPENAI_PROJECT_ID.
+// Tweaks vs prior version:
+// - Send binary for each Part (field: "data", Content-Type: application/octet-stream)
+//   → avoids proxy 400s seen with huge base64 text fields.
+// - Fallback: if a Part returns 400/415, retry once with base64 field.
+// - Smaller default chunk size (5 MiB) for friendlier proxies.
+// - Returns upstream x-request-id(s) for each step.
 
 const fetch = require("node-fetch");
 const FormData = require("form-data");
 
-// Tune chunk size well below the 64MB per-part cap.
-const MAX_PART_BYTES = 20 * 1024 * 1024; // 20 MiB
+// <= 64 MiB per OpenAI part; we choose smaller to be proxy-friendly.
+const MAX_PART_BYTES = 5 * 1024 * 1024; // 5 MiB
 
 exports.handler = async function (event) {
   try {
@@ -37,96 +38,73 @@ exports.handler = async function (event) {
       return json(400, { error: "No file content provided in request body" });
     }
 
-    // Support both raw base64 and data URLs ("data:...;base64,xxxx")
+    // Support data URLs and raw base64
     const base64 = String(file).includes(",") ? String(file).split(",").pop() : String(file);
     const buffer = Buffer.from(base64, "base64");
     if (!buffer.length) return json(400, { error: "Decoded file is empty" });
 
-    const resolvedName = fileName || "upload.csv";
-    const resolvedPurpose = purpose || "assistants"; // modern default for retrieval / file-search
-    const contentType = detectMime(resolvedName);
-
-    // Netlify Functions request-body practical ceiling ~10MB — fail fast to be kind to users.
+    // Netlify JSON body practical ceiling ~10MB; fail fast.
     if (buffer.length > Math.floor(9.5 * 1024 * 1024)) {
       return json(413, {
         error: `File too large for Netlify proxy (~10MB body). Size=${(buffer.length / 1024 / 1024).toFixed(2)} MB`,
       });
     }
 
+    const resolvedName = fileName || "upload.csv";
+    const resolvedPurpose = purpose || "assistants";
+    const contentType = detectMime(resolvedName);
+
     // ---------- 1) CREATE UPLOAD ----------
-    const createPayload = {
-      purpose: resolvedPurpose,
-      filename: resolvedName,
-      bytes: buffer.length,
-      mime_type: contentType,
-    };
-
-    const commonHeaders = {
-      Authorization: `Bearer ${apiKey}`,
-    };
-
-    // Optional project/org scoping if you’ve set them
-    if (process.env.OPENAI_ORG_ID) {
-      commonHeaders["OpenAI-Organization"] = process.env.OPENAI_ORG_ID;
-    }
-    if (process.env.OPENAI_PROJECT_ID) {
-      commonHeaders["OpenAI-Project"] = process.env.OPENAI_PROJECT_ID;
-    }
+    const commonHeaders = { Authorization: `Bearer ${apiKey}` };
+    if (process.env.OPENAI_ORG_ID)    commonHeaders["OpenAI-Organization"] = process.env.OPENAI_ORG_ID;
+    if (process.env.OPENAI_PROJECT_ID) commonHeaders["OpenAI-Project"]      = process.env.OPENAI_PROJECT_ID;
 
     const createRes = await fetch("https://api.openai.com/v1/uploads", {
       method: "POST",
       headers: { "Content-Type": "application/json", ...commonHeaders },
-      body: JSON.stringify(createPayload),
+      body: JSON.stringify({
+        purpose: resolvedPurpose,
+        filename: resolvedName,
+        bytes: buffer.length,
+        mime_type: contentType,
+      }),
     });
-
     const createReqId = createRes.headers.get("x-request-id") || null;
     const createText = await createRes.text();
-    let createJson;
-    try { createJson = JSON.parse(createText); } catch {}
-    if (!createRes.ok) {
-      return passthrough(createRes.status, createJson || createText, createReqId);
-    }
+    let createJson; try { createJson = JSON.parse(createText); } catch {}
+    if (!createRes.ok) return passthrough(createRes.status, createJson || createText, createReqId);
+
     const uploadId = createJson?.id;
     if (!uploadId) {
-      return json(502, { error: "Upload was created but no upload ID returned", create_request_id: createReqId, raw: createJson || createText });
+      return json(502, { error: "Upload created without an id", request_id: createReqId, raw: createJson || createText });
     }
 
     // ---------- 2) ADD PARTS ----------
     const partIds = [];
-    let offset = 0;
-    while (offset < buffer.length) {
+    for (let offset = 0, idx = 0; offset < buffer.length; offset += MAX_PART_BYTES, idx++) {
       const end = Math.min(offset + MAX_PART_BYTES, buffer.length);
       const chunk = buffer.subarray(offset, end);
-      // API examples show sending a base64 string in a multipart field named "data".
-      const form = new FormData();
-      form.append("data", chunk.toString("base64"));
 
-      const partRes = await fetch(`https://api.openai.com/v1/uploads/${encodeURIComponent(uploadId)}/parts`, {
-        method: "POST",
-        headers: { ...commonHeaders, ...form.getHeaders() },
-        body: form,
-      });
+      // Primary attempt: send BINARY as a file field
+      let partRes = await postPartBinary(uploadId, chunk, idx, commonHeaders);
+
+      // Fallback once on 400/415: try base64 text field
+      if (partRes.status === 400 || partRes.status === 415) {
+        partRes = await postPartBase64(uploadId, chunk, idx, commonHeaders);
+      }
 
       const partReqId = partRes.headers.get("x-request-id") || null;
       const partText = await partRes.text();
-      let partJson;
-      try { partJson = JSON.parse(partText); } catch {}
-      if (!partRes.ok) {
+      let partJson; try { partJson = JSON.parse(partText); } catch {}
+
+      if (!partRes.ok || !partJson?.id) {
         return passthrough(partRes.status, partJson || partText, partReqId, {
           upload_id: uploadId,
           failed_offset: offset,
         });
       }
-      if (!partJson?.id) {
-        return json(502, {
-          error: "Add-part succeeded without a part ID",
-          upload_id: uploadId,
-          part_response: partJson || partText,
-          request_id: partReqId,
-        });
-      }
+
       partIds.push({ id: partJson.id, reqId: partReqId });
-      offset = end;
     }
 
     // ---------- 3) COMPLETE UPLOAD ----------
@@ -135,11 +113,10 @@ exports.handler = async function (event) {
       headers: { "Content-Type": "application/json", ...commonHeaders },
       body: JSON.stringify({ part_ids: partIds.map(p => p.id) }),
     });
-
     const completeReqId = completeRes.headers.get("x-request-id") || null;
     const completeText = await completeRes.text();
-    let completeJson;
-    try { completeJson = JSON.parse(completeText); } catch {}
+    let completeJson; try { completeJson = JSON.parse(completeText); } catch {}
+
     if (!completeRes.ok) {
       return passthrough(completeRes.status, completeJson || completeText, completeReqId, {
         upload_id: uploadId,
@@ -147,7 +124,6 @@ exports.handler = async function (event) {
       });
     }
 
-    // The completed Upload includes a nested File object that’s now usable across the platform.
     const fileObject = completeJson?.file || null;
 
     return json(200, {
@@ -173,13 +149,12 @@ exports.handler = async function (event) {
   }
 };
 
-// ---------- helpers ----------
+// ----- helpers -----
 function json(statusCode, body) {
   return { statusCode, body: JSON.stringify(body) };
 }
 
 function passthrough(statusCode, upstreamBody, requestId, extra = {}) {
-  // Surface upstream status/body transparently and include x-request-id for support.
   if (typeof upstreamBody === "object" && upstreamBody !== null) {
     return json(statusCode, { ...upstreamBody, request_id: requestId, ...extra });
   }
@@ -195,4 +170,30 @@ function detectMime(name) {
   if (lower.endsWith(".doc")) return "application/msword";
   if (lower.endsWith(".jsonl")) return "application/jsonl";
   return "application/octet-stream";
+}
+
+// Sends a Part as BINARY file content
+async function postPartBinary(uploadId, chunk, idx, headers) {
+  const form = new FormData();
+  // name MUST be "data"; attach binary with a filename and octet-stream
+  form.append("data", chunk, {
+    filename: `part-${String(idx).padStart(5, "0")}.bin`,
+    contentType: "application/octet-stream",
+  });
+  return fetch(`https://api.openai.com/v1/uploads/${encodeURIComponent(uploadId)}/parts`, {
+    method: "POST",
+    headers: { ...headers, ...form.getHeaders() },
+    body: form,
+  });
+}
+
+// Fallback: send base64 as a text field named "data"
+async function postPartBase64(uploadId, chunk, idx, headers) {
+  const form = new FormData();
+  form.append("data", chunk.toString("base64"));
+  return fetch(`https://api.openai.com/v1/uploads/${encodeURIComponent(uploadId)}/parts`, {
+    method: "POST",
+    headers: { ...headers, ...form.getHeaders() },
+    body: form,
+  });
 }
