@@ -23,6 +23,7 @@
       padding: 0;
       width: 100vw;
       font-family: Arial, sans-serif;
+      position: relative; /* anchor absolute children to the page */
     }
     .container {
       width: 100vw;
@@ -90,6 +91,26 @@
       overflow: visible;
       box-sizing: border-box;
     }
+
+    /* Config mode: show outlines and smooth movement */
+    body.config-mode .configurable {
+      outline: 2px dashed rgba(0,0,0,.45);
+      transition: left .08s linear, top .08s linear, width .08s linear, height .08s linear;
+    }
+    .modal-overlay { transition: opacity .2s ease; }
+
+    /* Config mode: lighten the sheet and let clicks pass through so previews are visible */
+    body.config-mode .modal-overlay {
+      opacity: 0.08 !important;
+      pointer-events: none !important;
+    }
+
+    /* Ensure buttery movement while editing */
+    body.config-mode .layout-abs,
+    body.config-mode .configurable {
+      will-change: left, top, width, height;
+    }
+
     .button-container {
       width: 200px;
       display: flex;
@@ -234,20 +255,21 @@
     .metadata-progress {
       width: 90%;
     }
+    /* Let JS absolute positioning take over; remove relative/negative offsets */
     #container13 {
-      position: relative;
+      position: static;
       width: 250px;
-      top: -150px;
+      top: auto;
     }
     #belowSearch {
-      margin-top: -180px;
-      margin-left: 10px;
+      margin-top: 0;
+      margin-left: 0;
     }
     .title-container {
-      margin-top: -50px;
+      margin-top: 0;
     }
     #etsyListingTitleContainer {
-      position: relative;
+      position: static;
       width: 1000px;
     }
     #etsyListingTitleContainer textarea {
@@ -257,16 +279,16 @@
       margin-top: 0px;
     }
     #etsyListingDescriptionContainer {
-      position: relative;
+      position: static;
       width: 1000px;
     }
     #etsyListingDescriptionContainer textarea {
       width: 1000px;
     }
     #userProvidedKeyPhrasesContainer {
-      position: relative;
-      top: 125px;
-      left: 10px;
+      position: static;
+      top: auto;
+      left: auto;
     }
     #topButtons {
       margin: 10px 0;
@@ -303,13 +325,42 @@
     #etsyShopListingsContainer {
       position: relative;
     }
+
+    /* Force the new absolute layout system to win over legacy/author CSS */
+    .layout-abs { position: absolute !important; }
+
+    /* Absolute layout stage: all configurable components live here */
+    #layoutRoot {
+      position: relative;
+      width: 100vw;
+      min-height: 200vh;
+      z-index: 2500;
+    }
+
+    /* Neutralize wrapper layouts so children don't fight absolute placement */
+    .neutralize-wrapper,
+    #descriptionAndFileUploadContainer,
+    #topButtons,
+    #belowSearch,
+    #etsyShopListingsContainer,
+    #previewGridContainer,
+    #previewGridStatic,
+    .listing-desc-container,
+    .flex-container,
+    .title-container,
+    .description-container {
+      position: static !important;
+      display: contents !important;
+    }
+
   </style>
 </head>
 <body>
-  <!-- Include default UI positions (uiPositions.js) -->
-  <script src="uiPositions.js"></script>
+  <!-- Absolute layout stage (every component will be reparented here) -->
+  <div id="layoutRoot"></div>
+  <!-- Legacy uiPositions removed: new layout system is source of truth -->
 
-  <button id="configureButtonsBtn" class="btn waves-effect waves-light configurable">Configure Buttons</button>
+  <button id="openConfigBtn" class="btn waves-effect waves-light configurable" style="margin-left:10px;">Open Config</button>
   
   <div id="descriptionAndFileUploadContainer">
     <div class="listing-desc-container" id="listingDescContainer">
@@ -324,7 +375,7 @@
     <button id="photoUploadNewBtn" class="btn waves-effect waves-light configurable update-btn" style="margin-left: 10px;">Update Photos</button>
     <button id="uploadToEtsyBtn" class="btn waves-effect waves-light configurable update-btn" style="margin-left: 10px;">Update Info</button>
     <div id="etsyShopListingsContainer">
-      <div class="section-heading configurable">
+      <div id="etsyShopListingsHeading" class="section-heading configurable">
         Etsy Shop Listings
         <span id="listingQueueCount">0</span>
       </div>
@@ -335,7 +386,7 @@
   </div>
   
   <div class="phrases-header configurable" id="userProvidedKeyPhrasesContainer">
-    <span class="section-heading configurable">Search Key Phrases</span>
+    <span id="searchKeyPhrasesHeading" class="section-heading configurable">Search Key Phrases</span>
     <!-- Clear button deletes files from the vector store -->
     <button id="clearKeyPhrasesBtn" class="btn-small waves-effect waves-light configurable">Clear CSV Files</button>
     <div id="dropZone" class="configurable">Image Drop</div>
@@ -350,13 +401,13 @@
   
   <div id="belowSearch">
     <button id="generateBtn" class="btn waves-effect waves-light configurable">Generate</button>
-    <div class="title-container" id="etsyListingTitleContainer" style="margin-top: -50px;">
-      <div class="section-heading configurable">Etsy Listing TITLE</div>
+    <div class="title-container" id="etsyListingTitleContainer" style="margin-top: 0;">
+      <div id="listingTitleHeading" class="section-heading configurable">Etsy Listing TITLE</div>
       <div class="flex-container configurable">
         <div class="textbox-container configurable">
           <textarea id="listingTitle" class="materialize-textarea" rows="2"></textarea>
         </div>
-        <div class="button-container configurable" style="margin-top: -60px;">
+        <div class="button-container configurable">
           <button id="regenTitleBtn" class="btn-small waves-effect waves-light configurable regen-btn">Re-Gen</button>
           <button id="copyTitleBtn" class="btn-small waves-effect waves-light configurable copy-btn">
             <i class="material-icons">content_copy</i>
@@ -368,7 +419,7 @@
     </div>
     
     <div class="description-container" id="etsyListingDescriptionContainer" style="margin-top: 0px;">
-      <div class="section-heading configurable">Etsy Listing DESCRIPTION</div>
+      <div id="listingDescriptionHeading" class="section-heading configurable">Etsy Listing DESCRIPTION</div>
       <div class="flex-container configurable">
         <div class="textbox-container configurable">
           <textarea id="listingDescription" class="materialize-textarea"></textarea>
@@ -539,18 +590,6 @@ Key Phrase Generation Using the .csv Sales Reports and .csv Product List Files:
     </div>
   </div>
   
-  <!-- Button Config Modal -->
-  <div id="buttonConfigModal" class="modal">
-    <div class="modal-content">
-      <h4>Configure Button Positions</h4>
-      <div id="buttonConfigContainer"></div>
-      <textarea id="uploadedFilesListModal" class="materialize-textarea" rows="2" placeholder="Uploaded files will appear here"></textarea>
-    </div>
-    <div class="modal-footer">
-      <a href="#!" id="saveButtonPositionsBtn" class="modal-close waves-effect waves-green btn">Save Positions</a>
-    </div>
-  </div>
-  
   <!-- Crop Modal -->
   <div id="photoCropModal" class="modal" style="width:650px; height:650px;">
     <div class="crop-container" style="position: relative; width:100%; height:100%;">
@@ -575,17 +614,70 @@ Key Phrase Generation Using the .csv Sales Reports and .csv Product List Files:
       <a href="#!" class="modal-close waves-effect waves-green btn">Close</a>
     </div>
   </div>
+
+  <!-- Layout Config Modal (mirrors shipping-1 flow) -->
+  <div id="configModal" class="modal">
+    <div class="modal-content">
+      <h5>Configure Component Positions</h5>
+      <table class="striped" id="configTable">
+        <thead>
+          <tr>
+            <th>Component</th><th>Left</th><th>Top</th><th>Width</th><th>Height</th>
+          </tr>
+        </thead>
+        <tbody></tbody>
+      </table>
+    </div>
+    <div class="modal-footer">
+      <a id="resetLayoutBtn" class="waves-effect waves-red btn-flat">Reset</a>
+      <a id="saveConfigBtn" class="modal-close waves-effect waves-green btn">Save</a>
+    </div>
+  </div>
   
   <script src="https://code.jquery.com/jquery-3.6.0.min.js"></script>
   <script src="https://cdnjs.cloudflare.com/ajax/libs/materialize/1.0.0/js/materialize.min.js"></script>
-  <script src="metadataHandler.js"></script>
+  <!-- Fallback: inline metadataHandler to avoid 404 while keeping the same API -->
+  <script>
+    window.metadataHandler = window.metadataHandler || (function(){
+      /**
+       * analyzeAndEmbedMetadata(i)
+       * Minimal implementation:
+       * - Generates a short alt/metadata string from the Listing Description or filename
+       * - Stores it in window.photoMeta[i] so your upload calls use it as alt_text
+       * - Updates the little status text under each preview cell
+       */
+      async function analyzeAndEmbedMetadata(i){
+        try {
+          const imgData = (window.previewImages && window.previewImages[i]) || null;
+          if (!imgData) {
+            if (window.M && M.toast) M.toast({ html: "No image in slot " + (i+1) });
+            return;
+          }
+          const desc = (document.getElementById("listingDescInput")?.value || "").trim();
+          const name = (window.photoNames?.[i] || "").replace(/\.[a-z0-9]+$/i, "");
+          // Build a concise, SEO-ish line (max ~200 chars)
+          const base = (desc || name || "Jewelry photo").replace(/\s+/g, " ").trim();
+          const tag  = base.slice(0, 200);
+          // Persist for your upload paths (used as alt_text later)
+          window.photoMeta[i] = tag;
+          // UI status tick
+          const s = document.getElementById("metadataStatus" + i);
+          if (s) s.textContent = "✓ tagged";
+        } catch (e) {
+          console.error("metadataHandler.analyzeAndEmbedMetadata error:", e);
+          if (window.M && M.toast) M.toast({ html: "Metadata error: " + e.message });
+        }
+      }
+      return { analyzeAndEmbedMetadata };
+    })();
+  </script>
   <script>
     // The temporary debug toast notifications have been removed.
 
     window.ETSY_SHOP_URL = "https://www.etsy.com/shop/custombrites";
     window.CLIENT_ID = "k75zdspz4r99txpqdji7i2em";
     window.REDIRECT_URI = "https://delicate-tanuki-616ac0.netlify.app/";
-    window.modelName = "chatgpt-4o-latest";
+    window.modelName = "gpt-5";
     window.accessToken;
     window.soldOrdersCSV = [];
     window.listingsCSV = [];
@@ -601,6 +693,421 @@ Key Phrase Generation Using the .csv Sales Reports and .csv Product List Files:
     window.listingQueue = [];
     window.photoUpdateComplete = false;
     window.infoUpdateComplete = false;
+
+    // ====== POSITION CONFIG (global, dynamic) ======
+    window.configComponentIDs = [];
+
+    /** Every interactive/visible control we want independently positionable */
+    const AUTO_SELECTORS = [
+      "button",        // all <button>
+      "a.btn",         // Materialize anchors acting as buttons
+      "input", "textarea", "select",
+      "#dropZone",
+      ".preview-cell", // each photo cell
+      ".section-heading",
+      "#listingQueueCount"
+    ];
+
+    function isExcluded(el){
+      // do NOT move overlays or any modal internals (including the config modal itself)
+      return el.closest("#configModal") || el.closest(".modal") || el.classList.contains("modal") || el.classList.contains("modal-overlay");
+    }
+
+    function ensureId(el){
+      if (el.id) return el.id;
+      const id = el.tagName.toLowerCase() + "-" + Math.random().toString(36).slice(2,7);
+      el.id = id;
+      return id;
+    }
+
+    function collectMovables(){
+      const nodes = new Set();
+      AUTO_SELECTORS.forEach(sel => {
+        document.querySelectorAll(sel).forEach(n => { if (!isExcluded(n)) nodes.add(n); });
+      });
+      return Array.from(nodes);
+    }
+
+    // 3.2 Hard defaults — FULLY SPECIFIED per user map (all keys get a concrete value)
+    const defaultPositions = {
+      // Top controls
+      openConfigBtn:           { left: 190,  top: 10,  width: 140, height: 35 },
+      connectEtsyBtn:          { left: 10,   top: 10,  width: 160, height: 35 },
+      photoUploadNewBtn:       { left: 600,  top: 10,  width: 160, height: 35 },
+      uploadToEtsyBtn:         { left: 800,  top: 10,  width: 160, height: 35 },
+      clearKeyPhrasesBtn:      { left: 1030, top: 10,  width: 120, height: 35 },
+      analyzeMetadataBtn:      { left: 600,  top: 100, width: 160, height: 35 },
+
+      // Generation controls
+      generateBtn:             { left: 10,   top: 455, width: 125, height: 35 },
+      regenTitleBtn:           { left: 285,  top: 492, width: 100, height: 35 },
+      copyTitleBtn:            { left: 410,  top: 492, width: 100, height: 35 },
+      showTitleRulesBtn:       { left: 150,  top: 0,   width: 0,   height: 0  },
+      regenDescriptionBtn:     { left: 285,  top: 603, width: 100, height: 35 },
+      copyDescriptionBtn:      { left: 410,  top: 603, width: 100, height: 35 },
+      showDescriptionRulesBtn: { left: 150,  top: 0,   width: 0,   height: 0  },
+
+      // Text inputs / areas
+      listingDescInput:        { left: 10,   top: 220, width: 490, height: 35 },
+      uploadedFilesList:       { left: 1083, top: 3,   width: 150, height: 35 },
+      shopListings:            { left: 10,   top: 110, width: 500, height: 45 },
+      searchKeyPhrases:        { left: 10,   top: 325, width: 500, height: 107 },
+      listingTitle:            { left: 10,   top: 535, width: 1000,height: 45 },
+      listingDescription:      { left: 10,   top: 540, width: 1400,height: 150 },
+
+      // Drop zone
+      dropZone:                { left: 1340, top: 150, width: 155, height: 350 },
+
+      // Preview cells
+      previewCell0:            { left: 600,  top: 150, width: 120, height: 158 },
+      previewCell1:            { left: 750,  top: 150, width: 120, height: 158 },
+      previewCell2:            { left: 900,  top: 150, width: 120, height: 158 },
+      previewCell3:            { left: 1050, top: 150, width: 120, height: 158 },
+      previewCell4:            { left: 1200, top: 150, width: 120, height: 158 },
+      previewCell5:            { left: 600,  top: 340, width: 120, height: 158 },
+      previewCell6:            { left: 750,  top: 340, width: 120, height: 158 },
+      previewCell7:            { left: 900,  top: 340, width: 120, height: 158 },
+      previewCell8:            { left: 1050, top: 340, width: 120, height: 158 },
+      previewCell9:            { left: 1200, top: 340, width: 120, height: 158 },
+
+      // Auto-assigned heading IDs (current session)
+      etsyShopListingsHeading:   { left: 10,   top: 75,  width: 180, height: 27 },
+      searchKeyPhrasesHeading:   { left: 10,   top: 290, width: 180, height: 27 },
+      listingTitleHeading:       { left: 10,   top: 505, width: 180, height: 27 },
+      listingDescriptionHeading: { left: 10,   top: 610, width: 250, height: 27 },
+
+      // Counter chip
+      listingQueueCount:       { left: 190,  top: 75,  width: 25,  height: 27 }
+    };
+
+    // (Shipping-1 stores to LS as pos-<id>-left|top|width|height and applies absolute layout.  [oai_citation:6‡shipping-1.html](file-service://file-UyzPx2tdaLoZi5ZZoE5Zq8))
+
+    function adoptIntoLayoutRoot(el){
+    const stage = document.getElementById("layoutRoot");
+    if (!stage || !el || el.parentElement === stage) return;
+
+    // Compute absolute document coordinates BEFORE moving
+    const r = el.getBoundingClientRect();
+    const L = Math.round(r.left + window.scrollX);
+    const T = Math.round(r.top  + window.scrollY);
+    const W = Math.round(r.width  || el.offsetWidth  || 0);
+    const H = Math.round(r.height || el.offsetHeight || 0);
+
+    stage.appendChild(el); // reparent to stage
+
+    el.classList.add("layout-abs");
+    el.classList.add("configurable"); // dashed outline in config-mode
+    el.style.setProperty("position","absolute","important");
+    el.style.setProperty("left",  L + "px","important");
+    el.style.setProperty("top",   T + "px","important");
+    el.style.setProperty("width", W + "px","important");
+    el.style.setProperty("height",H + "px","important");
+    el.style.setProperty("z-index","3000","important");
+    // strip conflicting layout styles
+    el.style.removeProperty("margin");
+    el.style.removeProperty("margin-left");
+    el.style.removeProperty("margin-top");
+    el.style.removeProperty("right");
+    el.style.removeProperty("bottom");
+  }
+
+  function initAbsoluteLayout(){
+    const stage = document.getElementById("layoutRoot");
+    if (!stage) return;
+
+    const movables = collectMovables();
+    window.configComponentIDs = [];
+    movables.forEach(el => {
+      const id = ensureId(el);
+      window.configComponentIDs.push(id);
+      adoptIntoLayoutRoot(el);
+    });
+    // de-dupe
+    window.configComponentIDs = Array.from(new Set(window.configComponentIDs));
+  }
+
+    // Utility to get a safe numeric value
+    function _num(v, fallback){ v = (v==null? "" : String(v)); var n = parseInt(v,10); return isFinite(n) ? n : fallback; }
+
+    // Remove old wrapper positions/styles we no longer control
+    function cleanupNestedConflicts(){
+      ["descriptionAndFileUploadContainer","topButtons","belowSearch"].forEach(function(id){
+        var el = document.getElementById(id);
+        if (el){
+          el.classList.remove("layout-abs");
+          el.style.removeProperty("position");
+          el.style.removeProperty("left");
+          el.style.removeProperty("top");
+          el.style.removeProperty("width");
+          el.style.removeProperty("height");
+        }
+        ["left","top","width","height"].forEach(function(k){
+          localStorage.removeItem("pos-"+id+"-"+k);
+        });
+      });
+    }
+
+    // ---- ID migration: preserve saved positions after renaming ephemeral IDs ----
+    const ID_MIGRATIONS = {
+      "div-0g0nl": "etsyShopListingsHeading",
+      "span-yr8zb": "searchKeyPhrasesHeading",
+      "div-89qwd": "listingTitleHeading",
+      "div-0cwxn": "listingDescriptionHeading"
+    };
+    function migrateLocalStoragePositions(){
+      Object.entries(ID_MIGRATIONS).forEach(([oldId, newId]) => {
+        ["left","top","width","height"].forEach(k => {
+          const oldKey = "pos-" + oldId + "-" + k;
+          const newKey = "pos-" + newId + "-" + k;
+          const val = localStorage.getItem(oldKey);
+          if (val != null && localStorage.getItem(newKey) == null) {
+            localStorage.setItem(newKey, val);
+          }
+          // Always clear the old keys so they won't clutter storage
+          localStorage.removeItem(oldKey);
+        });
+      });
+    }
+
+    // 3.3 Apply saved (or default) positions — same storage keys as shipping-1
+    function loadPositions(){
+      const ids = window.configComponentIDs || [];
+      for (var i=0; i<ids.length; i++){
+        var id = ids[i];
+        var el = document.getElementById(id);
+        if(!el) continue;
+
+        // If no hard default provided, seed from the live DOM so first-run layout is preserved.
+        var rect = el.getBoundingClientRect();
+        var seed = {
+          left:  Math.round(rect.left + window.scrollX),
+          top:   Math.round(rect.top  + window.scrollY),
+          width: Math.round(rect.width  || el.offsetWidth  || 0),
+          height:Math.round(rect.height || el.offsetHeight || 0)
+        };
+        var def = Object.assign(seed, defaultPositions[id] || {});
+
+        var left = localStorage.getItem("pos-"+id+"-left");
+        var top  = localStorage.getItem("pos-"+id+"-top");
+        var w    = localStorage.getItem("pos-"+id+"-width");
+        var h    = localStorage.getItem("pos-"+id+"-height");
+
+        left = _num(left, def.left);
+        top  = _num(top,  def.top);
+        w    = _num(w,    def.width);
+        h    = _num(h,    def.height);
+
+        el.classList.add("layout-abs");
+        el.classList.add("configurable"); // show dashed outline + transition in config-mode
+        // Use !important to beat author styles and grid/flex side-effects
+        el.style.setProperty("position", "absolute", "important");
+        el.style.setProperty("left",    left + "px", "important");
+        el.style.setProperty("top",     top  + "px", "important");
+        el.style.setProperty("width",   ((w>0 ? w : def.width)) + "px", "important");
+        el.style.setProperty("height",  ((h>0 ? h : def.height)) + "px", "important");
+        // NEW: ensure absolute layout isn't visually offset/hidden
+        el.style.removeProperty("margin");
+        el.style.removeProperty("margin-left");
+        el.style.removeProperty("margin-top");
+        el.style.removeProperty("right");
+        el.style.removeProperty("bottom");
+        el.style.setProperty("z-index", "3000", "important");
+      }
+    }
+
+    function populateConfigTable(){
+      var tbody = document.getElementById("configTable").querySelector("tbody");
+      tbody.innerHTML = "";
+      const ids = window.configComponentIDs || [];
+      for (var i=0; i<ids.length; i++){
+        var id = ids[i];
+        var el = document.getElementById(id);
+        if(!el) continue;
+
+        // Seed exactly like loadPositions(): DOM rect → merged with hard defaults
+        var rect = el.getBoundingClientRect();
+        var seed = {
+          left:  Math.round(rect.left + window.scrollX),
+          top:   Math.round(rect.top  + window.scrollY),
+          width: Math.round(rect.width  || el.offsetWidth  || 0),
+          height:Math.round(rect.height || el.offsetHeight || 0)
+        };
+        var def = Object.assign(seed, defaultPositions[id] || {});
+
+        // Prefer saved values if present
+        var left = _num(localStorage.getItem("pos-"+id+"-left"),   def.left);
+        var top  = _num(localStorage.getItem("pos-"+id+"-top"),    def.top);
+        var w    = _num(localStorage.getItem("pos-"+id+"-width"),  def.width);
+        var h    = _num(localStorage.getItem("pos-"+id+"-height"), def.height);
+
+        var tr = document.createElement("tr");
+        tr.innerHTML = `
+          <td>${id}</td>
+          <td><input id="left_${id}"   type="number" value="${left}"  style="width:90px"></td>
+          <td><input id="top_${id}"    type="number" value="${top}"   style="width:90px"></td>
+          <td><input id="width_${id}"  type="number" value="${w}"     style="width:90px"></td>
+          <td><input id="height_${id}" type="number" value="${h}"     style="width:90px"></td>
+        `;
+        tbody.appendChild(tr);
+        // Live preview while editing numbers (input/change/keyup/mousewheel)
+        ["left","top","width","height"].forEach(function(k){
+          var inp = document.getElementById(k + "_" + id);
+          if (inp) {
+            const handler = function(){ previewFromInputs(id); };
+            ["input","change","keyup","mousewheel"].forEach(evt => inp.addEventListener(evt, handler));
+          }
+        });
+      }
+    }
+
+    /* --- absolute layout helpers --- */
+    function applySinglePosition(id, left, top, width, height) {
+      const el = document.getElementById(id);
+      if (!el) return;
+
+      const cs = window.getComputedStyle(el);
+      const curL = parseInt(cs.left, 10)    || el.offsetLeft  || 0;
+      const curT = parseInt(cs.top, 10)     || el.offsetTop   || 0;
+      const curW = parseInt(cs.width, 10)   || el.offsetWidth || 0;
+      const curH = parseInt(cs.height, 10)  || el.offsetHeight|| 0;
+
+      const L = Number.isFinite(+left)  ? +left  : curL;
+      const T = Number.isFinite(+top)   ? +top   : curT;
+      const W = Number.isFinite(+width) ? +width : curW;
+      const H = Number.isFinite(+height)? +height: curH;
+
+      el.classList.add("layout-abs");
+      el.style.setProperty("position", "absolute", "important");
+      el.style.setProperty("left",  L + "px", "important");
+      el.style.setProperty("top",   T + "px", "important");
+      el.style.setProperty("width", W + "px", "important");
+      el.style.setProperty("height",H + "px", "important");
+      el.style.setProperty("z-index","3000","important");
+
+      // Ensure nothing "fights" absolute placement
+      el.style.removeProperty("margin");
+      el.style.removeProperty("margin-left");
+      el.style.removeProperty("margin-top");
+      el.style.removeProperty("right");
+      el.style.removeProperty("bottom");
+    }
+
+    function previewFromInputs(id) {
+      const l = document.getElementById("left_"   + id)?.value;
+      const t = document.getElementById("top_"    + id)?.value;
+      const w = document.getElementById("width_"  + id)?.value;
+      const h = document.getElementById("height_" + id)?.value;
+      applySinglePosition(id, parseInt(l,10), parseInt(t,10), parseInt(w,10), parseInt(h,10));
+    }
+
+    function forceApplyPositions() {
+      // Apply now, after modal close animation, and once more after paint
+      requestAnimationFrame(() => {
+        if (typeof loadPositions === "function") loadPositions();
+        setTimeout(() => { if (typeof loadPositions === "function") loadPositions(); }, 180);
+      });
+    }
+
+    // 3.5 Wire up modal + save handler (same ids as shipping-1)
+    document.addEventListener("DOMContentLoaded", function(){
+      localStorage.removeItem("buttonPositions"); // purge legacy store once
+      // Cleanup old wrapper keys, adopt EVERY control into the absolute stage, then apply layout
+      cleanupNestedConflicts();
+      initAbsoluteLayout();      // discover, assign IDs, reparent to #layoutRoot
+      migrateLocalStoragePositions(); // move saved positions from old random IDs to new stable IDs
+      loadPositions();           // apply saved/default positions to all
+
+        var configModal = M.Modal.init(document.getElementById("configModal"), {
+        onOpenStart() {
+          document.body.classList.add("config-mode");
+          // So you can see layout changes behind the modal
+          setTimeout(() => {
+            const ov = document.querySelector(".modal-overlay");
+            if (ov) ov.style.opacity = "0.15";
+          }, 0);
+        },
+        onCloseEnd() {
+          document.body.classList.remove("config-mode");
+          const ov = document.querySelector(".modal-overlay");
+          if (ov) ov.style.opacity = "";
+        }
+      });
+      var openBtn = document.getElementById("openConfigBtn");
+      if (openBtn){
+        openBtn.addEventListener("click", function(){
+          populateConfigTable(); // shipping-1 builds table on open.  [oai_citation:8‡shipping-1.html](file-service://file-UyzPx2tdaLoZi5ZZoE5Zq8)
+          configModal.open();
+        });
+      }
+
+      var resetBtn = document.getElementById("resetLayoutBtn");
+      if (resetBtn){
+        resetBtn.addEventListener("click", function(){
+          const ids = window.configComponentIDs || [];
+          ids.forEach(id => ["left","top","width","height"].forEach(k => localStorage.removeItem("pos-"+id+"-"+k)));
+          if (window.M && M.toast) M.toast({ html: "All positions reset." });
+          requestAnimationFrame(() => { if (typeof loadPositions === "function") loadPositions(); });
+        });
+      }
+
+      var saveBtn = document.getElementById("saveConfigBtn");
+      if (saveBtn){
+        saveBtn.addEventListener("click", function(){
+          const ids = window.configComponentIDs || [];
+          for (var i=0; i<ids.length; i++){
+            var id = ids[i];
+            var el = document.getElementById(id);
+            if(!el) continue;
+
+            var cs = window.getComputedStyle(el);
+            var left = _num(document.getElementById("left_"+id)?.value,
+                            _num(localStorage.getItem("pos-"+id+"-left"),  parseInt(cs.left)||el.offsetLeft||0));
+            var top  = _num(document.getElementById("top_"+id)?.value,
+                            _num(localStorage.getItem("pos-"+id+"-top"),   parseInt(cs.top)||el.offsetTop||0));
+            var w    = _num(document.getElementById("width_"+id)?.value,
+                            _num(localStorage.getItem("pos-"+id+"-width"), parseInt(cs.width)||el.offsetWidth||0));
+            var h    = _num(document.getElementById("height_"+id)?.value,
+                            _num(localStorage.getItem("pos-"+id+"-height"),parseInt(cs.height)||el.offsetHeight||0));
+
+            if (left!=null) localStorage.setItem("pos-"+id+"-left",  left);
+            if (top!=null)  localStorage.setItem("pos-"+id+"-top",   top);
+            if (w!=null)    localStorage.setItem("pos-"+id+"-width", w);
+            if (h!=null)    localStorage.setItem("pos-"+id+"-height",h);
+
+            // Live preview (with margin strip + high z-index)
+            if (typeof applySinglePosition === "function") {
+              applySinglePosition(id, left, top, w, h);
+            } else {
+              // Fallback if applySinglePosition() isn't present
+              el.classList.add("layout-abs");
+              el.classList.add("configurable"); // ensure outline/transition are active
+              el.style.setProperty("position", "absolute", "important");
+              el.style.setProperty("left",  L + "px", "important");
+              el.style.setProperty("top",   T + "px", "important");
+              el.style.setProperty("width", W + "px", "important");
+              el.style.setProperty("height",H + "px", "important");
+
+              // show above page content while configuring, but still under the modal content
+              const z = document.body.classList.contains("config-mode") ? 10050 : 3000;
+              el.style.setProperty("z-index", String(z), "important");
+              el.style.removeProperty("margin");
+              el.style.removeProperty("margin-left");
+              el.style.removeProperty("margin-top");
+              el.style.removeProperty("right");
+              el.style.removeProperty("bottom");
+            }
+          }
+
+          // Apply everything once after persisting
+          if (typeof forceApplyPositions === "function") forceApplyPositions();
+
+          if (window.M && M.toast) M.toast({ html: "Layout saved and applied." });
+
+          // Re-assert once more after modal animates closed
+          requestAnimationFrame(loadPositions);
+        });
+      }
+    });
 
     window.appendedDescriptionText = `
 
@@ -785,31 +1292,6 @@ document.getElementById("shopListings").addEventListener("keydown", (e) => {
         }
       } catch (err) {
         console.error("Error restoring data after redirect:", err);
-      }
-    }
-
-    // Load button positions (from local storage or default from uiPositions.js)
-    function loadButtonPositions() {
-      let stored = localStorage.getItem("buttonPositions");
-      if (stored) {
-        let positions = JSON.parse(stored);
-        for (let id in positions) {
-          let el = document.getElementById(id);
-          if (el) { 
-            el.style.top = positions[id].top; 
-            el.style.left = positions[id].left; 
-          }
-        }
-      } else if (window.defaultUIPositions) {
-        let positions = window.defaultUIPositions;
-        for (let id in positions) {
-          let el = document.getElementById(id);
-          if (el) { 
-            el.style.top = positions[id].top; 
-            el.style.left = positions[id].left; 
-          }
-        }
-        localStorage.setItem("buttonPositions", JSON.stringify(positions));
       }
     }
 
@@ -1214,96 +1696,6 @@ Return only one phrase in plain text.
       }
     }
 
-    document.getElementById("configureButtonsBtn").addEventListener("click", () => {
-      let configContainer = document.getElementById("buttonConfigContainer");
-      configContainer.innerHTML = "";
-      // First, read saved positions from localStorage.
-      let savedPositions = JSON.parse(localStorage.getItem("buttonPositions") || "{}");
-      // Define the selectors we want to display.
-      const selectors = [
-        "#configureButtonsBtn",
-        "#listingDescContainer",
-        "#uploadedFilesList",
-        "#dropZone",
-        "#previewGridContainer",
-        "#container13",
-        "#uploadToEtsyBtn",
-        "#etsyShopListingsContainer",
-        "#userProvidedKeyPhrasesContainer",
-        "#etsyListingTitleContainer",
-        "#etsyListingDescriptionContainer",
-        "#regenTitleBtn",
-        "#copyTitleBtn",
-        "#regenDescriptionBtn",
-        "#copyDescriptionBtn",
-        "#photoUploadNewBtn",
-        "#generateBtn",
-        "#connectEtsyBtn",
-        "#analyzeMetadataBtn",
-        "#showAnalyzeRulesBtn"
-      ].join(", ");
-      let elements = document.querySelectorAll(selectors);
-      let table = document.createElement("table");
-      table.className = "striped";
-      let thead = document.createElement("thead");
-      thead.innerHTML = "<tr><th>Element ID</th><th>Top (px)</th><th>Left (px)</th></tr>";
-      table.appendChild(thead);
-      let tbody = document.createElement("tbody");
-      elements.forEach(el => {
-        let id = el.id;
-        // Use the saved position if available; otherwise use computed style.
-        let pos = savedPositions[id] || {};
-        let currentTop = pos.top || (el.style.top || window.getComputedStyle(el).top || "0");
-        let currentLeft = pos.left || (el.style.left || window.getComputedStyle(el).left || "0");
-        let tr = document.createElement("tr");
-        tr.innerHTML = `<td>${id}</td>
-          <td><input type="number" id="${id}_top" value="${parseInt(currentTop)||0}"></td>
-          <td><input type="number" id="${id}_left" value="${parseInt(currentLeft)||0}"></td>`;
-        let topInput = tr.querySelector(`#${id}_top`);
-        let leftInput = tr.querySelector(`#${id}_left`);
-        topInput.addEventListener("input", () => { el.style.top = topInput.value + "px"; });
-        leftInput.addEventListener("input", () => { el.style.left = leftInput.value + "px"; });
-        tbody.appendChild(tr);
-      });
-      table.appendChild(tbody);
-      configContainer.appendChild(table);
-      let modalElem = document.getElementById("buttonConfigModal");
-      let modalInstance = M.Modal.getInstance(modalElem) || M.Modal.init(modalElem, { preventScrolling: false });
-      modalInstance.open();
-    });
-
-    document.getElementById("saveButtonPositionsBtn").addEventListener("click", () => {
-      const selectors = [
-        "#configureButtonsBtn",
-        "#listingDescContainer",
-        "#uploadedFilesList",
-        "#dropZone",
-        "#previewGridContainer",
-        "#container13",
-        "#uploadToEtsyBtn",
-        "#etsyShopListingsContainer",
-        "#userProvidedKeyPhrasesContainer",
-        "#etsyListingTitleContainer",
-        "#etsyListingDescriptionContainer",
-        "#regenTitleBtn",
-        "#copyTitleBtn",
-        "#regenDescriptionBtn",
-        "#copyDescriptionBtn",
-        "#photoUploadNewBtn",
-        "#generateBtn",
-        "#connectEtsyBtn",
-        "#analyzeMetadataBtn",
-        "#showAnalyzeRulesBtn"
-      ].join(", ");
-      let elements = document.querySelectorAll(selectors);
-      let positions = {};
-      elements.forEach(el => {
-        positions[el.id] = { top: el.style.top || "0px", left: el.style.left || "0px" };
-      });
-      localStorage.setItem("buttonPositions", JSON.stringify(positions));
-      M.toast({ html: "Button positions saved." });
-    });
-
     function loadReservedPhotos() {
       const stored = localStorage.getItem("reservedPhotos");
       window.reservedPhotos = stored ? JSON.parse(stored) : [];
@@ -1690,7 +2082,7 @@ Return only one phrase in plain text.
     });
 
     document.addEventListener("DOMContentLoaded", async () => {
-      loadButtonPositions();
+      loadPositions();
       loadReservedPhotos();
       restoreDataAfterRedirect();
       let urlParams = new URLSearchParams(window.location.search);
