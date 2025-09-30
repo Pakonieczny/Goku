@@ -38,30 +38,6 @@
       width: 100%;
       box-sizing: border-box;
     }
-    #descriptionAndFileUploadContainer {
-      display: flex;
-      align-items: center;
-    }
-    .listing-desc-container {
-      position: relative;
-      display: inline-block;
-      width: 500px;
-    }
-    .listing-desc-container h5 {
-      margin: 0 0 10px 0;
-      font-size: 1.2rem;
-      font-weight: 500;
-    }
-    .listing-desc-container label.section-heading {
-      font-size: 1.2rem;
-      font-weight: 500;
-    }
-    .listing-desc-container input {
-      width: 500px;
-      height: 30px;
-      border: 1px solid #000;
-      padding: 5px;
-    }
     #searchKeyPhrases {
       resize: none;
       box-sizing: border-box;
@@ -69,10 +45,6 @@
     }
     #searchKeyPhrases[rows="14"] {
       height: auto;
-    }
-    /* Ensure the CSV textarea can receive drop events */
-    #uploadedFilesList {
-      pointer-events: auto;
     }
     .flex-container {
       display: flex;
@@ -121,12 +93,6 @@
     #listingTitle {
       min-height: 45px;
     }
-    #listingDescInput {
-      width: 500px;
-      height: 30px;
-      border: 1px solid #000;
-      padding: 5px;
-    }
     #listingDescription {
       min-height: 150px;
       width: 500px;
@@ -156,17 +122,6 @@
     /* Hide any unused drop zones */
     #fileDropZonesContainer {
       display: none;
-    }
-    #uploadedFilesList {
-      width: 225px;
-      height: 125px;
-      resize: none;
-      box-sizing: border-box;
-      border: 1px solid grey;
-      margin-left: 85px;
-      position: relative;
-      font-size: 0.875rem;
-      z-index: 10;
     }
     .modal {
       z-index: 9999 !important;
@@ -352,8 +307,7 @@
       display: contents !important;
     }
 
-    /* make the movable container a real box again */
-    #listingDescContainer { display: block !important; }
+/* (listingDescContainer removed) */
 
   </style>
 </head>
@@ -364,13 +318,7 @@
 
   <button id="openConfigBtn" class="btn waves-effect waves-light configurable" style="margin-left:10px;">Open Config</button>
   
-  <div id="descriptionAndFileUploadContainer">
-    <div class="listing-desc-container" id="listingDescContainer">
-      <h5>Listing Description</h5>
-      <input id="listingDescInput" type="text" placeholder="Enter your question here">
-    </div>
-    <textarea id="uploadedFilesList" class="materialize-textarea" rows="2" placeholder="Drop CSV files here"></textarea>
-  </div>
+  <!-- descriptionAndFileUploadContainer removed (Listing Description + CSV textarea) -->
   
   <div id="topButtons">
     <button id="connectEtsyBtn" class="btn waves-effect waves-light configurable">Connect to Etsy</button>
@@ -389,8 +337,7 @@
   
   <div class="phrases-header configurable" id="userProvidedKeyPhrasesContainer">
     <span id="searchKeyPhrasesHeading" class="section-heading configurable">Search Key Phrases</span>
-    <!-- Clear button deletes files from the vector store -->
-    <button id="clearKeyPhrasesBtn" class="btn-small waves-effect waves-light configurable">Clear CSV Files</button>
+    <!-- clearKeyPhrasesBtn removed -->
     <div id="dropZone" class="configurable">Image Drop</div>
     <button id="analyzeMetadataBtn" class="btn waves-effect waves-light configurable">Analyze Photos</button>
   </div>
@@ -655,7 +602,11 @@ Key Phrase Generation Using the .csv Sales Reports and .csv Product List Files:
             if (window.M && M.toast) M.toast({ html: "No image in slot " + (i+1) });
             return;
           }
-          const desc = (document.getElementById("listingDescInput")?.value || "").trim();
+            const desc = (
+            document.getElementById("listingDescription")?.value ||
+            document.getElementById("listingTitle")?.value ||
+            ""
+          ).trim();
           const name = (window.photoNames?.[i] || "").replace(/\.[a-z0-9]+$/i, "");
           // Build a concise, SEO-ish line (max ~200 chars)
           const base = (desc || name || "Jewelry photo").replace(/\s+/g, " ").trim();
@@ -708,7 +659,6 @@ Key Phrase Generation Using the .csv Sales Reports and .csv Product List Files:
       ".preview-cell", // each photo cell
       ".section-heading",
       "#listingQueueCount",
-      "#listingDescContainer",
       "#titleCount"             
     ];
 
@@ -739,7 +689,7 @@ Key Phrase Generation Using the .csv Sales Reports and .csv Product List Files:
       connectEtsyBtn:          { left: 10,   top: 10,  width: 160, height: 35 },
       photoUploadNewBtn:       { left: 600,  top: 10,  width: 160, height: 35 },
       uploadToEtsyBtn:         { left: 800,  top: 10,  width: 160, height: 35 },
-      clearKeyPhrasesBtn:      { left: 1030, top: 10,  width: 120, height: 35 },
+
       analyzeMetadataBtn:      { left: 600,  top: 100, width: 160, height: 35 },
 
       // Generation controls
@@ -752,13 +702,11 @@ Key Phrase Generation Using the .csv Sales Reports and .csv Product List Files:
       showDescriptionRulesBtn: { left: 150,  top: 0,   width: 0,   height: 0  },
 
       // Text inputs / areas
-      listingDescInput:        { left: 10,   top: 220, width: 490, height: 35 },
-      uploadedFilesList:       { left: 1083, top: 3,   width: 150, height: 35 },
+
       shopListings:            { left: 10,   top: 110, width: 500, height: 45 },
       searchKeyPhrases:        { left: 10,   top: 325, width: 500, height: 107 },
       listingTitle:            { left: 10,   top: 535, width: 1000,height: 45 },
       listingDescription:      { left: 10,   top: 540, width: 1400,height: 150 },
-      listingDescContainer:    { left: 10,   top: 185, width: 520,  height: 70  },
       titleCount:              { left: 10,   top: 585, width: 150,  height: 24  },
 
       // Drop zone
@@ -1191,39 +1139,6 @@ https://www.etsy.com/your/shops/me/listing-editor/edit/1822973998
       modalInstance.open();
     }
 
-    // CSV Drop Listener for uploadedFilesList element
-    const csvDropZone = document.getElementById("uploadedFilesList");
-    csvDropZone.addEventListener("dragover", e => {
-      e.preventDefault();
-      e.stopPropagation();
-      csvDropZone.style.borderColor = "#000";
-    });
-    csvDropZone.addEventListener("dragleave", e => {
-      e.preventDefault();
-      e.stopPropagation();
-      csvDropZone.style.borderColor = "#ccc";
-    });
-    csvDropZone.addEventListener("drop", async e => {
-      e.preventDefault();
-      e.stopPropagation();
-      csvDropZone.style.borderColor = "#ccc";
-      const files = e.dataTransfer.files;
-      for (let file of files) {
-        if (/\.csv$/i.test(file.name)) {
-          try {
-            const fileData = await uploadDocFile(file);
-            M.toast({ html: "CSV file uploaded with ID: " + (fileData.id || "N/A") });
-            window.uploadedCSVFileIds.push(fileData.id);
-            csvDropZone.value = window.uploadedCSVFileIds.join("\n");
-            await updateVectorStore();
-          } catch (err) {
-            console.error(err);
-            M.toast({ html: "Error uploading CSV: " + err.message });
-          }
-        }
-      }
-    });
-
     // Helper function: parseListingNumbers using regex to split by comma with optional whitespace
     function parseListingNumbers(rawInput) {
       const parts = rawInput.split(/\s*,\s*/);
@@ -1462,9 +1377,11 @@ document.getElementById("shopListings").addEventListener("keydown", (e) => {
     });
 
     async function generateTagPhrases() {
-      let question = document.getElementById("listingDescInput").value.trim();
+      let question =
+        (document.getElementById("listingDescription")?.value || "").trim() ||
+        (document.getElementById("listingTitle")?.value || "").trim();
       if (!question) {
-        M.toast({ html: "Please enter a question in the Listing Description." });
+        M.toast({ html: "Please enter text in Etsy Listing DESCRIPTION or TITLE." });
         return;
       }
       try {
@@ -1519,7 +1436,7 @@ document.getElementById("shopListings").addEventListener("keydown", (e) => {
 Here is some relevant data from our CSV files:
 ${retrievedContext}
 
-Listing Description (for emphasis): "${question}"
+Etsy Listing DESCRIPTION (for emphasis): "${question}"
 Emphasis on SEO and generating effective Etsy tag phrases.
 
 Keyword Rules:
