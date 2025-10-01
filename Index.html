@@ -8,7 +8,6 @@
   <!-- Import Google Material Icons and Materialize CSS -->
   <link href="https://fonts.googleapis.com/icon?family=Material+Icons" rel="stylesheet">
   <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/materialize/1.0.0/css/materialize.min.css">
-  <!-- Include PapaParse for CSV parsing -->
   <!-- Include piexifjs for EXIF manipulation -->
   <script src="https://cdn.jsdelivr.net/npm/piexifjs@1.0.4/piexif.min.js"></script>
   <!-- Include SortableJS -->
@@ -372,7 +371,7 @@
   
   <div class="phrases-header configurable" id="userProvidedKeyPhrasesContainer">
     <span id="searchKeyPhrasesHeading" class="section-heading configurable">Search Key Phrases</span>
-    <!-- Clear button deletes files from the vector store -->
+   
     <div id="dropZone" class="configurable">Image Drop</div>
     <button id="analyzeMetadataBtn" class="btn waves-effect waves-light configurable">Analyze Photos</button>
   </div>
@@ -544,13 +543,11 @@ Option 3:
     <div class="modal-content">
       <h4>Keyword Rules</h4>
       <textarea id="keywordRulesTextarea" style="width:100%; height:300px;">
-Key Phrase Generation Using the .csv Sales Reports and .csv Product List Files:
 - Generate exactly 13 tag phrases. 
 - Each one of the 13 individual Key Phrases CAN NOT exceed a MAXIMUM of 20 characters including spaces, this must be STRICTLY adhered to above all other requirements.
 - It's very important that you DO NOT GENERATE Key Phrases that are too similar to one another. Prioritize using unique key words to offer a wider gamut of possibilities, don't overuse the same word too many time in all 13 Key Phrases.
 - The Key Phrases must be SEO friendly multi word phrases tailored for Etsy listing advertising.
-- Using the attached Vector Store Etsy sales report files extrapolate the best tag phrases based on sales performance of individual listings.
-- Correlate the Vector Store Etsy sales report of the top performing listings (Inclusive of Key Words and Key Phrases) with the user query from the Listing Description user input text box to generate statistically the most successful Key Phrases.
+-Description user input text box to generate statistically the most successful Key Phrases.
 - Maximize the word count in every Key Phrase to capture more audiences as long as they do not exceed 20 characters long including spaces. 
 - If the following words "Necklace", "Earrings","Earring", "Necklaces" are not present in the Listing Description user input text box then refrain from using these words in the generated Key Phrases
 - Look for the following words in the Listing Description text box "Charm", "Necklace", "Earrings", "Studs", "Hoops".
@@ -1561,7 +1558,6 @@ document.getElementById("shopListings").addEventListener("keydown", (e) => {
         }
       }
       updateStaticPreviewGrid();
-      document.getElementById("uploadedFilesList").value = window.uploadedCSVFileIds.join("\n");
     });
 
     function updateStaticPreviewGrid() {
@@ -1833,7 +1829,6 @@ document.getElementById("shopListings").addEventListener("keydown", (e) => {
           loadNextListingInQueue();
         }
       });
-      await listVectorStoreFiles();
     });
 
     async function exchangeCodeForToken(code) {
