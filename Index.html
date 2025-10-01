@@ -64,6 +64,8 @@
       resize: none;
       box-sizing: border-box;
       border: 1px solid grey;
+      font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace;
+      overflow-x: auto;
     }
     #searchKeyPhrases[rows="14"] {
       height: auto;
@@ -378,7 +380,7 @@
 
   <div id="container13" class="flex-container configurable">
     <div class="textbox-container configurable">
-      <textarea id="searchKeyPhrases" class="materialize-textarea" rows="14"></textarea>
+      <textarea id="searchKeyPhrases" class="materialize-textarea" rows="14" wrap="off"></textarea>
     </div>
   </div>
   
@@ -1333,6 +1335,20 @@ document.getElementById("shopListings").addEventListener("keydown", (e) => {
     }
     window.uploadPhotos = uploadPhotos;
 
+    function toTwoColumns(phrases, perCol = 7, gap = 3) {
+      const left = phrases.slice(0, perCol);
+      const right = phrases.slice(perCol, perCol * 2);
+      const leftWidth = Math.max(0, ...left.map(p => p.length));
+      const pad = leftWidth + gap; // space between columns
+      const lines = [];
+      for (let i = 0; i < perCol; i++) {
+        const l = (left[i] || "");
+        const r = (right[i] || "");
+        lines.push(l.padEnd(pad, " ") + r);
+      }
+      return lines.join("\n");
+    }
+
     async function uploadReservedPhotos() {
       let listingInput = document.getElementById("shopListings").value.trim();
       if (!listingInput) {
@@ -1403,12 +1419,27 @@ document.getElementById("shopListings").addEventListener("keydown", (e) => {
         if (phrasesArray.some(p => p.length > 20)) {
           throw new Error("Could not fix some phrases under 20 chars. Please try again.");
         }
-      const outputText = phrasesArray.join("\n");
+      // Build two side-by-side columns (max 7 phrases per column)
+      const left  = phrasesArray.slice(0, 7);
+      const right = phrasesArray.slice(7, 14);
+      const leftWidth = Math.max(0, ...left.map(p => p.length));
+      const pad = leftWidth + 3; // spaces between columns
+      const colLines = [];
+      for (let i = 0; i < 7; i++) {
+        const L = left[i]  || "";
+        const R = right[i] || "";
+        colLines.push(L.padEnd(pad, " ") + R);
+      }
+      const outputText = colLines.join("\n");
 
       // 1) Keep original box updated (backward compatibility)
       const skp = document.getElementById("searchKeyPhrases");
       if (skp) {
         skp.value = outputText;
+        // Ensure the columns render correctly
+        skp.setAttribute("wrap", "off");
+        skp.style.fontFamily = 'ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace';
+        skp.style.overflowX = "auto";
         const h1 = Math.max(180, skp.scrollHeight);
         skp.style.setProperty("height", h1 + "px", "important");
         skp.style.setProperty("overflow", "auto", "important");
