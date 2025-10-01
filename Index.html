@@ -1461,7 +1461,7 @@ document.getElementById("shopListings").addEventListener("keydown", (e) => {
           { role: "user", content: prompt }
         ],
         temperature: 1,
-        max_completion_tokens: 200
+        max_tokens: 200
       };
 
       const data = await callOpenAI(payload);
@@ -1493,7 +1493,7 @@ document.getElementById("shopListings").addEventListener("keydown", (e) => {
             { role: "user", content: prompt }
           ],
           temperature: 1,
-          max_completion_tokens: 30
+          max_tokens: 30
         };
 
         const data = await callOpenAI(payload);
@@ -1503,19 +1503,24 @@ document.getElementById("shopListings").addEventListener("keydown", (e) => {
       throw new Error("Could not generate a new short tag.");
     }
 
-    async function callOpenAI(payload) {
-      let response = await fetch("/.netlify/functions/openaiProxy", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(payload)
-      });
-      if (!response.ok) {
-        let errorData = await response.json();
-        throw new Error("API Error: " + (errorData.error ? errorData.error.message : response.statusText));
+      async function callOpenAI(payload) {
+        const res = await fetch("/.netlify/functions/openaiProxy", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify(payload)
+        });
+
+        const text = await res.text(); // handle both JSON and plain text error bodies
+        if (!res.ok) {
+          let msg = text;
+          try {
+            const j = JSON.parse(text);
+            msg = j?.error?.message || msg;
+          } catch (_) { /* non-JSON error body */ }
+          throw new Error("API Error: " + msg);
+        }
+        return JSON.parse(text);
       }
-      let jsonData = await response.json();
-      return jsonData;
-    }
 
     function updateTitleCount(text) {
       document.getElementById("titleCount").textContent = "Count: " + text.length;
