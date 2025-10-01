@@ -1460,7 +1460,7 @@ document.getElementById("shopListings").addEventListener("keydown", (e) => {
           { role: "system", content: "Generate concise, varied Etsy tags. No duplicates. Each tag ≤ 20 chars." },
           { role: "user", content: prompt }
         ],
-        max_tokens: 200
+        max_completion_tokens: 100
       };
 
       const data = await callOpenAI(payload);
@@ -1492,7 +1492,7 @@ document.getElementById("shopListings").addEventListener("keydown", (e) => {
             { role: "user", content: prompt }
           ],
         
-          max_tokens: 30
+          max_completion_tokens: 30
         };
 
         const data = await callOpenAI(payload);
