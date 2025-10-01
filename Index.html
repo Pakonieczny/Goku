@@ -2098,7 +2098,7 @@ Important: Return ONLY the title as plain text.`;
     ],
     max_output_tokens: 120,
     reasoning: { effort: "minimal" },
-    verbosity: "low"
+    text: { verbosity: "low" }
   };
   const data = await callOpenAI(payload);
   const output = extractResponseText(data);
@@ -2152,7 +2152,7 @@ Important: Return ONLY the title as plain text.`;
       ],
       max_output_tokens: 220,
       reasoning: { effort: "minimal" },
-      verbosity: "low"
+      text: { verbosity: "low" }
     };
 
     try {
