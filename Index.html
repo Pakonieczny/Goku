@@ -1460,7 +1460,6 @@ document.getElementById("shopListings").addEventListener("keydown", (e) => {
           { role: "system", content: "Generate concise, varied Etsy tags. No duplicates. Each tag ≤ 20 chars." },
           { role: "user", content: prompt }
         ],
-        temperature: 1,
         max_tokens: 200
       };
 
@@ -1492,7 +1491,7 @@ document.getElementById("shopListings").addEventListener("keydown", (e) => {
             { role: "system", content: "Return ONE short tag only, no numbering, ≤ 20 chars." },
             { role: "user", content: prompt }
           ],
-          temperature: 1,
+        
           max_tokens: 30
         };
 
@@ -2011,7 +2010,7 @@ Important: Return ONLY the title as plain text.`;
       { role: "system", content: "Return ONLY the title as plain text." },
       { role: "user", content: promptText }
     ],
-    temperature: 1
+
   };
   try {
     let data = await callOpenAI(payload);
@@ -2053,7 +2052,7 @@ Important: Return ONLY the description as plain text.`;
       { role: "system", content: "Return ONLY the description as plain text." },
       { role: "user", content: promptText }
     ],
-    temperature: 1
+
   };
   try {
     let data = await callOpenAI(payload);
