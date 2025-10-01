@@ -1445,10 +1445,21 @@ document.getElementById("shopListings").addEventListener("keydown", (e) => {
         skp.style.fontFamily = 'ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace';
         skp.style.overflowX = "auto";
         skp.style.fontSize = "85%"; // 25% smaller for denser tag scan
-        const h1 = Math.max(180, skp.scrollHeight);
-        skp.style.setProperty("height", h1 + "px", "important");
-        skp.style.setProperty("overflow", "auto", "important");
-        if (window.M && M.textareaAutoResize) M.textareaAutoResize(skp);
+        // Clamp to exactly 7 lines (no dead space below the last line)
+        skp.setAttribute("rows", "7");                 // hint browsers
+        skp.style.setProperty("height", "auto", "important"); // reset before measuring
+        const cs = window.getComputedStyle(skp);
+        let lh = parseFloat(cs.lineHeight);
+        if (!lh || Number.isNaN(lh)) {
+          lh = parseFloat(cs.fontSize) * 1.2;          // fallback if line-height === "normal"
+        }
+        const padY    = (parseFloat(cs.paddingTop) || 0) + (parseFloat(cs.paddingBottom) || 0);
+        const borderY = (parseFloat(cs.borderTopWidth) || 0) + (parseFloat(cs.borderBottomWidth) || 0);
+        const exactPx = Math.ceil(lh * 7 + padY + borderY);
+        skp.style.setProperty("height",    exactPx + "px", "important");
+        skp.style.setProperty("min-height",exactPx + "px", "important");
+        skp.style.setProperty("max-height",exactPx + "px", "important");
+        skp.style.setProperty("overflow-y","hidden", "important"); // no vertical scrollbars
         skp.scrollTop = 0;
       }
 
