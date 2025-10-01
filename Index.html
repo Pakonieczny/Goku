@@ -82,7 +82,7 @@
       font-size: 1rem;
       line-height: 1.2;
       resize: none;
-      overflow: visible;
+      overflow: auto; /* was visible — content could be clipped with fixed height */
       box-sizing: border-box;
     }
 
@@ -718,7 +718,7 @@ Option 3:
       // Text inputs / areas
       listingDescInput:        { left: 10,   top: 220, width: 490, height: 35 },
       shopListings:            { left: 10,   top: 110, width: 500, height: 45 },
-      searchKeyPhrases:        { left: 10,   top: 325, width: 500, height: 107 },
+      searchKeyPhrases:        { left: 10,   top: 325, width: 500, height: 200 },
       listingTitle:            { left: 10,   top: 535, width: 1000,height: 45 },
       listingDescription:      { left: 10,   top: 540, width: 1400,height: 150 },
       listingDescContainer:    { left: 10,   top: 185, width: 520,  height: 70  },
@@ -1403,7 +1403,14 @@ document.getElementById("shopListings").addEventListener("keydown", (e) => {
         if (phrasesArray.some(p => p.length > 20)) {
           throw new Error("Could not fix some phrases under 20 chars. Please try again.");
         }
-        document.getElementById("searchKeyPhrases").value = phrasesArray.join("\n");
+        const skp = document.getElementById("searchKeyPhrases");
+        skp.value = phrasesArray.join("\n");
+        // Ensure visibility even under absolute layout caps
+        const h = Math.max(180, skp.scrollHeight);
+        skp.style.setProperty("height", h + "px", "important");
+        skp.style.setProperty("overflow", "auto", "important");
+        if (window.M && M.textareaAutoResize) M.textareaAutoResize(skp);
+        skp.scrollTop = 0;
         M.toast({ html: "Tag Phrases generated successfully!" });
       } catch (err) {
         console.error(err);
@@ -2047,18 +2054,6 @@ Important: Return ONLY the description as plain text.`;
     function updateTitleCount(text) {
       document.getElementById("titleCount").textContent = "Count: " + text.length;
     }
-
-   // Press Enter in Listing Description → generate tag phrases
-    (function attachEnterForDesc(){
-      const el = document.getElementById("listingDescInput");
-      if (!el) return;
-      el.addEventListener("keydown", (e) => {
-        if (e.key === "Enter" && !e.shiftKey) {
-          e.preventDefault();
-          generateTagPhrases();
-        }
-      });
-    })();
 
     document.getElementById("copyTitleBtn").addEventListener("click", () => {
       let text = document.getElementById("listingTitle").value;
