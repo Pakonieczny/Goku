@@ -4,7 +4,18 @@ exports.handler = async function(event, context) {
     const apiKey = process.env.OPENAI_API_KEY;
     if (!apiKey) throw new Error("Missing OPENAI_API_KEY environment variable");
 
-    const response = await fetch("https://api.openai.com/v1/chat/completions", {
+    // Route by payload shape: use Responses API when caller sends `input`
+    const wantsResponses =
+      payload && (payload.input !== undefined ||
+                  payload.max_output_tokens !== undefined ||
+                  payload.reasoning !== undefined ||
+                  payload.verbosity !== undefined);
+
+    const endpoint = wantsResponses
+      ? "https://api.openai.com/v1/responses"
+      : "https://api.openai.com/v1/chat/completions";
+
+    const response = await fetch(endpoint, {
       method: "POST",
       headers: {
         "Content-Type": "application/json",

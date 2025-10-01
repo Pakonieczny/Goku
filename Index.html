@@ -2021,14 +2021,20 @@ Key Phrases: "${keyPhrases}"
 ${rulesText}
 Important: Return ONLY the title as plain text.`;
   document.getElementById("listingTitle").value = "Generating title...";
-  let payload = {
+  const payload = {
     model: window.modelName,
-    messages: [
+    input: [
       { role: "system", content: "Return ONLY the title as plain text." },
       { role: "user", content: promptText }
     ],
-
+    max_output_tokens: 120,
+    reasoning: { effort: "minimal" },
+    verbosity: "low"
   };
+  const data = await callOpenAI(payload);
+  const output = extractResponseText(data);
+  document.getElementById("listingTitle").value = output || "No title generated.";
+  updateTitleCount(output);
   try {
     let data = await callOpenAI(payload);
     if (data.choices && data.choices.length > 0) {
@@ -2047,42 +2053,63 @@ Important: Return ONLY the title as plain text.`;
   let etsyLink = window.ETSY_SHOP_URL;
   let keyPhrases = document.getElementById("searchKeyPhrases").value.trim();
   let rawDescription = document.getElementById("listingDescInput").value.trim();
+
   if (!keyPhrases) {
     M.toast({ html: "Please provide the search key phrases." });
     return;
   }
-  let rulesText = document.getElementById("descriptionRulesTextarea").value;
-  let promptText = `
-You are ChatGPT using ${window.modelName}.
-Based on the inputs below, generate an Etsy Listing DESCRIPTION only.
-Input Context:
-Etsy Link: "${etsyLink}"
-Listing Description: "${rawDescription}"
-Key Phrases: "${keyPhrases}"
---- Rules for DESCRIPTION ---
-${rulesText}
-Important: Return ONLY the description as plain text.`;
-  document.getElementById("listingDescription").value = "Generating description...";
-  let payload = {
-    model: window.modelName,
-    messages: [
-      { role: "system", content: "Return ONLY the description as plain text." },
-      { role: "user", content: promptText }
-    ],
 
-  };
-  try {
-    let data = await callOpenAI(payload);
-    if (data.choices && data.choices.length > 0) {
-      let output = data.choices[0].message.content;
+  let rulesText = document.getElementById("descriptionRulesTextarea").value;
+
+  let promptText = `
+  You are ChatGPT using ${window.modelName}.
+  Based on the inputs below, generate an Etsy Listing DESCRIPTION only.
+  Input Context:
+  Etsy Link: "${etsyLink}"
+  Listing Description: "${rawDescription}"
+  Key Phrases: "${keyPhrases}"
+  --- Rules for DESCRIPTION ---
+  ${rulesText}
+  Important: Return ONLY the description as plain text.`;
+
+    document.getElementById("listingDescription").value = "Generating description...";
+
+    // Responses API payload for GPT-5
+    const payload = {
+      model: window.modelName, // "gpt-5"
+      input: [
+        { role: "system", content: "Return ONLY the description as plain text." },
+        { role: "user", content: promptText }
+      ],
+      max_output_tokens: 220,
+      reasoning: { effort: "minimal" },
+      verbosity: "low"
+    };
+
+    try {
+      const data = await callOpenAI(payload);
+
+      // Use global helper if present; otherwise unwrap Responses API locally
+      const output = (typeof extractResponseText === "function")
+        ? extractResponseText(data)
+        : (
+            typeof data?.output_text === "string" ? data.output_text :
+            (Array.isArray(data?.output)
+              ? data.output
+                  .flatMap(b => Array.isArray(b?.content) ? b.content : [])
+                  .map(p => (typeof p?.text === "string" ? p.text : ""))
+                  .join("")
+                  .trim()
+              : (data?.choices?.[0]?.message?.content || "")
+            ).trim()
+          );
+
       document.getElementById("listingDescription").value = output || "No description generated.";
-    } else {
-      document.getElementById("listingDescription").value = "No description generated.";
+    } catch (error) {
+      const msg = (error && error.message) ? error.message : String(error);
+      document.getElementById("listingDescription").value = "Error: " + msg;
     }
-  } catch (error) {
-    document.getElementById("listingDescription").value = "Error: " + error;
   }
-}
 
     async function callOpenAI(payload) {
       let response = await fetch("/.netlify/functions/openaiProxy", {
