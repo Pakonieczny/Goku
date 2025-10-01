@@ -353,6 +353,14 @@
       <input id="listingDescInput" type="text" placeholder="Enter your question here">
     </div>
   </div>
+
+  <!-- Key Words output -->
+  <div id="keyWordsContainer" class="flex-container configurable">
+    <span id="keyWordsHeading" class="section-heading configurable">Key Words</span>
+    <div class="textbox-container configurable">
+      <textarea id="keyWords" class="materialize-textarea" rows="14" placeholder="Generated Tag Phrases appear here"></textarea>
+    </div>
+  </div>
   
   <div id="topButtons">
     <button id="connectEtsyBtn" class="btn waves-effect waves-light configurable">Connect to Etsy</button>
@@ -740,6 +748,8 @@ Option 3:
       previewCell9:            { left: 1200, top: 340, width: 120, height: 158 },
 
       // Auto-assigned heading IDs (current session)
+      keyWords:                  { left: 10,   top: 720, width: 500, height: 200 },
+      keyWordsHeading:           { left: 10,   top: 685, width: 180, height: 27 },
       etsyShopListingsHeading:   { left: 10,   top: 75,  width: 180, height: 27 },
       searchKeyPhrasesHeading:   { left: 10,   top: 290, width: 180, height: 27 },
       listingTitleHeading:       { left: 10,   top: 505, width: 180, height: 27 },
@@ -1403,15 +1413,31 @@ document.getElementById("shopListings").addEventListener("keydown", (e) => {
         if (phrasesArray.some(p => p.length > 20)) {
           throw new Error("Could not fix some phrases under 20 chars. Please try again.");
         }
-        const skp = document.getElementById("searchKeyPhrases");
-        skp.value = phrasesArray.join("\n");
-        // Ensure visibility even under absolute layout caps
-        const h = Math.max(180, skp.scrollHeight);
-        skp.style.setProperty("height", h + "px", "important");
+      const outputText = phrasesArray.join("\n");
+
+      // 1) Keep original box updated (backward compatibility)
+      const skp = document.getElementById("searchKeyPhrases");
+      if (skp) {
+        skp.value = outputText;
+        const h1 = Math.max(180, skp.scrollHeight);
+        skp.style.setProperty("height", h1 + "px", "important");
         skp.style.setProperty("overflow", "auto", "important");
         if (window.M && M.textareaAutoResize) M.textareaAutoResize(skp);
         skp.scrollTop = 0;
-        M.toast({ html: "Tag Phrases generated successfully!" });
+      }
+
+      // 2) New "Key Words" box is the primary output
+      const kw = document.getElementById("keyWords");
+      if (kw) {
+        kw.value = outputText;
+        const h2 = Math.max(180, kw.scrollHeight);
+        kw.style.setProperty("height", h2 + "px", "important");
+        kw.style.setProperty("overflow", "auto", "important");
+        if (window.M && M.textareaAutoResize) M.textareaAutoResize(kw);
+        kw.scrollTop = 0;
+      }
+
+      M.toast({ html: "Tag Phrases generated successfully!" });
       } catch (err) {
         console.error(err);
         M.toast({ html: "Error generating valid tag phrases: " + err.message });
