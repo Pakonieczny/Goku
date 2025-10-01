@@ -14,11 +14,18 @@ exports.handler = async function(event, context) {
     });
 
     if (!response.ok) {
-      const errorData = await response.json();
-      return {
-        statusCode: response.status,
-        body: JSON.stringify({ error: errorData })
-      };
+      // Pass through OpenAI's JSON as-is so the frontend can read error.error.message
+      const raw = await response.text();
+      try {
+        const errJson = JSON.parse(raw);
+        return { statusCode: response.status, body: JSON.stringify(errJson) };
+      } catch {
+        // Fallback if upstream didn't return JSON
+        return {
+          statusCode: response.status,
+          body: JSON.stringify({ error: { message: raw || "Upstream error", status: response.status } })
+        };
+      }
     }
 
     const data = await response.json();

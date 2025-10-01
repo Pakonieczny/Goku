@@ -2048,6 +2048,18 @@ Important: Return ONLY the description as plain text.`;
       document.getElementById("titleCount").textContent = "Count: " + text.length;
     }
 
+   // Press Enter in Listing Description → generate tag phrases
+    (function attachEnterForDesc(){
+      const el = document.getElementById("listingDescInput");
+      if (!el) return;
+      el.addEventListener("keydown", (e) => {
+        if (e.key === "Enter" && !e.shiftKey) {
+          e.preventDefault();
+          generateTagPhrases();
+        }
+      });
+    })();
+
     document.getElementById("copyTitleBtn").addEventListener("click", () => {
       let text = document.getElementById("listingTitle").value;
       navigator.clipboard.writeText(text).catch(err => console.error("Copy error:", err));
