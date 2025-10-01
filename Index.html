@@ -9,7 +9,6 @@
   <link href="https://fonts.googleapis.com/icon?family=Material+Icons" rel="stylesheet">
   <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/materialize/1.0.0/css/materialize.min.css">
   <!-- Include PapaParse for CSV parsing -->
-  <script src="https://cdnjs.cloudflare.com/ajax/libs/PapaParse/5.3.2/papaparse.min.js"></script>
   <!-- Include piexifjs for EXIF manipulation -->
   <script src="https://cdn.jsdelivr.net/npm/piexifjs@1.0.4/piexif.min.js"></script>
   <!-- Include SortableJS -->
@@ -69,10 +68,6 @@
     }
     #searchKeyPhrases[rows="14"] {
       height: auto;
-    }
-    /* Ensure the CSV textarea can receive drop events */
-    #uploadedFilesList {
-      pointer-events: auto;
     }
     .flex-container {
       display: flex;
@@ -156,17 +151,6 @@
     /* Hide any unused drop zones */
     #fileDropZonesContainer {
       display: none;
-    }
-    #uploadedFilesList {
-      width: 225px;
-      height: 125px;
-      resize: none;
-      box-sizing: border-box;
-      border: 1px solid grey;
-      margin-left: 85px;
-      position: relative;
-      font-size: 0.875rem;
-      z-index: 10;
     }
     .modal {
       z-index: 9999 !important;
@@ -369,7 +353,6 @@
       <h5>Listing Description</h5>
       <input id="listingDescInput" type="text" placeholder="Enter your question here">
     </div>
-    <textarea id="uploadedFilesList" class="materialize-textarea" rows="2" placeholder="Drop CSV files here"></textarea>
   </div>
   
   <div id="topButtons">
@@ -390,7 +373,6 @@
   <div class="phrases-header configurable" id="userProvidedKeyPhrasesContainer">
     <span id="searchKeyPhrasesHeading" class="section-heading configurable">Search Key Phrases</span>
     <!-- Clear button deletes files from the vector store -->
-    <button id="clearKeyPhrasesBtn" class="btn-small waves-effect waves-light configurable">Clear CSV Files</button>
     <div id="dropZone" class="configurable">Image Drop</div>
     <button id="analyzeMetadataBtn" class="btn waves-effect waves-light configurable">Analyze Photos</button>
   </div>
@@ -605,17 +587,6 @@ Key Phrase Generation Using the .csv Sales Reports and .csv Product List Files:
       </div>
     </div>
   </div>
-  
-  <!-- New File Content Modal (to view CSV file content) -->
-  <div id="fileContentModal" class="modal">
-    <div class="modal-content">
-      <h4>File Content</h4>
-      <textarea id="fileContentModalText" style="width:100%; height:300px;" readonly></textarea>
-    </div>
-    <div class="modal-footer">
-      <a href="#!" class="modal-close waves-effect waves-green btn">Close</a>
-    </div>
-  </div>
 
   <!-- Layout Config Modal (mirrors shipping-1 flow) -->
   <div id="configModal" class="modal">
@@ -681,9 +652,6 @@ Key Phrase Generation Using the .csv Sales Reports and .csv Product List Files:
     window.REDIRECT_URI = "https://delicate-tanuki-616ac0.netlify.app/";
     window.modelName = "gpt-5";
     window.accessToken;
-    window.soldOrdersCSV = [];
-    window.listingsCSV = [];
-    window.uploadedCSVFileIds = [];
     window.photoNames = [];
     window.previewImages = [];
     window.photoMeta = [];
@@ -739,7 +707,6 @@ Key Phrase Generation Using the .csv Sales Reports and .csv Product List Files:
       connectEtsyBtn:          { left: 10,   top: 10,  width: 160, height: 35 },
       photoUploadNewBtn:       { left: 600,  top: 10,  width: 160, height: 35 },
       uploadToEtsyBtn:         { left: 800,  top: 10,  width: 160, height: 35 },
-      clearKeyPhrasesBtn:      { left: 1030, top: 10,  width: 120, height: 35 },
       analyzeMetadataBtn:      { left: 600,  top: 100, width: 160, height: 35 },
 
       // Generation controls
@@ -753,7 +720,6 @@ Key Phrase Generation Using the .csv Sales Reports and .csv Product List Files:
 
       // Text inputs / areas
       listingDescInput:        { left: 10,   top: 220, width: 490, height: 35 },
-      uploadedFilesList:       { left: 1083, top: 3,   width: 150, height: 35 },
       shopListings:            { left: 10,   top: 110, width: 500, height: 45 },
       searchKeyPhrases:        { left: 10,   top: 325, width: 500, height: 107 },
       listingTitle:            { left: 10,   top: 535, width: 1000,height: 45 },
@@ -1170,8 +1136,6 @@ https://www.etsy.com/your/shops/me/listing-editor/edit/1822973998
     // On persistDataBeforeRedirect, store current queue to local storage.
     function persistDataBeforeRedirect() {
       try {
-        localStorage.setItem("soldOrdersCSV", JSON.stringify(window.soldOrdersCSV));
-        localStorage.setItem("listingsCSV", JSON.stringify(window.listingsCSV));
         const listingsInputValue = document.getElementById("shopListings").value || "";
         localStorage.setItem("shopListingsText", listingsInputValue);
         localStorage.setItem("listingQueue", JSON.stringify(window.listingQueue));
@@ -1190,39 +1154,6 @@ https://www.etsy.com/your/shops/me/listing-editor/edit/1822973998
       let modalInstance = M.Modal.getInstance(modalElem) || M.Modal.init(modalElem);
       modalInstance.open();
     }
-
-    // CSV Drop Listener for uploadedFilesList element
-    const csvDropZone = document.getElementById("uploadedFilesList");
-    csvDropZone.addEventListener("dragover", e => {
-      e.preventDefault();
-      e.stopPropagation();
-      csvDropZone.style.borderColor = "#000";
-    });
-    csvDropZone.addEventListener("dragleave", e => {
-      e.preventDefault();
-      e.stopPropagation();
-      csvDropZone.style.borderColor = "#ccc";
-    });
-    csvDropZone.addEventListener("drop", async e => {
-      e.preventDefault();
-      e.stopPropagation();
-      csvDropZone.style.borderColor = "#ccc";
-      const files = e.dataTransfer.files;
-      for (let file of files) {
-        if (/\.csv$/i.test(file.name)) {
-          try {
-            const fileData = await uploadDocFile(file);
-            M.toast({ html: "CSV file uploaded with ID: " + (fileData.id || "N/A") });
-            window.uploadedCSVFileIds.push(fileData.id);
-            csvDropZone.value = window.uploadedCSVFileIds.join("\n");
-            await updateVectorStore();
-          } catch (err) {
-            console.error(err);
-            M.toast({ html: "Error uploading CSV: " + err.message });
-          }
-        }
-      }
-    });
 
     // Helper function: parseListingNumbers using regex to split by comma with optional whitespace
     function parseListingNumbers(rawInput) {
@@ -1283,10 +1214,6 @@ document.getElementById("shopListings").addEventListener("keydown", (e) => {
     // On page load, restore the listing queue from local storage (if available)
     function restoreDataAfterRedirect() {
       try {
-        let soCSV = localStorage.getItem("soldOrdersCSV");
-        if (soCSV) { window.soldOrdersCSV = JSON.parse(soCSV); }
-        let liCSV = localStorage.getItem("listingsCSV");
-        if (liCSV) { window.listingsCSV = JSON.parse(liCSV); }
         // Load listingQueue from local storage if it exists.
         let storedQueue = localStorage.getItem("listingQueue");
         if (storedQueue) {
@@ -1488,121 +1415,62 @@ document.getElementById("shopListings").addEventListener("keydown", (e) => {
     }
 
     async function getInitialPhrases(question, keywordRules) {
-      let store_id = localStorage.getItem("vectorStoreId");
-      let retrievedContext = "";
-      if (store_id) {
-        try {
-          let resp = await fetch("/.netlify/functions/vectorStore", {
-            method: "POST",
-            headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({
-              action: "query",
-              store_id,
-              query: question,
-              topK: 5
-            })
-          });
-          if (resp.ok) {
-            let data = await resp.json();
-            retrievedContext = data?.data || "";
-          } else {
-            M.toast({ html: "Could not retrieve context from store. HTTP " + resp.status });
-          }
-        } catch (err) {
-          console.error("Error retrieving CSV context:", err);
-          M.toast({ html: "Error retrieving context: " + err.message });
-        }
-      } else {
-        M.toast({ html: "Warning: no vector store ID in localStorage. Possibly no CSV context loaded." });
-      }
-      let prompt = `
-Here is some relevant data from our CSV files:
-${retrievedContext}
+      const prompt = `
+    Listing Description: "${question}"
 
-Listing Description (for emphasis): "${question}"
-Emphasis on SEO and generating effective Etsy tag phrases.
+    Keyword Rules:
+    ${keywordRules}
 
-Keyword Rules:
-${keywordRules}
+    Generate exactly 13 Etsy SEO key phrases (each ≤ 20 characters). Return as plain text, one per line.
+      `.trim();
 
-Generate exactly 13 SEO key phrases (each ≤ 20 characters). Return as plain text.
-      `;
-      let payload = {
+      const payload = {
         model: window.modelName,
         messages: [
-          { role: "system", content: "Use the CSV context above to generate more accurate key phrases." },
+          { role: "system", content: "Generate concise, varied Etsy tags. No duplicates. Each tag ≤ 20 chars." },
           { role: "user", content: prompt }
         ],
         temperature: 0.7,
         max_tokens: 500
       };
-      let data = await callOpenAI(payload);
-      let answer = data.choices[0].message.content || "";
-      let phrasesArray = answer
+
+      const data = await callOpenAI(payload);
+      const answer = (data.choices?.[0]?.message?.content || "");
+      return answer
         .split(/[\n,]+/)
         .map(s => s.replace(/^\d+\.\s*/, "").trim())
-        .filter(p => p);
-      return phrasesArray;
+        .filter(Boolean);
     }
 
     async function regenerateSinglePhrase(question, keywordRules, currentValid, maxAttempts = 5) {
       for (let attempt = 1; attempt <= maxAttempts; attempt++) {
-        let store_id = localStorage.getItem("vectorStoreId");
-        let retrievedContext = "";
-        if (store_id) {
-          try {
-            let resp = await fetch("/.netlify/functions/vectorStore", {
-              method: "POST",
-              headers: { "Content-Type": "application/json" },
-              body: JSON.stringify({
-                action: "query",
-                store_id,
-                query: question,
-                topK: 5
-              })
-            });
-            if (resp.ok) {
-              let data = await resp.json();
-              retrievedContext = data?.data || "";
-            }
-          } catch (err) {
-            console.warn("Could not retrieve CSV context for single phrase regeneration:", err);
-          }
-        }
-        let prompt = `
-We have 12 valid phrases:
-${currentValid.join(", ")}
+        const prompt = `
+    We already have valid phrases:
+    ${currentValid.join(", ")}
 
-Now produce ONE new phrase (≤20 chars) that satisfies the same rules:
+    Produce ONE new Etsy tag (≤ 20 chars) that is not too similar to the above.
 
-Here is some relevant data from our CSV:
-${retrievedContext}
+    Listing Description: "${question}"
 
-Keyword Rules:
-${keywordRules}
-Return only one phrase in plain text.
-        `;
-        let payload = {
+    Keyword Rules:
+    ${keywordRules}
+        `.trim();
+
+        const payload = {
           model: window.modelName,
           messages: [
-            { role: "system", content: "Generate a single phrase, up to 20 characters." },
+            { role: "system", content: "Return ONE short tag only, no numbering, ≤ 20 chars." },
             { role: "user", content: prompt }
           ],
-          temperature: 0.7,
-          max_tokens: 150
+          temperature: 0.8,
+          max_tokens: 30
         };
-        let data = await callOpenAI(payload);
-        let answerText = data.choices[0].message.content || "";
-        let candidate = answerText.trim()
-          .replace(/^\d+\.\s*/, "")
-          .split("\n")[0]
-          .trim();
-        if (candidate.length <= 20) {
-          return candidate;
-        }
-        console.warn(`Attempt ${attempt}: Single phrase too long => "${candidate}"`);
+
+        const data = await callOpenAI(payload);
+        const tag = (data.choices?.[0]?.message?.content || "").split(/[\n,]+/)[0].trim();
+        if (tag && tag.length <= 20 && !currentValid.includes(tag)) return tag;
       }
-      throw new Error("Failed to generate a single phrase under 20 chars after multiple attempts.");
+      throw new Error("Could not generate a new short tag.");
     }
 
     async function callOpenAI(payload) {
@@ -1631,76 +1499,6 @@ Return only one phrase in plain text.
       let text = document.getElementById("listingDescription").value;
       navigator.clipboard.writeText(text).catch(err => console.error("Copy error:", err));
     });
-    
-    async function clearStoreCSVFiles() {
-      let storeId = localStorage.getItem("vectorStoreId");
-      if (!storeId) {
-        M.toast({ html: "No vector store ID found. Nothing to clear." });
-        return;
-      }
-      let payload = {
-        action: "clear_csv_files",
-        store_id: storeId
-      };
-      try {
-        let resp = await fetch("/.netlify/functions/vectorStore", {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify(payload)
-        });
-        if (!resp.ok) {
-          M.toast({ html: "Error clearing CSV files, status " + resp.status });
-          return;
-        }
-        let data = await resp.json();
-        M.toast({ html: "Cleared CSV files from the store: " + JSON.stringify(data) });
-        window.uploadedCSVFileIds = [];
-        localStorage.removeItem("uploadedCSVFileIds");
-        document.getElementById("uploadedFilesList").value = "";
-        await listVectorStoreFiles();
-      } catch (err) {
-        console.error(err);
-        M.toast({ html: "clearStoreCSVFiles error: " + err.message });
-      }
-    }
-    document.getElementById("clearKeyPhrasesBtn").addEventListener("click", clearStoreCSVFiles);
-
-    async function listVectorStoreFiles() {
-      let storeId = localStorage.getItem("vectorStoreId");
-      if (!storeId) {
-        M.toast({ html: "No vector store ID found in localStorage. Not listing files." });
-        return;
-      }
-      let payload = {
-        action: "list_files",
-        store_id: storeId
-      };
-      try {
-        let resp = await fetch("/.netlify/functions/vectorStore", {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify(payload)
-        });
-        if (!resp.ok) {
-          M.toast({ html: "listVectorStoreFiles: error " + resp.status });
-          return;
-        }
-        let data = await resp.json();
-        if (!data.data || !Array.isArray(data.data)) {
-          M.toast({ html: "No files found in the store." });
-          return;
-        }
-        let displayNames = data.data.map(f => {
-          let fname = f.filename || "";
-          fname = fname.replace(/(\.csv|\.txt)$/i, "");
-          return fname;
-        });
-        document.getElementById("uploadedFilesList").value = displayNames.join("\n");
-      } catch (err) {
-        console.error(err);
-        M.toast({ html: "Error listing store files: " + err.message });
-      }
-    }
 
     function loadReservedPhotos() {
       const stored = localStorage.getItem("reservedPhotos");
@@ -1724,94 +1522,6 @@ Return only one phrase in plain text.
         img.onerror = reject;
         img.src = dataURL;
       });
-    }
-
-    async function uploadDocFile(file) {
-      return new Promise((resolve, reject) => {
-        const reader = new FileReader();
-        reader.onload = async (event) => {
-          try {
-            const dataURL = event.target.result;
-            let base64Content;
-            let newFileName = file.name;
-            let contentType = "text/csv";
-            if (/\.csv$/i.test(file.name)) {
-              const csvBase64 = dataURL.split(",")[1];
-              const csvText = csvBase64 ? atob(csvBase64) : "";
-              const parsed = Papa.parse(csvText, { header: false });
-              const plainText = parsed.data.map(row => row.join(" ")).join("\n");
-              base64Content = btoa(plainText);
-              newFileName = file.name.replace(/\.csv$/i, ".txt");
-              contentType = "text/plain";
-            } else {
-              base64Content = dataURL.split(",")[1];
-              if (file.name.toLowerCase().endsWith(".docx")) {
-                contentType = "application/vnd.openxmlformats-officedocument.wordprocessingml.document";
-              } else if (file.name.toLowerCase().endsWith(".doc")) {
-                contentType = "application/msword";
-              }
-            }
-            if (!base64Content) throw new Error("File content is empty.");
-            const payload = { 
-              file: base64Content, 
-              fileName: newFileName, 
-              purpose: "user_data" 
-            };
-            const response = await fetch("/.netlify/functions/uploadFile", {
-              method: "POST",
-              headers: { "Content-Type": "application/json" },
-              body: JSON.stringify(payload)
-            });
-            if (!response.ok) {
-              let serverText = "";
-              try { serverText = await response.text(); } catch {}
-              throw new Error(`Upload failed ${response.status}${serverText ? " — " + serverText : ""}`);
-            }
-            const fileData = await response.json();
-            fileData.name = fileData.name || newFileName;
-            fileData.id = fileData.id || newFileName || ('file-' + Date.now());
-            resolve(fileData);
-          } catch (err) { 
-            reject(err); 
-          }
-        };
-        reader.onerror = (err) => {
-          reject(err);
-        };
-        reader.readAsDataURL(file);
-      });
-    }
-
-    async function updateVectorStore() {
-      const fileIds = window.uploadedCSVFileIds || [];
-      if (fileIds.length === 0) {
-        M.toast({ html: "No CSV files uploaded yet, skipping vector store update." });
-        return;
-      }
-      try {
-        const vectorStorePayload = { 
-          name: "CSV Vector Store", 
-          file_ids: fileIds,
-          model: "text-embedding-ada-002"
-        };
-        const response = await fetch("/.netlify/functions/vectorStore", {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify(vectorStorePayload)
-        });
-        if (!response.ok) {
-          throw new Error("Error creating vector store, status " + response.status);
-        }
-        const data = await response.json();
-        M.toast({ html: "Vector store created/updated. Store ID: " + data.id });
-        if (data && data.id) {
-          localStorage.setItem("vectorStoreId", data.id);
-          M.toast({ html: "Saved store_id in localStorage: " + data.id });
-        }
-      } catch (err) {
-        M.toast({ html: "updateVectorStore error: " + err.message });
-        console.error(err);
-      }
     }
 
     const dropZone = document.getElementById("dropZone");
