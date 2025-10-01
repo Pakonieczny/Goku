@@ -64,6 +64,7 @@
       resize: none;
       box-sizing: border-box;
       border: 1px solid grey;
+      font-size: 0.75rem; /* 25% smaller than the 1rem textarea default */
       font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace;
       overflow-x: auto;
     }
@@ -1419,15 +1420,18 @@ document.getElementById("shopListings").addEventListener("keydown", (e) => {
         if (phrasesArray.some(p => p.length > 20)) {
           throw new Error("Could not fix some phrases under 20 chars. Please try again.");
         }
-      // Build two side-by-side columns (max 7 phrases per column)
+      // Build two side-by-side columns with numbering (max 7 phrases per column)
       const left  = phrasesArray.slice(0, 7);
       const right = phrasesArray.slice(7, 14);
-      const leftWidth = Math.max(0, ...left.map(p => p.length));
+      const leftLabels = left.map((p, i) => `${i + 1}. ${p || ""}`);
+      const rightLabels = right.map((p, i) => `${i + 8}. ${p || ""}`);
+      // pad width based on the fully labeled left column
+      const leftWidth = Math.max(0, ...leftLabels.map(s => s.length));
       const pad = leftWidth + 3; // spaces between columns
       const colLines = [];
       for (let i = 0; i < 7; i++) {
-        const L = left[i]  || "";
-        const R = right[i] || "";
+        const L = leftLabels[i]  || `${i + 1}. `;
+        const R = rightLabels[i] || "";
         colLines.push(L.padEnd(pad, " ") + R);
       }
       const outputText = colLines.join("\n");
@@ -1440,6 +1444,7 @@ document.getElementById("shopListings").addEventListener("keydown", (e) => {
         skp.setAttribute("wrap", "off");
         skp.style.fontFamily = 'ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace';
         skp.style.overflowX = "auto";
+        skp.style.fontSize = "75%"; // 25% smaller for denser tag scan
         const h1 = Math.max(180, skp.scrollHeight);
         skp.style.setProperty("height", h1 + "px", "important");
         skp.style.setProperty("overflow", "auto", "important");
@@ -1453,6 +1458,49 @@ document.getElementById("shopListings").addEventListener("keydown", (e) => {
         M.toast({ html: "Error generating valid tag phrases: " + err.message });
       }
     }
+
+    // Precise double-click selection inside #searchKeyPhrases:
+    // Select ONLY the tag phrase (exclude "1. ", "2. ", and exclude the other column).
+    (function attachTagPhraseDblClick(){
+      const ta = document.getElementById("searchKeyPhrases");
+      if (!ta) return;
+      ta.addEventListener("dblclick", function(e){
+        const text = ta.value;
+        // Use current selectionStart as the click anchor
+        let pos = ta.selectionStart ?? 0;
+        // Identify current line
+        const lineStart = text.lastIndexOf("\n", Math.max(0, pos - 1)) + 1;
+        const nl = text.indexOf("\n", pos);
+        const lineEnd = (nl === -1 ? text.length : nl);
+        const line = text.slice(lineStart, lineEnd);
+        // Line format: "<num>. <leftPhrase><spaces><num>. <rightPhrase>"
+        const mNumLeft = line.match(/^(\s*\d{1,2}\.\s)/);
+        if (!mNumLeft) return;
+        const leftPrefixLen = mNumLeft[0].length;     // includes "1. "
+        const rest = line.slice(leftPrefixLen);
+        const mDelim = /\s{3,}\d{1,2}\.\s/.exec(rest); // gap + "8. "
+        let leftText = rest, rightText = "", rightStartInLine = -1;
+        if (mDelim) {
+          leftText = rest.slice(0, mDelim.index);
+          const rightOffset = mDelim.index + mDelim[0].length;
+          rightText = rest.slice(rightOffset);
+          rightStartInLine = leftPrefixLen + rightOffset;
+        }
+        const leftStartInLine = leftPrefixLen;
+        const leftEndInLine   = leftPrefixLen + leftText.length;
+        const clickOffset = (ta.selectionStart ?? 0) - lineStart;
+        // Snap selection to the phrase under the click:
+        if (clickOffset >= leftStartInLine && clickOffset <= leftEndInLine) {
+          ta.setSelectionRange(lineStart + leftStartInLine, lineStart + leftEndInLine);
+          e.preventDefault();
+          return;
+        }
+        if (rightText && clickOffset >= rightStartInLine && clickOffset <= (line.length)) {
+          ta.setSelectionRange(lineStart + rightStartInLine, lineEnd);
+          e.preventDefault();
+        }
+      });
+    })();
 
     // --- Unify Responses/Chat return shapes (robust to either) ---
      function extractResponseText(data) {
