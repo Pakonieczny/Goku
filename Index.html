@@ -1444,6 +1444,20 @@ document.getElementById("shopListings").addEventListener("keydown", (e) => {
       }
     }
 
+    // --- Unify Responses/Chat return shapes (robust to either) ---
+     function extractResponseText(data) {
+       if (typeof data?.output_text === "string") return data.output_text;
+       if (Array.isArray(data?.output)) {
+         // Concatenate any text parts the Responses API produced
+         return data.output
+           .flatMap(block => Array.isArray(block?.content) ? block.content : [])
+           .map(part => typeof part?.text === "string" ? part.text : "")
+           .join("").trim();
+       }
+       // Fallback if upstream ever returns Chat-style
+       return (data?.choices?.[0]?.message?.content || "").trim();
+     }
+
     async function getInitialPhrases(question, keywordRules) {
       const prompt = `
     Listing Description: "${question}"
@@ -1455,16 +1469,18 @@ document.getElementById("shopListings").addEventListener("keydown", (e) => {
       `.trim();
 
       const payload = {
-        model: window.modelName,
-        messages: [
+        model: window.modelName,            // "gpt-5"
+        input: [
           { role: "system", content: "Generate concise, varied Etsy tags. No duplicates. Each tag ≤ 20 chars." },
           { role: "user", content: prompt }
         ],
-        max_completion_tokens: 100
+        max_output_tokens: 200,
+        reasoning: { effort: "minimal" },   // light reasoning = faster/cheaper on GPT-5
+        verbosity: "low"
       };
 
       const data = await callOpenAI(payload);
-      const answer = (data.choices?.[0]?.message?.content || "");
+      const answer = extractResponseText(data);
       return answer
         .split(/[\n,]+/)
         .map(s => s.replace(/^\d+\.\s*/, "").trim())
@@ -1487,16 +1503,17 @@ document.getElementById("shopListings").addEventListener("keydown", (e) => {
 
         const payload = {
           model: window.modelName,
-          messages: [
+          input: [
             { role: "system", content: "Return ONE short tag only, no numbering, ≤ 20 chars." },
             { role: "user", content: prompt }
           ],
-        
-          max_completion_tokens: 30
+          max_output_tokens: 30,
+          reasoning: { effort: "minimal" },
+          verbosity: "low"
         };
 
         const data = await callOpenAI(payload);
-        const tag = (data.choices?.[0]?.message?.content || "").split(/[\n,]+/)[0].trim();
+        const tag = extractResponseText(data).split(/[\n,]+/)[0].trim();
         if (tag && tag.length <= 20 && !currentValid.includes(tag)) return tag;
       }
       throw new Error("Could not generate a new short tag.");
