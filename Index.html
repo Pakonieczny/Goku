@@ -1476,7 +1476,7 @@ document.getElementById("shopListings").addEventListener("keydown", (e) => {
         ],
         max_output_tokens: 200,
         reasoning: { effort: "minimal" },   // light reasoning = faster/cheaper on GPT-5
-        text.verbosity: "low"
+        text: { verbosity: "low" }
       };
 
       const data = await callOpenAI(payload);
@@ -1509,7 +1509,7 @@ document.getElementById("shopListings").addEventListener("keydown", (e) => {
           ],
           max_output_tokens: 30,
           reasoning: { effort: "minimal" },
-          text.verbosity: "low"
+          text: { verbosity: "low" }
         };
 
         const data = await callOpenAI(payload);
@@ -2029,7 +2029,7 @@ Important: Return ONLY the title as plain text.`;
     ],
     max_output_tokens: 120,
     reasoning: { effort: "minimal" },
-    text.verbosity: "low"
+    verbosity: "low"
   };
   const data = await callOpenAI(payload);
   const output = extractResponseText(data);
@@ -2083,7 +2083,7 @@ Important: Return ONLY the title as plain text.`;
       ],
       max_output_tokens: 220,
       reasoning: { effort: "minimal" },
-      text.verbosity: "low"
+      verbosity: "low"
     };
 
     try {
