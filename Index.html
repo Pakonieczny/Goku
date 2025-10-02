@@ -462,8 +462,18 @@ Default Photo Analysis Rules:
 6. Limit the description to 200 characters.
 7. Do not mention earrings unless explicitly identified.
 8. Do not mix necklace and earring descriptions.
-9. Be more to the point with  much less filler words and more jewelry and best fit client focused descriptions
-10. Less narrative and story building with more focus on facts and details about the jewelry and charm to appeal to potential clients.        
+9. - Ban low-value synonyms: never use {token, keepsake, dainty, whimsical, delicate, unique, inspired, design, lightweight, idea, accessory, accessories}.
+10. - Ban the following: "Gift for Him", "Statement Piece", "Unique", "Spiritual Gift", "Outdoor Style", "accessories", "simple", "minimalist", "whimsical", "cute", "filled", "gold filled", "silver", "Vibes", "solid gold", "gold vermeil", "rosegold", "14k", "handmade", "quirky", "delicate", "accessory", "for", "dangle", "gold plated", "jewelry", "custom", "celestial", "design", "lightweight", "Fine Chain Necklace", "Small", "Large", "Nice", "Long", "Dark", "Short", "and", "but", "light", "heavy", "Wanderlust", "Theme", "Minimal Chain Gift", "Tiny Pendant Chain", "Charm Look", "Charm Wear", "Chain Necklace", "Small Pendant Chain", "Everyday"
+11. - Semantic near-dup drop: if two tags differ only by a leading adjective (e.g., “tiny bird charm” vs “bird charm”) or only by material (e.g., “gold bird pendant” vs “rosegold bird pendant”), keep the single highest-volume variant and discard the rest.
+12. Be more to the point with  much less filler words and more jewelry and best fit client focused descriptions
+13. ANTI-REPETITION (TITLE)
+  - No repeated bigrams: compute all 2-word sequences; each must be unique across the title.
+  - Do not repeat the same head-noun pair (e.g., “bird pendant”) more than once.
+  - Use at most one subject root twice: if “hummingbird” appears, use “bird” at most once elsewhere.
+  - Material frequency: words {gold, rosegold, silver, 14k} → max 2 total occurrences across the whole title.
+  - “gift for …” phrase appears at most once in the title; avoid stacking variants (“gift for her”, “gift for mom”) in the same title.
+  - Ban filler adjectives in titles as well: {dainty, whimsical, delicate, unique, keepsake, inspired, design, lightweight}.
+14. Less narrative and story building with more focus on facts and details about the jewelry and charm to appeal to potential clients.        
       Descriptions of good fit between client needs and our offerings:  
       Example a. Soccer mom would have an appeal for a soccer ball necklace, or a team jersey.         
       Example b. A nurse would have an appeal for a stethoscope earrings, or syringe.        
@@ -546,17 +556,27 @@ Option 3:
     <div class="modal-content">
       <h4>Keyword Rules</h4>
       <textarea id="keywordRulesTextarea" style="width:100%; height:300px;">
-- Generate exactly 13 tag phrases. 
-- Each one of the 13 individual Key Phrases CAN NOT exceed a MAXIMUM of 20 characters including spaces, this must be STRICTLY adhered to above all other requirements.
-- It's very important that you DO NOT GENERATE Key Phrases that are too similar to one another. Prioritize using unique key words to offer a wider gamut of possibilities, don't overuse the same word too many time in all 13 Key Phrases.
-- The Key Phrases must be SEO friendly multi word phrases tailored for Etsy listing advertising.
--Description user input text box to generate statistically the most successful Key Phrases.
-- Maximize the word count in every Key Phrase to capture more audiences as long as they do not exceed 20 characters long including spaces. 
-- If the following words "Necklace", "Earrings","Earring", "Necklaces" are not present in the Listing Description user input text box then refrain from using these words in the generated Key Phrases
-- Look for the following words in the Listing Description text box "Charm", "Necklace", "Earrings", "Studs", "Hoops".
-- "Charm" must appear at least once in the generated Key Phrases.
-- "Gift for Her" must appear at least once in the generated Key Phrases.
--Good examples of Listing Titles, focus on hey they flow and the Title structure, use these as templates for what a good Listing Title looks like:
+REPETITION & DEDUP (TAGS)
+- Canonicalize before checking duplicates: lowercase, trim, collapse spaces, singularize simple plurals (charms→charm, earrings→earring), strip leading adjectives {tiny, small, little}.
+- Exact tag uniqueness: no two identical canonical tags.
+ANTI-REPETITION (TITLE)
+- No repeated bigrams: compute all 2-word sequences; each must be unique across the title.
+- Do not repeat the same head-noun pair (e.g., “bird pendant”) more than once.
+- Use at most one subject root twice: if “hummingbird” appears, use “bird” at most once elsewhere.
+- Material frequency: words {gold, rosegold, silver, 14k} → max 2 total occurrences across the whole title.
+- “gift for …” phrase appears at most once in the title; avoid stacking variants (“gift for her”, “gift for mom”) in the same title.
+- Ban filler adjectives in titles as well: {dainty, whimsical, delicate, unique, keepsake, inspired, design, lightweight}.
+- Head-noun bigram rule: extract the last two nouns of each tag (e.g., “bird pendant”, “bird charm”). Each head-noun bigram may appear AT MOST once across all 13 tags.
+- Phrase families:
+  • “gift for …” → MAX 1 tag total (e.g., “gift for her”, “gift for mom”). Prefer the most relevant variant and drop others.
+  • Materials {gold, rosegold, silver, 14k} → appear in ≤ 3 tags combined.
+  • Subject roots: if “hummingbird” is used, allow “bird” generic in ≤ 2 tags; overall subject root (“bird/hummingbird/wildlife/nature”) ≤ 5 tags.
+- Noun cap: each of {charm, pendant, necklace, earring} may appear in ≤ 3 tags; the same pair (e.g., “bird pendant”) may appear in ≤ 1 tag.
+- Ban low-value synonyms: never use {token, keepsake, dainty, whimsical, delicate, unique, inspired, design, lightweight, idea, accessory, accessories}.
+- Ban the following: "Gift for Him", "Statement Piece", "Unique", "Spiritual Gift", "Outdoor Style", "accessories", "simple", "minimalist", "whimsical", "cute", "filled", "gold filled", "silver", "Vibes", "solid gold", "gold vermeil", "rosegold", "14k", "handmade", "quirky", "delicate", "accessory", "for", "dangle", "gold plated", "jewelry", "custom", "celestial", "design", "lightweight", "Fine Chain Necklace", "Small", "Large", "Nice", "Long", "Dark", "Short", "and", "but", "light", "heavy", "Wanderlust", "Theme", "Minimal Chain Gift", "Tiny Pendant Chain", "Charm Look", "Charm Wear", "Chain Necklace", "Small Pendant Chain", "Everyday"
+- Semantic near-dup drop: if two tags differ only by a leading adjective (e.g., “tiny bird charm” vs “bird charm”) or only by material (e.g., “gold bird pendant” vs “rosegold bird pendant”), keep the single highest-volume variant and discard the rest.
+
+-Good examples of Listing Titles, focus on how they flow and the Title structure, use these as templates for what a good Listing Title looks like:
     a. Trex Pendant Dinosaur Jewelry Mini Dino Necklace Gift for Her T-Rex Necklace Dainty Dinosaur Necklace Lover Gift Dinosaur Pendant
     b. Tennis Earrings Sports Earring Tennis Player Earrings Handmade Jewelry Sports Gifts Game Day Outfit Tennis Player Gift Custom Earring
     c. Megaphone Necklace Cheerleader Jewelry Gift for Her Cheer Team Charm Cheer Squad Gifts Cheer Coach Gift Cheerleader Necklace Senior Gifts
@@ -565,8 +585,7 @@ Option 3:
     f. Volleyball Necklace Sports Team Pendant Gift for Her Volleyball Jewelry Personalized Volleyball Mom Charm Sports Necklace Volleyball Coach
     g. Basketball Charm Necklace Gold Basketball Sports Jewelry Coach Gift Basketball Player Sports Pendant Basketball Gift for Her Basketball Mom
     h. Hummingbird Earrings Gold Bird Jewelry Gift for Her Mockingjay Stud Earrings Bird Lover Hummingbird Charm Jewelry Hunger Games Bird Earrings
- 
-- Exclude: "Gift for Him", "Statement Piece", "Unique", "Spiritual Gift", "Outdoor Style", "accessories", "simple", "minimalist", "whimsical", "cute", "filled", "gold filled", "silver", "Vibes", "solid gold", "gold vermeil", "rosegold", "14k", "handmade", "quirky", "delicate", "accessory", "for", "dangle", "gold plated", "jewelry", "custom", "celestial", "design", "lightweight", "Fine Chain Necklace", "Small", "Large", "Nice", "Long", "Dark", "Short", "and", "but", "light", "heavy", "Wanderlust", "Theme", "Minimal Chain Gift", "Tiny Pendant Chain", "Charm Look", "Charm Wear", "Chain Necklace", "Small Pendant Chain", "Everyday"
+
       </textarea>
     </div>
     <div class="modal-footer">
