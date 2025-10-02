@@ -1644,7 +1644,7 @@ document.getElementById("shopListings").addEventListener("keydown", (e) => {
           { role: "user", content: prompt }
         ],
         max_output_tokens: 1000,
-        reasoning: { effort: "low" },   // light reasoning = faster/cheaper on GPT-5
+        reasoning: { effort: "minimal" },   // light reasoning = faster/cheaper on GPT-5
         text: { verbosity: "medium" }
       };
 
@@ -1677,7 +1677,7 @@ document.getElementById("shopListings").addEventListener("keydown", (e) => {
             { role: "user", content: prompt }
           ],
           max_output_tokens: 1000,
-          reasoning: { effort: "low" },
+          reasoning: { effort: "minimal" },
           text: { verbosity: "medium" }
         };
 
@@ -2196,7 +2196,7 @@ document.getElementById("shopListings").addEventListener("keydown", (e) => {
           { role: "user", content: promptText }
         ],
         max_output_tokens: 1000,
-        reasoning: { effort: "low" },
+        reasoning: { effort: "minimal" },
         text: { verbosity: "medium" }
       };
 
