@@ -706,7 +706,7 @@ Option 3:
             ],
             max_output_tokens: 120,
             reasoning: { effort: "high" },
-            text: { verbosity: "high" }
+            text: { verbosity: "medium" }
           };
 
           const data = await callOpenAI(payload);
@@ -1645,7 +1645,7 @@ document.getElementById("shopListings").addEventListener("keydown", (e) => {
         ],
         max_output_tokens: 200,
         reasoning: { effort: "high" },   // light reasoning = faster/cheaper on GPT-5
-        text: { verbosity: "high" }
+        text: { verbosity: "medium" }
       };
 
       const data = await callOpenAI(payload);
@@ -1676,9 +1676,9 @@ document.getElementById("shopListings").addEventListener("keydown", (e) => {
             { role: "system", content: "Return ONE short tag only, no numbering, ≤ 20 chars." },
             { role: "user", content: prompt }
           ],
-          max_output_tokens: 30,
-        reasoning: { effort: "high" },   
-        text: { verbosity: "high" }
+          max_output_tokens: 120,
+          reasoning: { effort: "high" },
+          text: { verbosity: "medium" }
         };
 
         const data = await callOpenAI(payload);
@@ -2196,8 +2196,8 @@ document.getElementById("shopListings").addEventListener("keydown", (e) => {
           { role: "user", content: promptText }
         ],
         max_output_tokens: 120,
-        reasoning: { effort: "high" },   
-        text: { verbosity: "high" }
+        reasoning: { effort: "high" },
+        text: { verbosity: "medium" }
       };
 
       try {
@@ -2243,9 +2243,9 @@ document.getElementById("shopListings").addEventListener("keydown", (e) => {
         { role: "system", content: "Return ONLY the description as plain text." },
         { role: "user", content: promptText }
       ],
-      max_output_tokens: 220,
-        reasoning: { effort: "high" },   
-        text: { verbosity: "high" }
+      max_output_tokens: 200,
+      reasoning: { effort: "high" },
+      text: { verbosity: "medium" }
     };
 
     try {
