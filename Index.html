@@ -705,8 +705,8 @@ Option 3:
               }
             ],
             max_output_tokens: 1000,
-            reasoning: { effort: "medium" },
-            text: { verbosity: "medium" }
+            reasoning: { effort: "low" },
+            text: { verbosity: "low" }
           };
 
           const data = await callOpenAI(payload);
@@ -1644,8 +1644,8 @@ document.getElementById("shopListings").addEventListener("keydown", (e) => {
           { role: "user", content: prompt }
         ],
         max_output_tokens: 1000,
-        reasoning: { effort: "medium" },   // light reasoning = faster/cheaper on GPT-5
-        text: { verbosity: "medium" }
+        reasoning: { effort: "low" },   // light reasoning = faster/cheaper on GPT-5
+        text: { verbosity: "low" }
       };
 
       const data = await callOpenAI(payload);
@@ -1677,8 +1677,8 @@ document.getElementById("shopListings").addEventListener("keydown", (e) => {
             { role: "user", content: prompt }
           ],
           max_output_tokens: 1000,
-          reasoning: { effort: "medium" },
-          text: { verbosity: "medium" }
+          reasoning: { effort: "low" },
+          text: { verbosity: "low" }
         };
 
         const data = await callOpenAI(payload);
@@ -2196,8 +2196,8 @@ document.getElementById("shopListings").addEventListener("keydown", (e) => {
           { role: "user", content: promptText }
         ],
         max_output_tokens: 1000,
-        reasoning: { effort: "medium" },
-        text: { verbosity: "medium" }
+        reasoning: { effort: "low" },
+        text: { verbosity: "low" }
       };
 
       try {
@@ -2244,8 +2244,8 @@ document.getElementById("shopListings").addEventListener("keydown", (e) => {
         { role: "user", content: promptText }
       ],
       max_output_tokens: 1000,
-      reasoning: { effort: "medium" },
-      text: { verbosity: "medium" }
+      reasoning: { effort: "low" },
+      text: { verbosity: "low" }
     };
 
     try {
