@@ -681,7 +681,7 @@ Option 3:
 
           const prompt = `
   You are generating Etsy listing photo metadata.
-  Return ONE concise alt/metadata line (<= 200 chars), plain text only.
+  Return ONE concise alt/metadata line (<= 125 chars), plain text only.
   Prefer concrete product details you can see: material, shape, color, finish, style.
   If rules conflict with what you see, trust the image.
   Listing context (optional):
@@ -695,7 +695,7 @@ Option 3:
           const payload = {
             model: window.modelName || "gpt-5",
             input: [
-              { role: "system", content: "Return ONLY one plain-text line, <=200 characters." },
+              { role: "system", content: "Return ONLY one plain-text line, <=125 characters." },
               {
                 role: "user",
                 content: [
@@ -705,8 +705,8 @@ Option 3:
               }
             ],
             max_output_tokens: 100,
-            reasoning: { effort: "minimal" },
-            text: { verbosity: "low" }
+            reasoning: { effort: "medium" },
+            text: { verbosity: "medium" }
           };
 
           const data = await callOpenAI(payload);
@@ -1644,8 +1644,8 @@ document.getElementById("shopListings").addEventListener("keydown", (e) => {
           { role: "user", content: prompt }
         ],
         max_output_tokens: 200,
-        reasoning: { effort: "minimal" },   // light reasoning = faster/cheaper on GPT-5
-        text: { verbosity: "low" }
+        reasoning: { effort: "medium" },   // light reasoning = faster/cheaper on GPT-5
+        text: { verbosity: "medium" }
       };
 
       const data = await callOpenAI(payload);
@@ -1676,9 +1676,9 @@ document.getElementById("shopListings").addEventListener("keydown", (e) => {
             { role: "system", content: "Return ONE short tag only, no numbering, ≤ 20 chars." },
             { role: "user", content: prompt }
           ],
-          max_output_tokens: 30,
-          reasoning: { effort: "minimal" },
-          text: { verbosity: "low" }
+          max_output_tokens: 130,
+          reasoning: { effort: "medium" },
+          text: { verbosity: "medium" }
         };
 
         const data = await callOpenAI(payload);
@@ -2196,8 +2196,8 @@ document.getElementById("shopListings").addEventListener("keydown", (e) => {
           { role: "user", content: promptText }
         ],
         max_output_tokens: 120,
-        reasoning: { effort: "minimal" },
-        text: { verbosity: "low" }
+        reasoning: { effort: "medium" },
+        text: { verbosity: "medium" }
       };
 
       try {
@@ -2244,8 +2244,8 @@ document.getElementById("shopListings").addEventListener("keydown", (e) => {
         { role: "user", content: promptText }
       ],
       max_output_tokens: 220,
-      reasoning: { effort: "minimal" },
-      text: { verbosity: "low" }
+      reasoning: { effort: "medium" },
+      text: { verbosity: "medium" }
     };
 
     try {
