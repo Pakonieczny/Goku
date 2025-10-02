@@ -2071,52 +2071,45 @@ document.getElementById("shopListings").addEventListener("keydown", (e) => {
     });
     
     async function generateTitleOnly() {
-  let etsyLink = window.ETSY_SHOP_URL;
-  let keyPhrases = document.getElementById("searchKeyPhrases").value.trim();
-  let rawDescription = document.getElementById("listingDescInput").value.trim();
-  if (!keyPhrases) {
-    M.toast({ html: "Please provide the search key phrases." });
-    return;
-  }
-  let rulesText = document.getElementById("titleRulesTextarea").value;
-  let promptText = `
-You are ChatGPT using ${window.modelName}.
-Based on the inputs below, generate an Etsy Listing TITLE only.
-Input Context:
-Etsy Link: "${etsyLink}"
-Listing Description: "${rawDescription}"
-Key Phrases: "${keyPhrases}"
---- Rules for TITLE ---
-${rulesText}
-Important: Return ONLY the title as plain text.`;
-  document.getElementById("listingTitle").value = "Generating title...";
-  const payload = {
-    model: window.modelName,
-    input: [
-      { role: "system", content: "Return ONLY the title as plain text." },
-      { role: "user", content: promptText }
-    ],
-    max_output_tokens: 120,
-    reasoning: { effort: "minimal" },
-    text: { verbosity: "low" }
-  };
-  const data = await callOpenAI(payload);
-  const output = extractResponseText(data);
-  document.getElementById("listingTitle").value = output || "No title generated.";
-  updateTitleCount(output);
-  try {
-    let data = await callOpenAI(payload);
-    if (data.choices && data.choices.length > 0) {
-      let output = data.choices[0].message.content;
-      document.getElementById("listingTitle").value = output || "No title generated.";
-      updateTitleCount(output);
-    } else {
-      document.getElementById("listingTitle").value = "No title generated.";
+      let etsyLink = window.ETSY_SHOP_URL;
+      let keyPhrases = document.getElementById("searchKeyPhrases").value.trim();
+      let rawDescription = document.getElementById("listingDescInput").value.trim();
+      if (!keyPhrases) { M.toast({ html: "Please provide the search key phrases." }); return; }
+
+      let rulesText = document.getElementById("titleRulesTextarea").value;
+      let promptText = `
+    You are ChatGPT using ${window.modelName}.
+    Based on the inputs below, generate an Etsy Listing TITLE only.
+    Input Context:
+    Etsy Link: "${etsyLink}"
+    Listing Description: "${rawDescription}"
+    Key Phrases: "${keyPhrases}"
+    --- Rules for TITLE ---
+    ${rulesText}
+    Important: Return ONLY the title as plain text.`;
+
+      document.getElementById("listingTitle").value = "Generating title...";
+      const payload = {
+        model: window.modelName,
+        input: [
+          { role: "system", content: "Return ONLY the title as plain text." },
+          { role: "user", content: promptText }
+        ],
+        max_output_tokens: 120,
+        reasoning: { effort: "minimal" },
+        text: { verbosity: "low" }
+      };
+
+      try {
+        const data = await callOpenAI(payload);
+        const output = extractResponseText(data);
+        document.getElementById("listingTitle").value = output || "No title generated.";
+        updateTitleCount(output || "");
+      } catch (error) {
+        const msg = (error && error.message) ? error.message : String(error);
+        document.getElementById("listingTitle").value = "Error: " + msg;
+      }
     }
-  } catch (error) {
-    document.getElementById("listingTitle").value = "Error: " + error;
-  }
-}
 
     async function generateDescriptionOnly() {
   let etsyLink = window.ETSY_SHOP_URL;
