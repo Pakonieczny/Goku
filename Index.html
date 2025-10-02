@@ -704,8 +704,8 @@ Option 3:
                 ]
               }
             ],
-            max_output_tokens: 1000,
-            reasoning: { effort: "low" },
+            max_output_tokens: 2000,
+            reasoning: { effort: "medium" },
             text: { verbosity: "medium" }
           };
 
@@ -1643,8 +1643,8 @@ document.getElementById("shopListings").addEventListener("keydown", (e) => {
           { role: "system", content: "Generate concise, varied Etsy tags. No duplicates. Each tag ≤ 20 chars." },
           { role: "user", content: prompt }
         ],
-        max_output_tokens: 1200,
-        reasoning: { effort: "low" },   // light reasoning = faster/cheaper on GPT-5
+        max_output_tokens: 2000,
+        reasoning: { effort: "medium" },   // light reasoning = faster/cheaper on GPT-5
         text: { verbosity: "medium" }
       };
 
@@ -1676,8 +1676,8 @@ document.getElementById("shopListings").addEventListener("keydown", (e) => {
             { role: "system", content: "Return ONE short tag only, no numbering, ≤ 20 chars." },
             { role: "user", content: prompt }
           ],
-          max_output_tokens: 1000,
-          reasoning: { effort: "low" },
+          max_output_tokens: 2000,
+          reasoning: { effort: "medium" },
           text: { verbosity: "medium" }
         };
 
@@ -2195,8 +2195,8 @@ document.getElementById("shopListings").addEventListener("keydown", (e) => {
           { role: "system", content: "Return ONLY the title as plain text." },
           { role: "user", content: promptText }
         ],
-        max_output_tokens: 1200,
-        reasoning: { effort: "low" },
+        max_output_tokens: 2000,
+        reasoning: { effort: "medium" },
         text: { verbosity: "medium" }
       };
 
@@ -2243,8 +2243,8 @@ document.getElementById("shopListings").addEventListener("keydown", (e) => {
         { role: "system", content: "Return ONLY the description as plain text." },
         { role: "user", content: promptText }
       ],
-      max_output_tokens: 1220,
-      reasoning: { effort: "low" },
+      max_output_tokens: 2000,
+      reasoning: { effort: "medium" },
       text: { verbosity: "medium" }
     };
 
