@@ -644,6 +644,106 @@ Option 3:
       return { analyzeAndEmbedMetadata };
     })();
   </script>
+
+  <!-- Fallback: inline metadataHandler to avoid 404 while keeping the same API -->
+  <script>
+    window.metadataHandler = window.metadataHandler || (function(){
+      async function analyzeAndEmbedMetadata(i) {
+        const txt = (window.previewImages && window.previewImages[i]) ? "OK" : "no image";
+        window.photoMeta = window.photoMeta || [];
+        window.photoMeta[i] = "AUTO: " + txt;
+        const ta = document.getElementById("metadataTextarea");
+        if (ta) {
+          ta.value = Array.from({ length: Math.min(7, window.previewImages.length) }, (_, idx) =>
+            `${idx + 1}. ${window.photoMeta[idx] || ""}`.trim()
+          ).join("\n").trim();
+        }
+      }
+      return { analyzeAndEmbedMetadata };
+    })();
+  </script>
+
+  <!-- ⬇️ Paste your REAL GPT-5 vision-backed handler RIGHT BELOW ⬇️ -->
+  <script>
+    // Real GPT-5 vision-backed metadata generator
+    window.metadataHandler = (function () {
+      async function analyzeAndEmbedMetadata(i) {
+        try {
+          const imgData = (window.previewImages && window.previewImages[i]) || null;
+          if (!imgData) {
+            if (window.M?.toast) M.toast({ html: "No image in slot " + (i + 1) });
+            return;
+          }
+
+          const rules = document.getElementById("analyzeRulesTextarea")?.value?.trim() || "";
+          const listingDesc = document.getElementById("listingDescInput")?.value?.trim() || "";
+          const fileHint = (window.photoNames?.[i] || "").replace(/\.[a-z0-9]+$/i, "");
+
+          const prompt = `
+  You are generating Etsy listing photo metadata.
+  Return ONE concise alt/metadata line (<= 200 chars), plain text only.
+  Prefer concrete product details you can see: material, shape, color, finish, style.
+  If rules conflict with what you see, trust the image.
+  Listing context (optional):
+  ${listingDesc ? ("- " + listingDesc) : ""}
+  Rules (optional):
+  ${rules ? ("- " + rules) : ""}
+  File hint (optional):
+  ${fileHint ? ("- " + fileHint) : ""}
+  `.trim();
+
+          const payload = {
+            model: window.modelName || "gpt-5",
+            input: [
+              { role: "system", content: "Return ONLY one plain-text line, <=200 characters." },
+              {
+                role: "user",
+                content: [
+                  { type: "input_text", text: prompt },
+                  { type: "input_image", image_url: imgData }
+                ]
+              }
+            ],
+            max_output_tokens: 120,
+            reasoning: { effort: "minimal" },
+            text: { verbosity: "low" }
+          };
+
+          const data = await callOpenAI(payload);
+          const raw = (typeof extractResponseText === "function")
+            ? extractResponseText(data)
+            : (data?.output_text || "").trim();
+
+          const best = (raw || listingDesc || fileHint || "Jewelry photo")
+            .replace(/\s+/g, " ")
+            .slice(0, 200);
+
+          window.photoMeta = window.photoMeta || [];
+          window.photoMeta[i] = best;
+
+          const s = document.getElementById("metadataStatus" + i);
+          if (s) s.textContent = "✓ analyzed";
+
+          const ta = document.getElementById("metadataTextarea");
+          if (ta) {
+            const count = Math.min(7, window.previewImages.length);
+            const lines = Array.from({ length: count }, (_, idx) =>
+              `${idx + 1}. ${window.photoMeta[idx] || ""}`.trim()
+            ).join("\n").trim();
+            if (lines) ta.value = lines;
+          }
+
+          return best;
+        } catch (e) {
+          console.error("metadataHandler.analyzeAndEmbedMetadata error:", e);
+          if (window.M?.toast) M.toast({ html: "Metadata error: " + e.message });
+        }
+      }
+
+      return { analyzeAndEmbedMetadata };
+    })();
+  </script>
+    
   <script>
     // The temporary debug toast notifications have been removed.
 
