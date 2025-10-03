@@ -463,7 +463,7 @@ Default Photo Analysis Rules:
 7. Do not mention earrings unless explicitly identified.
 8. Do not mix necklace and earring descriptions.
 9. - Ban low-value synonyms: never use {token, keepsake, dainty, whimsical, delicate, unique, inspired, design, lightweight, idea, accessory, accessories}.
-10. - Ban the following: "Gift for Him", "Statement Piece", "Unique", "Spiritual Gift", "Outdoor Style", "accessories", "simple", "minimalist", "whimsical", "cute", "filled", "gold filled", "silver", "Vibes", "solid gold", "gold vermeil", "rosegold", "14k", "handmade", "quirky", "delicate", "accessory", "for", "dangle", "gold plated", "jewelry", "custom", "celestial", "design", "lightweight", "Fine Chain Necklace", "Small", "Large", "Nice", "Long", "Dark", "Short", "and", "but", "light", "heavy", "Wanderlust", "Theme", "Minimal Chain Gift", "Tiny Pendant Chain", "Charm Look", "Charm Wear", "Chain Necklace", "Small Pendant Chain", "Everyday"
+10. - Ban the following: "Gift for Him", "Statement Piece", "Unique", "Spiritual Gift", "Outdoor Style", "accessories", "simple", "minimalist", "whimsical", "cute", "filled", "gold filled", "silver", "Vibes", "solid gold", "gold vermeil", "rosegold", "14k", "handmade", "quirky", "delicate", "accessory", "for", "dangle", "gold plated", "jewelry", "custom", "celestial", "design", "lightweight", "Fine Chain Necklace", "Small", "Large", "Nice", "Long", "Dark", "Short", "and", "but", "light", "heavy", "Wanderlust", "Theme", "Minimal Chain Gift", "Tiny Pendant Chain", "Charm Look", "Charm Wear", "Chain Necklace", "Small Pendant Chain", "Everyday", "etched", "detail", "smooth", "polished".
 11. - Semantic near-dup drop: if two tags differ only by a leading adjective (e.g., “tiny bird charm” vs “bird charm”) or only by material (e.g., “gold bird pendant” vs “rosegold bird pendant”), keep the single highest-volume variant and discard the rest.
 12. Be more to the point with  much less filler words and more jewelry and best fit client focused descriptions
 13. ANTI-REPETITION (TITLE)
@@ -492,33 +492,85 @@ Default Photo Analysis Rules:
     <div class="modal-content">
       <h4>Title Rules</h4>
       <textarea id="titleRulesTextarea" style="width:100%; height:300px;">
-Title Structure & Formatting:
-- Titles MUST begin with the SAME TWO WORDS as in the Listing Description user input text box.
-- Never begin any Listing Title with these words "Charm", "Necklace", "Earrings", "Studs", "Hoops"
-- The second word in every Listing Title must be one of the following "Necklace", "Earrings", "Charm", "Studs", "Hoops". Look for the correct word in the user provided Listing Description text box. 
-- If non of the following words "Necklace", "Earrings","Earring", "Necklaces" are in the "Listing Description" text box then refrain from using these words in the generated Listing Title
-- Generate the Title Listing from 5-7 SEO Etsy optimized long-tail key phrases (2-5 words each) that flow dramatically as proper sentence.
-- Product Type words (Examples: "Fish", "Tree", "Angel", "Volleyball", "Dolphin", "Penguin") must always come first.
-- Ensure grammatical flow and no punctuation.
+TITLE RULES — v2025-10-03 (Supersedes all prior title directives)
 
-Word Usage & Frequency:
-- No word may appear more than three times.
-- "earrings" must be plural and follow a noun.
-- The word" stud" can only be used if the word "earring" or "earrings" is present in the "Listing Description" text box.
+SCOPE & PRECEDENCE
+- These rules replace and overrule any previous instructions about titles (including mandatory “gold”, “for”, or forced “charm” usage).
+- Apply to every generated TITLE string.
 
-Use of "For":
-- "for" must appear at least twice in a grammatically correct manner as part of the Listing Title.
+LENGTH
+- Target: 120–135 characters.
+- Hard cap: 140 characters (never exceed).
+- Do not intentionally produce <120 unless no compliant phrasing can reach 120.
 
-Title Length & Word Order:
-- Titles must be between 125 and 140 characters.
-- Adjectives must follow nouns.
-- Avoid plurals for "stud" and "animal"; use plurals for "hoops" and "earrings" correctly.
+STRUCTURE
+- The first word MUST be the product type (e.g., Necklace, Bracelet, Stud Earrings, Hoop Earrings).
+- Never start with a material, color, adjective, or brand term.
+- Write as a single line of plain text (no commas, slashes, hyphens, emojis, or extra spaces).
+
+VOCABULARY BLOCKLIST (strict)
+- Disallow these tokens anywhere in the title (case-insensitive, match whole words):
+  and, or, for, gold, silver, rosegold, 14k, solid gold, gold plated, gold filled, rose gold filled, sterling silver, 14k solid gold,
+  jewelry, accessories, accessory, custom, simple, unique, delicate, whimsical, cute, minimal, minimalist, celestial, design,
+  lightweight, inspired, idea, statement, polka dot, beady chain, keepsake, mockingjay
+- If any blocked token appears, the title is invalid and must be regenerated.
+
+MATERIALS & COLORS
+- Do not mention precious metal materials or karat values in titles (handled in description/attributes).
+
+“CHARM” RULE
+- If the product type is any form of “Necklace” or a layering piece: the word “charm” is NOT allowed.
+- For other product types (e.g., Earrings, Bracelet): “charm” may appear at most once, never as the first or last word.
+
+REPETITION & PHRASE CONTROL
+- Do not repeat the product type.
+- Do not repeat the same bigram (two-word phrase) more than once (e.g., “bar necklace” appears max one time).
+- Any single word may appear at most 3 times.
+- Avoid close synonyms that recreate the same phrase intent (e.g., “bar pendant” + “bar necklace” + “bar chain” is excessive—keep exactly one).
+
+EARRINGS-SPECIFIC RULES
+- Use “earrings” only in plural, and only after a noun (e.g., “Croissant Earrings”).
+- If “stud” appears, it must be directly before “earrings” (e.g., “stud earrings”).
+- If “earrings” appears more than once, ensure there are at least three words between each occurrence.
+- Do not exceed three total occurrences of “earrings”.
+
+PUNCTUATION & CASING
+- Allowed characters: letters, numbers, and single spaces.
+- Disallow commas, hyphens/dashes, slashes, quotes, and emojis.
+- Use either Title Case or consistent sentence case; do not use ALL CAPS.
+
+SEO SLICE BEHAVIOR
+- Construct the title so that contiguous 3–5 word windows read as natural, SEO-sensible phrases without reordering.
+- Do not begin or end the entire title with a preposition.
+- Never end the title with the word “Gift”.
+
+CONFLICT HANDLING
+- If following a rule would introduce a blocked token, omit that token and restructure to remain within length/structure constraints.
+- These rules take priority over any template that requires specific words now on the blocklist.
+
+VALIDATION CHECKLIST (must all be true)
+[ ] 120 ≤ length ≤ 140
+[ ] First token is a product type (not material/color/adjective)
+[ ] No blocklisted tokens present
+[ ] If product is Necklace/layering → “charm” absent
+[ ] Otherwise “charm” count ≤ 1 and not first/last
+[ ] No repeated bigrams; product type not repeated
+[ ] Word frequency per token ≤ 3
+[ ] If “earrings” present → plural, after a noun, ≤ 3 total, 3+ words spacing between repeats
+[ ] No commas/hyphens/slashes/emojis; single-space separation
+[ ] Does not end with “Gift”
+
+OPTIONAL REGEX GUARDRAILS (case-insensitive; treat \b as word boundary)
+- Blocklist scan (sample):  \b(and|or|for|gold|silver|rosegold|14k|solid gold|gold plated|gold filled|rose gold filled|sterling silver|14k solid gold|jewelry|accessories?|custom|simple|unique|delicate|whimsical|cute|minimal(?:ist)?|celestial|design|lightweight|inspired|idea|statement|polka dot|beady chain|keepsake|mockingjay)\b
+- Illegal punctuation:  [,/\\\-\"'’`]| {2,}
+- Starts with product type (example set—extend as needed):  ^(?:necklace|bracelet|stud earrings|hoop earrings|drop earrings|ring|anklet)\b
+- “charm” forbidden for necklaces:  ^necklace\b.*\bcharm\b
+- “stud” must precede “earrings”:  \bstud\b(?!\s+earrings\b)
+- “earrings” repeated too closely:  \bearrings\b(?:\s+\w+){0,2}\s+\bearrings\b  (invalidate on match)
 
 SEO Optimization:
 - The Listing Title should be comprised of at least seven optimized SEO Key Phrases that dramatically flow well together.
 
-Prohibited Words:
-- Exclude: "accessories", "unique", "simple", "minimalist", "whimsical", "cute", "filled", "gold filled", "silver", "solid gold", "gold vermeil", "rosegold", "14k", "handmade", "quirky", "delicate", "accessory", "for", "dangle", "gold plated", "jewelry", "custom", "celestial", "design", "lightweight".
       </textarea>
     </div>
     <div class="modal-footer">
@@ -723,7 +775,7 @@ ANTI-REPETITION (TITLE)
                 ]
               }
             ],
-            max_output_tokens: 1000,
+            max_output_tokens: 120,
             reasoning: { effort: "low" },
             text: { verbosity: "medium" }
           };
@@ -1662,7 +1714,7 @@ document.getElementById("shopListings").addEventListener("keydown", (e) => {
           { role: "system", content: "Generate concise, varied Etsy tags. No duplicates. Each tag ≤ 20 chars." },
           { role: "user", content: prompt }
         ],
-        max_output_tokens: 1000,
+        max_output_tokens: 120,
         reasoning: { effort: "minimal" },   // light reasoning = faster/cheaper on GPT-5
         text: { verbosity: "medium" }
       };
@@ -1695,7 +1747,7 @@ document.getElementById("shopListings").addEventListener("keydown", (e) => {
             { role: "system", content: "Return ONE short tag only, no numbering, ≤ 20 chars." },
             { role: "user", content: prompt }
           ],
-          max_output_tokens: 1000,
+          max_output_tokens: 120,
           reasoning: { effort: "minimal" },
           text: { verbosity: "medium" }
         };
@@ -2214,7 +2266,7 @@ document.getElementById("shopListings").addEventListener("keydown", (e) => {
           { role: "system", content: "Return ONLY the title as plain text." },
           { role: "user", content: promptText }
         ],
-        max_output_tokens: 1000,
+        max_output_tokens: 120,
         reasoning: { effort: "minimal" },
         text: { verbosity: "medium" }
       };
@@ -2262,7 +2314,7 @@ document.getElementById("shopListings").addEventListener("keydown", (e) => {
         { role: "system", content: "Return ONLY the description as plain text." },
         { role: "user", content: promptText }
       ],
-      max_output_tokens: 1000,
+      max_output_tokens: 120,
       reasoning: { effort: "low" },
       text: { verbosity: "medium" }
     };
