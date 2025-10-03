@@ -494,39 +494,48 @@ Default Photo Analysis Rules:
       <textarea id="titleRulesTextarea" style="width:100%; height:300px;">
 TITLE RULES (STRICT — MATCH THE EXAMPLES EXACTLY)
 
-STRUCTURE (exact order)
-1) Lead = {Subject/Motif} {Product-Type}
+CORE STRUCTURE (exact order)
+1) Lead = [Action/Style ]{Motif} {Product-Type}
 2) Divider = one colon ":" (exactly one in the whole title)
-3) Materials = 2–4 items (comma-separated; optional "or" before the last)
+3) Materials = 2–4 items (comma-separated; may include "Handmade" once; optional "or" before the last)
 4) Tail = compact category/occasion phrase
-5) Never repeat any of the following words (Necklace, Charm, Disc, Stud, Earrings, Hoop, Pendant)
+5) Never repeat any of these words more than once: Necklace, Charm, Disc, Stud, Earrings, Hoop, Pendant
 
-ALLOWED PRODUCT-TYPES
+ALLOWED PRODUCT-TYPES (expanded)
 - Pendant Necklace
 - Charm Necklace
 - Disc Necklace Charm
 - Necklace Charm
 - Necklace
+- Bar Necklace
+- Tag Necklace
 - Hoop Earrings
+- Huggie Hoop Earrings
+- Drop Earrings
 - Stud Earrings
 - Earrings
 - Charm
 
-ALLOWED MATERIAL TOKENS (for the Materials segment)
+ALLOWED MATERIAL TOKENS (Materials segment only)
 - Handmade
 - Sterling Silver
 - Gold Filled
 - Rose Gold
 - 14K Solid Gold  (accept "14k" or "14K")
 
-TAIL SEGMENT (must include at least one of)
-- Jewelry, Pendant, Charm, Studs
-Optional additions: "Gift", "for her", "for mom" (keep the tail concise).
+ACTION/STYLE TOKENS (optional, place BEFORE the Motif; Title Case)
+- Running, Flying, Leaping, Soaring, Howling, Dancing, Blooming
+- Customizable, Personalized, Engraved, Initial, Zodiac, Birth Flower
+- Layered, Stackable, Adjustable
+
+TAIL — THEME TOKENS (mix 1–2 with at least one of {Jewelry | Pendant | Charm | Studs})
+- Animal, Bird, Floral, Nature, Ocean, Coastal, Nautical, Western, Sports, Zodiac, Astrology, Geometric
+Optional: add "Gift" and at most one of {"for her","for mom"}.
 
 WORD PLACEMENT (strict)
-- Subject first, then Product-Type, then colon, then Materials list, then Tail.
-- "Earrings" must be plural; if "Stud" appears it must be "Stud Earrings".
-- "Charm" may appear in the lead (e.g., "Charm Necklace") or in the tail (e.g., "Jewelry Charm"); use "Charm" at most twice total.
+- Subject/Motif (with optional Action/Style) first, then Product-Type, then colon, then Materials list, then Tail.
+- "Earrings" must be plural; if "Stud" appears it must read "Stud Earrings".
+- "Charm" may appear in the lead OR tail; total uses of "Charm" ≤ 2.
 
 PUNCTUATION & CASING
 - Exactly one colon.
@@ -537,35 +546,38 @@ PUNCTUATION & CASING
 LENGTH
 - 80–120 characters (target 90–110).
 
-MICRO-TEMPLATES
-- {Motif} Pendant Necklace: {Materials[, …]} {Theme|Jewelry|Pendant|Charm}[ Gift][ for her|for mom]
-- {Motif} {Stud|Hoop} Earrings: {Handmade, }{Materials[, …]} {Theme|Jewelry|Charm|Studs}[ Gift][ for her|for mom]
-- {Motif} Charm Necklace: {Materials[, …]} {Theme|Pendant|Jewelry|Charm}[ Gift][ for her|for mom]
+MICRO-TEMPLATES (expanded; choose one)
+- [Action] {Motif} Pendant Necklace: {Materials[, …]} {Theme|Jewelry|Pendant|Charm}[ Gift][ for her|for mom]
+- [Action] {Motif} {Stud|Hoop|Huggie Hoop|Drop} Earrings: [Handmade, ]{Materials[, …]} {Theme|Jewelry|Charm|Studs}[ Gift][ for her|for mom]
+- [Action] {Motif} Charm Necklace: {Materials[, …]} {Theme|Pendant|Jewelry|Charm}[ Gift][ for her|for mom]
+- Customizable {Motif} Pendant Necklace: {Materials[, …]} {Letter|Number|Zodiac|Birth Flower} {Pendant|Jewelry}[ Gift][ for her|for mom]
+- Engraved {Motif} Disc Necklace Charm: {Materials[, …]} {Pendant|Jewelry}[ Gift][ for her|for mom]
+- {Motif} Bar Necklace: {Materials[, …]} {Pendant|Jewelry}[ Gift][ for her|for mom]
+- {Motif} Tag Necklace: {Materials[, …]} {Pendant|Jewelry}[ Gift][ for her|for mom]
+- {Season|Occasion} {Motif} Pendant Necklace: {Materials[, …]} {Theme|Jewelry|Pendant}[ Gift][ for her|for mom]
+- {Motif} Huggie Hoop Earrings: [Handmade, ]{Materials[, …]} {Theme|Jewelry|Charm|Studs}[ Gift][ for her|for mom]
+- {Motif} Drop Earrings: [Handmade, ]{Materials[, …]} {Theme|Jewelry|Charm|Studs}[ Gift][ for her|for mom]
 
 REFERENCE EXAMPLES (follow structure/flow)
 a. USA Flag Pendant Necklace: 14k Solid Gold, Gold Filled, Silver Patriotic Jewelry
 b. Flying Hawk Hoop Earrings: Handmade Sterling Silver, 14k Solid Gold Bird Charm Jewelry Gift
-c. Angel Number Necklace: Gold Lucky Charm Pendant, Silver Custom Number
-d. Pine Tree Pendant Necklace: Sterling Silver, Gold Filled, 14K Solid Gold Forever Tree Charm for mom
-e. Comedy Tragedy Mask Charm Necklace: Sterling Silver, 14K Solid Gold, Gold Filled, Theater Jewelry
-f. Cowboy Hat Charm Necklace: Sterling Silver, 14K Solid Gold, Gold Filled, Western Pendant Jewelry
-g. Cobra Snake Pendant Necklace: Sterling Silver, 14K Solid Gold, Gold Filled Serpent Charm for her
-h. Starburst Stud Earrings: Handmade, 14K Solid Gold, Sterling Silver, Gold Filled Celestial Jewelry Charm
-i. Football Helmet Pendant Necklace: Sterling Silver, Gold Filled, Rose Gold, 14K Solid Gold Sports Jewelry Charm
-j. Scorpio Zodiac Charm: 14K Solid Gold, Sterling Silver, Gold Filled Astrology Pendant, Birthday Gift
-k. Lily of the Valley Earrings: 14K Solid Gold, Sterling Silver Drooping Flower Studs
+c. Pine Tree Pendant Necklace: Sterling Silver, Gold Filled, 14K Solid Gold Forever Tree Charm for mom
+d. Comedy Tragedy Mask Charm Necklace: Sterling Silver, 14K Solid Gold, Gold Filled Theater Jewelry
+e. Running Wolf Pendant Necklace: Sterling Silver, Gold Filled, 14K Solid Gold Animal Jewelry Gift for mom  [103 chars]
+f. Customizable Initial Charm Necklace: Sterling Silver, Gold Filled, 14K Solid Gold Letter Pendant Gift for her  [109 chars]
+g. Leaping Dolphin Huggie Hoop Earrings: Sterling Silver, Gold Filled Ocean Jewelry Gift for mom  [93 chars]
 
 VALIDATION CHECKLIST (all must pass)
-[ ] One colon present; text exists on both sides.
-[ ] Lead ends with an allowed Product-Type.
-[ ] Materials count 2–4; only allowed tokens; optional "or" before last.
-[ ] Tail present and contains one of {Jewelry | Pendant | Charm | Studs}.
+[ ] One colon present; non-empty text on both sides.
+[ ] Lead ends with an allowed Product-Type (see list).
+[ ] Materials count 2–4; tokens only from ALLOWED MATERIALS; optional "Handmade" once.
+[ ] Tail present; includes one of {Jewelry | Pendant | Charm | Studs}; at most one "Gift for …".
 [ ] Earrings rules satisfied; "Charm" ≤ 2.
 [ ] No hyphens/slashes/quotes/emojis; single space after commas.
 [ ] 80–120 characters inclusive.
 
-SEO Optimization:
-- The Listing Title should be comprised of at least seven optimized SEO Key Phrases that dramatically flow well together.
+SEO Guidance
+Compose the title as a chain of distinct, non-repeating search phrases that still read naturally. Favor concrete nouns (motif, product, material, theme) over filler adjectives.
 
       </textarea>
     </div>
