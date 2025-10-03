@@ -492,78 +492,76 @@ Default Photo Analysis Rules:
     <div class="modal-content">
       <h4>Title Rules</h4>
       <textarea id="titleRulesTextarea" style="width:100%; height:300px;">
-TITLE RULES:
+TITLE RULES (STRICT — MATCH THE EXAMPLES EXACTLY)
 
-SCOPE & PRECEDENCE
-- These rules replace and overrule any previous instructions about titles.
-- Apply to every generated TITLE string.
-- Hard block any fo the following words from being the 1st word in the generated Title (e.g., Necklace, Bracelet, Stud, Hoop, Earrings, Huggie).
+STRUCTURE (exact order)
+1) Lead = {Subject/Motif} {Product-Type}
+2) Divider = one colon ":" (exactly one in the whole title)
+3) Materials = 2–4 items (comma-separated; optional "or" before the last)
+4) Tail = compact category/occasion phrase
 
--Good examples of Listing Titles, focus on how they flow and the Title structure, use these as templates for what a good Listing Title looks like:
-    a. USA Flag Pendant Necklace: 14k Solid Gold, Gold Filled, Silver Patriotic Jewelry 
-    b. Flying Hawk Hoop Earrings: Handmade Sterling Silver, 14k Solid Gold Bird Charm Jewelry Gift
-    c. Lighthouse Disc Necklace Charm: Coastal Charm, Gold Filled, Solid Gold or Sterling Silver, Handmade Pendant
-    d. Pine Tree Pendant Necklace: Sterling Silver, Gold Filled, 14K Solid Gold Forever Tree Charm for mom
-    e. Comedy Tragedy Mask Charm Necklace: Sterling Silver, 14K Solid Gold, Gold Filled, Theater Jewelry
-    f. Cowboy Hat Charm Necklace: Sterling Silver, 14K Solid Gold, Gold Filled, Western Pendant Jewelry
-    g. Cobra Snake Pendant Necklace: Sterling Silver, 14K Solid Gold, Gold Filled Serpent Charm for her
-    h. Starburst Stud Earrings: Handmade,14K Solid Gold, Sterling Silver, Gold Filled Celestial Jewelry Charm
-    i. Football Helmet Pendant Necklace: Sterling Silver, Gold Filled, Rose Gold, 14K Solid Gold Sports Jewelry Charm
-    j. Scorpio Zodiac Charm: 14K Solid Gold, Sterling Silver, Gold Filled Astrology Pendant, Birthday Gift
-    k. Lily of the Valley Earrings: 14K Solid Gold, Sterling Silver Drooping Flower Studs
+ALLOWED PRODUCT-TYPES (the lead must end with one of these)
+- Pendant Necklace
+- Charm Necklace
+- Disc Necklace Charm
+- Necklace Charm
+- Necklace
+- Hoop Earrings
+- Stud Earrings
+- Earrings
+- Charm
 
-LENGTH
-- Target: 90–120 characters.
-- Hard cap: 120 characters (never exceed).
-- Do not intentionally produce <90 unless no compliant phrasing can reach the minimum.
+ALLOWED MATERIAL TOKENS (for the Materials segment)
+- Handmade
+- Sterling Silver
+- Gold Filled
+- Rose Gold
+- 14K Solid Gold  (accept "14k" or "14K")
 
-STRUCTURE
-- Never start with a material, color, adjective, or brand term.
-- Write as a single line of plain text (no commas, slashes, hyphens, emojis, or extra spaces).
+TAIL SEGMENT (must include at least one of)
+- Jewelry, Pendant, Charm, Studs
+Optional additions: "Gift", "for her", "for mom" (keep the tail concise).
 
-REPETITION & PHRASE CONTROL
-- Do not repeat the product type.
-- Do not repeat the same bigram (two-word phrase) more than once (e.g., “necklace” appears max one time).
-- Any single word may appear at most 2 times.
-- Avoid close synonyms that recreate the same phrase intent (e.g., “bar pendant” + “bar necklace” + “bar chain” is excessive—keep exactly one).
-
-EARRINGS-SPECIFIC RULES
-- Use “earrings” only in plural, and only after a noun (e.g., “Croissant Earrings”).
-- If “stud” appears, it must be directly before “earrings” (e.g., “stud earrings”).
-- If “earrings” appears more than once, ensure there are at least three words between each occurrence.
-- Do not exceed 2 total occurrences of “earrings”.
+WORD PLACEMENT (strict)
+- Subject first, then Product-Type, then colon, then Materials list, then Tail.
+- "Earrings" must be plural; if "Stud" appears it must be "Stud Earrings".
+- "Charm" may appear in the lead (e.g., "Charm Necklace") or in the tail (e.g., "Jewelry Charm"); use "Charm" at most twice total.
 
 PUNCTUATION & CASING
-- Allowed characters: letters, numbers, and single spaces, colans.
-- Disallow commas, hyphens/dashes, slashes, quotes, and emojis.
-- Use either Title Case or consistent sentence case; do not use ALL CAPS.
+- Exactly one colon.
+- Commas with a single space after each comma.
+- Title Case for content words.
+- No hyphens, slashes, quotes, or emojis.
 
-SEO SLICE BEHAVIOR
-- Construct the title so that contiguous 3–5 word windows read as natural, SEO-sensible phrases without reordering.
-- Do not begin or end the entire title with a preposition.
-- Never end the title with the word “Gift”.
+LENGTH
+- 80–120 characters (target 90–110).
 
-CONFLICT HANDLING
-- If following a rule would introduce a blocked token, omit that token and restructure to remain within length/structure constraints.
-- These rules take priority over any template that requires specific words now on the blocklist.
+MICRO-TEMPLATES
+- {Motif} Pendant Necklace: {Materials[, …]} {Theme|Jewelry|Pendant|Charm}[ Gift][ for her|for mom]
+- {Motif} {Stud|Hoop} Earrings: {Handmade, }{Materials[, …]} {Theme|Jewelry|Charm|Studs}[ Gift][ for her|for mom]
+- {Motif} Charm Necklace: {Materials[, …]} {Theme|Pendant|Jewelry|Charm}[ Gift][ for her|for mom]
 
-VALIDATION CHECKLIST (must all be true)
-[ ] 120 ≤ length ≤ 140
-[ ] First 2 -3 words must be the product type (not material/color/adjective)
-      -(Example: Hummingbird Necklace, Tree Earring, Car Charm, Dog Bracelet, Banana huggie earring etc...)
-[ ] No blocklisted tokens present
-[ ] Otherwise “charm” count ≤ 1 and not first/last
-[ ] No repeated bigrams; product type not repeated
-[ ] Word frequency ≤ 2
-[ ] If “earrings” present → plural, after a noun, ≤ 2 total, 3+ words spacing between repeats
-[ ] No commas/hyphens/slashes/emojis; single-space separation
-[ ] Does not end with “Gift”
+REFERENCE EXAMPLES (follow structure/flow)
+a. USA Flag Pendant Necklace: 14k Solid Gold, Gold Filled, Silver Patriotic Jewelry
+b. Flying Hawk Hoop Earrings: Handmade Sterling Silver, 14k Solid Gold Bird Charm Jewelry Gift
+c. Lighthouse Disc Necklace Charm: Coastal Charm, Gold Filled, Solid Gold or Sterling Silver, Handmade Pendant
+d. Pine Tree Pendant Necklace: Sterling Silver, Gold Filled, 14K Solid Gold Forever Tree Charm for mom
+e. Comedy Tragedy Mask Charm Necklace: Sterling Silver, 14K Solid Gold, Gold Filled, Theater Jewelry
+f. Cowboy Hat Charm Necklace: Sterling Silver, 14K Solid Gold, Gold Filled, Western Pendant Jewelry
+g. Cobra Snake Pendant Necklace: Sterling Silver, 14K Solid Gold, Gold Filled Serpent Charm for her
+h. Starburst Stud Earrings: Handmade, 14K Solid Gold, Sterling Silver, Gold Filled Celestial Jewelry Charm
+i. Football Helmet Pendant Necklace: Sterling Silver, Gold Filled, Rose Gold, 14K Solid Gold Sports Jewelry Charm
+j. Scorpio Zodiac Charm: 14K Solid Gold, Sterling Silver, Gold Filled Astrology Pendant, Birthday Gift
+k. Lily of the Valley Earrings: 14K Solid Gold, Sterling Silver Drooping Flower Studs
 
-OPTIONAL REGEX GUARDRAILS (case-insensitive; treat \b as word boundary)
-- Blocklist scan (sample):  \b(and|or|for|accessories|simple|unique|delicate|whimsical|cute|minimal|celestial|design|lightweight|inspired|idea|statement|polka dot|keepsake)\b
-- Illegal punctuation:  [,/\\\-\"'’`]| {2,}
-- “stud” must precede “earrings”:  \bstud\b(?!\s+earrings\b)
-- “earrings” repeated too closely:  \bearrings\b(?:\s+\w+){0,2}\s+\bearrings\b  (invalidate on match)
+VALIDATION CHECKLIST (all must pass)
+[ ] One colon present; text exists on both sides.
+[ ] Lead ends with an allowed Product-Type.
+[ ] Materials count 2–4; only allowed tokens; optional "or" before last.
+[ ] Tail present and contains one of {Jewelry | Pendant | Charm | Studs}.
+[ ] Earrings rules satisfied; "Charm" ≤ 2.
+[ ] No hyphens/slashes/quotes/emojis; single space after commas.
+[ ] 80–120 characters inclusive.
 
 SEO Optimization:
 - The Listing Title should be comprised of at least seven optimized SEO Key Phrases that dramatically flow well together.
