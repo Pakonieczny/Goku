@@ -773,7 +773,7 @@ ANTI-REPETITION (TITLE)
                 ]
               }
             ],
-            max_output_tokens: 120,
+            max_output_tokens: 200,
             reasoning: { effort: "low" },
             text: { verbosity: "medium" }
           };
@@ -1745,7 +1745,7 @@ document.getElementById("shopListings").addEventListener("keydown", (e) => {
             { role: "system", content: "Return ONE short tag only, no numbering, ≤ 20 chars." },
             { role: "user", content: prompt }
           ],
-          max_output_tokens: 120,
+          max_output_tokens: 220,
           reasoning: { effort: "minimal" },
           text: { verbosity: "medium" }
         };
