@@ -2240,6 +2240,131 @@ document.getElementById("shopListings").addEventListener("keydown", (e) => {
     document.getElementById("generateBtn").addEventListener("click", async () => {
       await Promise.all([generateTitleOnly(), generateDescriptionOnly()]);
     });
+
+        (function () {
+      // Strict blocklist (case-insensitive whole words)
+      const TITLE_BLOCKLIST = [
+        "and","or","for","gold","silver","rosegold","14k","solid gold","gold plated",
+        "gold filled","rose gold filled","sterling silver","14k solid gold","jewelry",
+        "accessories","accessory","custom","simple","unique","delicate","whimsical",
+        "cute","minimal","minimalist","celestial","design","lightweight","inspired",
+        "idea","statement","polka dot","beady chain","keepsake","mockingjay"
+      ];
+
+      const WORD_BOUNDARY = (w) => new RegExp(`(^|\\b)${w.replace(/[.*+?^${}()|[\\]\\\\]/g,'\\\\$&')}(\\b|$)`, "i");
+      const hasBlocked = (t) => TITLE_BLOCKLIST.some(w => WORD_BOUNDARY(w).test(t));
+
+      function normalizeSpaces(t){ return t.replace(/\s+/g,' ').trim(); }
+      function dedupeSpaces(t){ return t.replace(/ {2,}/g,' '); }
+
+      function firstTokenIsProductType(t){
+        const first = t.trim().split(/\s+/)[0].toLowerCase();
+        return /^(necklace|bracelet|anklet|ring|stud|studs|earrings|hoop|hoops)$/i.test(first)
+               || /earrings$/i.test(first); // e.g., "Stud Earrings"
+      }
+
+      function countWord(t, w){ return (t.match(new RegExp(`\\b${w}\\b`, 'gi'))||[]).length; }
+      function removeWord(t, w){ return normalizeSpaces(t.replace(new RegExp(`\\b${w}\\b`, 'gi'),'').replace(/\s{2,}/g,' ')); }
+
+      function clampLength(t){
+        if (t.length > 140) t = t.slice(0, 140).replace(/\s+\S*$/, ''); // trim to last whole word
+        return t;
+      }
+
+      function limitWordFrequency(t, w, maxTimes=3){
+        const parts = t.split(/\s+/);
+        let seen = 0;
+        const out = [];
+        for (const tok of parts){
+          if (tok.toLowerCase() === w.toLowerCase()){
+            if (seen < maxTimes){ out.push(tok); seen++; }
+          } else out.push(tok);
+        }
+        return normalizeSpaces(out.join(' '));
+      }
+
+      function dropRepeatedBigrams(t){
+        const words = t.split(/\s+/);
+        const seen = new Set();
+        const out = [];
+        for (let i=0;i<words.length;i++){
+          const bigram = i<words.length-1 ? (words[i]+' '+words[i+1]).toLowerCase() : null;
+          if (bigram && seen.has(bigram)) { continue; } // skip word to break duplicate bigram
+          if (bigram) seen.add(bigram);
+          out.push(words[i]);
+        }
+        return normalizeSpaces(out.join(' '));
+      }
+
+      function enforceEarringsRules(t){
+        // earrings plural, after noun; spacing between repeats; ≤3 total occurrences
+        t = t.replace(/\bearring\b/gi, 'earrings'); // normalize singular to plural
+        // Limit total to 3
+        let count = (t.match(/\bearrings\b/gi)||[]).length;
+        while (count > 3){ t = t.replace(/\bearrings\b/i,''); count--; }
+        // Ensure spacing between occurrences ≥3 words
+        t = t.replace(/\bearrings\b(\s+\w+){0,2}\s+\bearrings\b/gi, 'earrings'); // collapse too-close repeats
+        return normalizeSpaces(t);
+      }
+
+      window.validateTitle = function(raw){
+        let t = normalizeSpaces(raw);
+        const issues = [];
+
+        if (!firstTokenIsProductType(t)) issues.push("Must start with a product type.");
+        if (hasBlocked(t)) issues.push("Contains blocklisted token(s).");
+        if ((/^\s*necklace\b/i).test(t) && /\bcharm\b/i.test(t)) issues.push("“charm” not allowed for Necklace titles.");
+        if ((t.match(/\bnecklace\b/gi)||[]).length > 1) issues.push("Product type repeated (necklace).");
+        if ((t.match(/\bbar\b/gi)||[]).length > 3) issues.push("Word frequency cap exceeded for “bar”.");
+        if (/\bbar charm\b/gi.test(t) && (t.match(/\bbar charm\b/gi)||[]).length > 1) issues.push("Repeated bigram “bar charm”.");
+        if (/[,/\\\-\"'’`]/.test(t)) issues.push("Illegal punctuation present.");
+        if (t.length < 120 || t.length > 140) issues.push("Length outside 120–140 chars.");
+
+        return { ok: issues.length === 0, issues, title: t };
+      };
+
+      window.autoRepairTitle = function(raw){
+        let t = normalizeSpaces(raw);
+
+        // Remove blocklisted tokens
+        for (const w of TITLE_BLOCKLIST){ t = removeWord(t, w); }
+
+        // Necklace-specific charm removal
+        if (/^\s*necklace\b/i.test(t)) t = removeWord(t, 'charm');
+
+        // Remove duplicate product type tokens (keep first)
+        const prod = ['necklace','bracelet','earrings','ring','hoop','stud','studs'];
+        for (const p of prod){
+          const rx = new RegExp(`\\b${p}\\b`, 'gi');
+          let seen = false;
+          t = t.replace(rx, (m)=> seen ? '' : (seen=true, m));
+        }
+
+        // Word-frequency caps
+        t = limitWordFrequency(t, 'bar', 3);
+
+        // Bigram de-dup
+        t = dropRepeatedBigrams(t);
+
+        // Earrings rules
+        t = enforceEarringsRules(t);
+
+        // Cleanup and clamp
+        t = dedupeSpaces(t);
+        t = clampLength(t);
+
+        // Pad to ≥120 if needed with safe tail (no banned tokens)
+        if (t.length < 120){
+          const pad = " everyday wear layering style";
+          while (t.length < 120 && (t + pad).length <= 140){
+            t += pad;
+          }
+          t = clampLength(t);
+        }
+
+        return normalizeSpaces(t);
+      };
+    })();
     
     async function generateTitleOnly() {
       let etsyLink = window.ETSY_SHOP_URL;
@@ -2272,10 +2397,12 @@ document.getElementById("shopListings").addEventListener("keydown", (e) => {
       };
 
       try {
-        const data = await callOpenAI(payload);
-        const output = extractResponseText(data);
-        document.getElementById("listingTitle").value = output || "No title generated.";
-        updateTitleCount(output || "");
+        const output = extractResponseText(data) || "";
+        const fixed = window.autoRepairTitle(output);
+        const validation = window.validateTitle(fixed);
+        document.getElementById("listingTitle").value = fixed || "No title generated.";
+        updateTitleCount(fixed || "");
+        if (!validation.ok) { console.warn("Title validation issues:", validation.issues); }
       } catch (error) {
         const msg = (error && error.message) ? error.message : String(error);
         document.getElementById("listingTitle").value = "Error: " + msg;
