@@ -492,11 +492,12 @@ Default Photo Analysis Rules:
     <div class="modal-content">
       <h4>Title Rules</h4>
       <textarea id="titleRulesTextarea" style="width:100%; height:300px;">
-TITLE RULES — v2025-10-03 (Supersedes all prior title directives)
+TITLE RULES:
 
 SCOPE & PRECEDENCE
 - These rules replace and overrule any previous instructions about titles.
 - Apply to every generated TITLE string.
+- Hard block any fo the following words from being the 1st word in the generated Title (e.g., Necklace, Bracelet, Stud, Hoop, Earrings, Huggie).
 
 LENGTH
 - Target: 90–120 characters.
@@ -504,7 +505,6 @@ LENGTH
 - Do not intentionally produce <90 unless no compliant phrasing can reach the minimum.
 
 STRUCTURE
-- Hard block any fo the following words from being the first word in a title (e.g., Necklace, Bracelet, Stud Earrings, Hoop Earrings).
 - Never start with a material, color, adjective, or brand term.
 - Write as a single line of plain text (no commas, slashes, hyphens, emojis, or extra spaces).
 
@@ -561,7 +561,7 @@ VALIDATION CHECKLIST (must all be true)
 [ ] Does not end with “Gift”
 
 OPTIONAL REGEX GUARDRAILS (case-insensitive; treat \b as word boundary)
-- Blocklist scan (sample):  \b(and|or|for|gold|silver|rosegold|14k|solid gold|gold plated|gold filled|rose gold filled|sterling silver|14k solid gold|jewelry|accessories?|custom|simple|unique|delicate|whimsical|cute|minimal(?:ist)?|celestial|design|lightweight|inspired|idea|statement|polka dot|beady chain|keepsake|mockingjay)\b
+- Blocklist scan (sample):  \b(and|or|for|jewelry|accessories?|custom|simple|unique|delicate|whimsical|cute|minimal(?:ist)?|celestial|design|lightweight|inspired|idea|statement|polka dot|keepsake)\b
 - Illegal punctuation:  [,/\\\-\"'’`]| {2,}
 - Starts with product type (example: Hummingbird Necklace, Tree Earring, Car Charm, Dog Bracelet, Banana huggie earring etc...)
 - “stud” must precede “earrings”:  \bstud\b(?!\s+earrings\b)
@@ -571,14 +571,17 @@ SEO Optimization:
 - The Listing Title should be comprised of at least seven optimized SEO Key Phrases that dramatically flow well together.
 
 -Good examples of Listing Titles, focus on how they flow and the Title structure, use these as templates for what a good Listing Title looks like:
-    a. Trex Pendant Dinosaur Jewelry Mini Dino Necklace Gift for Her T-Rex Necklace Dainty Dinosaur Necklace Lover Gift Dinosaur Pendant
-    b. Tennis Earrings Sports Earring Tennis Player Earrings Handmade Jewelry Sports Gifts Game Day Outfit Tennis Player Gift Custom Earring
-    c. Megaphone Necklace Cheerleader Jewelry Gift for Her Cheer Team Charm Cheer Squad Gifts Cheer Coach Gift Cheerleader Necklace Senior Gifts
-    d. Sea Turtle Necklace Cute Turtle Necklace Friend Gift Mother's Day Birthday Gift Turtle Gifts Cute Jewelry Quirky Jewelry
-    e. Baseball Earrings Sports Fan Team Earrings College Gifts Baseball Mom Fun Earring Sports Team Gift Game Day Outfit Small Hoops
-    f. Volleyball Necklace Sports Team Pendant Gift for Her Volleyball Jewelry Personalized Volleyball Mom Charm Sports Necklace Volleyball Coach
-    g. Basketball Charm Necklace Gold Basketball Sports Jewelry Coach Gift Basketball Player Sports Pendant Basketball Gift for Her Basketball Mom
-    h. Hummingbird Earrings Gold Bird Jewelry Gift for Her Mockingjay Stud Earrings Bird Lover Hummingbird Charm Jewelry Hunger Games Bird Earrings
+    a. USA Flag Pendant Necklace: 14k Solid Gold, Gold Filled, Silver Patriotic Jewelry 
+    b. Flying Hawk Hoop Earrings: Handmade Sterling Silver, 14k Solid Gold Bird Charm Jewelry Gift
+    c. Lighthouse Disc Necklace Charm: Coastal Charm, Gold Filled, Solid Gold or Sterling Silver, Handmade Pendant
+    d. Pine Tree Pendant Necklace: Sterling Silver, Gold Filled, 14K Solid Gold Forever Tree Charm for mom
+    e. Comedy Tragedy Mask Charm Necklace: Sterling Silver, 14K Solid Gold, Gold Filled, Theater Jewelry
+    f. Cowboy Hat Charm Necklace: Sterling Silver, 14K Solid Gold, Gold Filled, Western Pendant Jewelry
+    g. Cobra Snake Pendant Necklace: Sterling Silver, 14K Solid Gold, Gold Filled Serpent Charm for her
+    h. Starburst Stud Earrings: Handmade,14K Solid Gold, Sterling Silver, Gold Filled Celestial Jewelry Charm
+    i. Football Helmet Pendant Necklace: Sterling Silver, Gold Filled, Rose Gold, 14K Solid Gold Sports Jewelry Charm
+    j. Scorpio Zodiac Charm: 14K Solid Gold, Sterling Silver, Gold Filled Astrology Pendant, Birthday Gift
+    k. Lily of the Valley Earrings: 14K Solid Gold, Sterling Silver Drooping Flower Studs
       </textarea>
     </div>
     <div class="modal-footer">
