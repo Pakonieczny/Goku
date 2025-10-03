@@ -495,7 +495,7 @@ Default Photo Analysis Rules:
 TITLE RULES — v2025-10-03 (Supersedes all prior title directives)
 
 SCOPE & PRECEDENCE
-- These rules replace and overrule any previous instructions about titles (including mandatory “gold”, “for”, or forced “charm” usage).
+- These rules replace and overrule any previous instructions about titles.
 - Apply to every generated TITLE string.
 
 LENGTH
@@ -504,7 +504,7 @@ LENGTH
 - Do not intentionally produce <120 unless no compliant phrasing can reach 120.
 
 STRUCTURE
-- The first word MUST be the product type (e.g., Necklace, Bracelet, Stud Earrings, Hoop Earrings).
+- The first word MUST NEVER be the product type (e.g., Necklace, Bracelet, Stud Earrings, Hoop Earrings).
 - Never start with a material, color, adjective, or brand term.
 - Write as a single line of plain text (no commas, slashes, hyphens, emojis, or extra spaces).
 
@@ -524,8 +524,8 @@ MATERIALS & COLORS
 
 REPETITION & PHRASE CONTROL
 - Do not repeat the product type.
-- Do not repeat the same bigram (two-word phrase) more than once (e.g., “bar necklace” appears max one time).
-- Any single word may appear at most 3 times.
+- Do not repeat the same bigram (two-word phrase) more than once (e.g., “necklace” appears max one time).
+- Any single word may appear at most 2 times.
 - Avoid close synonyms that recreate the same phrase intent (e.g., “bar pendant” + “bar necklace” + “bar chain” is excessive—keep exactly one).
 
 EARRINGS-SPECIFIC RULES
@@ -550,27 +550,25 @@ CONFLICT HANDLING
 
 VALIDATION CHECKLIST (must all be true)
 [ ] 120 ≤ length ≤ 140
-[ ] First token is a product type (not material/color/adjective)
+[ ] First 2 -3 words must be the product type (not material/color/adjective)
+      -(Example: Hummingbird Necklace, Tree Earring, Car Charm, Dog Bracelet, Banana huggie earring etc...)
 [ ] No blocklisted tokens present
-[ ] If product is Necklace/layering → “charm” absent
 [ ] Otherwise “charm” count ≤ 1 and not first/last
 [ ] No repeated bigrams; product type not repeated
-[ ] Word frequency per token ≤ 3
-[ ] If “earrings” present → plural, after a noun, ≤ 3 total, 3+ words spacing between repeats
+[ ] Word frequency per token ≤ 2
+[ ] If “earrings” present → plural, after a noun, ≤ 2 total, 3+ words spacing between repeats
 [ ] No commas/hyphens/slashes/emojis; single-space separation
 [ ] Does not end with “Gift”
 
 OPTIONAL REGEX GUARDRAILS (case-insensitive; treat \b as word boundary)
 - Blocklist scan (sample):  \b(and|or|for|gold|silver|rosegold|14k|solid gold|gold plated|gold filled|rose gold filled|sterling silver|14k solid gold|jewelry|accessories?|custom|simple|unique|delicate|whimsical|cute|minimal(?:ist)?|celestial|design|lightweight|inspired|idea|statement|polka dot|beady chain|keepsake|mockingjay)\b
 - Illegal punctuation:  [,/\\\-\"'’`]| {2,}
-- Starts with product type (example set—extend as needed):  ^(?:necklace|bracelet|stud earrings|hoop earrings|drop earrings|ring|anklet)\b
-- “charm” forbidden for necklaces:  ^necklace\b.*\bcharm\b
+- Starts with product type (example: Hummingbird Necklace, Tree Earring, Car Charm, Dog Bracelet, Banana huggie earring etc...)
 - “stud” must precede “earrings”:  \bstud\b(?!\s+earrings\b)
 - “earrings” repeated too closely:  \bearrings\b(?:\s+\w+){0,2}\s+\bearrings\b  (invalidate on match)
 
 SEO Optimization:
 - The Listing Title should be comprised of at least seven optimized SEO Key Phrases that dramatically flow well together.
-
       </textarea>
     </div>
     <div class="modal-footer">
@@ -2240,131 +2238,6 @@ document.getElementById("shopListings").addEventListener("keydown", (e) => {
     document.getElementById("generateBtn").addEventListener("click", async () => {
       await Promise.all([generateTitleOnly(), generateDescriptionOnly()]);
     });
-
-        (function () {
-      // Strict blocklist (case-insensitive whole words)
-      const TITLE_BLOCKLIST = [
-        "and","or","for","gold","silver","rosegold","14k","solid gold","gold plated",
-        "gold filled","rose gold filled","sterling silver","14k solid gold","jewelry",
-        "accessories","accessory","custom","simple","unique","delicate","whimsical",
-        "cute","minimal","minimalist","celestial","design","lightweight","inspired",
-        "idea","statement","polka dot","beady chain","keepsake","mockingjay"
-      ];
-
-      const WORD_BOUNDARY = (w) => new RegExp(`(^|\\b)${w.replace(/[.*+?^${}()|[\\]\\\\]/g,'\\\\$&')}(\\b|$)`, "i");
-      const hasBlocked = (t) => TITLE_BLOCKLIST.some(w => WORD_BOUNDARY(w).test(t));
-
-      function normalizeSpaces(t){ return t.replace(/\s+/g,' ').trim(); }
-      function dedupeSpaces(t){ return t.replace(/ {2,}/g,' '); }
-
-      function firstTokenIsProductType(t){
-        const first = t.trim().split(/\s+/)[0].toLowerCase();
-        return /^(necklace|bracelet|anklet|ring|stud|studs|earrings|hoop|hoops)$/i.test(first)
-               || /earrings$/i.test(first); // e.g., "Stud Earrings"
-      }
-
-      function countWord(t, w){ return (t.match(new RegExp(`\\b${w}\\b`, 'gi'))||[]).length; }
-      function removeWord(t, w){ return normalizeSpaces(t.replace(new RegExp(`\\b${w}\\b`, 'gi'),'').replace(/\s{2,}/g,' ')); }
-
-      function clampLength(t){
-        if (t.length > 140) t = t.slice(0, 140).replace(/\s+\S*$/, ''); // trim to last whole word
-        return t;
-      }
-
-      function limitWordFrequency(t, w, maxTimes=3){
-        const parts = t.split(/\s+/);
-        let seen = 0;
-        const out = [];
-        for (const tok of parts){
-          if (tok.toLowerCase() === w.toLowerCase()){
-            if (seen < maxTimes){ out.push(tok); seen++; }
-          } else out.push(tok);
-        }
-        return normalizeSpaces(out.join(' '));
-      }
-
-      function dropRepeatedBigrams(t){
-        const words = t.split(/\s+/);
-        const seen = new Set();
-        const out = [];
-        for (let i=0;i<words.length;i++){
-          const bigram = i<words.length-1 ? (words[i]+' '+words[i+1]).toLowerCase() : null;
-          if (bigram && seen.has(bigram)) { continue; } // skip word to break duplicate bigram
-          if (bigram) seen.add(bigram);
-          out.push(words[i]);
-        }
-        return normalizeSpaces(out.join(' '));
-      }
-
-      function enforceEarringsRules(t){
-        // earrings plural, after noun; spacing between repeats; ≤3 total occurrences
-        t = t.replace(/\bearring\b/gi, 'earrings'); // normalize singular to plural
-        // Limit total to 3
-        let count = (t.match(/\bearrings\b/gi)||[]).length;
-        while (count > 3){ t = t.replace(/\bearrings\b/i,''); count--; }
-        // Ensure spacing between occurrences ≥3 words
-        t = t.replace(/\bearrings\b(\s+\w+){0,2}\s+\bearrings\b/gi, 'earrings'); // collapse too-close repeats
-        return normalizeSpaces(t);
-      }
-
-      window.validateTitle = function(raw){
-        let t = normalizeSpaces(raw);
-        const issues = [];
-
-        if (!firstTokenIsProductType(t)) issues.push("Must start with a product type.");
-        if (hasBlocked(t)) issues.push("Contains blocklisted token(s).");
-        if ((/^\s*necklace\b/i).test(t) && /\bcharm\b/i.test(t)) issues.push("“charm” not allowed for Necklace titles.");
-        if ((t.match(/\bnecklace\b/gi)||[]).length > 1) issues.push("Product type repeated (necklace).");
-        if ((t.match(/\bbar\b/gi)||[]).length > 3) issues.push("Word frequency cap exceeded for “bar”.");
-        if (/\bbar charm\b/gi.test(t) && (t.match(/\bbar charm\b/gi)||[]).length > 1) issues.push("Repeated bigram “bar charm”.");
-        if (/[,/\\\-\"'’`]/.test(t)) issues.push("Illegal punctuation present.");
-        if (t.length < 120 || t.length > 140) issues.push("Length outside 120–140 chars.");
-
-        return { ok: issues.length === 0, issues, title: t };
-      };
-
-      window.autoRepairTitle = function(raw){
-        let t = normalizeSpaces(raw);
-
-        // Remove blocklisted tokens
-        for (const w of TITLE_BLOCKLIST){ t = removeWord(t, w); }
-
-        // Necklace-specific charm removal
-        if (/^\s*necklace\b/i.test(t)) t = removeWord(t, 'charm');
-
-        // Remove duplicate product type tokens (keep first)
-        const prod = ['necklace','bracelet','earrings','ring','hoop','stud','studs'];
-        for (const p of prod){
-          const rx = new RegExp(`\\b${p}\\b`, 'gi');
-          let seen = false;
-          t = t.replace(rx, (m)=> seen ? '' : (seen=true, m));
-        }
-
-        // Word-frequency caps
-        t = limitWordFrequency(t, 'bar', 2);
-
-        // Bigram de-dup
-        t = dropRepeatedBigrams(t);
-
-        // Earrings rules
-        t = enforceEarringsRules(t);
-
-        // Cleanup and clamp
-        t = dedupeSpaces(t);
-        t = clampLength(t);
-
-        // Pad to ≥120 if needed with safe tail (no banned tokens)
-        if (t.length < 120){
-          const pad = " everyday wear layering style";
-          while (t.length < 120 && (t + pad).length <= 140){
-            t += pad;
-          }
-          t = clampLength(t);
-        }
-
-        return normalizeSpaces(t);
-      };
-    })();
     
     async function generateTitleOnly() {
       let etsyLink = window.ETSY_SHOP_URL;
