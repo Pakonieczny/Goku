@@ -2341,7 +2341,7 @@ document.getElementById("shopListings").addEventListener("keydown", (e) => {
         }
 
         // Word-frequency caps
-        t = limitWordFrequency(t, 'bar' 2);
+        t = limitWordFrequency(t, 'bar', 2);
 
         // Bigram de-dup
         t = dropRepeatedBigrams(t);
@@ -2397,12 +2397,10 @@ document.getElementById("shopListings").addEventListener("keydown", (e) => {
       };
 
       try {
-        const output = extractResponseText(data) || "";
-        const fixed = window.autoRepairTitle(output);
-        const validation = window.validateTitle(fixed);
-        document.getElementById("listingTitle").value = fixed || "No title generated.";
-        updateTitleCount(fixed || "");
-        if (!validation.ok) { console.warn("Title validation issues:", validation.issues); }
+        const data = await callOpenAI(payload);
+        const output = extractResponseText(data);
+        document.getElementById("listingTitle").value = output || "No title generated.";
+        updateTitleCount(output || "");
       } catch (error) {
         const msg = (error && error.message) ? error.message : String(error);
         document.getElementById("listingTitle").value = "Error: " + msg;
