@@ -1671,18 +1671,53 @@ document.getElementById("shopListings").addEventListener("keydown", (e) => {
     })();
 
     // --- Unify Responses/Chat return shapes (robust to either) ---
-     function extractResponseText(data) {
-       if (typeof data?.output_text === "string") return data.output_text;
-       if (Array.isArray(data?.output)) {
-         // Concatenate any text parts the Responses API produced
-         return data.output
-           .flatMap(block => Array.isArray(block?.content) ? block.content : [])
-           .map(part => typeof part?.text === "string" ? part.text : "")
-           .join("").trim();
-       }
-       // Fallback if upstream ever returns Chat-style
-       return (data?.choices?.[0]?.message?.content || "").trim();
-     }
+    function extractResponseText(data) {
+      // 1) Responses API (direct)
+      if (typeof data?.output_text === "string") return data.output_text.trim();
+      if (Array.isArray(data?.output)) {
+        return data.output
+          .flatMap(block => Array.isArray(block?.content) ? block.content : [])
+          .map(part => (typeof part?.text === "string" ? part.text : ""))
+          .join("")
+          .trim();
+      }
+
+      // 2) Responses API (nested under .response)
+      if (typeof data?.response?.output_text === "string") return data.response.output_text.trim();
+      if (Array.isArray(data?.response?.output)) {
+        return data.response.output
+          .flatMap(block => Array.isArray(block?.content) ? block.content : [])
+          .map(part => (typeof part?.text === "string" ? part.text : ""))
+          .join("")
+          .trim();
+      }
+
+      // 3) Chat Completions fallback
+      const chat = (data?.choices?.[0]?.message?.content || "").trim();
+      if (chat) return chat;
+
+      // 4) Last-ditch: common text fields
+      for (const k of ["text", "message", "content"]) {
+        const v = data?.[k];
+        if (typeof v === "string" && v.trim()) return v.trim();
+      }
+      return "";
+    }
+
+    // Fallback description builder (≤ 400 chars; never starts with "gift for her")
+    function buildFallbackDescription({ keyPhrases, rawDescription }) {
+      const phrases = String(keyPhrases || "")
+        .split(/\n+/)
+        .map(s => s.replace(/^\d+\.\s*/, "").trim())
+        .filter(Boolean);
+      const head = (rawDescription || "").trim();
+      const tagLine = phrases.length ? phrases.slice(0, 6).join(", ") : "";
+      let desc = head
+        ? head
+        : `A thoughtful piece made to wear every day. Highlights: ${tagLine}. Ideal for birthdays, holidays, or a sweet gift for mom.`;
+      if (desc.length > 400) desc = desc.slice(0, 397).trimEnd() + "...";
+      return desc;
+    }
 
     async function getInitialPhrases(question, keywordRules) {
       const prompt = `
@@ -2323,7 +2358,16 @@ document.getElementById("shopListings").addEventListener("keydown", (e) => {
             ).trim()
           );
 
-      document.getElementById("listingDescription").value = output || "No description generated.";
+      const clean = (output || "").trim();
+      if (!clean) {
+        console.warn("Empty description from API; raw response follows:", data);
+        const keyPhrases = document.getElementById("searchKeyPhrases")?.value || "";
+        const rawDescription = document.getElementById("listingDescInput")?.value || "";
+        const fallback = buildFallbackDescription({ keyPhrases, rawDescription });
+        document.getElementById("listingDescription").value = fallback;
+      } else {
+        document.getElementById("listingDescription").value = clean;
+      }
     } catch (error) {
       const msg = (error && error.message) ? error.message : String(error);
       document.getElementById("listingDescription").value = "Error: " + msg;
