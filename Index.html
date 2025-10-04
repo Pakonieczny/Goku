@@ -1553,6 +1553,12 @@ document.getElementById("shopListings").addEventListener("keydown", (e) => {
         M.toast({ html: "No images to upload. Please drag and drop images first." });
         return;
       }
+
+       if (!window.accessToken || String(window.accessToken).trim() === "") {
+        M.toast({ html: "Not connected to Etsy. Click “Connect to Etsy” first." });
+        return;
+      }
+
       let listingId = /^\d+$/.test(listingInput)
         ? listingInput
         : (listingInput.match(/\/listing\/(\d+)/) || [])[1];
@@ -1562,7 +1568,7 @@ document.getElementById("shopListings").addEventListener("keydown", (e) => {
       }
       for (let i = 0; i < window.previewImages.length; i++) {
         let dataURL = window.previewImages[i];
-        let altText = window.photoMeta[i] || "";
+        let altText = (window.photoMeta[i] || "").slice(0, 250); // mirror server clamp
         let rankNumber = i + 1;
         try {
           let res = await fetch(dataURL);
@@ -1576,8 +1582,11 @@ document.getElementById("shopListings").addEventListener("keydown", (e) => {
           formData.append("file", blob, window.photoNames[i] || `uploaded_photo_${i}.jpg`);
           let uploadUrl = `/.netlify/functions/imageUpload`;
           let response = await fetch(uploadUrl, { method: "POST", body: formData });
+          const raw = await response.text();
+          let msg = raw;
+          try { msg = JSON.parse(raw).error || JSON.parse(raw).message || raw; } catch {}
           if (!response.ok) {
-            M.toast({ html: `Error uploading photo #${rankNumber}: ` + response.status });
+            M.toast({ html: `Photo #${rankNumber} failed (${response.status}): ${msg}` });
           } else {
             M.toast({ html: `Photo #${rankNumber} uploaded with alt_text!` });
           }
@@ -1636,10 +1645,13 @@ document.getElementById("shopListings").addEventListener("keydown", (e) => {
           formData.append("file", blob, window.reservedPhotos[i].name || `reserved_photo_${i}.jpg`);
           let uploadUrl = `/.netlify/functions/imageUpload`;
           let response = await fetch(uploadUrl, { method: "POST", body: formData });
+          const raw = await response.text();
+          let msg = raw;
+          try { msg = JSON.parse(raw).error || JSON.parse(raw).message || raw; } catch {}
           if (!response.ok) {
-            M.toast({ html: `Error uploading reserved photo #${rankNumber}: ` + response.status });
+            M.toast({ html: `Photo #${rankNumber} failed (${response.status}): ${msg}` });
           } else {
-            M.toast({ html: `Reserved photo #${rankNumber} uploaded successfully!` });
+            M.toast({ html: `Photo #${rankNumber} uploaded with alt_text!` });
           }
         } catch (e) {
           console.error(e);
