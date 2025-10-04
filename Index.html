@@ -2333,7 +2333,8 @@ document.getElementById("shopListings").addEventListener("keydown", (e) => {
         tags: document.getElementById("searchKeyPhrases").value.split("\n").map(s => s.trim()).filter(s => s !== "")
       };
       M.toast({ html: "Updating Etsy listing info..." });
-      let updateUrl = `/.netlify/functions/updateListing?listingId=${listingId}&token=${encodeURIComponent(window.accessToken)}&userId=${encodeURIComponent(window.etsyUserId)}`;
+      let updateUrl =
+        `/.netlify/functions/updateListing?listingId=${listingId}&token=${encodeURIComponent(window.accessToken)}`;
       try {
         let response = await fetch(updateUrl, {
           method: "PUT",

@@ -1,28 +1,37 @@
 const fetch = require('node-fetch');
 
-exports.handler = async function(event, context) {
+exports.handler = async function(event) {
   try {
-    const listingId = event.queryStringParameters && event.queryStringParameters.listingId;
-    const accessToken = event.headers['access-token'] || event.headers['Access-Token'];
-    const userId = event.headers['x-user-id'] || event.headers['X-User-Id'];
+    const listingId =
+      event.queryStringParameters && event.queryStringParameters.listingId;
+    const accessToken =
+      event.headers['access-token'] || event.headers['Access-Token'];
     const clientId = process.env.CLIENT_ID;
 
     if (!listingId) {
-      return { statusCode: 400, body: JSON.stringify({ error: "Missing listingId parameter" }) };
+      return {
+        statusCode: 400,
+        body: JSON.stringify({ error: "Missing listingId parameter" })
+      };
     }
-    if (!accessToken || !userId) {
-      return { statusCode: 400, body: JSON.stringify({ error: "Missing access token or user id" }) };
+    if (!accessToken) {
+      return {
+        statusCode: 400,
+        body: JSON.stringify({ error: "Missing access token" })
+      };
     }
     if (!clientId) {
       console.error("CLIENT_ID environment variable is not set.");
     }
 
-    const etsyUrl = `https://api.etsy.com/v3/application/listings/${encodeURIComponent(listingId)}`;
+    const etsyUrl = `https://api.etsy.com/v3/application/listings/${encodeURIComponent(
+      listingId
+    )}`;
 
     const response = await fetch(etsyUrl, {
       method: "GET",
       headers: {
-        "Authorization": `Bearer ${userId}.${accessToken}`,
+        "Authorization": `Bearer ${accessToken}`, // Etsy expects the raw access_token here
         "x-api-key": clientId,
         "Content-Type": "application/json"
       }
