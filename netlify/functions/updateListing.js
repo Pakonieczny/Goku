@@ -1,12 +1,18 @@
+// netlify/functions/updateListing.js
 const fetch = require('node-fetch');
 
-exports.handler = async function(event) {
+exports.handler = async function (event) {
   try {
-    const listingId = event.queryStringParameters && event.queryStringParameters.listingId;
+    const listingId =
+      (event.queryStringParameters && event.queryStringParameters.listingId) || null;
+
+    // Token can come via query (?token=...), or headers
     const token =
       (event.queryStringParameters && event.queryStringParameters.token) ||
       event.headers['access-token'] ||
-      event.headers['Access-Token'];
+      event.headers['Access-Token'] ||
+      event.headers['authorization']?.replace(/^Bearer\s+/i, '');
+
     const clientId = process.env.CLIENT_ID;
     const shopId = process.env.SHOP_ID;
 
@@ -23,6 +29,7 @@ exports.handler = async function(event) {
       console.error("CLIENT_ID environment variable is not set.");
     }
 
+    // Parse JSON payload (title/description/tags/etc.)
     let payload = {};
     try {
       payload = event.body ? JSON.parse(event.body) : {};
@@ -31,13 +38,22 @@ exports.handler = async function(event) {
       payload = {};
     }
 
+    // Build x-www-form-urlencoded body.
+    // IMPORTANT: Etsy v3 expects arrays (e.g., tags) as a SINGLE comma-separated string.
     const form = new URLSearchParams();
     for (const [key, value] of Object.entries(payload)) {
       if (value == null) continue;
+
       if (Array.isArray(value)) {
-        for (const v of value) {
-          if (v != null) form.append(key, String(v));
-        }
+        // Filter null/undefined, stringify, join with commas
+        const csv = value
+          .filter(v => v != null && String(v).trim() !== "")
+          .map(v => String(v))
+          .join(',');
+        form.append(key, csv);
+      } else if (typeof value === 'object') {
+        // If you ever send structured fields, serialize safely
+        form.append(key, JSON.stringify(value));
       } else {
         form.append(key, String(value));
       }
@@ -49,6 +65,7 @@ exports.handler = async function(event) {
       method: "PATCH",
       headers: {
         "Content-Type": "application/x-www-form-urlencoded; charset=utf-8",
+        "Accept": "application/json",
         "Authorization": `Bearer ${token}`,
         "x-api-key": clientId
       },

@@ -2328,35 +2328,48 @@ document.getElementById("shopListings").addEventListener("keydown", (e) => {
       let userDescription = document.getElementById("listingDescription").value || "";
       let finalDescription = userDescription + window.appendedDescriptionText;
       // Build Etsy-safe tags (strip numbering/punctuation, 13 max, 20 chars each)
-      const rawTagLines = (document.getElementById("searchKeyPhrases").value || "").split("\n");
-
+      // Handles two-column numbered lines like "1. foo            8. bar"
+      const raw = (document.getElementById("searchKeyPhrases").value || "");
       const tags = [];
       const seen = new Set();
 
-      for (let line of rawTagLines) {
-        if (!line) continue;
+      const pushTag = (s) => {
+        let tag = (s || "")
+          .normalize("NFKD")
+          .replace(/[^\p{Letter}\p{Number}\s]/gu, " ") // allow only letters/numbers/space
+          .replace(/\s+/g, " ")
+          .trim();
+        if (!tag) return;
 
-        let tag = line.trim()
-          .replace(/^\s*\d+[\.\)]\s*/, "")                                // drop "1.", "02)", etc.
-          .normalize("NFKD").replace(/[^\p{Letter}\p{Number}\s]/gu, " ")  // strip punctuation/emoji
-          .replace(/\s+/g, " ").trim();
-
-        if (!tag) continue;
-
-        // Conservative Etsy cap
+        // 20 char soft cap (prefer breaking on space)
         if (tag.length > 20) {
           const cut = tag.slice(0, 20);
           const sp = cut.lastIndexOf(" ");
           tag = (sp > 7 ? cut.slice(0, sp) : cut).trim();
         }
-
         const key = tag.toLowerCase();
-        if (seen.has(key)) continue;
-        seen.add(key);
+        if (!seen.has(key)) {
+          seen.add(key);
+          tags.push(tag);
+        }
+      };
 
-        tags.push(tag);
-        if (tags.length >= 13) break;
-      }
+      // Go line by line; pull up to two numbered phrases per line.
+      raw.split("\n").forEach(line => {
+        let foundAny = false;
+        for (const m of line.matchAll(/\b\d{1,2}[.)]\s*([^0-9]+?)(?=(\s+\d{1,2}[.)]\s*|$))/g)) {
+          foundAny = true;
+          pushTag(m[1]);
+          if (tags.length >= 13) break;
+        }
+        if (!foundAny) {
+          // Fallback: treat the whole line as a tag if it's not numbered
+          // (useful if a user edited the textarea)
+          // Also drop a leading number if someone typed "3) Something"
+          const fallback = line.replace(/^\s*\d+[.)]\s*/, "");
+          pushTag(fallback);
+        }
+      });
 
       let payload = {
         title: document.getElementById("listingTitle").value,
