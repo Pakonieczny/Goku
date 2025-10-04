@@ -1841,7 +1841,9 @@ document.getElementById("shopListings").addEventListener("keydown", (e) => {
     // NEW: show/hide a heading spinner
     function toggleSpinner(elId, show) {
       const el = document.getElementById(elId);
-      if (el) el.style.display = show ? "inline-block" : "none";
+      if (!el) return;
+      el.style.display = show ? "inline-block" : "none";
+      el.classList.toggle("active", !!show); // <— key: Materialize needs this
     }
 
     function loadReservedPhotos() {
