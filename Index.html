@@ -2327,10 +2327,41 @@ document.getElementById("shopListings").addEventListener("keydown", (e) => {
       }
       let userDescription = document.getElementById("listingDescription").value || "";
       let finalDescription = userDescription + window.appendedDescriptionText;
+      // Build Etsy-safe tags (strip numbering/punctuation, 13 max, 20 chars each)
+      const rawTagLines = (document.getElementById("searchKeyPhrases").value || "").split("\n");
+
+      const tags = [];
+      const seen = new Set();
+
+      for (let line of rawTagLines) {
+        if (!line) continue;
+
+        let tag = line.trim()
+          .replace(/^\s*\d+[\.\)]\s*/, "")                                // drop "1.", "02)", etc.
+          .normalize("NFKD").replace(/[^\p{Letter}\p{Number}\s]/gu, " ")  // strip punctuation/emoji
+          .replace(/\s+/g, " ").trim();
+
+        if (!tag) continue;
+
+        // Conservative Etsy cap
+        if (tag.length > 20) {
+          const cut = tag.slice(0, 20);
+          const sp = cut.lastIndexOf(" ");
+          tag = (sp > 7 ? cut.slice(0, sp) : cut).trim();
+        }
+
+        const key = tag.toLowerCase();
+        if (seen.has(key)) continue;
+        seen.add(key);
+
+        tags.push(tag);
+        if (tags.length >= 13) break;
+      }
+
       let payload = {
         title: document.getElementById("listingTitle").value,
         description: finalDescription,
-        tags: document.getElementById("searchKeyPhrases").value.split("\n").map(s => s.trim()).filter(s => s !== "")
+        tags
       };
       M.toast({ html: "Updating Etsy listing info..." });
       let updateUrl =
