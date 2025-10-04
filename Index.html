@@ -143,25 +143,12 @@
       margin-bottom: 5px;
       display: inline-block;
     }
-
     /* NEW: inline title/section spinner */
-    .inline-spinner {
+    .inline-spinner{
       display: none;        /* toggled by JS */
       vertical-align: middle;
-      margin-left: 8px;
+      margin-left: 8px;     /* sits to the right of the heading */
     }
-
-    /* NEW: preview-cell analysis spinner */
-    .cell-spinner {
-      display: none;        /* toggled by JS */
-      position: absolute;
-      top: 50%;
-      left: 50%;
-      transform: translate(-50%, -50%);
-      z-index: 1100;
-      pointer-events: none; /* don’t block clicks */
-    }
-
     .count-text {
       font-style: italic;
       font-size: 0.9em;
@@ -401,16 +388,7 @@
   </div>
   
   <div class="phrases-header configurable" id="userProvidedKeyPhrasesContainer">
-    <span id="searchKeyPhrasesHeading" class="section-heading configurable">
-    Search Key Phrases
-    <span id="keyphrasesSpinner" class="inline-spinner preloader-wrapper small">
-      <div class="spinner-layer spinner-blue-only">
-        <div class="circle-clipper left"><div class="circle"></div></div>
-        <div class="gap-patch"><div class="circle"></div></div>
-        <div class="circle-clipper right"><div class="circle"></div></div>
-      </div>
-    </span>
-  </span>
+    <span id="searchKeyPhrasesHeading" class="section-heading configurable">Search Key Phrases</span>
    
     <div id="dropZone" class="configurable">Image Drop</div>
     <button id="analyzeMetadataBtn" class="btn waves-effect waves-light configurable">Analyze Photos</button>
@@ -425,16 +403,16 @@
   <div id="belowSearch">
     <button id="generateBtn" class="btn waves-effect waves-light configurable">Generate</button>
     <div class="title-container" id="etsyListingTitleContainer" style="margin-top: 0;">
-      <div id="listingTitleHeading" class="section-heading configurable">
-      Etsy Listing TITLE
-      <span id="titleSpinner" class="inline-spinner preloader-wrapper small">
-        <div class="spinner-layer spinner-blue-only">
-          <div class="circle-clipper left"><div class="circle"></div></div>
-          <div class="gap-patch"><div class="circle"></div></div>
-          <div class="circle-clipper right"><div class="circle"></div></div>
-        </div>
-      </span>
-    </div>
+     <div id="listingTitleHeading" class="section-heading configurable">
+        Etsy Listing TITLE
+        <span id="titleSpinner" class="inline-spinner preloader-wrapper small">
+          <div class="spinner-layer spinner-blue-only">
+            <div class="circle-clipper left"><div class="circle"></div></div>
+            <div class="gap-patch"><div class="circle"></div></div>
+            <div class="circle-clipper right"><div class="circle"></div></div>
+          </div>
+        </span>
+      </div>
       <div class="flex-container configurable">
         <div class="textbox-container configurable">
           <textarea id="listingTitle" class="materialize-textarea" rows="2"></textarea>
@@ -451,16 +429,7 @@
     </div>
     
     <div class="description-container" id="etsyListingDescriptionContainer" style="margin-top: 0px;">
-      <div id="listingDescriptionHeading" class="section-heading configurable">
-      Etsy Listing DESCRIPTION
-      <span id="descriptionSpinner" class="inline-spinner preloader-wrapper small">
-        <div class="spinner-layer spinner-blue-only">
-          <div class="circle-clipper left"><div class="circle"></div></div>
-          <div class="gap-patch"><div class="circle"></div></div>
-          <div class="circle-clipper right"><div class="circle"></div></div>
-        </div>
-      </span>
-    </div>
+      <div id="listingDescriptionHeading" class="section-heading configurable">Etsy Listing DESCRIPTION</div>
       <div class="flex-container configurable">
         <div class="textbox-container configurable">
           <textarea id="listingDescription" class="materialize-textarea"></textarea>
@@ -1607,14 +1576,8 @@ document.getElementById("shopListings").addEventListener("keydown", (e) => {
 
     document.getElementById("analyzeMetadataBtn").addEventListener("click", async () => {
       const count = Math.min(7, window.previewImages.length);
-      showOnlyCellSpinner(-1);      // NEW: ensure all off
       for (let i = 0; i < count; i++) {
-        try {
-          showOnlyCellSpinner(i);   // NEW: only this cell is active
-          await metadataHandler.analyzeAndEmbedMetadata(i);
-        } finally {
-          showOnlyCellSpinner(-1);  // NEW: clear after each cell finishes
-        }
+        await metadataHandler.analyzeAndEmbedMetadata(i);
       }
     });
 
@@ -1624,8 +1587,7 @@ document.getElementById("shopListings").addEventListener("keydown", (e) => {
         M.toast({ html: "Please enter a question in the Listing Description." });
         return;
       }
-      toggleSpinner("keyphrasesSpinner", true); // NEW: show
-    try {
+      try {
         let phrasesArray = await getInitialPhrases(question, document.getElementById("keywordRulesTextarea").value);
         for (let i = 0; i < phrasesArray.length; i++) {
           if (phrasesArray[i].length > 20) {
@@ -1684,8 +1646,6 @@ document.getElementById("shopListings").addEventListener("keydown", (e) => {
       } catch (err) {
         console.error(err);
         M.toast({ html: "Error generating valid tag phrases: " + err.message });
-        } finally {
-        toggleSpinner("keyphrasesSpinner", false); // NEW: hide
       }
     }
 
@@ -1864,19 +1824,6 @@ document.getElementById("shopListings").addEventListener("keydown", (e) => {
     function updateTitleCount(text) {
       document.getElementById("titleCount").textContent = "Count: " + text.length;
     }
-    // NEW: show/hide a heading spinner
-    function toggleSpinner(elId, show) {
-      const el = document.getElementById(elId);
-      if (el) el.style.display = show ? "inline-block" : "none";
-    }
-
-    // NEW: ensure only one cell spinner is visible at a time
-    function showOnlyCellSpinner(activeIndex) {
-      for (let j = 0; j < 10; j++) {
-        const s = document.getElementById("cellSpinner" + j);
-        if (s) s.style.display = (j === activeIndex) ? "block" : "none";
-      }
-    }
 
     document.getElementById("copyTitleBtn").addEventListener("click", () => {
       let text = document.getElementById("listingTitle").value;
@@ -1886,6 +1833,16 @@ document.getElementById("shopListings").addEventListener("keydown", (e) => {
       let text = document.getElementById("listingDescription").value;
       navigator.clipboard.writeText(text).catch(err => console.error("Copy error:", err));
     });
+
+    function updateTitleCount(text) {
+    document.getElementById("titleCount").textContent = "Count: " + text.length;
+    }
+
+    // NEW: show/hide a heading spinner
+    function toggleSpinner(elId, show) {
+      const el = document.getElementById(elId);
+      if (el) el.style.display = show ? "inline-block" : "none";
+    }
 
     function loadReservedPhotos() {
       const stored = localStorage.getItem("reservedPhotos");
@@ -1982,18 +1939,6 @@ document.getElementById("shopListings").addEventListener("keydown", (e) => {
             numOverlay.className = "number-overlay";
             numOverlay.textContent = (i + 1).toString();
             previewBox.appendChild(numOverlay);
-            // NEW: per-cell spinner (centered in cell)
-            const spinnerWrap = document.createElement("div");
-            spinnerWrap.id = "cellSpinner" + i;
-            spinnerWrap.className = "preloader-wrapper small cell-spinner";
-            spinnerWrap.innerHTML = `
-              <div class="spinner-layer spinner-blue-only">
-                <div class="circle-clipper left"><div class="circle"></div></div>
-                <div class="gap-patch"><div class="circle"></div></div>
-                <div class="circle-clipper right"><div class="circle"></div></div>
-              </div>`;
-            // append to the cell (positioned absolutely against .preview-cell)
-            cell.appendChild(spinnerWrap);
             let cropBtn = document.createElement("button");
             cropBtn.textContent = "Crop";
             cropBtn.style.position = "absolute";
@@ -2026,19 +1971,12 @@ document.getElementById("shopListings").addEventListener("keydown", (e) => {
             metadataStatus.className = "metadata-status";
             metadataStatus.id = "metadataStatus" + i;
             cell.appendChild(metadataStatus);
-           // NEW: still add spinner so it can be shown when analyzing this cell
-            const spinnerWrap = document.createElement("div");
-            spinnerWrap.id = "cellSpinner" + i;
-            spinnerWrap.className = "preloader-wrapper small cell-spinner";
-            spinnerWrap.innerHTML = `
-              <div class="spinner-layer spinner-blue-only">
-                <div class="circle-clipper left"><div class="circle"></div></div>
-                <div class="gap-patch"><div class="circle"></div></div>
-                <div class="circle-clipper right"><div class="circle"></div></div>
-              </div>`;
-            cell.appendChild(spinnerWrap);
           } else {
             cell.innerHTML = "Empty";
+            let metadataStatus = document.createElement("div");
+            metadataStatus.className = "metadata-status";
+            metadataStatus.id = "metadataStatus" + i;
+            cell.appendChild(metadataStatus);
           }
         } else {
           let rIndex = i - 7;
@@ -2061,6 +1999,23 @@ document.getElementById("shopListings").addEventListener("keydown", (e) => {
               saveReservedPhotos();
               updateStaticPreviewGrid();
             });
+            previewBox.appendChild(removeBtn);
+            let numOverlay = document.createElement("div");
+            numOverlay.className = "number-overlay";
+            numOverlay.textContent = (i + 1).toString();
+            previewBox.appendChild(numOverlay);
+            previewBox.addEventListener("click", () => { showMetadata(i); });
+            cell.appendChild(previewBox);
+            let metadataStatus = document.createElement("div");
+            metadataStatus.className = "metadata-status";
+            metadataStatus.id = "metadataStatus" + i;
+            cell.appendChild(metadataStatus);
+          } else {
+            cell.innerHTML = "Empty";
+            let metadataStatus = document.createElement("div");
+            metadataStatus.className = "metadata-status";
+            metadataStatus.id = "metadataStatus" + i;
+            cell.appendChild(metadataStatus);
           }
         }
       }
@@ -2357,8 +2312,8 @@ document.getElementById("shopListings").addEventListener("keydown", (e) => {
     ${rulesText}
     Important: Return ONLY the title as plain text.`;
 
-      document.getElementById("listingTitle").value = "Generating title...";
-      toggleSpinner("titleSpinner", true);   // NEW: show blue spinner
+        document.getElementById("listingTitle").value = "Generating title...";
+        toggleSpinner("titleSpinner", true);   // NEW: show blue spinner
       const payload = {
         model: window.modelName,
         input: [
@@ -2407,7 +2362,6 @@ document.getElementById("shopListings").addEventListener("keydown", (e) => {
   Important: Return ONLY the description as plain text.`;
 
     document.getElementById("listingDescription").value = "Generating description...";
-    toggleSpinner("descriptionSpinner", true);
 
     // Responses API payload for GPT-5
     const payload = {
@@ -2452,8 +2406,6 @@ document.getElementById("shopListings").addEventListener("keydown", (e) => {
     } catch (error) {
       const msg = (error && error.message) ? error.message : String(error);
       document.getElementById("listingDescription").value = "Error: " + msg;
-    } finally {
-      toggleSpinner("descriptionSpinner", false); // NEW
     }
   }
 
@@ -2470,6 +2422,19 @@ document.getElementById("shopListings").addEventListener("keydown", (e) => {
       let jsonData = await response.json();
       return jsonData;
     }
+
+    function updateTitleCount(text) {
+      document.getElementById("titleCount").textContent = "Count: " + text.length;
+    }
+
+    document.getElementById("copyTitleBtn").addEventListener("click", () => {
+      let text = document.getElementById("listingTitle").value;
+      navigator.clipboard.writeText(text).catch(err => console.error("Copy error:", err));
+    });
+    document.getElementById("copyDescriptionBtn").addEventListener("click", () => {
+      let text = document.getElementById("listingDescription").value;
+      navigator.clipboard.writeText(text).catch(err => console.error("Copy error:", err));
+    });
   </script>
 </body>
 </html>
