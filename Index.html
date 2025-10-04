@@ -854,6 +854,7 @@ ANTI-REPETITION (TITLE)
       "#dropZone",
       ".preview-cell", // each photo cell
       ".section-heading",
+      "#titleSpinner",
       "#listingQueueCount",
       "#listingDescContainer",
       "#titleCount"             
@@ -925,6 +926,7 @@ ANTI-REPETITION (TITLE)
       etsyShopListingsHeading:   { left: 10,   top: 75,  width: 180, height: 27 },
       searchKeyPhrasesHeading:   { left: 10,   top: 290, width: 180, height: 27 },
       listingTitleHeading:       { left: 10,   top: 505, width: 180, height: 27 },
+      titleSpinner:              { left: 195,  top: 505, width: 24,  height: 24 },
       listingDescriptionHeading: { left: 10,   top: 610, width: 250, height: 27 },
 
       // Counter chip
@@ -1176,11 +1178,23 @@ ANTI-REPETITION (TITLE)
             const ov = document.querySelector(".modal-overlay");
             if (ov) ov.style.opacity = "0.15";
           }, 0);
+          // NEW: show/animate the spinner during layout editing
+          const sp = document.getElementById("titleSpinner");
+          if (sp) {
+            sp.style.display = "inline-block";
+            sp.classList.add("active");
+          }
         },
         onCloseEnd() {
           document.body.classList.remove("config-mode");
           const ov = document.querySelector(".modal-overlay");
           if (ov) ov.style.opacity = "";
+              // NEW: return spinner to its normal, API-driven visibility
+              const sp = document.getElementById("titleSpinner");
+              if (sp) {
+                sp.classList.remove("active");
+                sp.style.display = ""; // allow generateTitleOnly() to control it
+              }
         }
       });
       var openBtn = document.getElementById("openConfigBtn");
