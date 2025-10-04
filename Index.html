@@ -388,7 +388,16 @@
   </div>
   
   <div class="phrases-header configurable" id="userProvidedKeyPhrasesContainer">
-    <span id="searchKeyPhrasesHeading" class="section-heading configurable">Search Key Phrases</span>
+    <span id="searchKeyPhrasesHeading" class="section-heading configurable">
+      Search Key Phrases
+      <span id="searchSpinner" class="inline-spinner preloader-wrapper small">
+        <div class="spinner-layer spinner-blue-only">
+          <div class="circle-clipper left"><div class="circle"></div></div>
+          <div class="gap-patch"><div class="circle"></div></div>
+          <div class="circle-clipper right"><div class="circle"></div></div>
+        </div>
+      </span>
+    </span>
    
     <div id="dropZone" class="configurable">Image Drop</div>
     <button id="analyzeMetadataBtn" class="btn waves-effect waves-light configurable">Analyze Photos</button>
@@ -429,7 +438,16 @@
     </div>
     
     <div class="description-container" id="etsyListingDescriptionContainer" style="margin-top: 0px;">
-      <div id="listingDescriptionHeading" class="section-heading configurable">Etsy Listing DESCRIPTION</div>
+      <div id="listingDescriptionHeading" class="section-heading configurable">
+        Etsy Listing DESCRIPTION
+        <span id="descriptionSpinner" class="inline-spinner preloader-wrapper small">
+          <div class="spinner-layer spinner-blue-only">
+            <div class="circle-clipper left"><div class="circle"></div></div>
+            <div class="gap-patch"><div class="circle"></div></div>
+            <div class="circle-clipper right"><div class="circle"></div></div>
+          </div>
+        </span>
+      </div>
       <div class="flex-container configurable">
         <div class="textbox-container configurable">
           <textarea id="listingDescription" class="materialize-textarea"></textarea>
@@ -857,6 +875,8 @@ ANTI-REPETITION (TITLE)
       "#titleSpinner",
       "#listingQueueCount",
       "#listingDescContainer",
+      "#descriptionSpinner",
+      "#searchSpinner",
       "#titleCount"             
     ];
 
@@ -905,7 +925,7 @@ ANTI-REPETITION (TITLE)
       listingTitle:            { left: 10,   top: 535, width: 1000,height: 45 },
       listingDescription:      { left: 10,   top: 540, width: 1400,height: 150 },
       listingDescContainer:    { left: 10,   top: 185, width: 520,  height: 70  },
-      titleCount:              { left: 10,   top: 585, width: 150,  height: 24  },
+      titleCount:              { left: 1030,   top: 558, width: 150,  height: 24  },
 
       // Drop zone
       dropZone:                { left: 1340, top: 150, width: 155, height: 350 },
@@ -926,8 +946,10 @@ ANTI-REPETITION (TITLE)
       etsyShopListingsHeading:   { left: 10,   top: 75,  width: 180, height: 27 },
       searchKeyPhrasesHeading:   { left: 10,   top: 290, width: 180, height: 27 },
       listingTitleHeading:       { left: 10,   top: 505, width: 180, height: 27 },
-      titleSpinner:              { left: 195,  top: 505, width: 24,  height: 24 },
+      titleSpinner:              { left: 160,  top: 507, width: 20,  height: 20 },
       listingDescriptionHeading: { left: 10,   top: 610, width: 250, height: 27 },
+      searchSpinner:             { left: 160,  top: 292, width: 20,  height: 20 },
+      descriptionSpinner:        { left: 270,  top: 612, width: 20,  height: 20 },
 
       // Counter chip
       listingQueueCount:       { left: 190,  top: 75,  width: 25,  height: 27 }
@@ -1170,40 +1192,44 @@ ANTI-REPETITION (TITLE)
       migrateLocalStoragePositions(); // move saved positions from old random IDs to new stable IDs
       loadPositions();           // apply saved/default positions to all
 
-        var configModal = M.Modal.init(document.getElementById("configModal"), {
-        onOpenStart() {
-          document.body.classList.add("config-mode");
-          // So you can see layout changes behind the modal
-          setTimeout(() => {
-            const ov = document.querySelector(".modal-overlay");
-            if (ov) ov.style.opacity = "0.15";
-          }, 0);
-          // NEW: show/animate the spinner during layout editing
-          const sp = document.getElementById("titleSpinner");
+    var configModal = M.Modal.init(document.getElementById("configModal"), {
+      onOpenStart() {
+        document.body.classList.add("config-mode");
+        // So you can see layout changes behind the modal
+        setTimeout(() => {
+          const ov = document.querySelector(".modal-overlay");
+          if (ov) ov.style.opacity = "0.15";
+        }, 0);
+        // NEW: show/animate the spinners during layout editing
+        ["titleSpinner","descriptionSpinner","searchSpinner"].forEach(id => {
+          const sp = document.getElementById(id);
           if (sp) {
             sp.style.display = "inline-block";
             sp.classList.add("active");
           }
-        },
-        onCloseEnd() {
-          document.body.classList.remove("config-mode");
-          const ov = document.querySelector(".modal-overlay");
-          if (ov) ov.style.opacity = "";
-              // NEW: return spinner to its normal, API-driven visibility
-              const sp = document.getElementById("titleSpinner");
-              if (sp) {
-                sp.classList.remove("active");
-                sp.style.display = ""; // allow generateTitleOnly() to control it
-              }
-        }
-      });
-      var openBtn = document.getElementById("openConfigBtn");
-      if (openBtn){
-        openBtn.addEventListener("click", function(){
-          populateConfigTable(); // shipping-1 builds table on open.  [oai_citation:8‡shipping-1.html](file-service://file-UyzPx2tdaLoZi5ZZoE5Zq8)
-          configModal.open();
+        });
+      },
+      onCloseEnd() {
+        document.body.classList.remove("config-mode");
+        const ov = document.querySelector(".modal-overlay");
+        if (ov) ov.style.opacity = "";
+        // NEW: return spinners to normal, API-driven visibility on close
+        ["titleSpinner","descriptionSpinner","searchSpinner"].forEach(id => {
+          const sp = document.getElementById(id);
+          if (sp) {
+            sp.classList.remove("active");
+            sp.style.display = ""; // let the generators control visibility
+          }
         });
       }
+    });
+    var openBtn = document.getElementById("openConfigBtn");
+    if (openBtn){
+      openBtn.addEventListener("click", function(){
+        populateConfigTable(); // shipping-1 builds table on open.  [oai_citation:8‡shipping-1.html](file-service://file-UyzPx2tdaLoZi5ZZoE5Zq8)
+        configModal.open();
+      });
+    }
 
       var resetBtn = document.getElementById("resetLayoutBtn");
       if (resetBtn){
@@ -1601,65 +1627,76 @@ document.getElementById("shopListings").addEventListener("keydown", (e) => {
         M.toast({ html: "Please enter a question in the Listing Description." });
         return;
       }
+
+      // NEW: show blue spinner beside Search Key Phrases
+      toggleSpinner("searchSpinner", true);
+
       try {
-        let phrasesArray = await getInitialPhrases(question, document.getElementById("keywordRulesTextarea").value);
+        let phrasesArray = await getInitialPhrases(
+          question,
+          document.getElementById("keywordRulesTextarea").value
+        );
+
+        // enforce ≤ 20 chars per phrase by regenerating offenders
         for (let i = 0; i < phrasesArray.length; i++) {
           if (phrasesArray[i].length > 20) {
             let otherValid = phrasesArray.filter((_, idx) => idx !== i && phrasesArray[idx].length <= 20);
-            let newPhrase = await regenerateSinglePhrase(question, document.getElementById("keywordRulesTextarea").value, otherValid);
+            let newPhrase = await regenerateSinglePhrase(
+              question,
+              document.getElementById("keywordRulesTextarea").value,
+              otherValid
+            );
             phrasesArray[i] = newPhrase;
           }
         }
         if (phrasesArray.some(p => p.length > 20)) {
           throw new Error("Could not fix some phrases under 20 chars. Please try again.");
         }
-      // Build two side-by-side columns with numbering (max 7 phrases per column)
-      const left  = phrasesArray.slice(0, 7);
-      const right = phrasesArray.slice(7, 14);
-      const leftLabels = left.map((p, i) => `${i + 1}. ${p || ""}`);
-      const rightLabels = right.map((p, i) => `${i + 8}. ${p || ""}`);
-      // pad width based on the fully labeled left column
-      const leftWidth = Math.max(0, ...leftLabels.map(s => s.length));
-      const pad = leftWidth + 3; // spaces between columns
-      const colLines = [];
-      for (let i = 0; i < 7; i++) {
-        const L = leftLabels[i]  || `${i + 1}. `;
-        const R = rightLabels[i] || "";
-        colLines.push(L.padEnd(pad, " ") + R);
-      }
-      const outputText = colLines.join("\n");
 
-      // 1) Keep original box updated (backward compatibility)
-      const skp = document.getElementById("searchKeyPhrases");
-      if (skp) {
-        skp.value = outputText;
-        // Ensure the columns render correctly
-        skp.setAttribute("wrap", "off");
-        skp.style.fontFamily = 'ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace';
-        skp.style.overflowX = "auto";
-        skp.style.fontSize = "85%"; // 25% smaller for denser tag scan
-        // Clamp to exactly 7 lines (no dead space below the last line)
-        skp.setAttribute("rows", "7");                 // hint browsers
-        skp.style.setProperty("height", "auto", "important"); // reset before measuring
-        const cs = window.getComputedStyle(skp);
-        let lh = parseFloat(cs.lineHeight);
-        if (!lh || Number.isNaN(lh)) {
-          lh = parseFloat(cs.fontSize) * 1.2;          // fallback if line-height === "normal"
+        // build 2-column, numbered (1–7 / 8–14), fixed to 7 lines
+        const left  = phrasesArray.slice(0, 7);
+        const right = phrasesArray.slice(7, 14);
+        const leftLabels = left.map((p, i) => `${i + 1}. ${p || ""}`);
+        const rightLabels = right.map((p, i) => `${i + 8}. ${p || ""}`);
+        const leftWidth = Math.max(0, ...leftLabels.map(s => s.length));
+        const pad = leftWidth + 3;
+        const colLines = [];
+        for (let i = 0; i < 7; i++) {
+          const L = leftLabels[i]  || `${i + 1}. `;
+          const R = rightLabels[i] || "";
+          colLines.push(L.padEnd(pad, " ") + R);
         }
-        const padY    = (parseFloat(cs.paddingTop) || 0) + (parseFloat(cs.paddingBottom) || 0);
-        const borderY = (parseFloat(cs.borderTopWidth) || 0) + (parseFloat(cs.borderBottomWidth) || 0);
-        const exactPx = Math.ceil(lh * 7 + padY + borderY);
-        skp.style.setProperty("height",    exactPx + "px", "important");
-        skp.style.setProperty("min-height",exactPx + "px", "important");
-        skp.style.setProperty("max-height",exactPx + "px", "important");
-        skp.style.setProperty("overflow-y","hidden", "important"); // no vertical scrollbars
-        skp.scrollTop = 0;
-      }
+        const outputText = colLines.join("\n");
 
-      M.toast({ html: "Tag Phrases generated successfully!" });
+        const skp = document.getElementById("searchKeyPhrases");
+        if (skp) {
+          skp.value = outputText;
+          skp.setAttribute("wrap", "off");
+          skp.style.fontFamily = 'ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace';
+          skp.style.overflowX = "auto";
+          skp.style.fontSize = "85%";
+          skp.setAttribute("rows", "7");
+          skp.style.setProperty("height", "auto", "important");
+          const cs = window.getComputedStyle(skp);
+          let lh = parseFloat(cs.lineHeight);
+          if (!lh || Number.isNaN(lh)) lh = parseFloat(cs.fontSize) * 1.2;
+          const padY    = (parseFloat(cs.paddingTop) || 0) + (parseFloat(cs.paddingBottom) || 0);
+          const borderY = (parseFloat(cs.borderTopWidth) || 0) + (parseFloat(cs.borderBottomWidth) || 0);
+          const exactPx = Math.ceil(lh * 7 + padY + borderY);
+          skp.style.setProperty("height",    exactPx + "px", "important");
+          skp.style.setProperty("min-height",exactPx + "px", "important");
+          skp.style.setProperty("max-height",exactPx + "px", "important");
+          skp.style.setProperty("overflow-y","hidden", "important");
+          skp.scrollTop = 0;
+        }
+
+        M.toast({ html: "Tag Phrases generated successfully!" });
       } catch (err) {
         console.error(err);
         M.toast({ html: "Error generating valid tag phrases: " + err.message });
+      } finally {
+        // NEW: hide spinner
+        toggleSpinner("searchSpinner", false);
       }
     }
 
@@ -2355,75 +2392,91 @@ document.getElementById("shopListings").addEventListener("keydown", (e) => {
     }
 
     async function generateDescriptionOnly() {
-  let etsyLink = window.ETSY_SHOP_URL;
-  let keyPhrases = document.getElementById("searchKeyPhrases").value.trim();
-  let rawDescription = document.getElementById("listingDescInput").value.trim();
+      let etsyLink = window.ETSY_SHOP_URL;
+      let keyPhrases = document.getElementById("searchKeyPhrases").value.trim();
+      let rawDescription = document.getElementById("listingDescInput").value.trim();
 
-  if (!keyPhrases) {
-    M.toast({ html: "Please provide the search key phrases." });
-    return;
-  }
-
-  let rulesText = document.getElementById("descriptionRulesTextarea").value;
-
-  let promptText = `
-  You are ChatGPT using ${window.modelName}.
-  Based on the inputs below, generate an Etsy Listing DESCRIPTION only.
-  Input Context:
-  Etsy Link: "${etsyLink}"
-  Listing Description: "${rawDescription}"
-  Key Phrases: "${keyPhrases}"
-  --- Rules for DESCRIPTION ---
-  ${rulesText}
-  Important: Return ONLY the description as plain text.`;
-
-    document.getElementById("listingDescription").value = "Generating description...";
-
-    // Responses API payload for GPT-5
-    const payload = {
-      model: window.modelName, // "gpt-5"
-      input: [
-        { role: "system", content: "Return ONLY the description as plain text." },
-        { role: "user", content: promptText }
-      ],
-      max_output_tokens: 300,
-      reasoning: { effort: "minimal" },
-      text: { verbosity: "medium" }
-    };
-
-    try {
-      const data = await callOpenAI(payload);
-
-      // Use global helper if present; otherwise unwrap Responses API locally
-      const output = (typeof extractResponseText === "function")
-        ? extractResponseText(data)
-        : (
-            typeof data?.output_text === "string" ? data.output_text :
-            (Array.isArray(data?.output)
-              ? data.output
-                  .flatMap(b => Array.isArray(b?.content) ? b.content : [])
-                  .map(p => (typeof p?.text === "string" ? p.text : ""))
-                  .join("")
-                  .trim()
-              : (data?.choices?.[0]?.message?.content || "")
-            ).trim()
-          );
-
-      const clean = (output || "").trim();
-      if (!clean) {
-        console.warn("Empty description from API; raw response follows:", data);
-        const keyPhrases = document.getElementById("searchKeyPhrases")?.value || "";
-        const rawDescription = document.getElementById("listingDescInput")?.value || "";
-        const fallback = buildFallbackDescription({ keyPhrases, rawDescription });
-        document.getElementById("listingDescription").value = fallback;
-      } else {
-        document.getElementById("listingDescription").value = clean;
+      if (!keyPhrases) {
+        M.toast({ html: "Please provide the search key phrases." });
+        return;
       }
-    } catch (error) {
-      const msg = (error && error.message) ? error.message : String(error);
-      document.getElementById("listingDescription").value = "Error: " + msg;
+
+      let rulesText = document.getElementById("descriptionRulesTextarea").value;
+
+      let promptText = `
+    You are ChatGPT using ${window.modelName}.
+    Based on the inputs below, generate an Etsy Listing DESCRIPTION only.
+    Input Context:
+    Etsy Link: "${etsyLink}"
+    Listing Description: "${rawDescription}"
+    Key Phrases: "${keyPhrases}"
+    --- Rules for DESCRIPTION ---
+    ${rulesText}
+    Important: Return ONLY the description as plain text.`.trim();
+
+      const out = document.getElementById("listingDescription");
+      out.value = "Generating description...";
+
+      // NEW: show blue spinner beside DESCRIPTION heading
+      toggleSpinner("descriptionSpinner", true);
+
+      try {
+        // Responses API payload for GPT-5
+        const payload = {
+          model: window.modelName, // e.g., "gpt-5"
+          input: [
+            { role: "system", content: "Return ONLY the description as plain text." },
+            { role: "user", content: promptText }
+          ],
+          max_output_tokens: 350,
+          reasoning: { effort: "minimal" },
+          text: { verbosity: "medium" }
+        };
+
+        const data = await callOpenAI(payload);
+
+        // Use global helper if present; otherwise unwrap Responses API locally
+        let text =
+          (typeof extractResponseText === "function")
+            ? extractResponseText(data)
+            : (
+                typeof data?.output_text === "string" ? data.output_text :
+                (Array.isArray(data?.output)
+                  ? data.output
+                      .flatMap(b => Array.isArray(b?.content) ? b.content : [])
+                      .map(p => (typeof p?.text === "string" ? p.text : ""))
+                      .join("")
+                      .trim()
+                  : (data?.choices?.[0]?.message?.content || "")
+                ).trim()
+              );
+
+        text = (text || "").trim();
+
+        // If nothing came back, build a local fallback that respects house rules
+        if (!text) {
+          console.warn("Empty description from API; raw response follows:", data);
+          const fallback = buildFallbackDescription({ keyPhrases, rawDescription });
+          text = fallback || "";
+        }
+
+        // Enforce hard cap of 400 characters for Etsy description rule
+        if (text.length > 400) text = text.slice(0, 397).trimEnd() + "...";
+
+        out.value = text;
+      } catch (error) {
+        console.error(error);
+        M.toast({ html: "API Error while generating description." });
+
+        // Best-effort fallback respecting house rules
+        let fallback = buildFallbackDescription({ keyPhrases, rawDescription }) || "";
+        if (fallback.length > 400) fallback = fallback.slice(0, 397).trimEnd() + "...";
+        out.value = fallback || ("Error: " + (error?.message || String(error)));
+      } finally {
+        // NEW: hide spinner once done
+        toggleSpinner("descriptionSpinner", false);
+      }
     }
-  }
 
     async function callOpenAI(payload) {
       let response = await fetch("/.netlify/functions/openaiProxy", {
