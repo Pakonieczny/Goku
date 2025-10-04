@@ -383,6 +383,21 @@
       pointer-events: none;
     }
 
+    /* Create Listing blue progress bar (same visuals, hidden initially) */
+    #createListingProgress {
+      position: absolute;
+      height: 22px;
+      width: 260px;               /* layout system can override */
+      border-radius: 6px;
+      overflow: hidden;
+      background: #e3f2fd;        /* light blue track */
+      border: 1px solid #2196f3;  /* blue border */
+      box-shadow: 0 1px 2px rgba(0,0,0,.08);
+      display: none;              /* shown on click */
+    }
+    #createListingProgress .bar { height: 100%; width: 0%; background: #2196f3; transition: width .25s ease; }
+    #createListingProgress .pct { position: absolute; inset: 0; display: flex; align-items: center; justify-content: center; font-weight: 700; font-size: 12px; color: #fff; text-shadow: 0 0 2px #000, 0 0 4px #000; letter-spacing: .2px; pointer-events: none; }
+
   </style>
 </head>
 <body>
@@ -401,8 +416,12 @@
   
   <div id="topButtons">
     <button id="connectEtsyBtn" class="btn waves-effect waves-light configurable">Connect to Etsy</button>
-    <button id="photoUploadNewBtn" class="btn waves-effect waves-light configurable update-btn" style="margin-left: 10px;">Update Photos</button>
-    <button id="uploadToEtsyBtn" class="btn waves-effect waves-light configurable update-btn" style="margin-left: 10px;">Update Info</button>
+    <button id="createListingBtn" class="btn waves-effect waves-light configurable update-btn" style="margin-left: 10px;">Create Listing</button>
+    <!-- Unified blue progress bar (hidden until clicked) -->
+    <div id="createListingProgress" class="configurable" style="display:none;">
+      <div class="bar"></div>
+      <div class="pct">0%</div>
+    </div>
     <div id="etsyShopListingsContainer">
       <div id="etsyShopListingsHeading" class="section-heading configurable">
         Etsy Shop Listings
@@ -910,6 +929,7 @@ ANTI-REPETITION (TITLE)
       "#descriptionSpinner",
       "#searchSpinner",
       "#analyzeMetadataProgress",
+      "#createListingProgress",
       "#titleCount"             
     ];
 
@@ -938,8 +958,8 @@ ANTI-REPETITION (TITLE)
       // Top controls
       openConfigBtn:           { left: 190,  top: 10,  width: 140, height: 35 },
       connectEtsyBtn:          { left: 10,   top: 10,  width: 160, height: 35 },
-      photoUploadNewBtn:       { left: 600,  top: 10,  width: 160, height: 35 },
-      uploadToEtsyBtn:         { left: 800,  top: 10,  width: 160, height: 35 },
+      createListingBtn:        { left: 700,  top: 10,  width: 160, height: 35 },
+      createListingProgress:   { left: 870,  top: 10,  width: 260, height: 22 },
       analyzeMetadataBtn:      { left: 600,  top: 100, width: 160, height: 35 },
 
       // Generation controls
@@ -1673,6 +1693,22 @@ document.getElementById("shopListings").addEventListener("keydown", (e) => {
       setMetadataProgress(0);
     }
 
+    // --- Create Listing unified progress (Photos -> Info)
+    function setCreateProgress(pct) {
+      const wrap = document.getElementById("createListingProgress");
+      if (!wrap) return;
+      const bar = wrap.querySelector(".bar");
+      const txt = wrap.querySelector(".pct");
+      const clamped = Math.max(0, Math.min(100, Math.round(pct)));
+      if (bar) bar.style.width = clamped + "%";
+      if (txt) txt.textContent = clamped + "%";
+    }
+    function resetCreateProgress() { setCreateProgress(0); }
+    function showCreateProgress(show) {
+      const wrap = document.getElementById("createListingProgress");
+      if (wrap) wrap.style.display = show ? "block" : "none";
+    }
+
     document.getElementById("analyzeMetadataBtn").addEventListener("click", async () => {
       try {
         const total = (window.previewImages && window.previewImages.length) || 0;
@@ -1689,6 +1725,95 @@ document.getElementById("shopListings").addEventListener("keydown", (e) => {
       } catch (e) {
         console.error(e);
         if (window.M?.toast) M.toast({ html: "Metadata analyze error: " + (e?.message || e) });
+      }
+    });
+
+    // --- Create Listing: Photos (1/2) then Info (2/2) with a single blue progress bar
+    document.getElementById("createListingBtn").addEventListener("click", async () => {
+      const btn = document.getElementById("createListingBtn");
+      try {
+        // Resolve listing ID (accepts plain ID or URL with /listing/ID)
+        let listingInput = (document.getElementById("shopListings").value || "").trim();
+        if (!listingInput) { M.toast({ html: "Please provide a listing URL or ID in 'Etsy Shop Listings'." }); return; }
+        let listingId = /^\d+$/.test(listingInput) ? listingInput : ((listingInput.match(/\/listing\/(\d+)/) || [])[1]);
+        if (!listingId) { M.toast({ html: "Invalid listing URL or ID." }); return; }
+        if (!window.accessToken) { M.toast({ html: "Please Connect to Etsy first." }); return; }
+
+        // UI: show unified progress + disable button
+        btn && (btn.disabled = true);
+        showCreateProgress(true);
+        resetCreateProgress();
+        setCreateProgress(5);
+
+        // ---------------- Stage 1: Upload Photos (main + reserved) ----------------
+        await uploadPhotos();               // existing function
+        await uploadReservedPhotos();       // existing function
+        window.photoUpdateComplete = true;
+        setCreateProgress(50);
+
+        // ---------------- Stage 2: Upload Info (title/desc/tags) -----------------
+        const userTitle = (document.getElementById("listingTitle").value || "").trim();
+        const userDescription = document.getElementById("listingDescription").value || "";
+        const finalDescription = userDescription + (window.appendedDescriptionText || "");
+
+        // Build Etsy-safe tags (≤13 items, ≤20 chars each), honoring two-column numbering
+        const raw = (document.getElementById("searchKeyPhrases").value || "");
+        const tags = [];
+        const seen = new Set();
+        const pushTag = (s) => {
+          let tag = (s || "")
+            .normalize("NFKD")
+            .replace(/[^\p{Letter}\p{Number}\s]/gu, " ")
+            .replace(/\s+/g, " ")
+            .trim();
+          if (!tag) return;
+          if (tag.length > 20) {
+            const cut = tag.slice(0, 20); const sp = cut.lastIndexOf(" ");
+            tag = (sp > 7 ? cut.slice(0, sp) : cut).trim();
+          }
+          const key = tag.toLowerCase();
+          if (!seen.has(key)) { seen.add(key); tags.push(tag); }
+        };
+        raw.split("\n").forEach(line => {
+          let foundAny = false;
+          for (const m of line.matchAll(/\b\d{1,2}[.)]\s*([^0-9]+?)(?=(\s+\d{1,2}[.)]\s*|$))/g)) {
+            foundAny = true; pushTag(m[1]); if (tags.length >= 13) break;
+          }
+          if (!foundAny) { const fallback = line.replace(/^\s*\d+[.)]\s*/, ""); pushTag(fallback); }
+        });
+        const slicedTags = tags.slice(0, 13);
+
+        setCreateProgress(70);
+        const payload = {
+          listing_id: listingId,
+          title: userTitle,
+          description: finalDescription,
+          tags: slicedTags
+        };
+        const resp = await fetch("/.netlify/functions/updateListing", {
+          method: "PUT",
+          headers: { "Content-Type": "application/json", Authorization: "Bearer " + window.accessToken },
+          body: JSON.stringify(payload)
+        });
+        const result = await resp.json();
+        if (!resp.ok) {
+          throw new Error(`Info update failed ${resp.status} — ${JSON.stringify(result)}`);
+        }
+        window.infoUpdateComplete = true;
+        setCreateProgress(100);
+        M.toast({ html: "Create Listing complete: Photos + Info updated." });
+
+        // Advance queue if present
+        if (window.listingQueue && window.listingQueue.length > 0) {
+          window.listingQueue.shift();
+          if (typeof loadNextListingInQueue === "function") loadNextListingInQueue();
+        }
+      } catch (err) {
+        console.error(err);
+        M.toast({ html: "Create Listing error: " + (err?.message || err) });
+      } finally {
+        setTimeout(() => { showCreateProgress(false); resetCreateProgress(); }, 600);
+        btn && (btn.disabled = false);
       }
     });
 
@@ -2323,123 +2448,6 @@ document.getElementById("shopListings").addEventListener("keydown", (e) => {
         M.toast({ html: "Error exchanging code for token" });
       }
     }
-
-    document.getElementById("uploadToEtsyBtn").addEventListener("click", async () => {
-      let listingInput = document.getElementById("shopListings").value.trim();
-      if (!listingInput) {
-        M.toast({ html: "Please provide a listing URL or ID in 'Etsy Shop Listings'." });
-        return;
-      }
-      let listingId = /^\d+$/.test(listingInput)
-        ? listingInput
-        : (listingInput.match(/\/listing\/(\d+)/) || [])[1];
-      if (!listingId) {
-        M.toast({ html: "Invalid listing URL or ID." });
-        return;
-      }
-      let userDescription = document.getElementById("listingDescription").value || "";
-      let finalDescription = userDescription + window.appendedDescriptionText;
-      // Build Etsy-safe tags (strip numbering/punctuation, 13 max, 20 chars each)
-      // Handles two-column numbered lines like "1. foo            8. bar"
-      const raw = (document.getElementById("searchKeyPhrases").value || "");
-      const tags = [];
-      const seen = new Set();
-
-      const pushTag = (s) => {
-        let tag = (s || "")
-          .normalize("NFKD")
-          .replace(/[^\p{Letter}\p{Number}\s]/gu, " ") // allow only letters/numbers/space
-          .replace(/\s+/g, " ")
-          .trim();
-        if (!tag) return;
-
-        // 20 char soft cap (prefer breaking on space)
-        if (tag.length > 20) {
-          const cut = tag.slice(0, 20);
-          const sp = cut.lastIndexOf(" ");
-          tag = (sp > 7 ? cut.slice(0, sp) : cut).trim();
-        }
-        const key = tag.toLowerCase();
-        if (!seen.has(key)) {
-          seen.add(key);
-          tags.push(tag);
-        }
-      };
-
-      // Go line by line; pull up to two numbered phrases per line.
-      raw.split("\n").forEach(line => {
-        let foundAny = false;
-        for (const m of line.matchAll(/\b\d{1,2}[.)]\s*([^0-9]+?)(?=(\s+\d{1,2}[.)]\s*|$))/g)) {
-          foundAny = true;
-          pushTag(m[1]);
-          if (tags.length >= 13) break;
-        }
-        if (!foundAny) {
-          // Fallback: treat the whole line as a tag if it's not numbered
-          // (useful if a user edited the textarea)
-          // Also drop a leading number if someone typed "3) Something"
-          const fallback = line.replace(/^\s*\d+[.)]\s*/, "");
-          pushTag(fallback);
-        }
-      });
-
-      let payload = {
-        title: document.getElementById("listingTitle").value,
-        description: finalDescription,
-        tags
-      };
-      M.toast({ html: "Updating Etsy listing info..." });
-      let updateUrl =
-        `/.netlify/functions/updateListing?listingId=${listingId}&token=${encodeURIComponent(window.accessToken)}`;
-      try {
-        let response = await fetch(updateUrl, {
-          method: "PUT",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify(payload)
-        });
-        if (!response.ok) {
-          let errorText = await response.text();
-          M.toast({ html: "Error updating listing: " + response.status + " - " + errorText });
-        } else {
-          M.toast({ html: "Listing info updated successfully!" });
-          window.infoUpdateComplete = true;
-          if (window.photoUpdateComplete && window.infoUpdateComplete) {
-            window.listingQueue.shift();
-            loadNextListingInQueue();
-          }
-        }
-      } catch (e) {
-        console.error(e);
-        M.toast({ html: "Exception: " + e.message });
-      }
-    });
-
-    document.getElementById("photoUploadNewBtn").addEventListener("click", async () => {
-      let listingInput = document.getElementById("shopListings").value.trim();
-      if (!listingInput) {
-        M.toast({ html: "Please provide a listing URL or ID in 'Etsy Shop Listings'." });
-        return;
-      }
-      let btn = document.getElementById("photoUploadNewBtn");
-      btn.disabled = true;
-      try {
-        M.toast({ html: "Uploading photos to Etsy..." });
-        await uploadPhotos();
-        M.toast({ html: "Uploading reserved photos to Etsy..." });
-        await uploadReservedPhotos();
-        M.toast({ html: "Photos updated successfully!" });
-        window.photoUpdateComplete = true;
-        if (window.photoUpdateComplete && window.infoUpdateComplete) {
-          window.listingQueue.shift();
-          loadNextListingInQueue();
-        }
-      } catch (err) {
-        console.error(err);
-        M.toast({ html: "Error uploading photos: " + err.message });
-      } finally {
-        btn.disabled = false;
-      }
-    });
 
     function dataURLtoBlob(dataurl) {
       const arr = dataurl.split(',');
