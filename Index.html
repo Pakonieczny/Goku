@@ -1790,7 +1790,7 @@ document.getElementById("shopListings").addEventListener("keydown", (e) => {
           description: finalDescription,
           tags: slicedTags
         };
-        const resp = await fetch("/.netlify/functions/updateListing", {
+        const resp = await fetch(`/.netlify/functions/updateListing?listingId=${encodeURIComponent(listingId)}`, {
           method: "PUT",
           headers: { "Content-Type": "application/json", Authorization: "Bearer " + window.accessToken },
           body: JSON.stringify(payload)
