@@ -981,9 +981,9 @@ ANTI-REPETITION (TITLE)
       listingTitleHeading:       { left: 10,   top: 505, width: 180, height: 27 },
       titleSpinner:              { left: 160,  top: 507, width: 20,  height: 20 },
       listingDescriptionHeading: { left: 10,   top: 610, width: 250, height: 27 },
-      searchSpinner:             { left: 160,  top: 292, width: 20,  height: 20 },
-      descriptionSpinner:        { left: 270,  top: 612, width: 20,  height: 20 },
-      analyzeMetadataProgress: { left: 772,  top: 100, width: 260, height: 22 },
+      searchSpinner:             { left: 177,  top: 292, width: 20,  height: 20 },
+      descriptionSpinner:        { left: 235,  top: 612, width: 20,  height: 20 },
+      analyzeMetadataProgress: { left: 800,  top: 105, width: 260, height: 27 },
 
       // Counter chip
       listingQueueCount:       { left: 190,  top: 75,  width: 25,  height: 27 }
@@ -2301,6 +2301,7 @@ document.getElementById("shopListings").addEventListener("keydown", (e) => {
         let tokenData = await response.json();
         if (tokenData.access_token) {
           window.accessToken = tokenData.access_token;
+          window.etsyUserId = tokenData.user_id; // needed for Etsy v3 Bearer format
           M.toast({ html: "Connected to Etsy!" });
         } else {
           M.toast({ html: "Error obtaining token: " + JSON.stringify(tokenData) });
@@ -2332,7 +2333,7 @@ document.getElementById("shopListings").addEventListener("keydown", (e) => {
         tags: document.getElementById("searchKeyPhrases").value.split("\n").map(s => s.trim()).filter(s => s !== "")
       };
       M.toast({ html: "Updating Etsy listing info..." });
-      let updateUrl = `/.netlify/functions/updateListing?listingId=${listingId}&token=${encodeURIComponent(window.accessToken)}`;
+      let updateUrl = `/.netlify/functions/updateListing?listingId=${listingId}&token=${encodeURIComponent(window.accessToken)}&userId=${encodeURIComponent(window.etsyUserId)}`;
       try {
         let response = await fetch(updateUrl, {
           method: "PUT",
