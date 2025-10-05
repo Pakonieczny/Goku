@@ -1609,6 +1609,7 @@ document.getElementById("shopListings").addEventListener("keydown", (e) => {
             M.toast({ html: `Photo #${rankNumber} failed (${response.status}): ${msg}` });
           } else {
             M.toast({ html: `Photo #${rankNumber} uploaded with alt_text!` });
+            bumpCreateProgressPerImage(); // +8% per successful image upload
           }
         } catch (e) {
           console.error(e);
@@ -1672,6 +1673,7 @@ document.getElementById("shopListings").addEventListener("keydown", (e) => {
             M.toast({ html: `Photo #${rankNumber} failed (${response.status}): ${msg}` });
           } else {
             M.toast({ html: `Photo #${rankNumber} uploaded with alt_text!` });
+            bumpCreateProgressPerImage(); // +8% per successful reserved image upload
           }
         } catch (e) {
           console.error(e);
@@ -1703,10 +1705,16 @@ document.getElementById("shopListings").addEventListener("keydown", (e) => {
       if (bar) bar.style.width = clamped + "%";
       if (txt) txt.textContent = clamped + "%";
     }
-    function resetCreateProgress() { setCreateProgress(0); }
+    function resetCreateProgress() { window._createPct = 0; setCreateProgress(0); }
     function showCreateProgress(show) {
       const wrap = document.getElementById("createListingProgress");
       if (wrap) wrap.style.display = show ? "block" : "none";
+    }
+    function bumpCreateProgressPerImage() {
+      const prev = Number(window._createPct || 0);
+      const next = Math.min(100, prev + 8); // 8% per successful upload
+      window._createPct = next;
+      setCreateProgress(next);
     }
 
     document.getElementById("analyzeMetadataBtn").addEventListener("click", async () => {
@@ -1742,14 +1750,12 @@ document.getElementById("shopListings").addEventListener("keydown", (e) => {
         // UI: show unified progress + disable button
         btn && (btn.disabled = true);
         showCreateProgress(true);
-        resetCreateProgress();
-        setCreateProgress(5);
+        resetCreateProgress(); // now sets window._createPct=0 and bar to 0%
 
         // ---------------- Stage 1: Upload Photos (main + reserved) ----------------
         await uploadPhotos();               // existing function
         await uploadReservedPhotos();       // existing function
         window.photoUpdateComplete = true;
-        setCreateProgress(50);
 
         // ---------------- Stage 2: Upload Info (title/desc/tags) -----------------
         const userTitle = (document.getElementById("listingTitle").value || "").trim();
@@ -1783,7 +1789,6 @@ document.getElementById("shopListings").addEventListener("keydown", (e) => {
         });
         const slicedTags = tags.slice(0, 13);
 
-        setCreateProgress(70);
         const payload = {
           listing_id: listingId,
           title: userTitle,
@@ -2516,6 +2521,16 @@ document.getElementById("shopListings").addEventListener("keydown", (e) => {
       }
     }
 
+     //    Word-safe 400-char cap, no ellipsis, trims trailing punctuation/spaces.
+     function capDescription(s, limit = 400) {
+       const t = (s || "").trim();
+       if (t.length <= limit) return t;
+       let cut = t.slice(0, limit + 1);           // slight overrun gives us room to backtrack
+       const lastSpace = cut.lastIndexOf(" ");
+       if (lastSpace > 0) cut = cut.slice(0, lastSpace);
+       return cut.replace(/[\s.,;:!?-]+$/,"");    // clean up ragged tail
+     }
+
     async function generateDescriptionOnly() {
       let etsyLink = window.ETSY_SHOP_URL;
       let keyPhrases = document.getElementById("searchKeyPhrases").value.trim();
@@ -2585,8 +2600,8 @@ document.getElementById("shopListings").addEventListener("keydown", (e) => {
           text = fallback || "";
         }
 
-        // Enforce hard cap of 400 characters for Etsy description rule
-        if (text.length > 400) text = text.slice(0, 397).trimEnd() + "...";
+         // Enforce 400-char cap without ellipsis and without cutting words
+         text = capDescription(text, 400);
 
         out.value = text;
       } catch (error) {
