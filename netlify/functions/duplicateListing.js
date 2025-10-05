@@ -424,6 +424,8 @@ exports.handler = async (event) => {
           copy.offerings = copy.offerings.map(o => {
             const oo = { ...o };
             delete oo.offering_id;
+            // remove read-only / invalid flag Etsy returns on offerings
+            if ("is_deleted" in oo) delete oo.is_deleted;
 
             // normalize quantity/enable flags
             if (oo.available_quantity != null && oo.quantity == null) {
@@ -446,7 +448,12 @@ exports.handler = async (event) => {
         return copy;
       });
 
-      await jput(`${API_BASE}/listings/${newListingId}/inventory?legacy=false`, token, xApiKey, { products });
+     // belt-and-suspenders: strip any lingering `is_deleted` anywhere in the structure
+      const sanitized = JSON.parse(
+        JSON.stringify({ products }, (k, v) => (k === "is_deleted" ? undefined : v))
+      );
+
+      await jput(`${API_BASE}/listings/${newListingId}/inventory?legacy=false`, token, xApiKey, sanitized);
     }
 
     // 5) Restore listing-level properties/attributes (best-effort)
