@@ -419,6 +419,7 @@
     <button id="createListingBtn" class="btn waves-effect waves-light configurable update-btn" style="margin-left: 10px;">Create Listing</button>
     <!-- Unified blue progress bar (hidden until clicked) -->
     <div id="createListingProgress" class="configurable" style="display:none;">
+      <button id="duplicateListingBtn" class="btn waves-effect waves-light configurable" style="margin-left: 10px;">Duplicate Listing</button>
       <div class="bar"></div>
       <div class="pct">0%</div>
     </div>
@@ -1004,6 +1005,7 @@ ANTI-REPETITION (TITLE)
       searchSpinner:             { left: 177,  top: 292, width: 20,  height: 20 },
       descriptionSpinner:        { left: 235,  top: 612, width: 20,  height: 20 },
       analyzeMetadataProgress: { left: 800,  top: 105, width: 260, height: 27 },
+      duplicateListingBtn:     { left: 870,  top: 10,  width: 180, height: 35 },
 
       // Counter chip
       listingQueueCount:       { left: 190,  top: 75,  width: 25,  height: 27 }
@@ -1814,6 +1816,48 @@ document.getElementById("shopListings").addEventListener("keydown", (e) => {
       } finally {
         setTimeout(() => { showCreateProgress(false); resetCreateProgress(); }, 600);
         btn && (btn.disabled = false);
+      }
+    });
+
+    // --- Duplicate Listing: clone everything into a new DRAFT ---
+    document.getElementById("duplicateListingBtn").addEventListener("click", async () => {
+      const btn = document.getElementById("duplicateListingBtn");
+      try {
+        let listingInput = (document.getElementById("shopListings").value || "").trim();
+        if (!listingInput) { M.toast({ html: "Enter a source listing URL or 10-digit ID in 'Etsy Shop Listings'." }); return; }
+        let listingId = /^\d+$/.test(listingInput) ? listingInput : ((listingInput.match(/\/listing\/(\d+)/) || [])[1]);
+        if (!listingId) { M.toast({ html: "Invalid listing URL or ID." }); return; }
+        if (!window.accessToken) { M.toast({ html: "Please Connect to Etsy first." }); return; }
+
+        btn.disabled = true;
+        M.toast({ html: "Duplicating listing… creating draft and copying data…" });
+
+        const res = await fetch("/.netlify/functions/duplicateListing", {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+            "Authorization": "Bearer " + window.accessToken
+          },
+          body: JSON.stringify({ listing_id: listingId })
+        });
+
+        const data = await res.json().catch(() => null);
+        if (!res.ok) {
+          throw new Error((data && (data.error || data.message)) || ("HTTP " + res.status));
+        }
+
+        const newId = data?.new_listing_id || data?.listing_id || data?.data?.listing_id;
+        if (newId) {
+          document.getElementById("shopListings").value = String(newId);
+          M.toast({ html: `Duplicated to draft: ${newId}` });
+        } else {
+          M.toast({ html: "Draft created, but could not parse new ID." });
+        }
+      } catch (e) {
+        console.error("duplicateListing error:", e);
+        M.toast({ html: "Duplicate failed: " + (e?.message || e) });
+      } finally {
+        if (btn) btn.disabled = false;
       }
     });
 
