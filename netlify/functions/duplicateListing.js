@@ -24,10 +24,7 @@ function baseHeaders(token, xApiKey, extra) {
   return Object.assign(h, extra || {});
 }
 
-// Choose a sensible quantity for create-listing:
-// 1) listing-level quantity if present
-// 2) max available from inventory offerings
-// 3) fallback to 187 (per request)
+// ---------- helpers ----------
 function deriveQuantity(srcData, inventory) {
   const q1 = (srcData && (srcData.quantity ?? srcData.data?.quantity));
   if (Number.isInteger(q1) && q1 > 0) return q1;
@@ -47,10 +44,7 @@ function deriveQuantity(srcData, inventory) {
   return 187;
 }
 
-// Choose a sensible price for create-listing (in cents):
-// 1) listing-level price if present
-// 2) min offering price from inventory
-// 3) fallback to 1000 ($10.00)
+// cents for createDraftListing's price
 function derivePrice(srcData, inventory) {
   const toCents = (v) => {
     if (v == null) return null;
@@ -62,7 +56,6 @@ function derivePrice(srcData, inventory) {
     if (!Number.isFinite(n)) return null;
     return String(v).includes(".") ? Math.round(n * 100) : Math.round(n);
   };
-
   const p1 = toCents(srcData && (srcData.price ?? srcData.data?.price));
   if (p1 && p1 > 0) return p1;
 
@@ -78,8 +71,26 @@ function derivePrice(srcData, inventory) {
     }
   } catch {}
   if (min !== Infinity) return min;
+  return 1000; // $10.00 default
+}
 
-  return 1000; // safe default ($10.00)
+// convert Money object -> decimal for updateListingInventory
+function toDecimalPrice(price) {
+  if (price == null) return undefined;
+  if (typeof price === "number") return price;
+  if (typeof price === "string") {
+    const n = Number(price);
+    return Number.isFinite(n) ? n : undefined;
+  }
+  if (typeof price === "object") {
+    const amount = price.amount ?? price.cents ?? price.value;
+    const divisor = price.divisor ?? 100;
+    if (Number.isFinite(amount) && Number.isFinite(divisor) && divisor > 0) {
+      // keep exact to 2 decimals
+      return Math.round((amount / divisor) * 100) / 100;
+    }
+  }
+  return undefined;
 }
 
 async function jget(url, token, xApiKey) {
@@ -123,6 +134,23 @@ async function jput(url, token, xApiKey, body) {
   return data;
 }
 
+// some Etsy endpoints still prefer x-www-form-urlencoded (e.g., creating readiness profile)
+async function formPost(url, token, xApiKey, data) {
+  const enc = new URLSearchParams();
+  Object.entries(data || {}).forEach(([k, v]) => {
+    if (v !== undefined && v !== null) enc.append(k, String(v));
+  });
+  const r = await fetch(url, {
+    method: "POST",
+    headers: baseHeaders(token, xApiKey, { "Content-Type": "application/x-www-form-urlencoded" }),
+    body: enc.toString()
+  });
+  const t = await r.text();
+  let json; try { json = t ? JSON.parse(t) : null; } catch { json = { raw: t }; }
+  if (!r.ok) throw new Error(`[POST ${url}] ${r.status} — ${json?.error || json?.message || t}`);
+  return json;
+}
+
 async function uploadImageFromUrl(imageUrl, token, xApiKey, shop_id, listing_id, rank) {
   const imgRes = await fetch(imageUrl);
   if (!imgRes.ok) throw new Error(`Download image failed: ${imageUrl} ${imgRes.status}`);
@@ -163,6 +191,69 @@ async function uploadDigitalFileFromUrl(fileUrl, token, xApiKey, shop_id, listin
   return json;
 }
 
+function isDigitalListing(srcData, filesList) {
+  const t = (srcData.type || srcData.listing_type || srcData.data?.type || "").toString().toLowerCase();
+  const digitalFlag = !!(srcData.is_digital ?? srcData.data?.is_digital);
+  if (digitalFlag) return true;
+  if (t === "download" || t === "digital") return true;
+  return Array.isArray(filesList) && filesList.length > 0;
+}
+
+// Resolve a readiness_state_id to satisfy physical listing creation.
+// Priority: copy from source inventory (majority id) -> pick an existing shop definition -> (last resort) create a default definition.
+async function resolveReadinessStateId({ token, xApiKey, shop_id, sourceId }) {
+  // 1) Try to read from source inventory with legacy=false
+  try {
+    const inv = await jget(`${API_BASE}/listings/${sourceId}/inventory?legacy=false`, token, xApiKey);
+    const prods = inv?.products || inv?.data?.products || [];
+    const counts = new Map();
+    for (const p of prods) {
+      for (const o of (p?.offerings || [])) {
+        const rid = o?.readiness_state_id;
+        if (rid) counts.set(rid, (counts.get(rid) || 0) + 1);
+      }
+    }
+    if (counts.size) {
+      return [...counts.entries()].sort((a, b) => b[1] - a[1])[0][0];
+    }
+  } catch (e) {
+    console.warn("readiness from inventory warning:", e.message);
+  }
+
+  // 2) Try any existing processing profile in the shop
+  try {
+    const defs = await jget(`${API_BASE}/shops/${shop_id}/readiness-state-definitions`, token, xApiKey);
+    const list = defs?.results || defs?.data || [];
+    if (Array.isArray(list) && list.length) {
+      const preferred =
+        list.find(d => (d.readiness_state || d.data?.readiness_state) === "ready_to_ship") || list[0];
+      return preferred.readiness_state_id || preferred.data?.readiness_state_id;
+    }
+  } catch (e) {
+    console.warn("readiness definitions read warning:", e.message);
+  }
+
+  // 3) As a last resort, create a minimal profile
+  try {
+    const created = await formPost(
+      `${API_BASE}/shops/${shop_id}/readiness-state-definitions`,
+      token,
+      xApiKey,
+      {
+        readiness_state: "ready_to_ship",
+        min_processing_time: 1,
+        max_processing_time: 3,
+        processing_time_unit: "days"
+      }
+    );
+    return created?.readiness_state_id || created?.data?.readiness_state_id;
+  } catch (e) {
+    console.warn("create readiness-state-definition warning:", e.message);
+  }
+
+  return null;
+}
+
 exports.handler = async (event) => {
   try {
     if (event.httpMethod !== "POST") {
@@ -180,21 +271,21 @@ exports.handler = async (event) => {
       return { statusCode: 400, body: JSON.stringify({ error: "Missing or invalid listing_id" }) };
     }
 
-    // 1) Read source listing core
-    const src = await jget(`${API_BASE}/listings/${sourceId}`, token, xApiKey);
+    // 1) Read source listing core (use legacy=false so readiness fields appear where applicable)
+    const src = await jget(`${API_BASE}/listings/${sourceId}?legacy=false`, token, xApiKey);
     const srcData = src || {};
     const shop_id = String(srcData.shop_id || srcData.data?.shop_id || srcData.results?.[0]?.shop_id || "").trim();
     if (!shop_id) throw new Error("Could not resolve shop_id from source listing.");
 
-    // 1a) Read images (for re-upload)
+    // 1a) Images
     const img = await jget(`${API_BASE}/listings/${sourceId}/images`, token, xApiKey);
     const images = img?.results || img?.data || [];
 
-    // 1b) Read inventory/variations
-    const inv = await jget(`${API_BASE}/listings/${sourceId}/inventory`, token, xApiKey);
+    // 1b) Inventory/variations (use legacy=false for readiness ids)
+    const inv = await jget(`${API_BASE}/listings/${sourceId}/inventory?legacy=false`, token, xApiKey);
     const inventory = inv?.products || inv?.data?.products || [];
 
-    // 1c) Read listing-level properties/attributes
+    // 1c) Properties
     let props = [];
     try {
       const p = await jget(`${API_BASE}/listings/${sourceId}/properties`, token, xApiKey);
@@ -203,7 +294,7 @@ exports.handler = async (event) => {
       console.warn("properties read warning:", e.message);
     }
 
-    // 1d) Read translations (best-effort)
+    // 1d) Translations
     let translations = [];
     try {
       const tr = await jget(`${API_BASE}/listings/${sourceId}/translations`, token, xApiKey);
@@ -219,8 +310,19 @@ exports.handler = async (event) => {
       files = f?.results || f?.data || [];
     } catch (e) { /* not digital or none */ }
 
-    // 2) Create a new DRAFT listing with core fields copied
-    const qty = deriveQuantity(srcData, inventory);  // ensure required 'quantity'
+    const isDigital = isDigitalListing(srcData, files);
+
+    // Resolve readiness_state_id for physical copies
+    let readinessId = null;
+    if (!isDigital) {
+      readinessId = await resolveReadinessStateId({ token, xApiKey, shop_id, sourceId });
+      if (!readinessId) {
+        throw new Error("No readiness_state_id available for physical listing creation.");
+      }
+    }
+
+    // 2) Create a new DRAFT listing (use legacy=false and include readiness_state_id for physical)
+    const qty = deriveQuantity(srcData, inventory);
     const core = {
       title: srcData.title || srcData.data?.title || "",
       description: srcData.description || srcData.data?.description || "",
@@ -231,7 +333,7 @@ exports.handler = async (event) => {
       tags: srcData.tags || srcData.data?.tags || [],
       materials: srcData.materials || srcData.data?.materials || [],
       quantity: qty,
-      price: derivePrice(srcData, inventory), // required by Etsy (cents)
+      price: derivePrice(srcData, inventory), // cents (integer) per createDraftListing
       shipping_profile_id: srcData.shipping_profile_id || srcData.data?.shipping_profile_id,
       return_policy_id: srcData.return_policy_id || srcData.data?.return_policy_id,
       shop_section_id: srcData.shop_section_id || srcData.data?.shop_section_id,
@@ -242,7 +344,9 @@ exports.handler = async (event) => {
       state: "draft",
       should_auto_renew: !!(srcData.should_auto_renew ?? srcData.data?.should_auto_renew)
     };
-    const created = await jpost(`${API_BASE}/shops/${shop_id}/listings`, token, xApiKey, core);
+    if (!isDigital && readinessId) core.readiness_state_id = readinessId;
+
+    const created = await jpost(`${API_BASE}/shops/${shop_id}/listings?legacy=false`, token, xApiKey, core);
     const newListingId = created?.listing_id || created?.data?.listing_id || created?.results?.[0]?.listing_id;
     if (!newListingId) throw new Error("Draft creation succeeded but no new listing_id in response.");
 
@@ -260,27 +364,45 @@ exports.handler = async (event) => {
       }
     }
 
-    // 4) Restore inventory/variations (must strip readonly IDs)
+    // 4) Restore inventory/variations — strip readonly, normalize prices to decimals, carry readiness_state_id
     if (Array.isArray(inventory) && inventory.length) {
       const products = inventory.map(p => {
         const copy = JSON.parse(JSON.stringify(p || {}));
+
+        // remove read-only/noisy fields per docs
         delete copy.product_id;
         delete copy.offering_id;
+        delete copy.scale_name;
+        delete copy.is_deleted;
+        delete copy.value_pairs;
+
         if (Array.isArray(copy.offerings)) {
           copy.offerings = copy.offerings.map(o => {
             const oo = { ...o };
             delete oo.offering_id;
-            if (oo.price && typeof oo.price === "object") {
-              const cents = (oo.price.amount ?? oo.price.cents ?? 0);
-              const cur = oo.price.currency_code || "USD";
-              oo.price = { amount: cents, currency_code: cur };
+
+            // normalize quantity/enable flags
+            if (oo.available_quantity != null && oo.quantity == null) {
+              oo.quantity = oo.available_quantity;
+              delete oo.available_quantity;
+            }
+
+            // price must be decimal for inventory updates
+            const dec = toDecimalPrice(oo.price);
+            if (Number.isFinite(dec)) oo.price = dec; else delete oo.price;
+
+            // ensure readiness_state_id present (copy exact if provided; else fall back to listing-level)
+            if (!isDigital) {
+              const rid = o?.readiness_state_id || readinessId;
+              if (rid) oo.readiness_state_id = rid;
             }
             return oo;
           });
         }
         return copy;
       });
-      await jput(`${API_BASE}/listings/${newListingId}/inventory`, token, xApiKey, { products });
+
+      await jput(`${API_BASE}/listings/${newListingId}/inventory?legacy=false`, token, xApiKey, { products });
     }
 
     // 5) Restore listing-level properties/attributes (best-effort)
