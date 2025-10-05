@@ -47,6 +47,41 @@ function deriveQuantity(srcData, inventory) {
   return 187;
 }
 
+// Choose a sensible price for create-listing (in cents):
+// 1) listing-level price if present
+// 2) min offering price from inventory
+// 3) fallback to 1000 ($10.00)
+function derivePrice(srcData, inventory) {
+  const toCents = (v) => {
+    if (v == null) return null;
+    if (typeof v === "object") {
+      const a = v.amount ?? v.cents ?? v.value;
+      return Number.isFinite(a) ? a : null;
+    }
+    const n = Number(v);
+    if (!Number.isFinite(n)) return null;
+    return String(v).includes(".") ? Math.round(n * 100) : Math.round(n);
+  };
+
+  const p1 = toCents(srcData && (srcData.price ?? srcData.data?.price));
+  if (p1 && p1 > 0) return p1;
+
+  let min = Infinity;
+  try {
+    if (Array.isArray(inventory)) {
+      for (const p of inventory) {
+        for (const o of (p?.offerings || [])) {
+          const c = toCents(o?.price);
+          if (c && c > 0 && c < min) min = c;
+        }
+      }
+    }
+  } catch {}
+  if (min !== Infinity) return min;
+
+  return 1000; // safe default ($10.00)
+}
+
 async function jget(url, token, xApiKey) {
   const r = await fetch(url, { headers: baseHeaders(token, xApiKey) });
   const t = await r.text();
@@ -196,6 +231,7 @@ exports.handler = async (event) => {
       tags: srcData.tags || srcData.data?.tags || [],
       materials: srcData.materials || srcData.data?.materials || [],
       quantity: qty,
+      price: derivePrice(srcData, inventory), // required by Etsy (cents)
       shipping_profile_id: srcData.shipping_profile_id || srcData.data?.shipping_profile_id,
       return_policy_id: srcData.return_policy_id || srcData.data?.return_policy_id,
       shop_section_id: srcData.shop_section_id || srcData.data?.shop_section_id,
