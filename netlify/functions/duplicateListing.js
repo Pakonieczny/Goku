@@ -190,7 +190,7 @@ exports.handler = async (event) => {
           images[i]?.url_300x300 ||
           images[i]?.url;
         if (url) {
-          await uploadImageFromUrl(url, bearer(event), shop_id, newListingId, r);
+          await uploadImageFromUrl(url, token, shop_id, newListingId, r);
         }
       }
     }
@@ -206,9 +206,8 @@ exports.handler = async (event) => {
             const oo = { ...o };
             delete oo.offering_id;
             // normalize price (v3 accepts decimal string)
-            if (oo.price && typeof oo.price === "object" && oo.price.amount) {
-              // amount is in minor units; fall back to provided "amount" if "amount" not present
-              const cents = oo.price.amount || oo.price.cents || 0;
+            if (oo.price && typeof oo.price === "object") {
+              const cents = (oo.price.amount ?? oo.price.cents ?? 0);
               const cur = oo.price.currency_code || "USD";
               oo.price = { amount: cents, currency_code: cur };
             }
@@ -259,4 +258,29 @@ exports.handler = async (event) => {
 
     // 7) Digital files (if any) — re-upload
     if (Array.isArray(files) && files.length) {
-      for (const f of
+      for (const f of files) {
+        const fileUrl = f.url || f.file_url || f.download_url;
+        const nameHint = f.name || f.file_name || "download.bin";
+        if (fileUrl) {
+          await uploadDigitalFileFromUrl(fileUrl, token, shop_id, newListingId, nameHint);
+        }
+      }
+    }
+
+    // ✅ success
+    return { statusCode: 200, body: JSON.stringify({
+      ok: true,
+      new_listing_id: newListingId,
+      copied: {
+        images: Array.isArray(images) ? images.length : 0,
+        products: Array.isArray(inventory) ? inventory.length : 0,
+        properties: Array.isArray(props) ? props.length : 0,
+        translations: Array.isArray(translations) ? translations.length : 0,
+        files: Array.isArray(files) ? files.length : 0
+      }
+    }) };
+  } catch (e) {
+    console.error("duplicateListing failed:", e);
+    return { statusCode: 500, body: JSON.stringify({ error: e.message }) };
+  }
+};
