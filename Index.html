@@ -1837,6 +1837,7 @@ document.getElementById("shopListings").addEventListener("keydown", (e) => {
           headers: {
             "Content-Type": "application/json",
             "Authorization": "Bearer " + window.accessToken
+            "X-Api-Key": window.CLIENT_ID
           },
           body: JSON.stringify({ listing_id: listingId })
         });

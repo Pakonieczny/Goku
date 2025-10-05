@@ -8,22 +8,33 @@ function bearer(event) {
   const h = event.headers || {};
   const auth = h.authorization || h.Authorization || "";
   if (auth.startsWith("Bearer ")) return auth;
-  // Fallback to env token if you use server-held tokens:
   if (process.env.ETSY_ACCESS_TOKEN) return "Bearer " + process.env.ETSY_ACCESS_TOKEN;
   throw new Error("Missing Authorization bearer token.");
 }
+function clientId(event) {
+  const h = event.headers || {};
+  return (
+    h["x-api-key"] || h["X-Api-Key"] ||
+    h["client-id"] || h["Client-Id"] ||
+    process.env.CLIENT_ID || process.env.ETSY_CLIENT_ID || ""
+  );
+}
+function baseHeaders(token, xApiKey, extra) {
+  const h = { Authorization: token, "x-api-key": xApiKey, Accept: "application/json" };
+  return Object.assign(h, extra || {});
+}
 
-async function jget(url, token) {
-  const r = await fetch(url, { headers: { Authorization: token } });
+async function jget(url, token, xApiKey) {
+  const r = await fetch(url, { headers: baseHeaders(token, xApiKey) });
   const t = await r.text();
   let data; try { data = t ? JSON.parse(t) : null; } catch { data = { raw: t }; }
   if (!r.ok) throw new Error(`[GET ${url}] ${r.status} — ${data?.error || data?.message || t}`);
   return data;
 }
-async function jpost(url, token, body) {
+async function jpost(url, token, xApiKey, body) {
   const r = await fetch(url, {
     method: "POST",
-    headers: { Authorization: token, "Content-Type": "application/json" },
+    headers: baseHeaders(token, xApiKey, { "Content-Type": "application/json" }),
     body: JSON.stringify(body || {})
   });
   const t = await r.text();
@@ -31,10 +42,10 @@ async function jpost(url, token, body) {
   if (!r.ok) throw new Error(`[POST ${url}] ${r.status} — ${data?.error || data?.message || t}`);
   return data;
 }
-async function jpatch(url, token, body) {
+async function jpatch(url, token, xApiKey, body) {
   const r = await fetch(url, {
     method: "PATCH",
-    headers: { Authorization: token, "Content-Type": "application/json" },
+    headers: baseHeaders(token, xApiKey, { "Content-Type": "application/json" }),
     body: JSON.stringify(body || {})
   });
   const t = await r.text();
@@ -42,10 +53,10 @@ async function jpatch(url, token, body) {
   if (!r.ok) throw new Error(`[PATCH ${url}] ${r.status} — ${data?.error || data?.message || t}`);
   return data;
 }
-async function jput(url, token, body) {
+async function jput(url, token, xApiKey, body) {
   const r = await fetch(url, {
     method: "PUT",
-    headers: { Authorization: token, "Content-Type": "application/json" },
+    headers: baseHeaders(token, xApiKey, { "Content-Type": "application/json" }),
     body: JSON.stringify(body || {})
   });
   const t = await r.text();
@@ -54,8 +65,7 @@ async function jput(url, token, body) {
   return data;
 }
 
-async function uploadImageFromUrl(imageUrl, token, shop_id, listing_id, rank) {
-  // Fetch binary and re-upload to the new listing
+async function uploadImageFromUrl(imageUrl, token, xApiKey, shop_id, listing_id, rank) {
   const imgRes = await fetch(imageUrl);
   if (!imgRes.ok) throw new Error(`Download image failed: ${imageUrl} ${imgRes.status}`);
   const buf = Buffer.from(await imgRes.arrayBuffer());
@@ -66,7 +76,7 @@ async function uploadImageFromUrl(imageUrl, token, shop_id, listing_id, rank) {
 
   const up = await fetch(`${API_BASE}/shops/${shop_id}/listings/${listing_id}/images`, {
     method: "POST",
-    headers: { Authorization: token, ...fd.getHeaders() },
+    headers: { ...baseHeaders(token, xApiKey), ...fd.getHeaders() },
     body: fd
   });
   const txt = await up.text();
@@ -75,7 +85,7 @@ async function uploadImageFromUrl(imageUrl, token, shop_id, listing_id, rank) {
   return json;
 }
 
-async function uploadDigitalFileFromUrl(fileUrl, token, shop_id, listing_id, nameHint) {
+async function uploadDigitalFileFromUrl(fileUrl, token, xApiKey, shop_id, listing_id, nameHint) {
   const fRes = await fetch(fileUrl);
   if (!fRes.ok) throw new Error(`Download file failed: ${fileUrl} ${fRes.status}`);
   const buf = Buffer.from(await fRes.arrayBuffer());
@@ -86,7 +96,7 @@ async function uploadDigitalFileFromUrl(fileUrl, token, shop_id, listing_id, nam
 
   const up = await fetch(`${API_BASE}/shops/${shop_id}/listings/${listing_id}/files`, {
     method: "POST",
-    headers: { Authorization: token, ...fd.getHeaders() },
+    headers: { ...baseHeaders(token, xApiKey), ...fd.getHeaders() },
     body: fd
   });
   const txt = await up.text();
@@ -101,6 +111,11 @@ exports.handler = async (event) => {
       return { statusCode: 405, body: JSON.stringify({ error: "Method Not Allowed" }) };
     }
     const token = bearer(event);
+    const xApiKey = clientId(event);
+    if (!xApiKey) {
+      return { statusCode: 400, body: JSON.stringify({ error: "Missing x-api-key (CLIENT_ID). Add header X-Api-Key or set env CLIENT_ID." }) };
+    }
+
     const body = JSON.parse(event.body || "{}");
     const sourceId = String(body.listing_id || body.listingId || "").trim();
     if (!/^\d{10}$/.test(sourceId)) {
@@ -108,33 +123,32 @@ exports.handler = async (event) => {
     }
 
     // 1) Read source listing core
-    const src = await jget(`${API_BASE}/listings/${sourceId}`, token);
+    const src = await jget(`${API_BASE}/listings/${sourceId}`, token, xApiKey);
     const srcData = src || {};
     const shop_id = String(srcData.shop_id || srcData.data?.shop_id || srcData.results?.[0]?.shop_id || "").trim();
     if (!shop_id) throw new Error("Could not resolve shop_id from source listing.");
 
     // 1a) Read images (for re-upload)
-    const img = await jget(`${API_BASE}/listings/${sourceId}/images`, token);
+    const img = await jget(`${API_BASE}/listings/${sourceId}/images`, token, xApiKey);
     const images = img?.results || img?.data || [];
 
     // 1b) Read inventory/variations
-    const inv = await jget(`${API_BASE}/listings/${sourceId}/inventory`, token);
+    const inv = await jget(`${API_BASE}/listings/${sourceId}/inventory`, token, xApiKey);
     const inventory = inv?.products || inv?.data?.products || [];
 
     // 1c) Read listing-level properties/attributes
     let props = [];
     try {
-      const p = await jget(`${API_BASE}/listings/${sourceId}/properties`, token);
+      const p = await jget(`${API_BASE}/listings/${sourceId}/properties`, token, xApiKey);
       props = p?.results || p?.data || [];
     } catch (e) {
-      // Some shops have minimal attributes; proceed
       console.warn("properties read warning:", e.message);
     }
 
     // 1d) Read translations (best-effort)
     let translations = [];
     try {
-      const tr = await jget(`${API_BASE}/listings/${sourceId}/translations`, token);
+      const tr = await jget(`${API_BASE}/listings/${sourceId}/translations`, token, xApiKey);
       translations = tr?.results || tr?.data || [];
     } catch (e) {
       console.warn("translations read warning:", e.message);
@@ -143,11 +157,9 @@ exports.handler = async (event) => {
     // 1e) Digital files (if any)
     let files = [];
     try {
-      const f = await jget(`${API_BASE}/listings/${sourceId}/files`, token);
+      const f = await jget(`${API_BASE}/listings/${sourceId}/files`, token, xApiKey);
       files = f?.results || f?.data || [];
-    } catch (e) {
-      // Not digital or no files
-    }
+    } catch (e) { /* not digital or none */ }
 
     // 2) Create a new DRAFT listing with core fields copied
     const core = {
@@ -159,39 +171,31 @@ exports.handler = async (event) => {
       is_supply: !!(srcData.is_supply ?? srcData.data?.is_supply),
       tags: srcData.tags || srcData.data?.tags || [],
       materials: srcData.materials || srcData.data?.materials || [],
-      // profiles / sections
       shipping_profile_id: srcData.shipping_profile_id || srcData.data?.shipping_profile_id,
       return_policy_id: srcData.return_policy_id || srcData.data?.return_policy_id,
       shop_section_id: srcData.shop_section_id || srcData.data?.shop_section_id,
-      // personalization
       is_personalizable: !!(srcData.is_personalizable ?? srcData.data?.is_personalizable),
       personalization_is_required: !!(srcData.personalization_is_required ?? srcData.data?.personalization_is_required),
       personalization_char_count_max: srcData.personalization_char_count_max || srcData.data?.personalization_char_count_max,
       personalization_instructions: srcData.personalization_instructions || srcData.data?.personalization_instructions,
-      // keep it DRAFT
       state: "draft",
       should_auto_renew: !!(srcData.should_auto_renew ?? srcData.data?.should_auto_renew)
     };
-
-    const created = await jpost(`${API_BASE}/shops/${shop_id}/listings`, token, core);
-    const newListingId =
-      created?.listing_id || created?.data?.listing_id || created?.results?.[0]?.listing_id;
+    const created = await jpost(`${API_BASE}/shops/${shop_id}/listings`, token, xApiKey, core);
+    const newListingId = created?.listing_id || created?.data?.listing_id || created?.results?.[0]?.listing_id;
     if (!newListingId) throw new Error("Draft creation succeeded but no new listing_id in response.");
 
     // 3) Re-upload images preserving order
     if (Array.isArray(images) && images.length) {
       for (let i = 0; i < images.length; i++) {
         const r = images[i]?.rank || i + 1;
-        // Prefer the largest available URL; fall back to any url
         const url =
           images[i]?.url_fullxfull ||
           images[i]?.url_o_fullxfull ||
           images[i]?.url_570xN ||
           images[i]?.url_300x300 ||
           images[i]?.url;
-        if (url) {
-          await uploadImageFromUrl(url, token, shop_id, newListingId, r);
-        }
+        if (url) await uploadImageFromUrl(url, token, xApiKey, shop_id, newListingId, r);
       }
     }
 
@@ -205,7 +209,6 @@ exports.handler = async (event) => {
           copy.offerings = copy.offerings.map(o => {
             const oo = { ...o };
             delete oo.offering_id;
-            // normalize price (v3 accepts decimal string)
             if (oo.price && typeof oo.price === "object") {
               const cents = (oo.price.amount ?? oo.price.cents ?? 0);
               const cur = oo.price.currency_code || "USD";
@@ -216,8 +219,7 @@ exports.handler = async (event) => {
         }
         return copy;
       });
-
-      await jput(`${API_BASE}/listings/${newListingId}/inventory`, token, { products });
+      await jput(`${API_BASE}/listings/${newListingId}/inventory`, token, xApiKey, { products });
     }
 
     // 5) Restore listing-level properties/attributes (best-effort)
@@ -231,7 +233,7 @@ exports.handler = async (event) => {
           scale_id: pr.scale_id || pr.data?.scale_id || null
         };
         try {
-          await jput(`${API_BASE}/listings/${newListingId}/properties/${property_id}`, token, payload);
+          await jput(`${API_BASE}/listings/${newListingId}/properties/${property_id}`, token, xApiKey, payload);
         } catch (e) {
           console.warn(`property ${property_id} set warning:`, e.message);
         }
@@ -249,7 +251,7 @@ exports.handler = async (event) => {
           tags: tr.tags || tr.data?.tags || core.tags
         };
         try {
-          await jput(`${API_BASE}/listings/${newListingId}/translations/${lang}`, token, payload);
+          await jput(`${API_BASE}/listings/${newListingId}/translations/${lang}`, token, xApiKey, payload);
         } catch (e) {
           console.warn(`translation ${lang} set warning:`, e.message);
         }
@@ -261,24 +263,25 @@ exports.handler = async (event) => {
       for (const f of files) {
         const fileUrl = f.url || f.file_url || f.download_url;
         const nameHint = f.name || f.file_name || "download.bin";
-        if (fileUrl) {
-          await uploadDigitalFileFromUrl(fileUrl, token, shop_id, newListingId, nameHint);
-        }
+        if (fileUrl) await uploadDigitalFileFromUrl(fileUrl, token, xApiKey, shop_id, newListingId, nameHint);
       }
     }
 
     // ✅ success
-    return { statusCode: 200, body: JSON.stringify({
-      ok: true,
-      new_listing_id: newListingId,
-      copied: {
-        images: Array.isArray(images) ? images.length : 0,
-        products: Array.isArray(inventory) ? inventory.length : 0,
-        properties: Array.isArray(props) ? props.length : 0,
-        translations: Array.isArray(translations) ? translations.length : 0,
-        files: Array.isArray(files) ? files.length : 0
-      }
-    }) };
+    return {
+      statusCode: 200,
+      body: JSON.stringify({
+        ok: true,
+        new_listing_id: newListingId,
+        copied: {
+          images: Array.isArray(images) ? images.length : 0,
+          products: Array.isArray(inventory) ? inventory.length : 0,
+          properties: Array.isArray(props) ? props.length : 0,
+          translations: Array.isArray(translations) ? translations.length : 0,
+          files: Array.isArray(files) ? files.length : 0
+        }
+      })
+    };
   } catch (e) {
     console.error("duplicateListing failed:", e);
     return { statusCode: 500, body: JSON.stringify({ error: e.message }) };
