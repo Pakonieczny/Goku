@@ -24,6 +24,29 @@ function baseHeaders(token, xApiKey, extra) {
   return Object.assign(h, extra || {});
 }
 
+// Choose a sensible quantity for create-listing:
+// 1) listing-level quantity if present
+// 2) max available from inventory offerings
+// 3) fallback to 187 (per request)
+function deriveQuantity(srcData, inventory) {
+  const q1 = (srcData && (srcData.quantity ?? srcData.data?.quantity));
+  if (Number.isInteger(q1) && q1 > 0) return q1;
+  try {
+    if (Array.isArray(inventory)) {
+      let maxQ = 0;
+      for (const p of inventory) {
+        const offs = p?.offerings || [];
+        for (const o of offs) {
+          const q = o?.quantity ?? o?.available_quantity ?? 0;
+          if (Number.isInteger(q) && q > maxQ) maxQ = q;
+        }
+      }
+      if (maxQ > 0) return maxQ;
+    }
+  } catch {}
+  return 187;
+}
+
 async function jget(url, token, xApiKey) {
   const r = await fetch(url, { headers: baseHeaders(token, xApiKey) });
   const t = await r.text();
@@ -162,6 +185,7 @@ exports.handler = async (event) => {
     } catch (e) { /* not digital or none */ }
 
     // 2) Create a new DRAFT listing with core fields copied
+    const qty = deriveQuantity(srcData, inventory);  // ensure required 'quantity'
     const core = {
       title: srcData.title || srcData.data?.title || "",
       description: srcData.description || srcData.data?.description || "",
@@ -171,6 +195,7 @@ exports.handler = async (event) => {
       is_supply: !!(srcData.is_supply ?? srcData.data?.is_supply),
       tags: srcData.tags || srcData.data?.tags || [],
       materials: srcData.materials || srcData.data?.materials || [],
+      quantity: qty,
       shipping_profile_id: srcData.shipping_profile_id || srcData.data?.shipping_profile_id,
       return_policy_id: srcData.return_policy_id || srcData.data?.return_policy_id,
       shop_section_id: srcData.shop_section_id || srcData.data?.shop_section_id,
