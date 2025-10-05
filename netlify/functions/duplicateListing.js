@@ -93,6 +93,29 @@ function toDecimalPrice(price) {
   return undefined;
 }
 
+// keep only the allowed keys for inventory property_values
+// allowed: property_id, value_ids, scale_id
+function sanitizePropertyValues(arr) {
+  if (!Array.isArray(arr)) return [];
+  const out = [];
+  for (const pv of arr) {
+    const property_id = pv?.property_id ?? pv?.data?.property_id;
+    const value_ids =
+      Array.isArray(pv?.value_ids) ? pv.value_ids.slice()
+      : Array.isArray(pv?.data?.value_ids) ? pv.data.value_ids.slice()
+      : [];
+    const scale_id = pv?.scale_id ?? pv?.data?.scale_id ?? null;
+    if (Number.isInteger(property_id)) {
+      out.push({
+        property_id,
+        value_ids,
+        scale_id
+      });
+    }
+  }
+  return out;
+}
+
 async function jget(url, token, xApiKey) {
   const r = await fetch(url, { headers: baseHeaders(token, xApiKey) });
   const t = await r.text();
@@ -200,7 +223,6 @@ function isDigitalListing(srcData, filesList) {
 }
 
 // Resolve a readiness_state_id to satisfy physical listing creation.
-// Priority: copy from source inventory (majority id) -> pick an existing shop definition -> (last resort) create a default definition.
 async function resolveReadinessStateId({ token, xApiKey, shop_id, sourceId }) {
   // 1) Try to read from source inventory with legacy=false
   try {
@@ -375,6 +397,11 @@ exports.handler = async (event) => {
         delete copy.scale_name;
         delete copy.is_deleted;
         delete copy.value_pairs;
+
+        // strip read-only fields from property_values and keep only allowed keys
+        if (Array.isArray(copy.property_values)) {
+          copy.property_values = sanitizePropertyValues(copy.property_values);
+        }
 
         if (Array.isArray(copy.offerings)) {
           copy.offerings = copy.offerings.map(o => {
