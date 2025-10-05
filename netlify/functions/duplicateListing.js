@@ -94,24 +94,41 @@ function toDecimalPrice(price) {
 }
 
 // keep only the allowed keys for inventory property_values
-// allowed: property_id, value_ids, scale_id
+// allowed (per docs): property_id, property_name, scale_id, value_ids, values
+// https://developer.etsy.com/documentation/tutorials/listings (see "Updating Inventory" example & notes)
 function sanitizePropertyValues(arr) {
   if (!Array.isArray(arr)) return [];
+  const normalizeStr = (v) => (v == null ? undefined : String(v));
+  const normalizeStrArr = (xs) => Array.isArray(xs) ? xs.map((v) => String(v)) : [];
+  const normalizeNumArr = (xs) =>
+    Array.isArray(xs) ? xs.map((v) => Number(v)).filter((n) => Number.isFinite(n)) : [];
+
   const out = [];
   for (const pv of arr) {
     const property_id = pv?.property_id ?? pv?.data?.property_id;
-    const value_ids =
-      Array.isArray(pv?.value_ids) ? pv.value_ids.slice()
-      : Array.isArray(pv?.data?.value_ids) ? pv.data.value_ids.slice()
-      : [];
-    const scale_id = pv?.scale_id ?? pv?.data?.scale_id ?? null;
-    if (Number.isInteger(property_id)) {
-      out.push({
-        property_id,
-        value_ids,
-        scale_id
-      });
+    if (!Number.isInteger(property_id)) continue;
+
+    // prefer explicit property_name from source; otherwise provide safe fallback
+    let property_name =
+      normalizeStr(pv?.property_name ?? pv?.data?.property_name ?? pv?.name ?? pv?.label);
+    if (!property_name) {
+      property_name = (property_id === 513) ? "Custom" : "Property";
     }
+
+    const scale_id = pv?.scale_id ?? pv?.data?.scale_id ?? null;
+    const value_ids =
+      normalizeNumArr(pv?.value_ids ?? pv?.data?.value_ids);
+    // values should be strings matching the selected value ids where possible
+    let values =
+      normalizeStrArr(pv?.values ?? pv?.data?.values ?? pv?.value_names);
+
+    out.push({
+      property_id,
+      property_name,
+      scale_id,
+      value_ids,
+      values
+    });
   }
   return out;
 }
