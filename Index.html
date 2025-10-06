@@ -1899,18 +1899,23 @@ document.getElementById("shopListings").addEventListener("keydown", (e) => {
          // start: show bar, hide check
         toggleCheck("analyzeMetadataCheck", false);
         showMetadataProgress(true);
-        const total = (window.previewImages && window.previewImages.length) || 0;
+        // Work set = previewCell0..6 only (skip reserved 7–9)
+        const slots   = [0,1,2,3,4,5,6];
+        const workIdx = slots.filter(i => !!(window.previewImages && window.previewImages[i]));
+        const total   = workIdx.length;
         if (!total) {
-          if (window.M?.toast) M.toast({ html: "No images to analyze." });
-          return;
+          if (window.M?.toast) M.toast({ html: "No images in cells 0–6 to analyze." });
           showMetadataProgress(false);
+          return;
         }
         resetMetadataProgress();
-        for (let i = 0; i < total; i++) {
+        let done = 0;
+        for (const i of workIdx) {
           await metadataHandler.analyzeAndEmbedMetadata(i);
-          setMetadataProgress(((i + 1) / total) * 100);
+          done++;
+          setMetadataProgress((done / total) * 100);
         }
-        if (window.M?.toast) M.toast({ html: `Analyzed metadata for ${total} image${total !== 1 ? "s" : ""}.` });
+        if (window.M?.toast) M.toast({ html: `Analyzed metadata for ${total} image${total !== 1 ? "s" : ""} (cells 0–6).` });
       } catch (e) {
         console.error(e);
         if (window.M?.toast) M.toast({ html: "Metadata analyze error: " + (e?.message || e) });
