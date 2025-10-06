@@ -2017,7 +2017,6 @@ document.getElementById("shopListings").addEventListener("keydown", (e) => {
         const leftPrefixLen = pre.length;
         const rest   = line.slice(leftPrefixLen);
         const mDelim = /\s{3,}\d{1,2}\.\s/.exec(rest);
-
         let leftText="", rightText="", delim="";
         if (mDelim){
           leftText  = rest.slice(0, mDelim.index);
@@ -2027,8 +2026,8 @@ document.getElementById("shopListings").addEventListener("keydown", (e) => {
           leftText = rest;
         }
 
-        const leftIdx  = i;      // 0..6
-        const rightIdx = i + 7;  // 7..13
+        const leftIdx  = i;
+        const rightIdx = i + 7;
 
         const leftHTML  = changedSet.has(leftIdx)
           ? `<span style="background: rgba(255,165,0,0.35); border-radius:2px;">${_skpEscape(leftText)}</span>`
@@ -2037,7 +2036,9 @@ document.getElementById("shopListings").addEventListener("keydown", (e) => {
           ? `<span style="background: rgba(255,165,0,0.35); border-radius:2px;">${_skpEscape(rightText)}</span>`
           : _skpEscape(rightText);
 
-        out.push(_skpEscape(pre) + leftHTML + _skpEscape(delim) + rightHTML);
+        /* ✨ FIX: maintain exact line grid by inserting a fixed spacer between columns */
+        const SPACER = "&nbsp;".repeat(6); // adjust column gap
+        out.push(_skpEscape(pre) + leftHTML + SPACER + _skpEscape(delim) + rightHTML);
       }
       return out.join("\n");
     }
