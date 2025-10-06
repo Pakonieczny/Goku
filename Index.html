@@ -2460,21 +2460,25 @@ document.getElementById("shopListings").addEventListener("keydown", (e) => {
       syncSkpOverlayPosition();
     }
 
-    // NEW: indices of phrases that are orange-highlighted (changed vs baseline)
-    function getSkpChangedIndices() {
-      const ta = document.getElementById("searchKeyPhrases");
-      const cur = (typeof extractSkpPhrasesFromText === "function")
-        ? extractSkpPhrasesFromText(ta?.value || "")
-        : [];
-      const base = Array.isArray(window.skpBaseline) ? window.skpBaseline : [];
-      const changed = new Set();
-      for (let i = 0; i < Math.max(cur.length, base.length); i++) {
-        const a = (cur[i] || "").trim().toLowerCase();
-        const b = (base[i] || "").trim().toLowerCase();
-        if (a !== b) changed.add(i);
+      // indices of phrases that are orange-highlighted (changed vs baseline)
+      function getSkpChangedIndices() {
+        const ta = document.getElementById("searchKeyPhrases");
+        const cur  = (typeof extractSkpPhrasesFromText === "function")
+          ? extractSkpPhrasesFromText(ta?.value || "")
+          : [];
+        // ✅ match refreshSkpOverlay's fallback
+        const base = (Array.isArray(window.skpBaseline) && window.skpBaseline.length)
+          ? window.skpBaseline
+          : cur;
+
+        const changed = new Set();
+        for (let i = 0; i < Math.max(cur.length, base.length); i++) {
+          const a = (cur[i]  || "").trim().toLowerCase();
+          const b = (base[i] || "").trim().toLowerCase();
+          if (a !== b) changed.add(i);
+        }
+        return changed;
       }
-      return changed;
-    }
 
      /* === NEW: keep 2 columns aligned on edit (auto-pad to a fixed tab stop) ===
      Recomputes the left column max width and re-injects spaces so the right
