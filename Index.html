@@ -2044,8 +2044,10 @@ document.getElementById("shopListings").addEventListener("keydown", (e) => {
 
         // 1) Guarded Key Phrases (skip orange)
         await generateTagPhrasesGuarded();
-        // NEW: repaint with green precedence right away
-        if (typeof refreshSkpOverlay === "function") refreshSkpOverlay();
+        // repaint with green precedence immediately
+        if (typeof refreshSkpOverlay === "function") {
+          refreshSkpOverlay();
+        }
         setDuplicateProgress(25);
 
         // 2) Re-generate Title
@@ -2449,24 +2451,24 @@ document.getElementById("shopListings").addEventListener("keydown", (e) => {
       }
 
       // Keep previously-orange indices locked as orange; add green set supplied by duplicate flow
-       const orange = new Set(changed);
-       if (window.skpOrangeLock instanceof Set) {
-         window.skpOrangeLock.forEach(idx => orange.add(idx));
-       }
-       const green = (window.skpJustRegenerated instanceof Set) ? window.skpJustRegenerated : new Set();
-       // NEW: ensure green wins over orange
-       if (green && green.size) { green.forEach(i => orange.delete(i)); }
-       ov.innerHTML = buildOverlayHtmlFromCurrentText(ta.value, orange, green);
+      const orange = new Set(changed);
+      if (window.skpOrangeLock instanceof Set) {
+        window.skpOrangeLock.forEach(idx => orange.add(idx));
+      }
+      const green = (window.skpJustRegenerated instanceof Set) ? window.skpJustRegenerated : new Set();
+      // ensure green wins over orange
+      if (green && green.size) { green.forEach(i => orange.delete(i)); }
+      ov.innerHTML = buildOverlayHtmlFromCurrentText(ta.value, orange, green);
       syncSkpOverlayPosition();
     }
 
       // indices of phrases that are orange-highlighted (changed vs baseline)
       function getSkpChangedIndices() {
         const ta = document.getElementById("searchKeyPhrases");
-        const cur  = (typeof extractSkpPhrasesFromText === "function")
+        const cur = (typeof extractSkpPhrasesFromText === "function")
           ? extractSkpPhrasesFromText(ta?.value || "")
           : [];
-        // ✅ match refreshSkpOverlay's fallback
+        // match refreshSkpOverlay's fallback: when baseline is empty, use current
         const base = (Array.isArray(window.skpBaseline) && window.skpBaseline.length)
           ? window.skpBaseline
           : cur;
