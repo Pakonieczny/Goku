@@ -2017,6 +2017,7 @@ document.getElementById("shopListings").addEventListener("keydown", (e) => {
         const leftPrefixLen = pre.length;
         const rest   = line.slice(leftPrefixLen);
         const mDelim = /\s{3,}\d{1,2}\.\s/.exec(rest);
+
         let leftText="", rightText="", delim="";
         if (mDelim){
           leftText  = rest.slice(0, mDelim.index);
@@ -2026,8 +2027,8 @@ document.getElementById("shopListings").addEventListener("keydown", (e) => {
           leftText = rest;
         }
 
-        const leftIdx  = i;
-        const rightIdx = i + 7;
+        const leftIdx  = i;      // 0..6
+        const rightIdx = i + 7;  // 7..13
 
         const leftHTML  = changedSet.has(leftIdx)
           ? `<span style="background: rgba(255,165,0,0.35); border-radius:2px;">${_skpEscape(leftText)}</span>`
@@ -2036,9 +2037,7 @@ document.getElementById("shopListings").addEventListener("keydown", (e) => {
           ? `<span style="background: rgba(255,165,0,0.35); border-radius:2px;">${_skpEscape(rightText)}</span>`
           : _skpEscape(rightText);
 
-        /* ✨ FIX: maintain exact line grid by inserting a fixed spacer between columns */
-        const SPACER = "&nbsp;".repeat(6); // adjust column gap
-        out.push(_skpEscape(pre) + leftHTML + SPACER + _skpEscape(delim) + rightHTML);
+        out.push(_skpEscape(pre) + leftHTML + _skpEscape(delim) + rightHTML);
       }
       return out.join("\n");
     }
@@ -2113,12 +2112,106 @@ document.getElementById("shopListings").addEventListener("keydown", (e) => {
       syncSkpOverlayPosition();
     }
 
-    // Wire input handler for immediate blue highlight on manual edits
+    /* === NEW: keep 2 columns aligned on edit (auto-pad to a fixed tab stop) ===
+     Recomputes the left column max width and re-injects spaces so the right
+     column (8–13) always starts at the same character, regardless of edits.
+     Caret position is preserved. */
+    function repadSkpColumnsPreserveCaret(){
+      const ta = document.getElementById("searchKeyPhrases");
+      if(!ta) return;
+
+      const original = ta.value;
+      const selStart = ta.selectionStart ?? 0;
+      const selEnd   = ta.selectionEnd ?? selStart;
+
+      // Identify current line and whether caret is in left or right phrase
+      const lines = String(original).split("\n");
+      let lineIdx = 0, acc = 0;
+      for (; lineIdx < 7; lineIdx++){
+        const len = (lines[lineIdx] ?? "").length + 1; // +1 for newline
+        if (selStart < acc + len) break;
+        acc += len;
+      }
+      const lineStart = acc;
+      const line = lines[lineIdx] ?? "";
+      const mNumLeft = line.match(/^(\s*\d{1,2}\.\s)/);
+      let caretIsRight = false, caretOffsetInPhrase = 0;
+      let leftText = "", rightText = "";
+      if (mNumLeft){
+        const leftPrefixLen = mNumLeft[0].length;
+        const rest = line.slice(leftPrefixLen);
+        const mDelim = /\s{3,}\d{1,2}\.\s/.exec(rest);
+        if (mDelim){
+          leftText  = rest.slice(0, mDelim.index);
+          const rightOffset = mDelim.index + mDelim[0].length;
+          rightText = rest.slice(rightOffset);
+          const rightAbsStart = lineStart + leftPrefixLen + rightOffset;
+          const leftAbsStart  = lineStart + leftPrefixLen;
+          if (selStart >= rightAbsStart){
+            caretIsRight = true;
+            caretOffsetInPhrase = selStart - rightAbsStart;
+          } else {
+            caretOffsetInPhrase = Math.max(0, Math.min(selStart - leftAbsStart, leftText.length));
+          }
+        } else {
+          leftText = rest;
+          const leftAbsStart  = lineStart + leftPrefixLen;
+          caretOffsetInPhrase = Math.max(0, Math.min(selStart - leftAbsStart, leftText.length));
+        }
+      }
+
+      // Rebuild with a fixed tab-stop using your existing 2-column formatter
+      const phrases = extractSkpPhrasesFromText(original);
+      const left  = phrases.slice(0,7);
+      const right = phrases.slice(7,14);
+      const leftLabels  = left.map((p,i)=>`${i+1}. ${p||""}`);
+      const rightLabels = right.map((p,i)=> right[i] ? `${i+8}. ${right[i]}` : "");
+      const leftWidth = Math.max(0, ...leftLabels.map(s=>s.length));
+      const pad = leftWidth + 3; // ≥ 3 spaces between columns
+
+      const rebuilt = [];
+      const newStarts = [];
+      for (let i=0;i<7;i++){
+        const L = leftLabels[i]  || `${i+1}. `;
+        const R = rightLabels[i] || "";
+        const newLine = L.padEnd(pad," ") + R;
+        newStarts[i] = (i===0 ? 0 : newStarts[i-1] + rebuilt[i-1].length + 1);
+        rebuilt.push(newLine);
+      }
+      const newText = rebuilt.join("\n");
+
+      if (newText !== original){
+        ta.value = newText;
+        // Restore caret at the same logical spot inside the edited phrase
+        let newCaret = selStart;
+        const thisStart = newStarts[lineIdx] ?? 0;
+        const newL = leftLabels[lineIdx] || `${lineIdx+1}. `;
+        const newLeftPrefixLen = (newL.match(/^(\s*\d{1,2}\.\s)/)||[""])[0].length;
+        const newLeftLen   = newL.length;
+        const newLeftPad   = Math.max(pad, newLeftLen); // after padEnd
+        if (caretIsRight){
+          const rightNum = right[lineIdx] ? `${lineIdx+8}. ` : "";
+          newCaret = thisStart + newLeftPad + rightNum.length
+                   + Math.min(caretOffsetInPhrase, (right[lineIdx]||"").length);
+        } else {
+          newCaret = thisStart + newLeftPrefixLen
+                   + Math.min(caretOffsetInPhrase, (left[lineIdx]||"").length);
+        }
+        ta.setSelectionRange(newCaret, newCaret);
+      }
+      // repaint highlights after normalize
+      refreshSkpOverlay();
+    }
+
+    // Wire input handler: normalize columns first, then repaint highlights
     (function attachSkpInputHighlighter(){
       const ta = document.getElementById("searchKeyPhrases");
       if(!ta) return;
-      ta.addEventListener("input", refreshSkpOverlay);
-      const init = () => { window.skpBaseline = extractSkpPhrasesFromText(ta.value); refreshSkpOverlay(); };
+      ta.addEventListener("input", repadSkpColumnsPreserveCaret);
+      const init = () => {
+        window.skpBaseline = extractSkpPhrasesFromText(ta.value);
+        repadSkpColumnsPreserveCaret();
+      };
       if (document.readyState === "loading") {
         window.addEventListener("DOMContentLoaded", init);
       } else {
