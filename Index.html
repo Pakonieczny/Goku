@@ -1967,7 +1967,7 @@ document.getElementById("shopListings").addEventListener("keydown", (e) => {
         }
 
         // 4) Merge: keep protected (“orange”) current items; replace the rest
-        const out = new Array(14).fill("");
+        const out = new Array(13).fill("");
         let pick = 0;
         for (let i = 0; i < 13; i++) {
           const keep = protectedIdx.has(i) && (current[i] || "").trim();
@@ -1979,11 +1979,11 @@ document.getElementById("shopListings").addEventListener("keydown", (e) => {
             if (pick < sanitizedFresh.length) pick++;
           }
         }
-        const phrasesArray = out.slice(0, 14);
+        const phrasesArray = out.slice(0, 13);
 
         // 5) Render in your fixed two-column, numbered layout (1–7 / 8–14)
         const left  = phrasesArray.slice(0, 7);
-        const right = phrasesArray.slice(7, 14);
+        const right = phrasesArray.slice(7, 13);
         const leftLabels  = left.map((p, i) => `${i + 1}. ${p || ""}`);
         const rightLabels = right.map((p, i) => `${i + 8}. ${p || ""}`);
         const leftWidth = Math.max(0, ...leftLabels.map(s => s.length));
@@ -2035,6 +2035,12 @@ document.getElementById("shopListings").addEventListener("keydown", (e) => {
         btn && (btn.disabled = true);
         showDuplicateProgress(true);
         resetDuplicateProgress(); // 0%
+        // Lock whatever is orange right now so it stays orange after the run
+        if (typeof getSkpChangedIndices === "function") {
+          window.skpOrangeLock = getSkpChangedIndices();
+        } else {
+          window.skpOrangeLock = new Set();
+        }
 
         // 1) Guarded Key Phrases (skip orange)
         await generateTagPhrasesGuarded();
@@ -2161,6 +2167,7 @@ document.getElementById("shopListings").addEventListener("keydown", (e) => {
 
       // 4) Merge: keep protected (“orange”) current items; replace the rest
       const out = new Array(14).fill("");
+      const just = new Set(); // indices regenerated this run (to paint green)
       let pick = 0;
       for (let i = 0; i < 13; i++) {
         const keep = protectedIdx.has(i) && (current[i] || "").trim();
@@ -2169,15 +2176,19 @@ document.getElementById("shopListings").addEventListener("keydown", (e) => {
         } else {
           // take the next fresh not already used
           while (pick < sanitizedFresh.length && out.includes(sanitizedFresh[pick])) pick++;
-          out[i] = sanitizedFresh[pick] || current[i] || "";
+          const nextVal = sanitizedFresh[pick] || current[i] || "";
+          out[i] = nextVal;
+          if (nextVal.trim() !== (current[i] || "").trim()) just.add(i);
           if (pick < sanitizedFresh.length) pick++;
         }
       }
-      const phrasesArray = out.slice(0, 14);
+      const phrasesArray = out.slice(0, 13);
+      // expose to overlay so it can paint green with precedence over orange
+      window.skpJustRegenerated = just;
 
       // 5) Rebuild the exact 2-column, fixed 7-line view (same as your formatter)
       const left  = phrasesArray.slice(0, 7);
-      const right = phrasesArray.slice(7, 14);
+      const right = phrasesArray.slice(7, 13);
       const leftLabels  = left.map((p, i) => `${i + 1}. ${p || ""}`);
       const rightLabels = right.map((p, i) => `${i + 8}. ${p || ""}`);
       const leftWidth = Math.max(0, ...leftLabels.map(s => s.length));
@@ -2320,8 +2331,9 @@ document.getElementById("shopListings").addEventListener("keydown", (e) => {
       return phrases;
     }
 
-    // Build overlay HTML from CURRENT TEXT (keeps exact spacing), marking changed indices
-    function buildOverlayHtmlFromCurrentText(text, changedSet){
+    // Build overlay HTML from CURRENT TEXT (keeps exact spacing)
+    // orangeSet = previously-changed (baseline/locked), greenSet = regenerated this run
+    function buildOverlayHtmlFromCurrentText(text, orangeSet, greenSet){
       const lines = String(text||"").split("\n");
       const out = [];
       for (let i=0;i<7;i++){
@@ -2346,11 +2358,21 @@ document.getElementById("shopListings").addEventListener("keydown", (e) => {
         const leftIdx  = i;      // 0..6
         const rightIdx = i + 7;  // 7..13
 
-        const leftHTML  = changedSet.has(leftIdx)
-          ? `<span style="background: rgba(255,165,0,0.35); border-radius:2px;">${_skpEscape(leftText)}</span>`
-          : _skpEscape(leftText);
-        const rightHTML = rightText!=="" && changedSet.has(rightIdx)
-          ? `<span style="background: rgba(255,165,0,0.35); border-radius:2px;">${_skpEscape(rightText)}</span>`
+        const isLeftGreen  = greenSet && greenSet.has(leftIdx);
+        const isLeftOrange = orangeSet && orangeSet.has(leftIdx);
+        const isRightGreen  = greenSet && greenSet.has(rightIdx);
+        const isRightOrange = orangeSet && orangeSet.has(rightIdx);
+
+        const leftHTML  = isLeftGreen
+          ? `<span style="background: rgba(76,175,80,0.32); border-radius:2px;">${_skpEscape(leftText)}</span>`
+          : (isLeftOrange
+              ? `<span style="background: rgba(255,165,0,0.35); border-radius:2px;">${_skpEscape(leftText)}</span>`
+              : _skpEscape(leftText));
+
+        const rightHTML = rightText!=="" && (isRightGreen || isRightOrange)
+          ? (isRightGreen
+              ? `<span style="background: rgba(76,175,80,0.32); border-radius:2px;">${_skpEscape(rightText)}</span>`
+              : `<span style="background: rgba(255,165,0,0.35); border-radius:2px;">${_skpEscape(rightText)}</span>`)
           : _skpEscape(rightText);
 
         out.push(_skpEscape(pre) + leftHTML + _skpEscape(delim) + rightHTML);
@@ -2424,7 +2446,13 @@ document.getElementById("shopListings").addEventListener("keydown", (e) => {
         if (a !== b) changed.add(i);
       }
 
-      ov.innerHTML = buildOverlayHtmlFromCurrentText(ta.value, changed);
+      // Keep previously-orange indices locked as orange; add green set supplied by duplicate flow
+      const orange = new Set(changed);
+      if (window.skpOrangeLock instanceof Set) {
+        window.skpOrangeLock.forEach(idx => orange.add(idx));
+      }
+      const green = (window.skpJustRegenerated instanceof Set) ? window.skpJustRegenerated : new Set();
+      ov.innerHTML = buildOverlayHtmlFromCurrentText(ta.value, orange, green);
       syncSkpOverlayPosition();
     }
 
