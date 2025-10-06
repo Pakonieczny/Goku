@@ -3267,6 +3267,14 @@ document.getElementById("shopListings").addEventListener("keydown", (e) => {
     document.getElementById("generateBtn").addEventListener("click", async () => {
       await Promise.all([generateTitleOnly(), generateDescriptionOnly()]);
     });
+
+    // Re-Gen buttons: run each generator independently
+    document.getElementById("regenTitleBtn").addEventListener("click", async () => {
+      await generateTitleOnly();
+    });
+    document.getElementById("regenDescriptionBtn").addEventListener("click", async () => {
+      await generateDescriptionOnly();
+    });
     
     async function generateTitleOnly() {
       let etsyLink = window.ETSY_SHOP_URL;
