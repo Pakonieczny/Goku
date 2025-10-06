@@ -2161,8 +2161,9 @@ document.getElementById("shopListings").addEventListener("keydown", (e) => {
       try {
         btn && (btn.disabled = true);
         showDuplicateProgress(true);
-        resetDuplicateProgress(); // 0%
-        // Lock whatever is orange right now so it stays orange after the run
+        resetDuplicateProgress(); // -> 0%
+
+        // Preserve currently orange SKP lines so they remain orange after this run
         if (typeof getSkpChangedIndices === "function") {
           window.skpOrangeLock = getSkpChangedIndices();
         } else {
@@ -2171,47 +2172,60 @@ document.getElementById("shopListings").addEventListener("keydown", (e) => {
 
         // 1) Guarded Key Phrases (skip orange)
         await generateTagPhrasesGuarded();
-        // repaint with green precedence immediately
-        if (typeof refreshSkpOverlay === "function") {
-          refreshSkpOverlay();
+        if (typeof refreshSkpOverlay === "function") refreshSkpOverlay();
+        setDuplicateProgress(20);
+
+        // 2) Swap previewCell0 <-> previewCell2 (and keep arrays in sync)
+        const A = 0, B = 2;
+        const haveA = !!(window.previewImages && window.previewImages[A]);
+        const haveB = !!(window.previewImages && window.previewImages[B]);
+        if (haveA && haveB) {
+          const swap = (arr) => { if (Array.isArray(arr)) [arr[A], arr[B]] = [arr[B], arr[A]]; };
+          swap(window.previewImages);
+          swap(window.photoNames);
+          swap(window.photoMeta);
+          swap(window.photoIds);
+          if (typeof updateStaticPreviewGrid === "function") updateStaticPreviewGrid();
+        } else {
+          if (window.M?.toast) M.toast({ html: "Swap skipped: need images in cells 1 and 3 (0 and 2)." });
         }
-        setDuplicateProgress(25);
+        setDuplicateProgress(40);
 
-        // 2) Re-generate Title
+        // 3) Re-generate Title
         await generateTitleOnly();
-        setDuplicateProgress(50);
+        setDuplicateProgress(60);
 
-        // 3) Re-generate Description
+        // 4) Re-generate Description
         await generateDescriptionOnly();
-        setDuplicateProgress(75);
+        setDuplicateProgress(80);
 
-        // 4) Analyze again, ensuring difference vs existing metadata
-        const count = Array.isArray(window.previewImages) ? window.previewImages.length : 0;
-        const metaTA = document.getElementById("metadataTextarea");
-        for (let i = 0; i < count; i++) {
-          const before = (window.photoMeta && window.photoMeta[i]) || "";
-          const best = await window.metadataHandler.analyzeAndEmbedMetadata(i);
-          let finalLine = best || "";
-          if (_normLine(finalLine) === _normLine(before)) {
-            finalLine = await _rephraseAltDifferent(before);
-            window.photoMeta = window.photoMeta || [];
-            window.photoMeta[i] = finalLine;
-          }
-          // keep textarea in sync
+        // 5) Re-analyze images (cells 0–6 only), progress from 80% → 100%
+        const slots   = [0,1,2,3,4,5,6];
+        const workIdx = slots.filter(i => !!(window.previewImages && window.previewImages[i]));
+        const count   = workIdx.length;
+        let done = 0;
+
+        for (const i of workIdx) {
+          await metadataHandler.analyzeAndEmbedMetadata(i);
+
+          // Keep the metadata textarea in sync with cells 0–6
+          const metaTA = document.getElementById("metadataTextarea");
           if (metaTA) {
-            const lines = Array.from({ length: Math.min(7, count) }, (_, idx) =>
-              `${idx + 1}. ${window.photoMeta[idx] || ""}`.trim()
-            ).join("\n").trim();
+            const lines = slots
+              .map(idx => `${idx + 1}. ${window.photoMeta[idx] || ""}`.trim())
+              .join("\n").trim();
             if (lines) metaTA.value = lines;
           }
-          const pct = 75 + Math.round(((i + 1) * 25) / Math.max(1, count));
+
+          done++;
+          const pct = 80 + Math.round((done * 20) / Math.max(1, count));
           setDuplicateProgress(pct);
         }
 
         setDuplicateProgress(100);
         showDuplicateProgress(false);
         toggleCheck("duplicateListingCheck", true);
-        if (window.M?.toast) M.toast({ html: "Duplicate prep complete (SKP kept, Title/Desc re-gen, Analyze diversified)." });
+        if (window.M?.toast) M.toast({ html: "Duplicate prep complete (swap 1↔3, SKP kept, Title/Desc re-gen, Analyze diversified)." });
       } catch (e) {
         console.error(e);
         if (window.M?.toast) M.toast({ html: "Duplicate flow error: " + e.message });
