@@ -1080,6 +1080,7 @@ ANTI-REPETITION (TITLE)
       searchSpinner:             { left: 177,  top: 292, width: 20,  height: 20 },
       descriptionSpinner:        { left: 235,  top: 612, width: 20,  height: 20 },
       duplicateListingBtn:       { left: 1040, top: 10, width: 160, height: 35 },
+      clearBtn:                  { left: 1290, top: 10, width: 110, height: 35 },
       analyzeMetadataProgress:   { left: 770,  top: 105, width: 160, height: 27 },
       analyzeMetadataCheck:      { left: 770,  top: 105, width: 22, height: 22 },
       duplicateListingProgress:  { left: 1170, top: 14, width: 160, height: 27 },
@@ -1435,6 +1436,11 @@ ANTI-REPETITION (TITLE)
           requestAnimationFrame(loadPositions);
         });
       }
+       // Wire up the Clear button
+      var clearBtn = document.getElementById("clearBtn");
+      if (clearBtn) {
+        clearBtn.addEventListener("click", handleClearAll);
+      }
     });
 
     window.appendedDescriptionText = `
@@ -1488,6 +1494,52 @@ https://www.etsy.com/shop/CustomBrites/policy"
 
 https://www.etsy.com/your/shops/me/listing-editor/edit/1822973998
 `;
+
+  // Clear UI helper (text, previews 0–6, checks, bars)
+   function handleClearAll() {
+     try {
+       // 1) Text boxes
+       const ids = ["searchKeyPhrases", "listingTitle", "listingDescription", "metadataTextarea"];
+       ids.forEach(id => { const el = document.getElementById(id); if (el) el.value = ""; });
+       // 1a) Overlay tied to searchKeyPhrases
+       const skp = document.getElementById("skpOverlay");
+       if (skp) skp.textContent = "";
+
+       // 2) Preview cells 0–6
+       window.previewImages = window.previewImages || [];
+       window.photoNames    = window.photoNames    || [];
+       window.photoMeta     = window.photoMeta     || [];
+       for (let i = 0; i <= 6; i++) {
+         window.previewImages[i] = undefined;
+         window.photoNames[i]    = undefined;
+         window.photoMeta[i]     = undefined;
+         const cell = document.getElementById("previewCell" + i);
+         if (cell) cell.innerHTML = "Empty";
+         const status = document.getElementById("metadataStatus" + i);
+         if (status) status.textContent = "";
+       }
+
+       // 3) Hide green checkmarks
+       ["analyzeMetadataCheck","createListingCheck","duplicateListingCheck"].forEach(id => {
+         const el = document.getElementById(id);
+         if (el) el.style.display = "none";
+       });
+
+       // 4) Reset & hide progress bars (keeps your “show only while running” invariant)
+       if (typeof resetMetadataProgress === "function") resetMetadataProgress();
+       if (typeof showMetadataProgress  === "function") showMetadataProgress(false);
+       if (typeof resetCreateProgress   === "function") resetCreateProgress();
+       if (typeof showCreateProgress    === "function") showCreateProgress(false);
+       if (typeof resetDuplicateProgress=== "function") resetDuplicateProgress();
+       if (typeof showDuplicateProgress === "function") showDuplicateProgress(false);
+
+       // Optional: toast
+       if (window.M?.toast) M.toast({ html: "Cleared." });
+     } catch (e) {
+       console.error("handleClearAll error:", e);
+       if (window.M?.toast) M.toast({ html: "Clear failed: " + (e?.message || e) });
+     }
+   }
 
     // On persistDataBeforeRedirect, store current queue to local storage.
     function persistDataBeforeRedirect() {
