@@ -1509,19 +1509,21 @@ https://www.etsy.com/your/shops/me/listing-editor/edit/1822973998
        const skp = document.getElementById("skpOverlay");
        if (skp) skp.textContent = "";
 
-       // 2) Preview cells 0–6
-       window.previewImages = window.previewImages || [];
-       window.photoNames    = window.photoNames    || [];
-       window.photoMeta     = window.photoMeta     || [];
-       for (let i = 0; i <= 6; i++) {
-         window.previewImages[i] = undefined;
-         window.photoNames[i]    = undefined;
-         window.photoMeta[i]     = undefined;
-         const cell = document.getElementById("previewCell" + i);
-         if (cell) cell.innerHTML = "Empty";
-         const status = document.getElementById("metadataStatus" + i);
-         if (status) status.textContent = "";
-       }
+        // 2) Preview cells 0–6 — compact reset (don’t leave 'length' inflated)
+        window.previewImages = [];
+        window.photoNames    = [];
+        window.photoMeta     = [];
+        window.photoIds      = []; // keep these in sync too
+
+        for (let i = 0; i <= 6; i++) {
+          const cell = document.getElementById("previewCell" + i);
+          if (cell) cell.innerHTML = "Empty";
+          const status = document.getElementById("metadataStatus" + i);
+          if (status) status.textContent = "";
+        }
+
+        window.draggedIndex = null;
+        updateStaticPreviewGrid();
 
        // 3) Hide green checkmarks
        ["analyzeMetadataCheck","createListingCheck","duplicateListingCheck"].forEach(id => {
@@ -2905,7 +2907,7 @@ document.getElementById("shopListings").addEventListener("keydown", (e) => {
       e.preventDefault();
       dropZone.style.borderColor = "#ccc";
       const files = e.dataTransfer.files;
-      const maxRemaining = 10 - window.previewImages.length;
+      const maxRemaining = Math.max(0, 7 - (window.previewImages?.length || 0));
       for (let i = 0; i < Math.min(files.length, maxRemaining); i++) {
         let file = files[i];
         if (/image\/(jpeg|png)/.test(file.type)) {
