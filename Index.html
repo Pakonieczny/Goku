@@ -422,6 +422,18 @@
     #createListingProgress .bar { height: 100%; width: 0%; background: #2196f3; transition: width .25s ease; }
     #createListingProgress .pct { position: absolute; inset: 0; display: flex; align-items: center; justify-content: center; font-weight: 700; font-size: 12px; color: #fff; text-shadow: 0 0 2px #000, 0 0 4px #000; letter-spacing: .2px; pointer-events: none; }
 
+    /* NEW: Duplicate-Listing holistic progress (same look) */
+    #duplicateListingProgress {
+      position: absolute; width: 260px; height: 22px;
+      background: rgba(0,0,0,.08); display: none;
+    }
+    #duplicateListingProgress .bar {
+      height: 100%; width: 0%; background: #2196f3; transition: width .25s ease;
+    }
+    #duplicateListingProgress .pct {
+      position: absolute; inset: 0; display: flex; align-items: center; justify-content: center; font-weight: 700; font-size: 12px; color: #fff; text-shadow: 0 0 2px #000, 0 0 4px #000; letter-spacing: .2px; pointer-events: none;
+    }
+
   </style>
 </head>
 <body>
@@ -446,6 +458,17 @@
       <div class="bar"></div>
       <div class="pct">0%</div>
     </div>
+
+     <!-- NEW: Duplicate Listing trigger (to the right of Create Listing) -->
+     <button id="duplicateListingBtn" class="btn waves-effect waves-light configurable" style="margin-left: 10px;">
+       Duplicate Listing
+     </button>
+     <!-- NEW: Holistic Duplicate Listing progress (hidden until clicked) -->
+     <div id="duplicateListingProgress" class="configurable" style="display:none;">
+       <div class="bar"></div>
+       <div class="pct">0%</div>
+     </div>
+
     <div id="etsyShopListingsContainer">
       <div id="etsyShopListingsHeading" class="section-heading configurable">
         Etsy Shop Listings
@@ -955,6 +978,7 @@ ANTI-REPETITION (TITLE)
       "#searchSpinner",
       "#analyzeMetadataProgress",
       "#createListingProgress",
+      "#duplicateListingProgress",
       "#titleCount"             
     ];
 
@@ -1028,7 +1052,9 @@ ANTI-REPETITION (TITLE)
       listingDescriptionHeading: { left: 10,   top: 610, width: 250, height: 27 },
       searchSpinner:             { left: 177,  top: 292, width: 20,  height: 20 },
       descriptionSpinner:        { left: 235,  top: 612, width: 20,  height: 20 },
-      analyzeMetadataProgress: { left: 800,  top: 105, width: 260, height: 27 },
+      analyzeMetadataProgress:   { left: 800,  top: 105, width: 260, height: 27 },
+      duplicateListingBtn:       { left: 1040, top: 10, width: 160, height: 35 },
+      duplicateListingProgress:  { left: 1040, top: 40, width: 260, height: 22 },
 
       // Counter chip
       listingQueueCount:       { left: 190,  top: 75,  width: 25,  height: 27 }
@@ -1742,6 +1768,19 @@ document.getElementById("shopListings").addEventListener("keydown", (e) => {
       setCreateProgress(next);
     }
 
+    // NEW: Duplicate progress (holistic)
+    function setDuplicateProgress(pct) {
+      const wrap = document.getElementById("duplicateListingProgress");
+      if (!wrap) return;
+      const bar = wrap.querySelector(".bar");
+      const txt = wrap.querySelector(".pct");
+      const clamped = Math.max(0, Math.min(100, Math.round(pct)));
+      if (bar) bar.style.width = clamped + "%";
+      if (txt) txt.textContent = clamped + "%";
+    }
+    function resetDuplicateProgress(){ window._dupPct = 0; setDuplicateProgress(0); }
+    function showDuplicateProgress(show){ const w = document.getElementById("duplicateListingProgress"); if (w) w.style.display = show ? "block" : "none"; }
+
     document.getElementById("analyzeMetadataBtn").addEventListener("click", async () => {
       try {
         const total = (window.previewImages && window.previewImages.length) || 0;
@@ -1847,6 +1886,84 @@ document.getElementById("shopListings").addEventListener("keydown", (e) => {
       }
     });
 
+     // NEW: Ensure Analyze results differ if re-run
+    function _normLine(s){ return String(s||"").toLowerCase().replace(/[^a-z0-9]+/g," ").trim(); }
+    async function _rephraseAltDifferent(prev){
+      const payload = {
+        model: window.modelName || "gpt-5",
+        input: [
+          { role: "system", content: "Return ONLY one plain text line (<=200 chars). Must not be identical to the input. Avoid trivial punctuation-only changes." },
+          { role: "user", content: `Rephrase this Etsy photo alt text so it says the same thing in different words (<=200 chars):\n${prev}` }
+        ],
+        max_output_tokens: 180,
+        reasoning: { effort: "minimal" },
+        text: { verbosity: "low" }
+      };
+      const data = await callOpenAI(payload);
+      const out = (typeof extractResponseText === "function")
+        ? extractResponseText(data)
+        : (data?.output_text || "").trim();
+      const line = (out || prev).replace(/\s+/g, " ").slice(0,200);
+      if (_normLine(line) === _normLine(prev)) {
+        // deterministic tiny nudge to ensure difference if model returned same text
+        return line.replace(/\bcharm\b/i, "pendant");
+      }
+      return line;
+    }
+
+    // NEW: Duplicate Listing sequential orchestrator
+    document.getElementById("duplicateListingBtn").addEventListener("click", async () => {
+      const btn = document.getElementById("duplicateListingBtn");
+      try {
+        btn && (btn.disabled = true);
+        showDuplicateProgress(true);
+        resetDuplicateProgress(); // 0%
+
+        // 1) Guarded Key Phrases (skip orange)
+        await generateTagPhrasesGuarded();
+        setDuplicateProgress(25);
+
+        // 2) Re-generate Title
+        await generateTitleOnly();
+        setDuplicateProgress(50);
+
+        // 3) Re-generate Description
+        await generateDescriptionOnly();
+        setDuplicateProgress(75);
+
+        // 4) Analyze again, ensuring difference vs existing metadata
+        const count = Array.isArray(window.previewImages) ? window.previewImages.length : 0;
+        const metaTA = document.getElementById("metadataTextarea");
+        for (let i = 0; i < count; i++) {
+          const before = (window.photoMeta && window.photoMeta[i]) || "";
+          const best = await window.metadataHandler.analyzeAndEmbedMetadata(i);
+          let finalLine = best || "";
+          if (_normLine(finalLine) === _normLine(before)) {
+            finalLine = await _rephraseAltDifferent(before);
+            window.photoMeta = window.photoMeta || [];
+            window.photoMeta[i] = finalLine;
+          }
+          // keep textarea in sync
+          if (metaTA) {
+            const lines = Array.from({ length: Math.min(7, count) }, (_, idx) =>
+              `${idx + 1}. ${window.photoMeta[idx] || ""}`.trim()
+            ).join("\n").trim();
+            if (lines) metaTA.value = lines;
+          }
+          const pct = 75 + Math.round(((i + 1) * 25) / Math.max(1, count));
+          setDuplicateProgress(pct);
+        }
+
+        setDuplicateProgress(100);
+        if (window.M?.toast) M.toast({ html: "Duplicate prep complete (SKP kept, Title/Desc re-gen, Analyze diversified)." });
+      } catch (e) {
+        console.error(e);
+        if (window.M?.toast) M.toast({ html: "Duplicate flow error: " + e.message });
+      } finally {
+        btn && (btn.disabled = false);
+      }
+    });
+
     async function generateTagPhrases() {
       let question = document.getElementById("listingDescInput").value.trim();
       if (!question) {
@@ -1882,6 +1999,88 @@ document.getElementById("shopListings").addEventListener("keydown", (e) => {
         // build 2-column, numbered (1–7 / 8–14), fixed to 7 lines
         const left  = phrasesArray.slice(0, 7);
         const right = phrasesArray.slice(7, 14);
+   // NEW: Guarded generator that preserves orange-highlighted phrases
+    async function generateTagPhrasesGuarded() {
+      // 1) Gather current + protected indices
+      const ta = document.getElementById("searchKeyPhrases");
+      const current = (typeof extractSkpPhrasesFromText === "function")
+        ? extractSkpPhrasesFromText(ta?.value || "")
+        : [];
+      const protectedIdx = (typeof getSkpChangedIndices === "function")
+        ? getSkpChangedIndices()
+        : new Set();
+
+      // 2) Ask model for fresh phrases (same source as your normal gen)
+      const question = (document.getElementById("listingDescInput")?.value || "").trim();
+      const keywordRules = document.getElementById("keywordRulesTextarea")?.value || "";
+      const fresh = await getInitialPhrases(question, keywordRules); // returns array of strings
+
+      // 3) Canonicalize, de-dup, cap to 13
+      const canon = (s) => {
+        let tag = String(s || "")
+          .normalize("NFKD")
+          .replace(/[^\p{Letter}\p{Number}\s]/gu, " ")
+          .replace(/\s+/g, " ")
+          .trim();
+        if (!tag) return "";
+        if (tag.length > 20) {
+          const cut = tag.slice(0, 20);
+          const sp = cut.lastIndexOf(" ");
+          tag = (sp > 7 ? cut.slice(0, sp) : cut).trim();
+        }
+        return tag;
+      };
+      const seen = new Set();
+      const sanitizedFresh = [];
+      for (const f of fresh) {
+        const t = canon(f);
+        if (!t) continue;
+        const key = t.toLowerCase();
+        if (seen.has(key)) continue;
+        seen.add(key);
+        sanitizedFresh.push(t);
+        if (sanitizedFresh.length >= 13) break;
+      }
+
+      // 4) Merge: keep protected (“orange”) current items; replace the rest
+      const out = new Array(14).fill("");
+      let pick = 0;
+      for (let i = 0; i < 13; i++) {
+        const keep = protectedIdx.has(i) && (current[i] || "").trim();
+        if (keep) {
+          out[i] = current[i];
+        } else {
+          // take the next fresh not already used
+          while (pick < sanitizedFresh.length && out.includes(sanitizedFresh[pick])) pick++;
+          out[i] = sanitizedFresh[pick] || current[i] || "";
+          if (pick < sanitizedFresh.length) pick++;
+        }
+      }
+      const phrasesArray = out.slice(0, 14);
+
+      // 5) Rebuild the exact 2-column, fixed 7-line view (same as your formatter)
+      const left  = phrasesArray.slice(0, 7);
+      const right = phrasesArray.slice(7, 14);
+      const leftLabels  = left.map((p, i) => `${i + 1}. ${p || ""}`);
+      const rightLabels = right.map((p, i) => `${i + 8}. ${p || ""}`);
+      const leftWidth = Math.max(0, ...leftLabels.map(s => s.length));
+      const pad = leftWidth + 3;
+      const colLines = [];
+      for (let i = 0; i < 7; i++) {
+        const L = leftLabels[i]  || `${i + 1}. `;
+        const R = rightLabels[i] || "";
+        colLines.push(L.padEnd(pad, " ") + R);
+      }
+      const outputText = colLines.join("\n");
+
+      if (ta) {
+        ta.value = outputText;
+       // preserve highlights (do NOT reseed baseline here)
+        if (typeof repadSkpColumnsPreserveCaret === "function") repadSkpColumnsPreserveCaret();
+        if (typeof refreshSkpOverlay === "function") refreshSkpOverlay();
+      }
+      M.toast({ html: "Key Phrases updated (orange kept)" });
+    }
         const leftLabels = left.map((p, i) => `${i + 1}. ${p || ""}`);
         const rightLabels = right.map((p, i) => `${i + 8}. ${p || ""}`);
         const leftWidth = Math.max(0, ...leftLabels.map(s => s.length));
@@ -2112,7 +2311,23 @@ document.getElementById("shopListings").addEventListener("keydown", (e) => {
       syncSkpOverlayPosition();
     }
 
-    /* === NEW: keep 2 columns aligned on edit (auto-pad to a fixed tab stop) ===
+    // NEW: indices of phrases that are orange-highlighted (changed vs baseline)
+    function getSkpChangedIndices() {
+      const ta = document.getElementById("searchKeyPhrases");
+      const cur = (typeof extractSkpPhrasesFromText === "function")
+        ? extractSkpPhrasesFromText(ta?.value || "")
+        : [];
+      const base = Array.isArray(window.skpBaseline) ? window.skpBaseline : [];
+      const changed = new Set();
+      for (let i = 0; i < Math.max(cur.length, base.length); i++) {
+        const a = (cur[i] || "").trim().toLowerCase();
+        const b = (base[i] || "").trim().toLowerCase();
+        if (a !== b) changed.add(i);
+      }
+      return changed;
+    }
+
+     /* === NEW: keep 2 columns aligned on edit (auto-pad to a fixed tab stop) ===
      Recomputes the left column max width and re-injects spaces so the right
      column (8–13) always starts at the same character, regardless of edits.
      Caret position is preserved. */
