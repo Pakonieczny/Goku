@@ -72,13 +72,27 @@
       height: auto;
     }
 
-     /* === SKP Blue Highlight overlay === */
-    #skpOverlay { position:absolute; pointer-events:none; z-index:3001; }
-    #skpOverlay .skp-mark {
-      position:absolute;
-      background: rgba(33,150,243,.22);
-      border-radius: 3px;
-      box-shadow: 0 0 0 1px rgba(33,150,243,.45) inset;
+    /* === SKP inline highlight overlay === */
+    #searchKeyPhrases {
+      background-color: transparent;  /* let the blue highlight show through */
+      caret-color: #000;
+    }
+
+    /* Positioned to exactly mirror the textarea; text transparent so only blue blocks show */
+    #skpOverlay {
+      position: absolute !important;
+      white-space: pre;
+      font-family: inherit;
+      font-size: inherit;
+      line-height: inherit;
+      pointer-events: none;
+      z-index: 2999;           /* textarea sits at 3000 in your abs layout */
+      color: transparent;      /* hide overlay text; we only want backgrounds */
+    }
+
+    #skpOverlay .mark {
+      background: rgba(33, 150, 243, 0.35);
+      border-radius: 2px;
     }
 
     /* Match fonts to #searchKeyPhrases */
@@ -466,6 +480,7 @@
   <div id="container13" class="flex-container configurable">
     <div class="textbox-container configurable">
       <textarea id="searchKeyPhrases" class="materialize-textarea" rows="14" wrap="off"></textarea>
+      <pre id="skpOverlay" aria-hidden="true"></pre>
     </div>
   </div>
   
@@ -1880,9 +1895,6 @@ document.getElementById("shopListings").addEventListener("keydown", (e) => {
 
         const skp = document.getElementById("searchKeyPhrases");
         if (skp) {
-          // Guard: ignore highlighter during programmatic writes
-          window._skpProgrammatic = true;
-
           skp.value = outputText;
           skp.setAttribute("wrap", "off");
           skp.style.fontFamily = 'ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace';
@@ -1901,9 +1913,11 @@ document.getElementById("shopListings").addEventListener("keydown", (e) => {
           skp.style.setProperty("max-height",exactPx + "px", "important");
           skp.style.setProperty("overflow-y","hidden", "important");
           skp.scrollTop = 0;
-
-          // Release guard on next tick so manual edits highlight
-          setTimeout(() => { window._skpProgrammatic = false; }, 0);
+          // === PATCH 4: seed baseline & clear highlights on fresh generation ===
+          if (typeof extractSkpPhrasesFromText === "function" && typeof refreshSkpOverlay === "function") {
+            window.skpBaseline = extractSkpPhrasesFromText(skp.value);
+            refreshSkpOverlay();
+          }
         }
 
         M.toast({ html: "Tag Phrases generated successfully!" });
@@ -1959,112 +1973,154 @@ document.getElementById("shopListings").addEventListener("keydown", (e) => {
       });
     })();
 
-     // === SKP: Blue highlight the phrase being manually edited ===
-    (function attachSKPHighlighter(){
-      const ta = document.getElementById("searchKeyPhrases");
-      if (!ta) return;
+    /* === SKP HIGHLIGHT: helpers & wiring === */
+    function _skpEscape(s){
+      const mapEsc = { '&':'&amp;', '<':'&lt;', '>':'&gt;', '"':'&quot;', "'":'&#39;' };
+      return String(s||'').replace(/[&<>"']/g, c => mapEsc[c]);
+    }
 
-      // Absolute overlay that mirrors the textarea box
-      const overlay = document.createElement("div");
-      overlay.id = "skpOverlay";
-      document.body.appendChild(overlay);
-
-      function syncOverlayBox(){
-        const r = ta.getBoundingClientRect();
-        overlay.style.left   = (r.left + window.scrollX) + "px";
-        overlay.style.top    = (r.top  + window.scrollY) + "px";
-        overlay.style.width  = r.width + "px";
-        overlay.style.height = r.height + "px";
-      }
-
-      function getMetrics(){
-        const cs = getComputedStyle(ta);
-        const lineHeight = parseFloat(cs.lineHeight) || (parseFloat(cs.fontSize) * 1.2);
-        const padL = parseFloat(cs.paddingLeft) || 0;
-        const padT = parseFloat(cs.paddingTop)  || 0;
-        const borderL = parseFloat(cs.borderLeftWidth) || 0;
-        const borderT = parseFloat(cs.borderTopWidth)  || 0;
-        return { lineHeight, padL, padT, borderL, borderT, scrollX: ta.scrollLeft || 0, scrollY: ta.scrollTop || 0 };
-      }
-
-      // Monospace → fixed char width; measure once
-      let charWidth = 8;
-      (function measureCharWidth(){
-        const cvs = document.createElement("canvas");
-        const ctx = cvs.getContext("2d");
-        ctx.font = getComputedStyle(ta).font;
-        charWidth = ctx.measureText("0").width || 8;
-      })();
-
-      function parseLineInfo(text, pos){
-        const lineStart = text.lastIndexOf("\\n", Math.max(0, pos - 1)) + 1;
-        const nl = text.indexOf("\\n", pos);
-        const lineEnd = (nl === -1 ? text.length : nl);
-        const line = text.slice(lineStart, lineEnd);
-
-        // Expect lines like: "1. leftPhrase   8. rightPhrase"
-        const mNumLeft = line.match(/^(\\s*\\d{1,2}\\.\\s)/);
-        if (!mNumLeft) return null;
+    // Parse current 2-col lines into up to 14 phrases (1–7 left, 8–14 right)
+    function extractSkpPhrasesFromText(text){
+      const lines = String(text||"").split("\n");
+      const phrases = [];
+      for (let i=0;i<7;i++){
+        const line = lines[i] ?? "";
+        const mNumLeft = line.match(/^(\s*\d{1,2}\.\s)/);
+        if(!mNumLeft){ phrases[i] = ""; phrases[i+7] = ""; continue; }
         const leftPrefixLen = mNumLeft[0].length;
         const rest = line.slice(leftPrefixLen);
-        const mDelim = /\\s{3,}\\d{1,2}\\.\\s/.exec(rest);
-
-        let leftText = rest, rightText = "", rightStartInLine = -1;
-        if (mDelim) {
-          leftText = rest.slice(0, mDelim.index);
-          const rightOffset = mDelim.index + mDelim[0].length;
-          rightText = rest.slice(rightOffset);
-          rightStartInLine = leftPrefixLen + rightOffset;
-        }
-        const leftStartInLine = leftPrefixLen;
-        const leftEndInLine   = leftPrefixLen + leftText.length;
-        return { lineStart, lineEnd, line, leftStartInLine, leftEndInLine, rightStartInLine, rightText };
-      }
-
-      let fadeTimer;
-      function highlightUnderCaret(){
-        if (window._skpProgrammatic) return; // ignore programmatic writes
-        const text = ta.value;
-        const pos  = ta.selectionStart ?? 0;
-        const info = parseLineInfo(text, pos);
-        if (!info) return;
-
-        const clickOffset = pos - info.lineStart;
-        let segStartCol, segLen;
-        if (clickOffset >= info.leftStartInLine && clickOffset <= info.leftEndInLine){
-          segStartCol = info.leftStartInLine;
-          segLen = info.leftEndInLine - info.leftStartInLine;
-        } else if (info.rightText && clickOffset >= info.rightStartInLine && clickOffset <= info.line.length){
-          segStartCol = info.rightStartInLine;
-          segLen = info.line.length - info.rightStartInLine;
+        const mDelim = /\s{3,}\d{1,2}\.\s/.exec(rest); // gap + "8. "
+        if (mDelim){
+          const leftText  = rest.slice(0, mDelim.index);
+          const rightText = rest.slice(mDelim.index + mDelim[0].length);
+          phrases[i]   = leftText.trim();
+          phrases[i+7] = rightText.trim();
         } else {
-          return;
+          phrases[i]   = rest.trim();
+          phrases[i+7] = "";
+        }
+      }
+      return phrases;
+    }
+
+    // Build overlay HTML from CURRENT TEXT (keeps exact spacing), marking changed indices
+    function buildOverlayHtmlFromCurrentText(text, changedSet){
+      const lines = String(text||"").split("\n");
+      const out = [];
+      for (let i=0;i<7;i++){
+        const line = lines[i] ?? "";
+        const mNumLeft = line.match(/^(\s*\d{1,2}\.\s)/);
+        if(!mNumLeft){ out.push(_skpEscape(line)); continue; }
+
+        const pre    = mNumLeft[0];
+        const leftPrefixLen = pre.length;
+        const rest   = line.slice(leftPrefixLen);
+        const mDelim = /\s{3,}\d{1,2}\.\s/.exec(rest);
+
+        let leftText="", rightText="", delim="";
+        if (mDelim){
+          leftText  = rest.slice(0, mDelim.index);
+          delim     = rest.slice(mDelim.index, mDelim.index + mDelim[0].length);
+          rightText = rest.slice(mDelim.index + mDelim[0].length);
+        } else {
+          leftText = rest;
         }
 
-        overlay.innerHTML = "";
-        syncOverlayBox();
-        const mark = document.createElement("div");
-        mark.className = "skp-mark";
-        const { lineHeight, padL, padT, borderL, borderT, scrollX, scrollY } = getMetrics();
+        const leftIdx  = i;      // 0..6
+        const rightIdx = i + 7;  // 7..13
 
-        // Compute 0-based line index for vertical placement
-        const lineIndex = (text.slice(0, info.lineStart).match(/\\n/g) || []).length;
-        const x = Math.max(0, Math.round(padL + borderL + segStartCol * charWidth - scrollX));
-        const y = Math.max(0, Math.round(padT + borderT + lineIndex * lineHeight - scrollY));
-        mark.style.left   = x + "px";
-        mark.style.top    = y + "px";
-        mark.style.width  = Math.round(segLen * charWidth) + "px";
-        mark.style.height = Math.round(lineHeight) + "px";
-        overlay.appendChild(mark);
+        const leftHTML  = changedSet.has(leftIdx)
+          ? `<span style="background: rgba(33,150,243,0.35); border-radius:2px;">${_skpEscape(leftText)}</span>`
+          : _skpEscape(leftText);
+        const rightHTML = rightText!=="" && changedSet.has(rightIdx)
+          ? `<span style="background: rgba(33,150,243,0.35); border-radius:2px;">${_skpEscape(rightText)}</span>`
+          : _skpEscape(rightText);
 
-        clearTimeout(fadeTimer);
-        fadeTimer = setTimeout(() => { overlay.innerHTML = ""; }, 2000);
+        out.push(_skpEscape(pre) + leftHTML + _skpEscape(delim) + rightHTML);
+      }
+      return out.join("\n");
+    }
+
+    // Keep overlay positioned exactly over the textarea (absolute layout friendly)
+    function syncSkpOverlayPosition(){
+      const ta = document.getElementById("searchKeyPhrases");
+      const ov = document.getElementById("skpOverlay");
+      if(!ta || !ov) return;
+      const cs = getComputedStyle(ta);
+      ov.style.position   = "absolute";
+      ov.style.whiteSpace = "pre";
+      ov.style.fontFamily = cs.fontFamily;
+      ov.style.fontSize   = cs.fontSize;
+      ov.style.lineHeight = cs.lineHeight;
+      ov.style.pointerEvents = "none";
+      ov.style.zIndex = String((parseInt(cs.zIndex)||3000) - 1); // sit just under textarea’s z-index
+      ov.style.color  = "transparent";      // hide overlay text; we only want background marks
+      ov.style.left   = cs.left;
+      ov.style.top    = cs.top;
+      ov.style.width  = cs.width;
+      ov.style.height = cs.height;
+      ov.style.padding = cs.padding;
+      ov.style.border  = "none";
+      ov.style.background = "transparent";
+      // match scroll offsets
+      ov.scrollTop  = ta.scrollTop;
+      ov.scrollLeft = ta.scrollLeft;
+    }
+
+    // Ensure overlay node exists; create if missing and wire observers
+    function ensureSkpOverlay(){
+      const ta = document.getElementById("searchKeyPhrases");
+      if(!ta) return null;
+      let ov = document.getElementById("skpOverlay");
+      if(!ov){
+        ov = document.createElement("pre");
+        ov.id = "skpOverlay";
+        ov.setAttribute("aria-hidden","true");
+        ta.insertAdjacentElement("afterend", ov);
+      }
+      // keep in lock-step with textarea scrolling & style changes
+      ta.addEventListener("scroll", syncSkpOverlayPosition);
+      const mo = new MutationObserver(syncSkpOverlayPosition);
+      mo.observe(ta, { attributes: true, attributeFilter: ["style"] });
+      window.addEventListener("resize", syncSkpOverlayPosition);
+      // initial
+      syncSkpOverlayPosition();
+      return ov;
+    }
+
+    // Compute changed phrases vs baseline and repaint overlay
+    window.skpBaseline = window.skpBaseline || [];
+    function refreshSkpOverlay(){
+      const ta = document.getElementById("searchKeyPhrases");
+      const ov = ensureSkpOverlay();
+      if(!ta || !ov) return;
+
+      const current = extractSkpPhrasesFromText(ta.value);
+      const base    = (window.skpBaseline && window.skpBaseline.length) ? window.skpBaseline : extractSkpPhrasesFromText(ta.value);
+
+      const changed = new Set();
+      const cap = Math.max(current.length, base.length);
+      for (let i=0;i<cap;i++){
+        const a = (current[i]||"").trim();
+        const b = (base[i]||"").trim();
+        if (a !== b) changed.add(i);
       }
 
-      ["input","keyup","click"].forEach(evt => ta.addEventListener(evt, highlightUnderCaret));
-      ta.addEventListener("scroll", syncOverlayBox);
-      window.addEventListener("resize", syncOverlayBox);
-      syncOverlayBox();
+      ov.innerHTML = buildOverlayHtmlFromCurrentText(ta.value, changed);
+      syncSkpOverlayPosition();
+    }
+
+    // Wire input handler for immediate blue highlight on manual edits
+    (function attachSkpInputHighlighter(){
+      const ta = document.getElementById("searchKeyPhrases");
+      if(!ta) return;
+      ta.addEventListener("input", refreshSkpOverlay);
+      const init = () => { window.skpBaseline = extractSkpPhrasesFromText(ta.value); refreshSkpOverlay(); };
+      if (document.readyState === "loading") {
+        window.addEventListener("DOMContentLoaded", init);
+      } else {
+        init();
+      }
     })();
 
     // --- Unify Responses/Chat return shapes (robust to either) ---
