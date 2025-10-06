@@ -2225,7 +2225,7 @@ document.getElementById("shopListings").addEventListener("keydown", (e) => {
         setDuplicateProgress(100);
         showDuplicateProgress(false);
         toggleCheck("duplicateListingCheck", true);
-        if (window.M?.toast) M.toast({ html: "Duplicate prep complete (swap 1↔3, SKP kept, Title/Desc re-gen, Analyze diversified)." });
+
       } catch (e) {
         console.error(e);
         if (window.M?.toast) M.toast({ html: "Duplicate flow error: " + e.message });
