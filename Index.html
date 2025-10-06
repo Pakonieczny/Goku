@@ -3320,15 +3320,45 @@ document.getElementById("shopListings").addEventListener("keydown", (e) => {
       }
     }
 
-     //    Word-safe 400-char cap, no ellipsis, trims trailing punctuation/spaces.
-     function capDescription(s, limit = 400) {
-       const t = (s || "").trim();
+   // Sentence-aware finisher:
+   // End at the NEAREST sentence boundary to `limit` (can go over). No ellipsis.
+   function capDescription(s, limit = 400) {
+     const t = (s || "").trim();
+     if (!t) return t;
+
+     // Collect end-of-sentence boundaries (., !, ?, … plus closing quotes/brackets)
+     const ends = [];
+     for (let i = 0; i < t.length; i++) {
+       const ch = t[i];
+       if (ch === "." || ch === "!" || ch === "?" || ch === "…") {
+         let j = i + 1;
+         while (j < t.length && `)"'’”]}`.includes(t[j])) j++;
+         ends.push(j);
+       }
+     }
+
+     // If no sentence punctuation, fall back to word-safe trim near limit
+     if (ends.length === 0) {
        if (t.length <= limit) return t;
-       let cut = t.slice(0, limit + 1);           // slight overrun gives us room to backtrack
+       let cut = t.slice(0, limit + 1);
        const lastSpace = cut.lastIndexOf(" ");
        if (lastSpace > 0) cut = cut.slice(0, lastSpace);
-       return cut.replace(/[\s.,;:!?-]+$/,"");    // clean up ragged tail
+       return cut.trimEnd();
      }
+
+     // Pick the nearest boundary to the limit (tie → choose AFTER to honor full sentence)
+     const prev = ends.filter(x => x <= limit).pop();
+     const next = ends.find(x => x >= limit);
+     let chosen = ends[ends.length - 1]; // default to last boundary
+     if (prev == null && next != null) chosen = next;
+     else if (prev != null && next == null) chosen = prev;
+     else if (prev != null && next != null) {
+       const dPrev = limit - prev, dNext = next - limit;
+       chosen = (dNext <= dPrev) ? next : prev;
+     }
+
+     return t.slice(0, chosen).trimEnd();
+   }
 
     async function generateDescriptionOnly() {
       let etsyLink = window.ETSY_SHOP_URL;
@@ -3406,11 +3436,9 @@ document.getElementById("shopListings").addEventListener("keydown", (e) => {
       } catch (error) {
         console.error(error);
         M.toast({ html: "API Error while generating description." });
-
-        // Best-effort fallback respecting house rules
-        let fallback = buildFallbackDescription({ keyPhrases, rawDescription }) || "";
-        if (fallback.length > 400) fallback = fallback.slice(0, 397).trimEnd() + "...";
-        out.value = fallback || ("Error: " + (error?.message || String(error)));
+        // Best-effort fallback: end at nearest sentence (can exceed 400)
+        const fbRaw = buildFallbackDescription({ keyPhrases, rawDescription }) || "";
+        out.value = capDescription(fbRaw, 400) || ("Error: " + (error?.message || String(error)));
       } finally {
         // NEW: hide spinner once done
         toggleSpinner("descriptionSpinner", false);
