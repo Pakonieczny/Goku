@@ -390,6 +390,7 @@
       background: #e3f2fd;        /* light blue track */
       border: 1px solid #2196f3;  /* blue border */
       box-shadow: 0 1px 2px rgba(0,0,0,.08);
+      display: none;              /* visible only when running */
     }
     #analyzeMetadataProgress .bar {
       height: 100%;
@@ -424,14 +425,35 @@
 
     /* NEW: Duplicate-Listing holistic progress (same look) */
     #duplicateListingProgress {
-      position: absolute; width: 260px; height: 22px;
-      background: rgba(0,0,0,.08); display: none;
+      position: absolute;
+      height: 22px;
+      width: 260px;               /* layout system can override */
+      border-radius: 6px;
+      overflow: hidden;
+      background: #e3f2fd;        /* light blue track */
+      border: 1px solid #2196f3;  /* blue border */
+      box-shadow: 0 1px 2px rgba(0,0,0,.08);
+      display: none;              /* visible only when running */
     }
-    #duplicateListingProgress .bar {
-      height: 100%; width: 0%; background: #2196f3; transition: width .25s ease;
-    }
-    #duplicateListingProgress .pct {
-      position: absolute; inset: 0; display: flex; align-items: center; justify-content: center; font-weight: 700; font-size: 12px; color: #fff; text-shadow: 0 0 2px #000, 0 0 4px #000; letter-spacing: .2px; pointer-events: none;
+    #duplicateListingProgress .bar { height: 100%; width: 0%; background: #2196f3; transition: width .25s ease; }
+    #duplicateListingProgress .pct { position: absolute; inset: 0; display: flex; align-items: center; justify-content: center; font-weight: 700; font-size: 12px; color: #fff; text-shadow: 0 0 2px #000, 0 0 4px #000; letter-spacing: .2px; pointer-events: none; }
+
+    /* Green completion check (movable) */
+    .progress-check {
+      position: absolute;
+      width: 22px;
+      height: 22px;
+      border-radius: 50%;
+      background: #2e7d32;    /* green */
+      color: #fff;
+      font-weight: 800;
+      font-size: 14px;
+      line-height: 22px;
+      text-align: center;
+      box-shadow: 0 1px 2px rgba(0,0,0,.18);
+      display: none;           /* only shown at 100% */
+      pointer-events: none;
+      z-index: 3050;
     }
 
   </style>
@@ -458,6 +480,7 @@
       <div class="bar"></div>
       <div class="pct">0%</div>
     </div>
+    <div id="createListingCheck" class="progress-check configurable" title="Create complete">✓</div>
 
      <!-- NEW: Duplicate Listing trigger (to the right of Create Listing) -->
      <button id="duplicateListingBtn" class="btn waves-effect waves-light configurable" style="margin-left: 10px;">
@@ -468,6 +491,7 @@
        <div class="bar"></div>
        <div class="pct">0%</div>
      </div>
+     <div id="duplicateListingCheck" class="progress-check configurable" title="Duplicate complete">✓</div>
 
     <div id="etsyShopListingsContainer">
       <div id="etsyShopListingsHeading" class="section-heading configurable">
@@ -499,6 +523,7 @@
       <div class="bar"></div>
       <div class="pct">0%</div>
     </div>
+    <div id="analyzeMetadataCheck" class="progress-check configurable" title="Analyze complete">✓</div>
   </div>
 
   <div id="container13" class="flex-container configurable">
@@ -979,7 +1004,10 @@ ANTI-REPETITION (TITLE)
       "#analyzeMetadataProgress",
       "#createListingProgress",
       "#duplicateListingProgress",
-      "#titleCount"             
+      "#titleCount",
+      "#analyzeMetadataCheck",
+      "#createListingCheck",
+      "#duplicateListingCheck"             
     ];
 
     function isExcluded(el){
@@ -1008,7 +1036,6 @@ ANTI-REPETITION (TITLE)
       openConfigBtn:           { left: 190,  top: 10,  width: 140, height: 35 },
       connectEtsyBtn:          { left: 10,   top: 10,  width: 160, height: 35 },
       createListingBtn:        { left: 700,  top: 10,  width: 160, height: 35 },
-      createListingProgress:   { left: 870,  top: 10,  width: 260, height: 22 },
       analyzeMetadataBtn:      { left: 600,  top: 100, width: 160, height: 35 },
 
       // Generation controls
@@ -1052,9 +1079,14 @@ ANTI-REPETITION (TITLE)
       listingDescriptionHeading: { left: 10,   top: 610, width: 250, height: 27 },
       searchSpinner:             { left: 177,  top: 292, width: 20,  height: 20 },
       descriptionSpinner:        { left: 235,  top: 612, width: 20,  height: 20 },
-      analyzeMetadataProgress:   { left: 800,  top: 105, width: 260, height: 27 },
       duplicateListingBtn:       { left: 1040, top: 10, width: 160, height: 35 },
-      duplicateListingProgress:  { left: 1040, top: 40, width: 260, height: 22 },
+      analyzeMetadataProgress:   { left: 770,  top: 105, width: 160, height: 27 },
+      analyzeMetadataCheck:      { left: 770,  top: 105, width: 22, height: 22 },
+      duplicateListingProgress:  { left: 1170, top: 14, width: 160, height: 27 },
+      duplicateListingCheck:     { left: 1170,  top: 14,  width: 22, height: 22 },   /* adjust as you like */
+      createListingProgress:     { left: 770,  top: 14,  width: 160, height: 27 },
+      createListingCheck:        { left: 770,  top: 14,  width: 22, height: 22 },   /* just left of create bar (870) */
+      
 
       // Counter chip
       listingQueueCount:       { left: 190,  top: 75,  width: 25,  height: 27 }
@@ -1741,8 +1773,13 @@ document.getElementById("shopListings").addEventListener("keydown", (e) => {
       const clamped = Math.max(0, Math.min(100, Math.round(pct)));
       if (bar) bar.style.width = clamped + "%";
       if (txt) txt.textContent = clamped + "%";
+      if (clamped >= 100) {
+        showMetadataProgress(false);
+        toggleCheck("analyzeMetadataCheck", true);
+      }
     }
     function resetMetadataProgress() {
+      toggleCheck("analyzeMetadataCheck", false);
       setMetadataProgress(0);
     }
 
@@ -1755,6 +1792,10 @@ document.getElementById("shopListings").addEventListener("keydown", (e) => {
       const clamped = Math.max(0, Math.min(100, Math.round(pct)));
       if (bar) bar.style.width = clamped + "%";
       if (txt) txt.textContent = clamped + "%";
+      if (clamped >= 100) {
+        showCreateProgress(false);
+        toggleCheck("createListingCheck", true);
+      }
     }
     function resetCreateProgress() { window._createPct = 0; setCreateProgress(0); }
     function showCreateProgress(show) {
@@ -1768,6 +1809,16 @@ document.getElementById("shopListings").addEventListener("keydown", (e) => {
       setCreateProgress(next);
     }
 
+    // Generic UI helpers
+    function toggleCheck(id, on) {
+      const el = document.getElementById(id);
+      if (el) el.style.display = on ? "block" : "none";
+    }
+    function showMetadataProgress(show) {
+      const wrap = document.getElementById("analyzeMetadataProgress");
+      if (wrap) wrap.style.display = show ? "block" : "none";
+    }
+
     // NEW: Duplicate progress (holistic)
     function setDuplicateProgress(pct) {
       const wrap = document.getElementById("duplicateListingProgress");
@@ -1777,16 +1828,24 @@ document.getElementById("shopListings").addEventListener("keydown", (e) => {
       const clamped = Math.max(0, Math.min(100, Math.round(pct)));
       if (bar) bar.style.width = clamped + "%";
       if (txt) txt.textContent = clamped + "%";
+      if (clamped >= 100) {
+        showDuplicateProgress(false);
+        toggleCheck("duplicateListingCheck", true);
+      }
     }
     function resetDuplicateProgress(){ window._dupPct = 0; setDuplicateProgress(0); }
     function showDuplicateProgress(show){ const w = document.getElementById("duplicateListingProgress"); if (w) w.style.display = show ? "block" : "none"; }
 
     document.getElementById("analyzeMetadataBtn").addEventListener("click", async () => {
       try {
+         // start: show bar, hide check
+        toggleCheck("analyzeMetadataCheck", false);
+        showMetadataProgress(true);
         const total = (window.previewImages && window.previewImages.length) || 0;
         if (!total) {
           if (window.M?.toast) M.toast({ html: "No images to analyze." });
           return;
+          showMetadataProgress(false);
         }
         resetMetadataProgress();
         for (let i = 0; i < total; i++) {
@@ -1797,6 +1856,10 @@ document.getElementById("shopListings").addEventListener("keydown", (e) => {
       } catch (e) {
         console.error(e);
         if (window.M?.toast) M.toast({ html: "Metadata analyze error: " + (e?.message || e) });
+        } finally {
+        // if not already auto-hidden by 100%, ensure hidden when not running
+        const pctText = document.querySelector("#analyzeMetadataProgress .pct")?.textContent || "0%";
+        if (pctText !== "100%") showMetadataProgress(false);
       }
     });
 
@@ -1815,6 +1878,7 @@ document.getElementById("shopListings").addEventListener("keydown", (e) => {
         btn && (btn.disabled = true);
         showCreateProgress(true);
         resetCreateProgress(); // now sets window._createPct=0 and bar to 0%
+        toggleCheck("createListingCheck", false);
 
         // ---------------- Stage 1: Upload Photos (main + reserved) ----------------
         await uploadPhotos();               // existing function
@@ -2082,12 +2146,15 @@ document.getElementById("shopListings").addEventListener("keydown", (e) => {
         }
 
         setDuplicateProgress(100);
+        showDuplicateProgress(false);
+        toggleCheck("duplicateListingCheck", true);
         if (window.M?.toast) M.toast({ html: "Duplicate prep complete (SKP kept, Title/Desc re-gen, Analyze diversified)." });
       } catch (e) {
         console.error(e);
         if (window.M?.toast) M.toast({ html: "Duplicate flow error: " + e.message });
       } finally {
         btn && (btn.disabled = false);
+        showDuplicateProgress(false);
       }
     });
 
