@@ -1911,6 +1911,123 @@ document.getElementById("shopListings").addEventListener("keydown", (e) => {
       return line;
     }
 
+    // GLOBAL guarded generator used by Duplicate flow (skips orange-highlighted SKPs)
+    window.generateTagPhrasesGuarded = async function () {
+      // Show spinner like normal gen
+      if (typeof toggleSpinner === "function") toggleSpinner("searchSpinner", true);
+
+      try {
+        // 1) Gather current + protected (orange) indices
+        const ta = document.getElementById("searchKeyPhrases");
+        const current = (typeof extractSkpPhrasesFromText === "function")
+          ? extractSkpPhrasesFromText(ta?.value || "")
+          : [];
+        const protectedIdx = (typeof getSkpChangedIndices === "function")
+          ? getSkpChangedIndices()
+          : new Set(); // safe fallback
+
+        // 2) Ask model for fresh phrases (same source as normal gen)
+        const question = (document.getElementById("listingDescInput")?.value || "").trim();
+        const keywordRules = document.getElementById("keywordRulesTextarea")?.value || "";
+        let fresh = await getInitialPhrases(question, keywordRules); // array of strings
+
+        // 2b) Enforce ≤20 chars by regenerating offenders (mirrors your normal flow)
+        for (let i = 0; i < fresh.length; i++) {
+          if (fresh[i].length > 20 && typeof regenerateSinglePhrase === "function") {
+            const otherValid = fresh.filter((_, idx) => idx !== i && fresh[idx].length <= 20);
+            fresh[i] = await regenerateSinglePhrase(question, keywordRules, otherValid);
+          }
+        }
+
+        // 3) Canonicalize, de-dup, cap to 13
+        const canon = (s) => {
+          let tag = String(s || "")
+            .normalize("NFKD")
+            .replace(/[^\p{Letter}\p{Number}\s]/gu, " ")
+            .replace(/\s+/g, " ")
+            .trim();
+          if (!tag) return "";
+          if (tag.length > 20) {
+            const cut = tag.slice(0, 20);
+            const sp = cut.lastIndexOf(" ");
+            tag = (sp > 7 ? cut.slice(0, sp) : cut).trim();
+          }
+          return tag;
+        };
+        const seen = new Set();
+        const sanitizedFresh = [];
+        for (const f of fresh) {
+          const t = canon(f);
+          if (!t) continue;
+          const key = t.toLowerCase();
+          if (seen.has(key)) continue;
+          seen.add(key);
+          sanitizedFresh.push(t);
+          if (sanitizedFresh.length >= 13) break;
+        }
+
+        // 4) Merge: keep protected (“orange”) current items; replace the rest
+        const out = new Array(14).fill("");
+        let pick = 0;
+        for (let i = 0; i < 13; i++) {
+          const keep = protectedIdx.has(i) && (current[i] || "").trim();
+          if (keep) {
+            out[i] = current[i];
+          } else {
+            while (pick < sanitizedFresh.length && out.includes(sanitizedFresh[pick])) pick++;
+            out[i] = sanitizedFresh[pick] || current[i] || "";
+            if (pick < sanitizedFresh.length) pick++;
+          }
+        }
+        const phrasesArray = out.slice(0, 14);
+
+        // 5) Render in your fixed two-column, numbered layout (1–7 / 8–14)
+        const left  = phrasesArray.slice(0, 7);
+        const right = phrasesArray.slice(7, 14);
+        const leftLabels  = left.map((p, i) => `${i + 1}. ${p || ""}`);
+        const rightLabels = right.map((p, i) => `${i + 8}. ${p || ""}`);
+        const leftWidth = Math.max(0, ...leftLabels.map(s => s.length));
+        const pad = leftWidth + 3;
+        const colLines = [];
+        for (let i = 0; i < 7; i++) {
+          const L = leftLabels[i]  || `${i + 1}. `;
+          const R = rightLabels[i] || "";
+          colLines.push(L.padEnd(pad, " ") + R);
+        }
+        const outputText = colLines.join("\n");
+
+        // 6) Write textarea + keep overlay/baseline in sync
+        const skp = document.getElementById("searchKeyPhrases");
+        if (skp) {
+          skp.value = outputText;
+          skp.setAttribute("wrap", "off");
+          skp.style.overflowX = "auto";
+          // exact 7-line height lock like your normal flow
+          const cs  = window.getComputedStyle(skp);
+          let lh    = parseFloat(cs.lineHeight);
+          if (!lh || Number.isNaN(lh)) lh = parseFloat(cs.fontSize) * 1.2;
+          const padY = (parseFloat(cs.paddingTop) || 0) + (parseFloat(cs.paddingBottom) || 0);
+          const borderY = (parseFloat(cs.borderTopWidth) || 0) + (parseFloat(cs.borderBottomWidth) || 0);
+          const exactPx = Math.ceil(lh * 7 + padY + borderY);
+          skp.style.setProperty("height",     exactPx + "px", "important");
+          skp.style.setProperty("min-height", exactPx + "px", "important");
+          skp.style.setProperty("max-height", exactPx + "px", "important");
+          skp.style.setProperty("overflow-y", "hidden", "important");
+          skp.scrollTop = 0;
+
+          // Refresh overlay + DO NOT reset baseline; we’re preserving orange.
+          if (typeof refreshSkpOverlay === "function") refreshSkpOverlay();
+        }
+
+        if (window.M?.toast) M.toast({ html: "Guarded Tag Phrases generated." });
+      } catch (err) {
+        console.error(err);
+        if (window.M?.toast) M.toast({ html: "Guarded generation error: " + err.message });
+      } finally {
+        if (typeof toggleSpinner === "function") toggleSpinner("searchSpinner", false);
+      }
+    };
+
     // NEW: Duplicate Listing sequential orchestrator
     document.getElementById("duplicateListingBtn").addEventListener("click", async () => {
       const btn = document.getElementById("duplicateListingBtn");
