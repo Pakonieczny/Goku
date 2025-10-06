@@ -2331,9 +2331,9 @@ document.getElementById("shopListings").addEventListener("keydown", (e) => {
       return phrases;
     }
 
-    // Build overlay HTML from CURRENT TEXT (keeps exact spacing)
-    // orangeSet = previously-changed (baseline/locked), greenSet = regenerated this run
-    function buildOverlayHtmlFromCurrentText(text, orangeSet, greenSet){
+     // Build overlay HTML from CURRENT TEXT (keeps exact spacing)
+     // orangeSet = previously-changed (baseline/locked), greenSet = regenerated this run
+     function buildOverlayHtmlFromCurrentText(text, orangeSet, greenSet){
       const lines = String(text||"").split("\n");
       const out = [];
       for (let i=0;i<7;i++){
