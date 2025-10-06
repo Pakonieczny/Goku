@@ -2368,16 +2368,12 @@ document.getElementById("shopListings").addEventListener("keydown", (e) => {
         const isRightGreen  = greenSet && greenSet.has(rightIdx);
         const isRightOrange = orangeSet && orangeSet.has(rightIdx);
 
-        const leftHTML  = isLeftGreen
-          ? `<span style="background: rgba(76,175,80,0.32); border-radius:2px;">${_skpEscape(leftText)}</span>`
-          : (isLeftOrange
-              ? `<span style="background: rgba(255,165,0,0.35); border-radius:2px;">${_skpEscape(leftText)}</span>`
-              : _skpEscape(leftText));
+        const leftHTML  = isLeftOrange
+          ? `<span style="background: rgba(255,165,0,0.35); border-radius:2px;">${_skpEscape(leftText)}</span>`
+          : _skpEscape(leftText);
 
-        const rightHTML = rightText!=="" && (isRightGreen || isRightOrange)
-          ? (isRightGreen
-              ? `<span style="background: rgba(76,175,80,0.32); border-radius:2px;">${_skpEscape(rightText)}</span>`
-              : `<span style="background: rgba(255,165,0,0.35); border-radius:2px;">${_skpEscape(rightText)}</span>`)
+        const rightHTML = rightText !== "" && isRightOrange
+          ? `<span style="background: rgba(255,165,0,0.35); border-radius:2px;">${_skpEscape(rightText)}</span>`
           : _skpEscape(rightText);
 
         out.push(_skpEscape(pre) + leftHTML + _skpEscape(delim) + rightHTML);
