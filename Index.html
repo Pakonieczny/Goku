@@ -2133,10 +2133,11 @@ document.getElementById("shopListings").addEventListener("keydown", (e) => {
       const current = (typeof extractSkpPhrasesFromText === "function")
         ? extractSkpPhrasesFromText(ta?.value || "")
         : [];
-      const protectedIdx = (typeof getSkpChangedIndices === "function")
-        ? getSkpChangedIndices()
-        : new Set();
-
+     const protectedIdx = (window.skpOrangeLock instanceof Set && window.skpOrangeLock.size)
+       ? new Set(window.skpOrangeLock)    // ← honor the indices locked when "Duplicate" was pressed
+       : ((typeof getSkpChangedIndices === "function")
+            ? getSkpChangedIndices()
+            : new Set());
       // 2) Ask model for fresh phrases (same source as your normal gen)
       const question = (document.getElementById("listingDescInput")?.value || "").trim();
       const keywordRules = document.getElementById("keywordRulesTextarea")?.value || "";
