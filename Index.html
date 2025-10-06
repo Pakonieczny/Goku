@@ -2452,13 +2452,18 @@ document.getElementById("shopListings").addEventListener("keydown", (e) => {
       }
 
       // Keep previously-orange indices locked as orange; add green set supplied by duplicate flow
+      const toSet = (v) => {
+        if (!v) return new Set();
+        if (v instanceof Set) return v;
+        try { return new Set(v); } catch { return new Set(); }
+      };
+
       const orange = new Set(changed);
-      if (window.skpOrangeLock instanceof Set) {
-        window.skpOrangeLock.forEach(idx => orange.add(idx));
-      }
-      const green = (window.skpJustRegenerated instanceof Set) ? window.skpJustRegenerated : new Set();
-      // ensure green wins over orange
-      if (green && green.size) { green.forEach(i => orange.delete(i)); }
+      toSet(window.skpOrangeLock).forEach(i => orange.add(i));
+
+      const green = toSet(window.skpJustRegenerated);
+      // green always overrides orange
+      green.forEach(i => orange.delete(i));
       ov.innerHTML = buildOverlayHtmlFromCurrentText(ta.value, orange, green);
       syncSkpOverlayPosition();
     }
