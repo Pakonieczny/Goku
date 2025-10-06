@@ -88,10 +88,11 @@
       pointer-events: none;
       z-index: 2999;           /* textarea sits at 3000 in your abs layout */
       color: transparent;      /* hide overlay text; we only want backgrounds */
+      margin: 0;
     }
 
     #skpOverlay .mark {
-      background: rgba(33, 150, 243, 0.35);
+      background: rgba(255, 165, 0, 0.35);
       border-radius: 2px;
     }
 
@@ -2030,10 +2031,10 @@ document.getElementById("shopListings").addEventListener("keydown", (e) => {
         const rightIdx = i + 7;  // 7..13
 
         const leftHTML  = changedSet.has(leftIdx)
-          ? `<span style="background: rgba(33,150,243,0.35); border-radius:2px;">${_skpEscape(leftText)}</span>`
+          ? `<span style="background: rgba(255,165,0,0.35); border-radius:2px;">${_skpEscape(leftText)}</span>`
           : _skpEscape(leftText);
         const rightHTML = rightText!=="" && changedSet.has(rightIdx)
-          ? `<span style="background: rgba(33,150,243,0.35); border-radius:2px;">${_skpEscape(rightText)}</span>`
+          ? `<span style="background: rgba(255,165,0,0.35); border-radius:2px;">${_skpEscape(rightText)}</span>`
           : _skpEscape(rightText);
 
         out.push(_skpEscape(pre) + leftHTML + _skpEscape(delim) + rightHTML);
@@ -2062,6 +2063,7 @@ document.getElementById("shopListings").addEventListener("keydown", (e) => {
       ov.style.padding = cs.padding;
       ov.style.border  = "none";
       ov.style.background = "transparent";
+      ov.style.margin = "0";
       // match scroll offsets
       ov.scrollTop  = ta.scrollTop;
       ov.scrollLeft = ta.scrollLeft;
