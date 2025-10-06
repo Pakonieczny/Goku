@@ -72,6 +72,15 @@
       height: auto;
     }
 
+     /* === SKP Blue Highlight overlay === */
+    #skpOverlay { position:absolute; pointer-events:none; z-index:3001; }
+    #skpOverlay .skp-mark {
+      position:absolute;
+      background: rgba(33,150,243,.22);
+      border-radius: 3px;
+      box-shadow: 0 0 0 1px rgba(33,150,243,.45) inset;
+    }
+
     /* Match fonts to #searchKeyPhrases */
     #listingTitle,
     #listingDescription,
@@ -1871,6 +1880,9 @@ document.getElementById("shopListings").addEventListener("keydown", (e) => {
 
         const skp = document.getElementById("searchKeyPhrases");
         if (skp) {
+          // Guard: ignore highlighter during programmatic writes
+          window._skpProgrammatic = true;
+
           skp.value = outputText;
           skp.setAttribute("wrap", "off");
           skp.style.fontFamily = 'ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace';
@@ -1889,6 +1901,9 @@ document.getElementById("shopListings").addEventListener("keydown", (e) => {
           skp.style.setProperty("max-height",exactPx + "px", "important");
           skp.style.setProperty("overflow-y","hidden", "important");
           skp.scrollTop = 0;
+
+          // Release guard on next tick so manual edits highlight
+          setTimeout(() => { window._skpProgrammatic = false; }, 0);
         }
 
         M.toast({ html: "Tag Phrases generated successfully!" });
@@ -1942,6 +1957,114 @@ document.getElementById("shopListings").addEventListener("keydown", (e) => {
           e.preventDefault();
         }
       });
+    })();
+
+     // === SKP: Blue highlight the phrase being manually edited ===
+    (function attachSKPHighlighter(){
+      const ta = document.getElementById("searchKeyPhrases");
+      if (!ta) return;
+
+      // Absolute overlay that mirrors the textarea box
+      const overlay = document.createElement("div");
+      overlay.id = "skpOverlay";
+      document.body.appendChild(overlay);
+
+      function syncOverlayBox(){
+        const r = ta.getBoundingClientRect();
+        overlay.style.left   = (r.left + window.scrollX) + "px";
+        overlay.style.top    = (r.top  + window.scrollY) + "px";
+        overlay.style.width  = r.width + "px";
+        overlay.style.height = r.height + "px";
+      }
+
+      function getMetrics(){
+        const cs = getComputedStyle(ta);
+        const lineHeight = parseFloat(cs.lineHeight) || (parseFloat(cs.fontSize) * 1.2);
+        const padL = parseFloat(cs.paddingLeft) || 0;
+        const padT = parseFloat(cs.paddingTop)  || 0;
+        const borderL = parseFloat(cs.borderLeftWidth) || 0;
+        const borderT = parseFloat(cs.borderTopWidth)  || 0;
+        return { lineHeight, padL, padT, borderL, borderT, scrollX: ta.scrollLeft || 0, scrollY: ta.scrollTop || 0 };
+      }
+
+      // Monospace → fixed char width; measure once
+      let charWidth = 8;
+      (function measureCharWidth(){
+        const cvs = document.createElement("canvas");
+        const ctx = cvs.getContext("2d");
+        ctx.font = getComputedStyle(ta).font;
+        charWidth = ctx.measureText("0").width || 8;
+      })();
+
+      function parseLineInfo(text, pos){
+        const lineStart = text.lastIndexOf("\\n", Math.max(0, pos - 1)) + 1;
+        const nl = text.indexOf("\\n", pos);
+        const lineEnd = (nl === -1 ? text.length : nl);
+        const line = text.slice(lineStart, lineEnd);
+
+        // Expect lines like: "1. leftPhrase   8. rightPhrase"
+        const mNumLeft = line.match(/^(\\s*\\d{1,2}\\.\\s)/);
+        if (!mNumLeft) return null;
+        const leftPrefixLen = mNumLeft[0].length;
+        const rest = line.slice(leftPrefixLen);
+        const mDelim = /\\s{3,}\\d{1,2}\\.\\s/.exec(rest);
+
+        let leftText = rest, rightText = "", rightStartInLine = -1;
+        if (mDelim) {
+          leftText = rest.slice(0, mDelim.index);
+          const rightOffset = mDelim.index + mDelim[0].length;
+          rightText = rest.slice(rightOffset);
+          rightStartInLine = leftPrefixLen + rightOffset;
+        }
+        const leftStartInLine = leftPrefixLen;
+        const leftEndInLine   = leftPrefixLen + leftText.length;
+        return { lineStart, lineEnd, line, leftStartInLine, leftEndInLine, rightStartInLine, rightText };
+      }
+
+      let fadeTimer;
+      function highlightUnderCaret(){
+        if (window._skpProgrammatic) return; // ignore programmatic writes
+        const text = ta.value;
+        const pos  = ta.selectionStart ?? 0;
+        const info = parseLineInfo(text, pos);
+        if (!info) return;
+
+        const clickOffset = pos - info.lineStart;
+        let segStartCol, segLen;
+        if (clickOffset >= info.leftStartInLine && clickOffset <= info.leftEndInLine){
+          segStartCol = info.leftStartInLine;
+          segLen = info.leftEndInLine - info.leftStartInLine;
+        } else if (info.rightText && clickOffset >= info.rightStartInLine && clickOffset <= info.line.length){
+          segStartCol = info.rightStartInLine;
+          segLen = info.line.length - info.rightStartInLine;
+        } else {
+          return;
+        }
+
+        overlay.innerHTML = "";
+        syncOverlayBox();
+        const mark = document.createElement("div");
+        mark.className = "skp-mark";
+        const { lineHeight, padL, padT, borderL, borderT, scrollX, scrollY } = getMetrics();
+
+        // Compute 0-based line index for vertical placement
+        const lineIndex = (text.slice(0, info.lineStart).match(/\\n/g) || []).length;
+        const x = Math.max(0, Math.round(padL + borderL + segStartCol * charWidth - scrollX));
+        const y = Math.max(0, Math.round(padT + borderT + lineIndex * lineHeight - scrollY));
+        mark.style.left   = x + "px";
+        mark.style.top    = y + "px";
+        mark.style.width  = Math.round(segLen * charWidth) + "px";
+        mark.style.height = Math.round(lineHeight) + "px";
+        overlay.appendChild(mark);
+
+        clearTimeout(fadeTimer);
+        fadeTimer = setTimeout(() => { overlay.innerHTML = ""; }, 2000);
+      }
+
+      ["input","keyup","click"].forEach(evt => ta.addEventListener(evt, highlightUnderCaret));
+      ta.addEventListener("scroll", syncOverlayBox);
+      window.addEventListener("resize", syncOverlayBox);
+      syncOverlayBox();
     })();
 
     // --- Unify Responses/Chat return shapes (robust to either) ---
