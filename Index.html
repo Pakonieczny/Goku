@@ -1547,6 +1547,14 @@ https://www.etsy.com/your/shops/me/listing-editor/edit/1822973998
      }
    }
 
+    // Build SKU from first word of title + 5-digit random number (e.g., Horse_18789)
+    function buildSkuFromTitle(title) {
+     const first = (title || "").trim().split(/\s+/)[0] || "SKU";
+      const cleaned = first.replace(/[^A-Za-z0-9_-]/g, "") || "SKU";
+      const rand = Math.floor(10000 + Math.random() * 90000); // 10000–99999
+      return `${cleaned}_${rand}`;
+    }
+
     // On persistDataBeforeRedirect, store current queue to local storage.
     function persistDataBeforeRedirect() {
       try {
@@ -2001,11 +2009,16 @@ document.getElementById("shopListings").addEventListener("keydown", (e) => {
         });
         const slicedTags = tags.slice(0, 13);
 
+        // NEW: generate and include SKU
+        const generatedSku = buildSkuFromTitle(userTitle);
         const payload = {
           listing_id: listingId,
           title: userTitle,
           description: finalDescription,
-          tags: slicedTags
+          tags: slicedTags,
+          // Add both common forms; your Netlify function / Etsy API can accept either.
+          skus: [generatedSku],
+          sku: generatedSku
         };
         const resp = await fetch(`/.netlify/functions/updateListing?listingId=${encodeURIComponent(listingId)}`, {
           method: "PUT",
