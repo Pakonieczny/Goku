@@ -2033,15 +2033,21 @@ document.getElementById("shopListings").addEventListener("keydown", (e) => {
 
         // NEW: actually set the SKU at the inventory level (where Etsy stores it)
         try {
-          const invResp = await fetch(`/.netlify/functions/updateListingInventory?listingId=${encodeURIComponent(listingId)}`, {
-            method: "PUT",
-            headers: { "Content-Type": "application/json", Authorization: "Bearer " + window.accessToken },
-            body: JSON.stringify({ sku: generatedSku })
-          });
-          const invJson = await invResp.json();
+          // Pass token in query AND keep body simple JSON; avoids edge cases where Authorization header is dropped.
+          const invResp = await fetch(
+            `/.netlify/functions/updateListingInventory?listingId=${encodeURIComponent(listingId)}&token=${encodeURIComponent(window.accessToken)}`,
+            {
+              method: "PUT",
+              headers: { "Content-Type": "application/json" },
+              body: JSON.stringify({ sku: generatedSku })
+            }
+          );
+          let invText = await invResp.text();
+          let invJson; try { invJson = JSON.parse(invText); } catch { invJson = { raw: invText }; }
           if (!invResp.ok) {
-            console.warn("Inventory SKU update failed:", invJson);
-            M.toast?.({ html: "Heads up: SKU wasn’t saved (see console)" });
+            console.warn("Inventory SKU update failed:", invJson?.error || invJson);
+            console.warn("Details:", invJson?.details || invJson);
+            M.toast?.({ html: "SKU update failed — see console" });
           } else {
             console.log("Inventory SKU set:", invJson);
           }

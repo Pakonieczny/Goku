@@ -9,7 +9,11 @@ exports.handler = async (event) => {
       event.headers["access-token"] ||
       event.headers["Access-Token"] ||
       event.headers["authorization"]?.replace(/^Bearer\s+/i, "");
-    const clientId = process.env.CLIENT_ID;
+      const clientId =
+      event.headers?.["x-api-key"] ||
+      event.headers?.["X-Api-Key"] ||
+      process.env.CLIENT_ID ||
+      process.env.ETSY_CLIENT_ID;
 
     if (!listingId) return { statusCode: 400, body: JSON.stringify({ error: "Missing listingId parameter" }) };
     if (!token) return { statusCode: 400, body: JSON.stringify({ error: "Missing access token" }) };
@@ -21,7 +25,7 @@ exports.handler = async (event) => {
     const desiredSku = String(body.sku || "").trim();
 
     // 1) GET current inventory (so we can send the full, sanitized products array back)
-    const invUrl = `https://api.etsy.com/v3/application/listings/${encodeURIComponent(listingId)}/inventory`;
+    const invUrl = `https://openapi.etsy.com/v3/application/listings/${encodeURIComponent(listingId)}/inventory`;
     const commonHeaders = {
       Accept: "application/json",
       Authorization: `Bearer ${token}`,
@@ -62,7 +66,7 @@ exports.handler = async (event) => {
       products = [{
         sku: desiredSku || undefined,
         property_values: [],
-        offerings: [{ price: 1.0, quantity: 1, is_enabled: true }]
+        offerings: [{ price: 1.0, quantity: 187, is_enabled: true }]
       }];
     }
 
