@@ -56,25 +56,39 @@ exports.handler = async (event) => {
           }
           return Number(price);
         };
-		const offerings = (p.offerings || []).map(o => {
-		  const price = toDecimal(o.price);
-		  if (!Number.isFinite(price)) {
-		    throw new Error("Invalid offering.price after normalization");
-		  }
-		  return {
-		    price,
-		    quantity: (o.quantity == null ? 1 : o.quantity),
-		    is_enabled: o.is_enabled !== false
-		  };
-		});
-        const property_values = (p.property_values || []).map(v => ({
-          property_id: v.property_id,
-          scale_id: v.scale_id ?? null,
-          value_ids: v.value_ids || [],
-          values: v.values || []
-        }));
-        // Put the generated SKU on the first product without one (or overwrite first product)
-        const sku = (idx === 0 && desiredSku) ? desiredSku : (p.sku || "");
+
+        const offeringsSrc = Array.isArray(p.offerings) ? p.offerings : [];
+        let offerings = offeringsSrc
+          .map(o => {
+            const raw = toDecimal(o.price);
+            const price = Number.isFinite(raw) ? Number(raw.toFixed(2)) : undefined;
+            return {
+              price,
+              quantity: (o.quantity == null ? 1 : o.quantity),
+              is_enabled: o.is_enabled !== false
+            };
+          })
+          .filter(o => Number.isFinite(o.price));
+
+        // Ensure at least one valid offering
+        if (offerings.length === 0) {
+          const fallbackRaw = toDecimal(offeringsSrc[0]?.price);
+          const fallbackPrice = Number.isFinite(fallbackRaw) ? Number(fallbackRaw.toFixed(2)) : 1.0;
+          offerings = [{ price: fallbackPrice, quantity: offeringsSrc[0]?.quantity ?? 187, is_enabled: true }];
+        }
+
+        const property_values = (p.property_values || [])
+          .map(v => ({
+            property_id: v.property_id,
+            scale_id: v.scale_id ?? null,
+            value_ids: Array.isArray(v.value_ids) ? v.value_ids.filter(Boolean) : [],
+            values: Array.isArray(v.values) ? v.values.filter(Boolean) : []
+          }))
+          // Drop empty specs that 400 the PUT
+          .filter(v => v.property_id && (v.value_ids.length > 0 || v.values.length > 0));
+
+        // Only set a new SKU when provided; otherwise leave Etsy’s SKU intact
+        const sku = (idx === 0 && desiredSku) ? desiredSku : (p.sku || undefined);
         return { sku, offerings, property_values };
       });
     } else {
@@ -86,12 +100,16 @@ exports.handler = async (event) => {
       }];
     }
 
-		const payload = {
-		  products,
-		  price_on_property,
-		  quantity_on_property,
-		  sku_on_property
-		};
+    const payload = { products };
+    if (Array.isArray(price_on_property) && price_on_property.length) {
+      payload.price_on_property = price_on_property;
+    }
+    if (Array.isArray(quantity_on_property) && quantity_on_property.length) {
+      payload.quantity_on_property = quantity_on_property;
+    }
+    if (Array.isArray(sku_on_property) && sku_on_property.length) {
+      payload.sku_on_property = sku_on_property;
+    }
 
     // 3) PUT updated inventory (this is where the SKU actually gets stored)
     const putRes = await fetch(invUrl, {
@@ -103,7 +121,8 @@ exports.handler = async (event) => {
     let data; try { data = JSON.parse(text); } catch { data = { raw: text }; }
 
     if (!putRes.ok) {
-      return { statusCode: putRes.status, body: JSON.stringify({ error: "Error updating inventory", details: data }) };
+      const msg = data?.error || data?.message || data?.raw || "Error updating inventory";
+      return { statusCode: putRes.status, body: JSON.stringify({ error: msg, details: data }) };
     }
     return { statusCode: 200, body: JSON.stringify({ ok: true, inventory: data }) };
   } catch (err) {
