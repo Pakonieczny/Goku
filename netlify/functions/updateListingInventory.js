@@ -33,15 +33,20 @@ exports.handler = async (event) => {
     };
     const invRes = await fetch(invUrl, { method: "GET", headers: commonHeaders });
 
+    // Hoist on_property arrays so they exist even if GET fails (avoids ReferenceError)
+	let price_on_property = [];
+	let quantity_on_property = [];
+	let sku_on_property = [];
+
     let products = [];
     if (invRes.ok) {
 		const inv = await invRes.json();
 		const srcProducts = inv?.products || inv?.results?.products || [];
 
-		// NEW: preserve on_property arrays (v3 returns them at top level or under results)
-		const price_on_property    = inv?.price_on_property    ?? inv?.results?.price_on_property    ?? [];
-		const quantity_on_property = inv?.quantity_on_property ?? inv?.results?.quantity_on_property ?? [];
-		const sku_on_property      = inv?.sku_on_property      ?? inv?.results?.sku_on_property      ?? [];
+		// Preserve on_property arrays (v3 returns them at top level or under results)
+		price_on_property    = inv?.price_on_property    ?? inv?.results?.price_on_property    ?? [];
+		quantity_on_property = inv?.quantity_on_property ?? inv?.results?.quantity_on_property ?? [];
+		sku_on_property      = inv?.sku_on_property      ?? inv?.results?.sku_on_property      ?? [];
       // 2) sanitize products per Etsy docs (remove IDs, convert Money -> decimal, drop is_deleted, etc.)
       products = srcProducts.map((p, idx) => {
         const toDecimal = (price) => {
@@ -51,11 +56,17 @@ exports.handler = async (event) => {
           }
           return Number(price);
         };
-        const offerings = (p.offerings || []).map(o => ({
-          price: toDecimal(o.price),
-          quantity: o.quantity,
-          is_enabled: o.is_enabled !== false
-        }));
+		const offerings = (p.offerings || []).map(o => {
+		  const price = toDecimal(o.price);
+		  if (!Number.isFinite(price)) {
+		    throw new Error("Invalid offering.price after normalization");
+		  }
+		  return {
+		    price,
+		    quantity: (o.quantity == null ? 1 : o.quantity),
+		    is_enabled: o.is_enabled !== false
+		  };
+		});
         const property_values = (p.property_values || []).map(v => ({
           property_id: v.property_id,
           scale_id: v.scale_id ?? null,
