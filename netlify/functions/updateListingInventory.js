@@ -78,14 +78,34 @@ exports.handler = async (event) => {
         }
 
         const property_values = (p.property_values || [])
-          .map(v => ({
-            property_id: v.property_id,
-            scale_id: v.scale_id ?? null,
-            value_ids: Array.isArray(v.value_ids) ? v.value_ids.filter(Boolean) : [],
-            values: Array.isArray(v.values) ? v.values.filter(Boolean) : []
-          }))
-          // Drop empty specs that 400 the PUT
-          .filter(v => v.property_id && (v.value_ids.length > 0 || v.values.length > 0));
+          .map(v => {
+            // Etsy requires a non-empty property_name for each spec (esp. custom prop_id 513).
+            const name =
+              (typeof v.property_name === "string" && v.property_name.trim()) ||
+              (typeof v.property_name_formatted === "string" && v.property_name_formatted.trim()) ||
+              undefined;
+
+            const out = {
+              property_id: v.property_id,
+              property_name: name,              // ← keep the name from GET
+            };
+            if (v.scale_id != null) out.scale_id = v.scale_id;
+            if (Array.isArray(v.value_ids)) out.value_ids = v.value_ids.filter(Boolean);
+            if (Array.isArray(v.values))    out.values    = v.values.filter(Boolean);
+
+            // Minimal safety for custom variations (prop_id 513) if name was missing
+            if (!out.property_name && Number(v.property_id) === 513) {
+              out.property_name = "Custom";
+            }
+            return out;
+          })
+          // Drop truly empty specs (no id or no values), but only after preserving property_name
+          .filter(v =>
+            v.property_id &&
+            v.property_name &&
+            ((Array.isArray(v.value_ids) && v.value_ids.length > 0) ||
+             (Array.isArray(v.values)    && v.values.length    > 0))
+          );
 
         // Only set a new SKU when provided; otherwise leave Etsy’s SKU intact
         const sku = (idx === 0 && desiredSku) ? desiredSku : (p.sku || undefined);
