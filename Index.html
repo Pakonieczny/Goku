@@ -1584,12 +1584,16 @@ https://www.etsy.com/your/shops/me/listing-editor/edit/1822973998
   document.getElementById("shopListings").addEventListener("paste", (e) => {
     e.preventDefault();
     let pasteData = (e.clipboardData || window.clipboardData).getData("text");
+    // NEW: persist raw text immediately (survives refresh)
+    localStorage.setItem("shopListingsText", pasteData);
     window.listingQueue = parseListingNumbers(pasteData);
     loadNextListingInQueue();
   });
 
     // When the user changes the shopListings textarea manually.
   document.getElementById("shopListings").addEventListener("change", () => {
+    // NEW: persist raw text immediately (survives refresh)
+    localStorage.setItem("shopListingsText", rawInput);
     let rawInput = document.getElementById("shopListings").value;
     window.listingQueue = parseListingNumbers(rawInput);
     loadNextListingInQueue();
@@ -1628,15 +1632,19 @@ document.getElementById("shopListings").addEventListener("keydown", (e) => {
     // On page load, restore the listing queue from local storage (if available)
     function restoreDataAfterRedirect() {
       try {
-        // Load listingQueue from local storage if it exists.
-        let storedQueue = localStorage.getItem("listingQueue");
+        const storedQueue = localStorage.getItem("listingQueue");
+        const storedText  = localStorage.getItem("shopListingsText") || "";
+
         if (storedQueue) {
           window.listingQueue = JSON.parse(storedQueue);
-          // Display only the first number from the restored queue.
-          if (window.listingQueue.length > 0) {
-            document.getElementById("shopListings").value = window.listingQueue[0];
-          }
+        } else if (storedText.trim()) {
+          window.listingQueue = parseListingNumbers(storedText.trim());
+        } else {
+          window.listingQueue = Array.isArray(window.listingQueue) ? window.listingQueue : [];
         }
+
+        // Will set textarea, update counter, and persist.
+        loadNextListingInQueue();
       } catch (err) {
         console.error("Error restoring data after redirect:", err);
       }
@@ -1930,12 +1938,25 @@ document.getElementById("shopListings").addEventListener("keydown", (e) => {
     document.getElementById("createListingBtn").addEventListener("click", async () => {
       const btn = document.getElementById("createListingBtn");
       try {
-        // Resolve listing ID (accepts plain ID or URL with /listing/ID)
-        let listingInput = (document.getElementById("shopListings").value || "").trim();
-        if (!listingInput) { M.toast({ html: "Please provide a listing URL or ID in 'Etsy Shop Listings'." }); return; }
-        let listingId = /^\d+$/.test(listingInput) ? listingInput : ((listingInput.match(/\/listing\/(\d+)/) || [])[1]);
-        if (!listingId) { M.toast({ html: "Invalid listing URL or ID." }); return; }
-        if (!window.accessToken) { M.toast({ html: "Please Connect to Etsy first." }); return; }
+    // Resolve listing ID: RANDOM from queue (if available), else fallback to typed input
+    let listingId = null;
+    window.__lastChosenQueueIndex = -1; // remember which index we used, to remove it after success
+
+    if (Array.isArray(window.listingQueue) && window.listingQueue.length > 0) {
+      const idx = Math.floor(Math.random() * window.listingQueue.length);
+      listingId = String(window.listingQueue[idx]);
+      window.__lastChosenQueueIndex = idx;
+      // Reflect the picked ID in the UI for transparency
+      document.getElementById("shopListings").value = listingId;
+    } else {
+      const listingInput = (document.getElementById("shopListings").value || "").trim();
+      if (!listingInput) { M.toast({ html: "Please provide a listing URL or ID in 'Etsy Shop Listings'." }); return; }
+      listingId = /^\d+$/.test(listingInput)
+        ? listingInput
+        : ((listingInput.match(/\/listing\/(\d+)/) || [])[1]);
+    }
+    if (!listingId) { M.toast({ html: "Invalid listing URL or ID." }); return; }
+    if (!window.accessToken) { M.toast({ html: "Please Connect to Etsy first." }); return; }
 
         // UI: show unified progress + disable button
         btn && (btn.disabled = true);
@@ -2001,7 +2022,15 @@ document.getElementById("shopListings").addEventListener("keydown", (e) => {
 
         // Advance queue if present
         if (window.listingQueue && window.listingQueue.length > 0) {
-          window.listingQueue.shift();
+         // Remove the exact one we just processed
+        if (typeof window.__lastChosenQueueIndex === "number" && window.__lastChosenQueueIndex >= 0) {
+          window.listingQueue.splice(window.__lastChosenQueueIndex, 1);
+          window.__lastChosenQueueIndex = -1;
+        } else {
+          // Fallback: remove by value (handles rare cases)
+          const i = window.listingQueue.indexOf(String(listingId));
+          if (i > -1) window.listingQueue.splice(i, 1);
+        }
           if (typeof loadNextListingInQueue === "function") loadNextListingInQueue();
         }
       } catch (err) {
@@ -3207,6 +3236,8 @@ document.getElementById("shopListings").addEventListener("keydown", (e) => {
         loadNextListingInQueue();
       });
       document.getElementById("shopListings").addEventListener("change", () => {
+       // NEW: persist raw text immediately (survives refresh)
+      localStorage.setItem("shopListingsText", rawInput);
         let rawInput = document.getElementById("shopListings").value;
         window.listingQueue = parseListingNumbers(rawInput);
         loadNextListingInQueue();
@@ -3216,6 +3247,8 @@ document.getElementById("shopListings").addEventListener("keydown", (e) => {
         if (e.key === "Enter" && !e.shiftKey) {
           e.preventDefault();
           let rawInput = document.getElementById("shopListings").value;
+          // NEW: persist raw text too
+          localStorage.setItem("shopListingsText", rawInput);
           window.listingQueue = parseListingNumbers(rawInput);
           localStorage.setItem("listingQueue", JSON.stringify(window.listingQueue));
           loadNextListingInQueue();
