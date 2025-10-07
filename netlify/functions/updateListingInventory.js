@@ -19,7 +19,7 @@ exports.handler = async (event) => {
     if (!token) return { statusCode: 400, body: JSON.stringify({ error: "Missing access token" }) };
     if (!clientId) return { statusCode: 500, body: JSON.stringify({ error: "CLIENT_ID not set" }) };
 
-    // Body: { sku: "Horse_18789" }
+    // Body: { sku: "Horse_18789" }  -> when provided, enforce uniform SKU across all products
     let body = {};
     try { body = event.body ? JSON.parse(event.body) : {}; } catch {}
     const desiredSku = String(body.sku || "").trim();
@@ -42,6 +42,10 @@ exports.handler = async (event) => {
     let products = [];
     let globalReadyId;
     let usesProcessingProfiles = false;
+
+    // SKU policy variables
+    let skuMode = "keep";     // "uniform" | "vary" | "none" | "keep"
+    let uniformSku;           // set when skuMode === "uniform"
 
     if (invRes.ok) {
       const inv = await invRes.json();
@@ -68,8 +72,31 @@ exports.handler = async (event) => {
       })();
       usesProcessingProfiles = (Array.isArray(readiness_state_on_property) && readiness_state_on_property.length > 0) || (globalReadyId != null);
 
+      // Decide SKU policy
+      const skuVaries = Array.isArray(sku_on_property) && sku_on_property.length > 0;
+      const existingSkus = srcProducts.map(p => (p.sku || "").trim()).filter(Boolean);
+      const firstExisting = existingSkus[0];
+
+      if (desiredSku) {
+        // Caller wants one SKU everywhere: enforce uniform + clear sku_on_property
+        skuMode = "uniform";
+        uniformSku = desiredSku;
+        sku_on_property = [];
+      } else if (skuVaries) {
+        // Listing declares SKU varies by property; keep per-variant SKUs
+        skuMode = "vary";
+      } else {
+        // No sku_on_property => must be consistent, so unify or drop all
+        if (existingSkus.length === 0) {
+          skuMode = "none"; // consistent "no sku" across all products
+        } else {
+          skuMode = "uniform";
+          uniformSku = firstExisting; // unify to first non-empty
+        }
+      }
+
       // 2) sanitize products per Etsy docs (remove IDs, convert Money -> decimal, drop is_deleted, etc.)
-      products = srcProducts.map((p, idx) => {
+      products = srcProducts.map((p) => {
         const toDecimal = (price) => {
           if (price == null) return undefined;
           if (typeof price === "object" && price.amount != null && price.divisor) {
@@ -114,7 +141,7 @@ exports.handler = async (event) => {
 
         const property_values = (p.property_values || [])
           .map(v => {
-            // Etsy requires a non-empty property_name for each spec (esp. custom prop_id 513).
+            // Keep a non-empty property_name for each spec (esp. custom prop_id 513).
             const name =
               (typeof v.property_name === "string" && v.property_name.trim()) ||
               (typeof v.property_name_formatted === "string" && v.property_name_formatted.trim()) ||
@@ -128,13 +155,11 @@ exports.handler = async (event) => {
             if (Array.isArray(v.value_ids)) out.value_ids = v.value_ids.filter(Boolean);
             if (Array.isArray(v.values))    out.values    = v.values.filter(Boolean);
 
-            // Minimal safety for custom variations (prop_id 513) if name was missing
             if (!out.property_name && Number(v.property_id) === 513) {
               out.property_name = "Custom";
             }
             return out;
           })
-          // Drop truly empty specs (no id or no values), but only after preserving property_name
           .filter(v =>
             v.property_id &&
             v.property_name &&
@@ -142,19 +167,37 @@ exports.handler = async (event) => {
              (Array.isArray(v.values)    && v.values.length    > 0))
           );
 
-        // Only set a new SKU when provided; otherwise leave Etsy’s SKU intact
-        const sku = (idx === 0 && desiredSku) ? desiredSku : (p.sku || undefined);
-        return { sku, offerings, property_values };
+        // Build product with the correct SKU policy
+        const prod = { offerings, property_values };
+        if (skuMode === "uniform") {
+          prod.sku = uniformSku;
+        } else if (skuMode === "vary") {
+          // keep variant-specific sku as-is if present
+          const keep = (p.sku || "").trim();
+          if (keep) prod.sku = keep;
+          // If missing SKU on some variants while varying, omit; Etsy allows differing/blank when sku_on_property declares variance
+        } else if (skuMode === "none") {
+          // omit sku for everyone (consistent "no sku")
+        } else {
+          // "keep" (should not occur, but safe fallback)
+          const keep = (p.sku || "").trim();
+          if (keep) prod.sku = keep;
+        }
+        return prod;
       });
     } else {
-      // No inventory yet? Create a minimal single-product inventory with your SKU.
-      products = [{
-        sku: desiredSku || undefined,
-        property_values: [],
-        offerings: [{ price: 1.0, quantity: 187, is_enabled: true }]
-      }];
+      // No inventory yet? Create a minimal single-product inventory with your SKU policy
+      const baseOffering = { price: 1.0, quantity: 187, is_enabled: true };
+      const minimal = { property_values: [], offerings: [baseOffering] };
+      if (desiredSku) {
+        minimal.sku = desiredSku;
+      }
+      products = [minimal];
+      // Ensure consistency at top-level
+      if (desiredSku) sku_on_property = [];
     }
 
+    // Build payload with only non-empty *_on_property arrays
     const payload = { products };
     if (Array.isArray(price_on_property) && price_on_property.length) {
       payload.price_on_property = price_on_property;
