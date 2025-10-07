@@ -35,8 +35,13 @@ exports.handler = async (event) => {
 
     let products = [];
     if (invRes.ok) {
-      const inv = await invRes.json();
-      const srcProducts = inv?.products || inv?.results?.products || [];
+		const inv = await invRes.json();
+		const srcProducts = inv?.products || inv?.results?.products || [];
+
+		// NEW: preserve on_property arrays (v3 returns them at top level or under results)
+		const price_on_property    = inv?.price_on_property    ?? inv?.results?.price_on_property    ?? [];
+		const quantity_on_property = inv?.quantity_on_property ?? inv?.results?.quantity_on_property ?? [];
+		const sku_on_property      = inv?.sku_on_property      ?? inv?.results?.sku_on_property      ?? [];
       // 2) sanitize products per Etsy docs (remove IDs, convert Money -> decimal, drop is_deleted, etc.)
       products = srcProducts.map((p, idx) => {
         const toDecimal = (price) => {
@@ -70,12 +75,12 @@ exports.handler = async (event) => {
       }];
     }
 
-    const payload = {
-      products,
-      price_on_property: [],
-      quantity_on_property: [],
-      sku_on_property: []
-    };
+		const payload = {
+		  products,
+		  price_on_property,
+		  quantity_on_property,
+		  sku_on_property
+		};
 
     // 3) PUT updated inventory (this is where the SKU actually gets stored)
     const putRes = await fetch(invUrl, {
