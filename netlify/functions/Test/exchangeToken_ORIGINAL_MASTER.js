@@ -28,7 +28,6 @@ const SHIPPING3_DOMAIN   = "https://shipping-3.goldenspike.app";
 // ─── new weld + design sub-domains ──────────────────────────────────
 const WELD1_DOMAIN       = "https://weld-1.goldenspike.app";
 const DESIGN1_DOMAIN     = "https://design-1.goldenspike.app";
-const SKU_DOMAIN         = "https://sku.goldenspike.app";
 
 /* 🆕 global CORS constants */
 const CORS = {
@@ -82,7 +81,6 @@ function pickDomainFromHost(event) {
     case "shipping-3":   return SHIPPING3_DOMAIN;
     case "goldenspike":  return GOLDENSPIKE_DOMAIN;
     case "design":       return DESIGN_DOMAIN;
-    case "sku":          return SKU_DOMAIN;  
     default:
       break; // fall through to host
   }
@@ -102,7 +100,6 @@ function pickDomainFromHost(event) {
   if (host.includes("design.goldenspike.app"))       return DESIGN_DOMAIN;
   if (host.includes("design-message.goldenspike.app"))       return DESIGNMESSAGE_DOMAIN;
   if (host.includes("design-message-1.goldenspike.app"))       return DESIGNMESSAGE1_DOMAIN;
-  if (host.includes("sku.goldenspike.app"))                    return SKU_DOMAIN;
   if (host.includes("goldenspike.app"))              return GOLDENSPIKE_DOMAIN;
 
   /* ── fallback ────────────────────────────────────────────────────── */
@@ -179,16 +176,8 @@ exports.handler = async function(event) {
       return { statusCode: resp.status, headers: CORS, body: JSON.stringify(data) };
     }
 
-     // include refresh payload so the client can auto-refresh
-     const issuedAt = Math.floor(Date.now() / 1000);
-     const paramsOut = new URLSearchParams({
-       access_token : data.access_token || "",
-       refresh_token: data.refresh_token || "",
-       expires_in   : String(data.expires_in || 3600),
-       issued_at    : String(issuedAt)
-     });
-     const finalUrl = `${finalRedirectUri}?${paramsOut.toString()}`;
-     return { statusCode: 302, headers: { ...CORS, Location: finalUrl }, body: "" };
+    const finalUrl = `${finalRedirectUri}?access_token=${encodeURIComponent(data.access_token)}`;
+    return { statusCode: 302, headers: { ...CORS, Location: finalUrl }, body: "" };
 
   } catch (err) {
     return { statusCode: 500, headers: CORS, body: JSON.stringify({ error: err.message }) };
