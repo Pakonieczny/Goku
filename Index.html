@@ -2030,6 +2030,26 @@ document.getElementById("shopListings").addEventListener("keydown", (e) => {
           throw new Error(`Info update failed ${resp.status} — ${JSON.stringify(result)}`);
         }
         window.infoUpdateComplete = true;
+
+        // NEW: actually set the SKU at the inventory level (where Etsy stores it)
+        try {
+          const invResp = await fetch(`/.netlify/functions/updateListingInventory?listingId=${encodeURIComponent(listingId)}`, {
+            method: "PUT",
+            headers: { "Content-Type": "application/json", Authorization: "Bearer " + window.accessToken },
+            body: JSON.stringify({ sku: generatedSku })
+          });
+          const invJson = await invResp.json();
+          if (!invResp.ok) {
+            console.warn("Inventory SKU update failed:", invJson);
+            M.toast?.({ html: "Heads up: SKU wasn’t saved (see console)" });
+          } else {
+            console.log("Inventory SKU set:", invJson);
+          }
+        } catch (e) {
+          console.error("Inventory SKU update error:", e);
+          M.toast?.({ html: "Heads up: SKU update threw an error (see console)" });
+        }
+
         setCreateProgress(100);
         M.toast({ html: "Create Listing complete: Photos + Info updated." });
 
