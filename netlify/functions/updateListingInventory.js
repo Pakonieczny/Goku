@@ -9,7 +9,7 @@ exports.handler = async (event) => {
       event.headers["access-token"] ||
       event.headers["Access-Token"] ||
       event.headers["authorization"]?.replace(/^Bearer\s+/i, "");
-      const clientId =
+    const clientId =
       event.headers?.["x-api-key"] ||
       event.headers?.["X-Api-Key"] ||
       process.env.CLIENT_ID ||
@@ -34,19 +34,40 @@ exports.handler = async (event) => {
     const invRes = await fetch(invUrl, { method: "GET", headers: commonHeaders });
 
     // Hoist on_property arrays so they exist even if GET fails (avoids ReferenceError)
-	let price_on_property = [];
-	let quantity_on_property = [];
-	let sku_on_property = [];
+    let price_on_property = [];
+    let quantity_on_property = [];
+    let sku_on_property = [];
+    let readiness_state_on_property = [];
 
     let products = [];
-    if (invRes.ok) {
-		const inv = await invRes.json();
-		const srcProducts = inv?.products || inv?.results?.products || [];
+    let globalReadyId;
+    let usesProcessingProfiles = false;
 
-		// Preserve on_property arrays (v3 returns them at top level or under results)
-		price_on_property    = inv?.price_on_property    ?? inv?.results?.price_on_property    ?? [];
-		quantity_on_property = inv?.quantity_on_property ?? inv?.results?.quantity_on_property ?? [];
-		sku_on_property      = inv?.sku_on_property      ?? inv?.results?.sku_on_property      ?? [];
+    if (invRes.ok) {
+      const inv = await invRes.json();
+      const srcProducts = inv?.products || inv?.results?.products || [];
+
+      // Preserve on_property arrays (v3 returns them at top level or under results)
+      price_on_property            = inv?.price_on_property            ?? inv?.results?.price_on_property            ?? [];
+      quantity_on_property         = inv?.quantity_on_property         ?? inv?.results?.quantity_on_property         ?? [];
+      sku_on_property              = inv?.sku_on_property              ?? inv?.results?.sku_on_property              ?? [];
+      readiness_state_on_property  = inv?.readiness_state_on_property  ?? inv?.results?.readiness_state_on_property  ?? [];
+
+      // Detect a global readiness_state_id from any offering
+      (function detectGlobalReadyId() {
+        const prods = inv?.products || inv?.results?.products || [];
+        for (const pr of prods) {
+          for (const o of (pr?.offerings || [])) {
+            const idNum = Number(o?.readiness_state_id);
+            if (Number.isFinite(idNum)) {
+              globalReadyId = idNum;
+              return;
+            }
+          }
+        }
+      })();
+      usesProcessingProfiles = (Array.isArray(readiness_state_on_property) && readiness_state_on_property.length > 0) || (globalReadyId != null);
+
       // 2) sanitize products per Etsy docs (remove IDs, convert Money -> decimal, drop is_deleted, etc.)
       products = srcProducts.map((p, idx) => {
         const toDecimal = (price) => {
@@ -62,11 +83,19 @@ exports.handler = async (event) => {
           .map(o => {
             const raw = toDecimal(o.price);
             const price = Number.isFinite(raw) ? Number(raw.toFixed(2)) : undefined;
-            return {
+            // Preserve readiness_state_id; if missing but listing uses processing profiles, fall back to globalReadyId
+            const rsidRaw = o?.readiness_state_id;
+            const rsidNum = Number(rsidRaw);
+            const readiness_state_id = Number.isFinite(rsidNum)
+              ? rsidNum
+              : (usesProcessingProfiles ? globalReadyId : undefined);
+            const base = {
               price,
               quantity: (o.quantity == null ? 1 : o.quantity),
               is_enabled: o.is_enabled !== false
             };
+            if (readiness_state_id != null) base.readiness_state_id = readiness_state_id;
+            return base;
           })
           .filter(o => Number.isFinite(o.price));
 
@@ -74,7 +103,13 @@ exports.handler = async (event) => {
         if (offerings.length === 0) {
           const fallbackRaw = toDecimal(offeringsSrc[0]?.price);
           const fallbackPrice = Number.isFinite(fallbackRaw) ? Number(fallbackRaw.toFixed(2)) : 1.0;
-          offerings = [{ price: fallbackPrice, quantity: offeringsSrc[0]?.quantity ?? 187, is_enabled: true }];
+          const fallback = {
+            price: fallbackPrice,
+            quantity: offeringsSrc[0]?.quantity ?? 187,
+            is_enabled: true
+          };
+          if (usesProcessingProfiles && globalReadyId != null) fallback.readiness_state_id = globalReadyId;
+          offerings = [fallback];
         }
 
         const property_values = (p.property_values || [])
@@ -87,7 +122,7 @@ exports.handler = async (event) => {
 
             const out = {
               property_id: v.property_id,
-              property_name: name,              // ← keep the name from GET
+              property_name: name
             };
             if (v.scale_id != null) out.scale_id = v.scale_id;
             if (Array.isArray(v.value_ids)) out.value_ids = v.value_ids.filter(Boolean);
@@ -129,6 +164,9 @@ exports.handler = async (event) => {
     }
     if (Array.isArray(sku_on_property) && sku_on_property.length) {
       payload.sku_on_property = sku_on_property;
+    }
+    if (Array.isArray(readiness_state_on_property) && readiness_state_on_property.length) {
+      payload.readiness_state_on_property = readiness_state_on_property;
     }
 
     // 3) PUT updated inventory (this is where the SKU actually gets stored)
