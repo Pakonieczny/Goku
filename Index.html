@@ -230,21 +230,23 @@
     .preview-cell.reserved {
       z-index: 2500;
     }
-    .preview-box {
-      position: relative;
-      width: 100%;
-      height: 100%;
-    }
-    .preview-box img {
-    width: 120px;
-    height: 120px;
-    object-fit: cover;
-    border-radius: 3px;
-    display: block;
-    /* enable smooth zoom/pan like sorting.html */
-    transform-origin: center center;           /* cloned */
-    transition: transform 0.3s ease;           /* cloned */
-    }
+      /* Enforce a 120x120 viewport and clip zoom/pan */
+      .preview-box {
+        position: relative;
+        width: 100%;
+        height: 120px;        /* was 100% of the cell */
+        overflow: hidden;     /* <— critical: clip the image */
+      }
+
+      /* keep the smooth transform you already have */
+      .preview-box img {
+        width: 120px;
+        height: 120px;
+        object-fit: cover;
+        transform-origin: center center;
+        transition: transform 0.3s ease;
+        display: block;
+      }
     .remove-btn {
       position: absolute;
       top: -5px;
@@ -1477,7 +1479,7 @@ P A C K A G I N G
 ------------------------------------
 
 E X P E D I T E D • S H I P P I N G
-You will be able to choose faster shipping options in the drop down menu when you check out. Ship times do NOT include production times (1-3 business days). However, if you select expedited shipping, we will try to get your order done faster.
+You will be able to choose faster shipping options in the drop down menu when you check out. Ship times do NOT include production times (3-6 business days). However, if you select expedited shipping, we will try to get your order done faster.
 
 ------------------------------------
 
@@ -3217,13 +3219,58 @@ document.getElementById("shopListings").addEventListener("keydown", (e) => {
       updateStaticPreviewGrid();
     });
 
-    /* === cloned from sorting.html: attach zoom/pan listeners to a preview box === */
+    function clampAndApply(img, box, scale, offX, offY) {
+      // viewport equals the .preview-box (now 120x120)
+      const viewportW = box.clientWidth;      // 120
+      const viewportH = box.clientHeight;     // 120
+      const baseW = img.clientWidth;          // 120 (pre-scale)
+      const baseH = img.clientHeight;         // 120 (pre-scale)
+      const scaledW = baseW * scale;
+      const scaledH = baseH * scale;
+
+      // max pre-scale translate allowed so the image still covers the viewport
+      const maxX = Math.max(0, (scaledW - viewportW) / 2 / scale);
+      const maxY = Math.max(0, (scaledH - viewportH) / 2 / scale);
+
+      offX = Math.max(-maxX, Math.min(maxX, offX));
+      offY = Math.max(-maxY, Math.min(maxY, offY));
+
+      img.dataset.scale = scale;
+      img.dataset.offsetX = offX;
+      img.dataset.offsetY = offY;
+      img.style.transform = `translate(${offX}px, ${offY}px) scale(${scale})`;
+    }
+
+    /* === cloned from sorting.html: attach zoom/pan listeners to a preview box (clamped) === */
     function attachPreviewBoxListeners(box) {
+      // Clamp offsets so the image never bleeds outside the .preview-box viewport
+      function clampAndApply(img, scale, offX, offY) {
+        const viewportW = box.clientWidth || 120;
+        const viewportH = box.clientHeight || 120;
+        const baseW = img.clientWidth || 120;   // CSS sets 120x120
+        const baseH = img.clientHeight || 120;
+        const scaledW = baseW * scale;
+        const scaledH = baseH * scale;
+
+        // allowable pre-scale translation so the scaled image still covers viewport
+        const maxX = Math.max(0, (scaledW - viewportW) / 2 / scale);
+        const maxY = Math.max(0, (scaledH - viewportH) / 2 / scale);
+
+        offX = Math.max(-maxX, Math.min(maxX, offX));
+        offY = Math.max(-maxY, Math.min(maxY, offY));
+
+        img.dataset.scale = scale;
+        img.dataset.offsetX = offX;
+        img.dataset.offsetY = offY;
+        img.style.transform = `translate(${offX}px, ${offY}px) scale(${scale})`;
+      }
+
       let isDragging = false;
       let isMouseDown = false;
       let dragStartX = 0, dragStartY = 0;
       let lastX = 0, lastY = 0;
       const dragThreshold = 3;
+      const MAX_SCALE = 8;
 
       box.addEventListener("wheel", function (ev) {
         const img = box.querySelector("img");
@@ -3232,6 +3279,7 @@ document.getElementById("shopListings").addEventListener("keydown", (e) => {
         let currentScale = parseFloat(img.dataset.scale) || 1;
         let offX = parseFloat(img.dataset.offsetX) || 0;
         let offY = parseFloat(img.dataset.offsetY) || 0;
+
         if (ev.deltaY < 0) {
           currentScale *= 1.1;            // zoom in
         } else {
@@ -3241,11 +3289,8 @@ document.getElementById("shopListings").addEventListener("keydown", (e) => {
             offX = 0; offY = 0;
           }
         }
-        if (currentScale > 8) currentScale = 8;
-        img.dataset.scale = currentScale;
-        img.dataset.offsetX = offX;
-        img.dataset.offsetY = offY;
-        img.style.transform = `translate(${offX}px, ${offY}px) scale(${currentScale})`;
+        if (currentScale > MAX_SCALE) currentScale = MAX_SCALE;
+        clampAndApply(img, currentScale, offX, offY);
       });
 
       box.addEventListener("mousedown", function (ev) {
@@ -3275,9 +3320,7 @@ document.getElementById("shopListings").addEventListener("keydown", (e) => {
         const dx = ev.clientX - lastX;
         const dy = ev.clientY - lastY;
         offX += dx; offY += dy;
-        img.dataset.offsetX = offX;
-        img.dataset.offsetY = offY;
-        img.style.transform = `translate(${offX}px, ${offY}px) scale(${scaleNow})`;
+        clampAndApply(img, scaleNow, offX, offY);
         lastX = ev.clientX; lastY = ev.clientY;
       });
 
@@ -3295,13 +3338,9 @@ document.getElementById("shopListings").addEventListener("keydown", (e) => {
         const dx = ev.clientX - boxCenterX;
         const dy = ev.clientY - boxCenterY;
         const scale = 5;
-        const fudgeY = 10;
         const offsetX = -scale * dx;
-        const offsetY = -scale * dy + fudgeY;
-        img.dataset.scale = scale;
-        img.dataset.offsetX = offsetX;
-        img.dataset.offsetY = offsetY;
-        img.style.transform = `translate(${offsetX}px, ${offsetY}px) scale(${scale})`;
+        const offsetY = -scale * dy;
+        clampAndApply(img, scale, offsetX, offsetY);
       });
     }
 
