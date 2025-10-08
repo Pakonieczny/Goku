@@ -3441,8 +3441,36 @@ document.getElementById("shopListings").addEventListener("keydown", (e) => {
             let previewBox = document.createElement("div");
             previewBox.className = "preview-box";
             previewBox.setAttribute("data-id", window.photoIds[i] || "");
-            previewBox.setAttribute("draggable", "true");
-            previewBox.addEventListener("dragstart", e => { window.draggedIndex = i; });
+            // Right-button-only drag: disable default drag, re-enable on right mousedown
+            previewBox.setAttribute("draggable", "false");
+
+            let _rightDrag = false;
+            previewBox.addEventListener("contextmenu", e => e.preventDefault()); // no OS menu during right-drag
+
+            previewBox.addEventListener("mousedown", e => {
+              if (e.button === 2) {            // right mouse
+                _rightDrag = true;
+                previewBox.setAttribute("draggable", "true");
+                // (optional) set immediately so a very short drag still has the index
+                window.draggedIndex = i;
+              } else {
+                _rightDrag = false;            // left/middle should not start HTML5 drag
+                previewBox.setAttribute("draggable", "false");
+              }
+            });
+
+            previewBox.addEventListener("dragstart", e => {
+              if (!_rightDrag) {               // guard: block accidental left-drags
+                e.preventDefault();
+                return;
+              }
+              window.draggedIndex = i;         // ensure index is correct at drag time
+            });
+
+            previewBox.addEventListener("dragend", () => {
+              _rightDrag = false;              // reset after drop/cancel
+              previewBox.setAttribute("draggable", "false");
+            });
             let img = document.createElement("img");
             img.src = window.previewImages[i];
             previewBox.appendChild(img);
@@ -3509,8 +3537,36 @@ document.getElementById("shopListings").addEventListener("keydown", (e) => {
             let previewBox = document.createElement("div");
             previewBox.className = "preview-box";
             previewBox.setAttribute("data-id", window.reservedPhotos[rIndex].id || "");
-            previewBox.setAttribute("draggable", "true");
-            previewBox.addEventListener("dragstart", e => { window.draggedIndex = i; });
+            // Right-button-only drag: disable default drag, re-enable on right mousedown
+            previewBox.setAttribute("draggable", "false");
+
+            let _rightDrag = false;
+            previewBox.addEventListener("contextmenu", e => e.preventDefault()); // no OS menu during right-drag
+
+            previewBox.addEventListener("mousedown", e => {
+              if (e.button === 2) {            // right mouse
+                _rightDrag = true;
+                previewBox.setAttribute("draggable", "true");
+                // (optional) set immediately so a very short drag still has the index
+                window.draggedIndex = i;
+              } else {
+                _rightDrag = false;            // left/middle should not start HTML5 drag
+                previewBox.setAttribute("draggable", "false");
+              }
+            });
+
+            previewBox.addEventListener("dragstart", e => {
+              if (!_rightDrag) {               // guard: block accidental left-drags
+                e.preventDefault();
+                return;
+              }
+              window.draggedIndex = i;         // ensure index is correct at drag time
+            });
+
+            previewBox.addEventListener("dragend", () => {
+              _rightDrag = false;              // reset after drop/cancel
+              previewBox.setAttribute("draggable", "false");
+            });
             let img = document.createElement("img");
             img.src = window.reservedPhotos[rIndex].src;
             previewBox.appendChild(img);
