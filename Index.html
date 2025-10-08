@@ -3292,6 +3292,7 @@ document.getElementById("shopListings").addEventListener("keydown", (e) => {
       localStorage.setItem("reservedPhotos", JSON.stringify(window.reservedPhotos));
     }
 
+    // Preserve aspect ratio (COVER) into a square canvas — no stretching.
     async function resizeImage(dataURL, width, height) {
       return new Promise((resolve, reject) => {
         const img = new Image();
@@ -3299,8 +3300,24 @@ document.getElementById("shopListings").addEventListener("keydown", (e) => {
           const canvas = document.createElement("canvas");
           canvas.width = width;
           canvas.height = height;
-          const ctx = canvas.getContext("2d");
-          ctx.drawImage(img, 0, 0, width, height);
+          const ctx = canvas.getContext("2d", { alpha: false });
+          ctx.imageSmoothingEnabled = true;
+          ctx.imageSmoothingQuality = "high";
+
+          const iw = img.naturalWidth || img.width;
+          const ih = img.naturalHeight || img.height;
+
+          // Scale so the *larger side* of the image fits the square (cover),
+          // then center and crop overflow.
+          const scale = Math.max(width / iw, height / ih);
+          const dw = iw * scale;
+          const dh = ih * scale;
+          const dx = (width  - dw) / 2;
+          const dy = (height - dh) / 2;
+
+          ctx.clearRect(0, 0, width, height);
+          ctx.drawImage(img, 0, 0, iw, ih, dx, dy, dw, dh);
+
           resolve(canvas.toDataURL("image/jpeg", 0.85));
         };
         img.onerror = reject;
