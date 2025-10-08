@@ -233,49 +233,54 @@
       /* Enforce a 120x120 viewport and clip zoom/pan */
       .preview-box {
         position: relative;
+        --btn-size: clamp(18px, 12%, 32px);
         width: 100%;
-        height: 120px;        /* was 100% of the cell */
-        overflow: hidden;     /* <— critical: clip the image */
+        height: auto;
+        flex: 1 1 auto;
+        overflow: hidden;     /* ← critical: clip the image */
       }
 
       /* keep the smooth transform you already have */
       .preview-box img {
-        width: 120px;
-        height: 120px;
+        width: 100px;
+        height: 100px;
         object-fit: cover;
         transform-origin: center center;
         transition: transform 0.3s ease;
         display: block;
       }
-    .remove-btn {
-      position: absolute;
-      top: -5px;
-      left: -5px;
-      width: 15px;
-      height: 15px;
-      background-color: black;
-      color: white;
-      font-size: 10px;
-      text-align: center;
-      cursor: pointer;
-      z-index: 999;
-      border-radius: 50%;
-    }
-    .number-overlay {
-      position: absolute;
-      top: 0;
-      right: 0;
-      width: 16px;
-      height: 16px;
-      background-color: rgba(0,0,0,0.7);
-      color: white;
-      display: flex;
-      align-items: center;
-      justify-content: center;
-      font-size: 10px;
-      z-index: 999;
-      border-radius: 3px;
-    }
+      .remove-btn {
+        position: absolute;
+        top: 6px;
+        left: 6px;
+        width: var(--btn-size);
+        height: var(--btn-size);
+        background-color: black;
+        color: white;
+        font-size: calc(var(--btn-size) * 0.5);
+        text-align: center;
+        cursor: pointer;
+        z-index: 999;
+        border-radius: 50%;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+      }
+      .number-overlay {
+        position: absolute;
+        top: 6px;
+        right: 6px;
+        width: var(--btn-size);
+        height: var(--btn-size);
+        background-color: rgba(0,0,0,0.7);
+        color: white;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        font-size: calc(var(--btn-size) * 0.5);
+        z-index: 999;
+        border-radius: 3px;
+      }
     .metadata-status {
       margin-top: 5px;
       text-align: center;
@@ -463,6 +468,25 @@
 
      /* TEMP: hide the Create Listing completion checkmark */
      #createListingCheck { display: none !important; }
+
+    /* Scales with preview-box using --btn-size */
+    .crop-btn {
+      position: absolute;
+      right: 6px;
+      bottom: 6px;
+      width: var(--btn-size);
+      height: var(--btn-size);
+      border-radius: 50%;
+      background-color: green;
+      color: white;
+      font-size: calc(var(--btn-size) * 0.45);
+      line-height: 1;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      border: none;
+      cursor: pointer;
+    }
 
   </style>
 </head>
@@ -1072,16 +1096,16 @@ ANTI-REPETITION (TITLE)
       dropZone:                { left: 1340, top: 150, width: 155, height: 350 },
 
       // Preview cells
-      previewCell0:            { left: 600,  top: 150, width: 120, height: 158 },
-      previewCell1:            { left: 750,  top: 150, width: 120, height: 158 },
-      previewCell2:            { left: 900,  top: 150, width: 120, height: 158 },
-      previewCell3:            { left: 1050, top: 150, width: 120, height: 158 },
-      previewCell4:            { left: 1200, top: 150, width: 120, height: 158 },
-      previewCell5:            { left: 600,  top: 340, width: 120, height: 158 },
-      previewCell6:            { left: 750,  top: 340, width: 120, height: 158 },
-      previewCell7:            { left: 900,  top: 340, width: 120, height: 158 },
-      previewCell8:            { left: 1050, top: 340, width: 120, height: 158 },
-      previewCell9:            { left: 1200, top: 340, width: 120, height: 158 },
+      previewCell0:            { left: 600,  top: 150, width: 135, height: 173 },
+      previewCell1:            { left: 750,  top: 150, width: 135, height: 173 },
+      previewCell2:            { left: 900,  top: 150, width: 135, height: 173 },
+      previewCell3:            { left: 1050, top: 150, width: 135, height: 173 },
+      previewCell4:            { left: 1200, top: 150, width: 135, height: 173 },
+      previewCell5:            { left: 600,  top: 340, width: 135, height: 173 },
+      previewCell6:            { left: 750,  top: 340, width: 135, height: 173 },
+      previewCell7:            { left: 900,  top: 340, width: 135, height: 173 },
+      previewCell8:            { left: 1050, top: 340, width: 135, height: 173 },
+      previewCell9:            { left: 1200, top: 340, width: 135, height: 173 },
 
       // Auto-assigned heading IDs (current session)
       etsyShopListingsHeading:   { left: 10,   top: 75,  width: 180, height: 27 },
@@ -3271,6 +3295,18 @@ document.getElementById("shopListings").addEventListener("keydown", (e) => {
       let lastX = 0, lastY = 0;
       const dragThreshold = 3;
       const MAX_SCALE = 8;
+       // Re-clamp the current image when the preview box resizes
+        if (typeof ResizeObserver !== "undefined") {
+          const ro = new ResizeObserver(() => {
+            const img = box.querySelector("img");
+            if (!img) return;
+            const s = parseFloat(img.dataset.scale) || 1;
+            let offX = parseFloat(img.dataset.offsetX) || 0;
+            let offY = parseFloat(img.dataset.offsetY) || 2; // keep slight downward bias
+            clampAndApply(img, s, offX, offY);
+          });
+          ro.observe(box);
+        }
 
       box.addEventListener("wheel", function (ev) {
         const img = box.querySelector("img");
@@ -3317,8 +3353,8 @@ document.getElementById("shopListings").addEventListener("keydown", (e) => {
         const scaleNow = parseFloat(img.dataset.scale) || 1;
         let offX = parseFloat(img.dataset.offsetX) || 0;
         let offY = parseFloat(img.dataset.offsetY) || 0;
-        const dx = ev.clientX - lastX;
-        const dy = ev.clientY - lastY;
+        const dx = (ev.clientX - lastX) * 0.5;
+        const dy = (ev.clientY - lastY) * 0.5;
         offX += dx; offY += dy;
         clampAndApply(img, scaleNow, offX, offY);
         lastX = ev.clientX; lastY = ev.clientY;
@@ -3364,7 +3400,7 @@ document.getElementById("shopListings").addEventListener("keydown", (e) => {
         const needX = requiredScaleFor(targetOffX, halfW);
         const needY = requiredScaleFor(targetOffY, halfH);
 
-        const DESIRED = 5;                          // your preferred zoom jump
+        const DESIRED = 3.5;                          // your preferred zoom jump
         let s1 = Math.max(DESIRED, s0 * 1.5, needX, needY);
         if (!Number.isFinite(s1)) s1 = MAX_SCALE;   // defined above in this function
         if (s1 > MAX_SCALE) s1 = MAX_SCALE;
@@ -3415,14 +3451,7 @@ document.getElementById("shopListings").addEventListener("keydown", (e) => {
             previewBox.appendChild(numOverlay);
             let cropBtn = document.createElement("button");
             cropBtn.textContent = "Crop";
-            cropBtn.style.position = "absolute";
-            cropBtn.style.bottom = "2px";
-            cropBtn.style.right = "2px";
-            cropBtn.style.width = "20px";
-            cropBtn.style.height = "20px";
-            cropBtn.style.borderRadius = "50%";
-            cropBtn.style.backgroundColor = "green";
-            cropBtn.style.color = "white";
+            cropBtn.className = "crop-btn";
             cropBtn.style.fontSize = "10px";
             cropBtn.addEventListener("click", ev => {
               ev.stopPropagation();
