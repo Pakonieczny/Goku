@@ -3491,7 +3491,7 @@ document.getElementById("shopListings").addEventListener("keydown", (e) => {
 
         // Offsets that place the clicked point exactly at the center
         let targetOffX = -px + 0.70;
-        let targetOffY = -py + 3;
+        let targetOffY = -py + 5;
 
         // Minimum scale needed so that centering is valid (no blank edges)
         const halfW = (img.clientWidth  || 120) / 2;
@@ -3504,7 +3504,7 @@ document.getElementById("shopListings").addEventListener("keydown", (e) => {
         const needX = requiredScaleFor(targetOffX, halfW);
         const needY = requiredScaleFor(targetOffY, halfH);
 
-        const DESIRED = 2.;                          // your preferred zoom jump
+        const DESIRED = 2.15.;                          // your preferred zoom jump
         let s1 = Math.max(DESIRED, s0 * 1.5, needX, needY);
         if (!Number.isFinite(s1)) s1 = MAX_SCALE;   // defined above in this function
         if (s1 > MAX_SCALE) s1 = MAX_SCALE;
