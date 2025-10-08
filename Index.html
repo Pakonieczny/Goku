@@ -3351,7 +3351,7 @@ document.getElementById("shopListings").addEventListener("keydown", (e) => {
 
         // Offsets that place the clicked point exactly at the center
         let targetOffX = -px;
-        let targetOffY = -py;
+        let targetOffY = -py + 2;
 
         // Minimum scale needed so that centering is valid (no blank edges)
         const halfW = (img.clientWidth  || 120) / 2;
