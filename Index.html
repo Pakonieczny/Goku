@@ -3441,16 +3441,8 @@ document.getElementById("shopListings").addEventListener("keydown", (e) => {
             let previewBox = document.createElement("div");
             previewBox.className = "preview-box";
             previewBox.setAttribute("data-id", window.photoIds[i] || "");
-            // Use RMB to drag between cells; disable native left-drag
-            previewBox.setAttribute("draggable", "false");
-            previewBox.addEventListener("contextmenu", e => e.preventDefault());
-            previewBox.addEventListener("mousedown", e => {
-              if (e.button === 2) {
-                e.preventDefault();
-                e.stopPropagation();
-                startRmbCellDrag(i, previewBox, e);
-              }
-            });
+            previewBox.setAttribute("draggable", "true");
+            previewBox.addEventListener("dragstart", e => { window.draggedIndex = i; });
             let img = document.createElement("img");
             img.src = window.previewImages[i];
             previewBox.appendChild(img);
@@ -3517,16 +3509,8 @@ document.getElementById("shopListings").addEventListener("keydown", (e) => {
             let previewBox = document.createElement("div");
             previewBox.className = "preview-box";
             previewBox.setAttribute("data-id", window.reservedPhotos[rIndex].id || "");
-            // RMB-only drag here too; keep file-drop behavior in the cell's drop handler
-            previewBox.setAttribute("draggable", "false");
-            previewBox.addEventListener("contextmenu", e => e.preventDefault());
-            previewBox.addEventListener("mousedown", e => {
-              if (e.button === 2) {
-                e.preventDefault();
-                e.stopPropagation();
-                startRmbCellDrag(i, previewBox, e);
-              }
-            });
+            previewBox.setAttribute("draggable", "true");
+            previewBox.addEventListener("dragstart", e => { window.draggedIndex = i; });
             let img = document.createElement("img");
             img.src = window.reservedPhotos[rIndex].src;
             previewBox.appendChild(img);
@@ -3566,125 +3550,6 @@ document.getElementById("shopListings").addEventListener("keydown", (e) => {
         }
       }
     }
-
-    // === Right-mouse drag for preview cells ==========================
-    (function () {
-      // ephemeral drag state
-      window.__rmbDrag = { active:false, fromIndex:null, ghost:null, lastHover:null, stopCtx:null };
-
-      function cellIndexFromPoint(x, y) {
-        const el = document.elementFromPoint(x, y);
-        const cell = el && el.closest && el.closest('.preview-cell');
-        if (!cell) return -1;
-        const m = /^previewCell(\d+)$/.exec(cell.id || "");
-        return m ? parseInt(m[1], 10) : -1;
-      }
-
-      function cleanup() {
-        const d = window.__rmbDrag;
-        if (d.lastHover) d.lastHover.classList.remove('drag-over');
-        if (d.ghost && d.ghost.parentNode) d.ghost.parentNode.removeChild(d.ghost);
-        if (d.stopCtx) document.removeEventListener('contextmenu', d.stopCtx, true);
-        d.active = false; d.fromIndex = null; d.ghost = null; d.lastHover = null; d.stopCtx = null;
-        window.draggedIndex = null;
-      }
-
-      function moveGhostTo(g, x, y) {
-        // center the ghost on the cursor
-        const w = g._w || g.getBoundingClientRect().width;
-        const h = g._h || g.getBoundingClientRect().height;
-        g.style.transform = `translate(${x - w/2}px, ${y - h/2}px)`;
-      }
-
-      // Perform the same moves your HTML5 drop handlers do
-      function performCellMove(fromIndex, toIndex) {
-        if (toIndex < 0 || toIndex > 9 || fromIndex === null || fromIndex === toIndex) return;
-
-        if (toIndex < 7) {
-          // main-grid target
-          if (fromIndex < 7) {
-            if (window.previewImages[fromIndex]) {
-              const [movedImage] = window.previewImages.splice(fromIndex, 1);
-              window.previewImages.splice(toIndex, 0, movedImage);
-              const [movedName] = window.photoNames.splice(fromIndex, 1);
-              window.photoNames.splice(toIndex, 0, movedName);
-              const [movedMeta] = window.photoMeta.splice(fromIndex, 1);
-              window.photoMeta.splice(toIndex, 0, movedMeta);
-              const [movedId] = window.photoIds.splice(fromIndex, 1);
-              window.photoIds.splice(toIndex, 0, movedId);
-            }
-            updateStaticPreviewGrid();
-          } else {
-            // reserved -> main (no-op to keep behavior identical to existing drop logic)
-            // (existing main-cell drop only reorders when draggedIndex<7)  [oai_citation:1‡Index.html](file-service://file-UGWqDU1AKXSpZWFZwdRyXE)
-          }
-        } else {
-          // reserved target
-          const rIndex = toIndex - 7;
-          if (fromIndex < 7) {
-            const [movedImage] = window.previewImages.splice(fromIndex, 1);
-            const [movedName]  = window.photoNames.splice(fromIndex, 1);
-            const [movedMeta]  = window.photoMeta.splice(fromIndex, 1);
-            const [movedId]    = window.photoIds.splice(fromIndex, 1);
-            const newReserved = { src: movedImage, name: movedName, meta: movedMeta || "", id: movedId };
-            window.reservedPhotos[rIndex] = newReserved; // mirrors existing drop  [oai_citation:2‡Index.html](file-service://file-UGWqDU1AKXSpZWFZwdRyXE)
-            saveReservedPhotos();
-            updateStaticPreviewGrid();
-          } else {
-            const oldRIndex = fromIndex - 7;
-            const [moved] = window.reservedPhotos.splice(oldRIndex, 1);
-            window.reservedPhotos[rIndex] = moved;       // mirrors existing drop  [oai_citation:3‡Index.html](file-service://file-UGWqDU1AKXSpZWFZwdRyXE)
-            saveReservedPhotos();
-            updateStaticPreviewGrid();
-          }
-        }
-      }
-
-      // Public: kick off a RMB drag from a given preview cell
-      window.startRmbCellDrag = function (fromIndex, sourceEl, startEvent) {
-        const d = window.__rmbDrag;
-        d.active = true;
-        d.fromIndex = fromIndex;
-        window.draggedIndex = fromIndex;
-
-        // kill context menu during RMB drag
-        d.stopCtx = (e) => e.preventDefault();
-        document.addEventListener('contextmenu', d.stopCtx, true);
-
-        // build a light "ghost"
-        const rect = sourceEl.getBoundingClientRect();
-        const ghost = sourceEl.cloneNode(true);
-        ghost.style.position = 'fixed';
-        ghost.style.pointerEvents = 'none';
-        ghost.style.opacity = '0.8';
-        ghost.style.width = rect.width + 'px';
-        ghost.style.height = rect.height + 'px';
-        ghost.style.zIndex = '10000';
-        ghost._w = rect.width; ghost._h = rect.height;
-        document.body.appendChild(ghost);
-        d.ghost = ghost;
-        moveGhostTo(ghost, startEvent.clientX, startEvent.clientY);
-
-        function onMove(ev) {
-          moveGhostTo(ghost, ev.clientX, ev.clientY);
-          const idx = cellIndexFromPoint(ev.clientX, ev.clientY);
-          const cell = (idx >= 0) ? document.getElementById('previewCell' + idx) : null;
-          if (d.lastHover && d.lastHover !== cell) d.lastHover.classList.remove('drag-over');
-          if (cell) { cell.classList.add('drag-over'); d.lastHover = cell; }
-        }
-
-        function onUp(ev) {
-          document.removeEventListener('mousemove', onMove);
-          document.removeEventListener('mouseup', onUp);
-          const idx = cellIndexFromPoint(ev.clientX, ev.clientY);
-          if (ev.button === 2 && idx >= 0) performCellMove(d.fromIndex, idx);
-          cleanup();
-        }
-
-        document.addEventListener('mousemove', onMove);
-        document.addEventListener('mouseup', onUp);
-      };
-    })();
 
     function initializeCellDragAndDrop() {
       for (let i = 0; i < 10; i++) {
