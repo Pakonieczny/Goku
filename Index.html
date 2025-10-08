@@ -1577,6 +1577,53 @@ https://www.etsy.com/your/shops/me/listing-editor/edit/1822973998
       }
       localStorage.setItem(`${baseKey}_n`, String(n));
     }
+
+    // ---- IndexedDB blob store (for big images; avoids LS quota) ----
+    const DB_NAME = "etsyUploadDB";
+    const DB_VERSION = 1;
+    let __etsyDB;
+    function idbOpen() {
+      if (__etsyDB) return Promise.resolve(__etsyDB);
+      return new Promise((resolve, reject) => {
+        const req = indexedDB.open(DB_NAME, DB_VERSION);
+        req.onupgradeneeded = () => {
+          const db = req.result;
+          if (!db.objectStoreNames.contains("blobs")) {
+            db.createObjectStore("blobs", { keyPath: "key" });
+          }
+        };
+        req.onsuccess = () => { __etsyDB = req.result; resolve(__etsyDB); };
+        req.onerror = () => reject(req.error);
+      });
+    }
+    async function idbPut(key, dataURL) {
+      const db = await idbOpen();
+      const blob = await (await fetch(dataURL)).blob();
+      await new Promise((resolve, reject) => {
+        const tx = db.transaction("blobs", "readwrite");
+        tx.objectStore("blobs").put({ key, blob });
+        tx.oncomplete = resolve; tx.onerror = () => reject(tx.error);
+      });
+      return key;
+    }
+    async function idbGetBlob(key) {
+      const db = await idbOpen();
+      return await new Promise((resolve, reject) => {
+        const tx = db.transaction("blobs", "readonly");
+        const req = tx.objectStore("blobs").get(key);
+        req.onsuccess = () => resolve(req.result && req.result.blob);
+        req.onerror = () => reject(req.error);
+      });
+    }
+    async function idbDel(key) {
+      const db = await idbOpen();
+      await new Promise((resolve, reject) => {
+        const tx = db.transaction("blobs", "readwrite");
+        tx.objectStore("blobs").delete(key);
+        tx.oncomplete = resolve; tx.onerror = () => reject(tx.error);
+      });
+    }
+
     function lsLoadLarge(baseKey) {
       const n = Number(localStorage.getItem(`${baseKey}_n`) || 0);
       let out = "";
@@ -1620,8 +1667,8 @@ https://www.etsy.com/your/shops/me/listing-editor/edit/1822973998
       return tags.slice(0, 13);
     }
 
-    // ---- Snapshot the current UI to a durable Job in LS ----
-    function queueListingUploadFromUI(listingId) {
+    // ---- Snapshot the current UI to a durable Job (LS manifest + IDB blobs) ----
+    async function queueListingUploadFromUI(listingId) {
       const jobId = `etsyJob_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`;
       const title = (document.getElementById("listingTitle")?.value || "").trim();
       const userDescription = document.getElementById("listingDescription")?.value || "";
@@ -1634,22 +1681,22 @@ https://www.etsy.com/your/shops/me/listing-editor/edit/1822973998
       const photos = Array.from(window.previewImages || []);
       const photoNames = Array.from(window.photoNames || []).map((n, i) => n || `uploaded_photo_${i}.jpg`);
       const photoMeta = Array.from(window.photoMeta || []).map(s => (s || "").slice(0, 250));
-      const photoKeyBases = photos.map((dataURL, i) => {
+      const photoKeyBases = await Promise.all(photos.map(async (dataURL, i) => {
         const key = `${jobId}_p${i}`;
-        try { lsSaveLarge(key, dataURL); } catch (e) { console.warn("Photo LS save failed", i, e); }
+        try { await idbPut(key, dataURL); } catch (e) { console.warn("Photo IDB save failed", i, e); }
         return key;
-      });
+      }));
 
       // Reserved (7–9) from reservedPhotos [{src,name,meta}]
       const reserved = Array.from(window.reservedPhotos || []);
       const reservedSrc = reserved.map(x => x?.src).filter(Boolean);
       const reservedNames = reserved.map((x, i) => x?.name || `reserved_photo_${i}.jpg`);
       const reservedMeta = reserved.map(x => (x?.meta || "").slice(0, 250));
-      const reservedKeyBases = reservedSrc.map((dataURL, i) => {
+      const reservedKeyBases = await Promise.all(reservedSrc.map(async (dataURL, i) => {
         const key = `${jobId}_rp${i}`;
-        try { lsSaveLarge(key, dataURL); } catch (e) { console.warn("Reserved LS save failed", i, e); }
+        try { await idbPut(key, dataURL); } catch (e) { console.warn("Reserved IDB save failed", i, e); }
         return key;
-      });
+      }));
 
       const job = {
         jobId,
@@ -1670,7 +1717,8 @@ https://www.etsy.com/your/shops/me/listing-editor/edit/1822973998
         reservedCount: reservedKeyBases.length,
         reservedKeyBases,
         reservedNames,
-        reservedMeta
+        reservedMeta,
+        storage: { photos: "idb", reserved: "idb" } // NEW: where the bytes live
       };
       localStorage.setItem(`etsyJob:${jobId}`, JSON.stringify(job));
       const queue = JSON.parse(localStorage.getItem("etsyUploadJobs") || "[]");
@@ -1694,9 +1742,10 @@ https://www.etsy.com/your/shops/me/listing-editor/edit/1822973998
       try {
         // --- Stage 1: Upload Photos (main 0–6)
         for (let i = 0; i < job.photoCount; i++) {
-          const dataURL = lsLoadLarge(job.photoKeyBases[i]);
-          if (!dataURL) continue;
-          const blob = await (await fetch(dataURL)).blob();
+        const blob = job.storage?.photos === "idb"
+          ? (await idbGetBlob(job.photoKeyBases[i]))
+          : await (async () => { const du = lsLoadLarge(job.photoKeyBases[i]); return du ? (await fetch(du)).blob() : null; })();
+        if (!blob) continue;
           const fd = new FormData();
           fd.append("listingId", listingId);
           fd.append("token", token);
@@ -1714,9 +1763,10 @@ https://www.etsy.com/your/shops/me/listing-editor/edit/1822973998
         }
         // --- Stage 1b: Reserved (7–9)
         for (let i = 0; i < job.reservedCount; i++) {
-          const dataURL = lsLoadLarge(job.reservedKeyBases[i]);
-          if (!dataURL) continue;
-          const blob = await (await fetch(dataURL)).blob();
+          const blob = job.storage?.reserved === "idb"
+            ? (await idbGetBlob(job.reservedKeyBases[i]))
+            : await (async () => { const du = lsLoadLarge(job.reservedKeyBases[i]); return du ? (await fetch(du)).blob() : null; })();
+          if (!blob) continue;
           const fd = new FormData();
           fd.append("listingId", listingId);
           fd.append("token", token);
@@ -1758,8 +1808,12 @@ https://www.etsy.com/your/shops/me/listing-editor/edit/1822973998
 
         if (typeof setCreateProgress === "function") setCreateProgress(100);
         save({ status: "DONE", progress: 100, completedAt: nowIso() });
-        // Clean up big chunks
-        [...job.photoKeyBases, ...job.reservedKeyBases].forEach(k => lsClearLarge(k));
+        // Clean up persisted image bytes
+        if (job.storage?.photos === "idb" || job.storage?.reserved === "idb") {
+          for (const k of [...job.photoKeyBases, ...job.reservedKeyBases]) { try { await idbDel(k); } catch {} }
+        } else {
+          [...job.photoKeyBases, ...job.reservedKeyBases].forEach(k => lsClearLarge(k));
+        }
 
         // Remove from queue
         const q = JSON.parse(localStorage.getItem("etsyUploadJobs") || "[]");
