@@ -2258,8 +2258,9 @@ document.getElementById("shopListings").addEventListener("keydown", (e) => {
 
         // 2) Snapshot EVERYTHING immediately to localStorage (so Clear won’t affect it)
         //    (Requires PATCH 1 functions: queueListingUploadFromUI, processEtsyJobs)
-        const jobId = queueListingUploadFromUI(listingId);
-
+        const jobId = await queueListingUploadFromUI(listingId);
+         const short = String(jobId).slice(-6);
+         window.M?.toast?.({ html: `Queued Etsy push (${short}). You can start your next listing.` });
         // 3) Kick the background processor; show progress but DO NOT block UI
         if (typeof showCreateProgress === "function") showCreateProgress(true);
         if (typeof resetCreateProgress === "function") resetCreateProgress();
