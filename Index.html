@@ -1555,247 +1555,6 @@ https://www.etsy.com/your/shops/me/listing-editor/edit/1822973998
       return `${cleaned}_${rand}`;
     }
 
-    // ============================
-    // LS-backed Etsy Upload Queue
-    // ============================
-    // Rationale:
-    // 1) On click, we SNAPSHOT all UI data + images into localStorage (chunked).
-    // 2) A tiny "daemon" processes queued jobs using the snapshot, not the UI.
-    //    So clearing the UI does NOT interrupt the Etsy push.
-    //
-    // Key LS keys:
-    //   etsyUploadJobs                -> ["etsyJob_<id>", ...]
-    //   etsyJob:<jobId>               -> JSON meta for a single job
-    //   <jobId>_p0_c0 / <jobId>_p0_n  -> chunked photo dataURL storage (see helpers)
-    //
-    // ---- Chunked LS helpers (store large data URLs safely) ----
-    const LS_CHUNK_SIZE = 480 * 1024; // ~480KB per chunk
-    function lsSaveLarge(baseKey, str) {
-      const n = Math.ceil((str || "").length / LS_CHUNK_SIZE) || 0;
-      for (let i = 0; i < n; i++) {
-        localStorage.setItem(`${baseKey}_c${i}`, str.slice(i * LS_CHUNK_SIZE, (i + 1) * LS_CHUNK_SIZE));
-      }
-      localStorage.setItem(`${baseKey}_n`, String(n));
-    }
-    function lsLoadLarge(baseKey) {
-      const n = Number(localStorage.getItem(`${baseKey}_n`) || 0);
-      let out = "";
-      for (let i = 0; i < n; i++) out += localStorage.getItem(`${baseKey}_c${i}`) || "";
-      return out;
-    }
-    function lsClearLarge(baseKey) {
-      const n = Number(localStorage.getItem(`${baseKey}_n`) || 0);
-      for (let i = 0; i < n; i++) localStorage.removeItem(`${baseKey}_c${i}`);
-      localStorage.removeItem(`${baseKey}_n`);
-    }
-    function nowIso() { return new Date().toISOString(); }
-
-    // ---- Tag builder (same logic as your Create flow) ----
-    function buildEtsyTagsFromOverlay(rawText) {
-      const raw = String(rawText || "");
-      const tags = [];
-      const seen = new Set();
-      const pushTag = (s) => {
-        let tag = (s || "")
-          .normalize("NFKD")
-          .replace(/[^\p{Letter}\p{Number}\s]/gu, " ")
-          .replace(/\s+/g, " ")
-          .trim();
-        if (!tag) return;
-        if (tag.length > 20) {
-          const cut = tag.slice(0, 20);
-          const sp = cut.lastIndexOf(" ");
-          tag = (sp > 7 ? cut.slice(0, sp) : cut).trim();
-        }
-        const key = tag.toLowerCase();
-        if (!seen.has(key)) { seen.add(key); tags.push(tag); }
-      };
-      raw.split("\n").forEach(line => {
-        let foundAny = false;
-        for (const m of line.matchAll(/\b\d{1,2}[.)]\s*([^0-9]+?)(?=(\s+\d{1,2}[.)]\s*|$))/g)) {
-          foundAny = true; pushTag(m[1]); if (tags.length >= 13) break;
-        }
-        if (!foundAny) { const fallback = line.replace(/^\s*\d+[.)]\s*/, ""); pushTag(fallback); }
-      });
-      return tags.slice(0, 13);
-    }
-
-    // ---- Snapshot the current UI to a durable Job in LS ----
-    function queueListingUploadFromUI(listingId) {
-      const jobId = `etsyJob_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`;
-      const title = (document.getElementById("listingTitle")?.value || "").trim();
-      const userDescription = document.getElementById("listingDescription")?.value || "";
-      const appended = window.appendedDescriptionText || "";
-      const finalDescription = userDescription + appended;
-      const tags = buildEtsyTagsFromOverlay(document.getElementById("searchKeyPhrases")?.value || "");
-      const sku = buildSkuFromTitle(title);
-
-      // Photos (0–6) from previewImages / names / meta
-      const photos = Array.from(window.previewImages || []);
-      const photoNames = Array.from(window.photoNames || []).map((n, i) => n || `uploaded_photo_${i}.jpg`);
-      const photoMeta = Array.from(window.photoMeta || []).map(s => (s || "").slice(0, 250));
-      const photoKeyBases = photos.map((dataURL, i) => {
-        const key = `${jobId}_p${i}`;
-        try { lsSaveLarge(key, dataURL); } catch (e) { console.warn("Photo LS save failed", i, e); }
-        return key;
-      });
-
-      // Reserved (7–9) from reservedPhotos [{src,name,meta}]
-      const reserved = Array.from(window.reservedPhotos || []);
-      const reservedSrc = reserved.map(x => x?.src).filter(Boolean);
-      const reservedNames = reserved.map((x, i) => x?.name || `reserved_photo_${i}.jpg`);
-      const reservedMeta = reserved.map(x => (x?.meta || "").slice(0, 250));
-      const reservedKeyBases = reservedSrc.map((dataURL, i) => {
-        const key = `${jobId}_rp${i}`;
-        try { lsSaveLarge(key, dataURL); } catch (e) { console.warn("Reserved LS save failed", i, e); }
-        return key;
-      });
-
-      const job = {
-        jobId,
-        createdAt: nowIso(),
-        status: "QUEUED",
-        progress: 0,
-        step: 0,
-        listingId: String(listingId),
-        accessToken: String(window.accessToken || ""), // capture now
-        title,
-        finalDescription,
-        tags,
-        sku,
-        photoCount: photoKeyBases.length,
-        photoKeyBases,
-        photoNames,
-        photoMeta,
-        reservedCount: reservedKeyBases.length,
-        reservedKeyBases,
-        reservedNames,
-        reservedMeta
-      };
-      localStorage.setItem(`etsyJob:${jobId}`, JSON.stringify(job));
-      const queue = JSON.parse(localStorage.getItem("etsyUploadJobs") || "[]");
-      queue.push(jobId);
-      localStorage.setItem("etsyUploadJobs", JSON.stringify(queue));
-      return jobId;
-    }
-
-    // ---- Job runner (daemon) ----
-    async function runEtsyJob(jobId) {
-      let job = JSON.parse(localStorage.getItem(`etsyJob:${jobId}`) || "null");
-      if (!job) return;
-      const save = (patch) => {
-        job = { ...job, ...patch };
-        localStorage.setItem(`etsyJob:${jobId}`, JSON.stringify(job));
-      };
-      const token = job.accessToken;
-      const listingId = job.listingId;
-      save({ status: "RUNNING" });
-
-      try {
-        // --- Stage 1: Upload Photos (main 0–6)
-        for (let i = 0; i < job.photoCount; i++) {
-          const dataURL = lsLoadLarge(job.photoKeyBases[i]);
-          if (!dataURL) continue;
-          const blob = await (await fetch(dataURL)).blob();
-          const fd = new FormData();
-          fd.append("listingId", listingId);
-          fd.append("token", token);
-          fd.append("fileName", job.photoNames[i] || `uploaded_photo_${i}.jpg`);
-          fd.append("rank", i + 1);
-          fd.append("alt_text", job.photoMeta[i] || "");
-          fd.append("file", blob, job.photoNames[i] || `uploaded_photo_${i}.jpg`);
-          const r = await fetch("/.netlify/functions/imageUpload", { method: "POST", body: fd });
-          if (!r.ok) {
-            const t = await r.text();
-            console.warn("Photo upload failed", i + 1, t);
-          } else {
-            if (typeof bumpCreateProgressPerImage === "function") bumpCreateProgressPerImage();
-          }
-        }
-        // --- Stage 1b: Reserved (7–9)
-        for (let i = 0; i < job.reservedCount; i++) {
-          const dataURL = lsLoadLarge(job.reservedKeyBases[i]);
-          if (!dataURL) continue;
-          const blob = await (await fetch(dataURL)).blob();
-          const fd = new FormData();
-          fd.append("listingId", listingId);
-          fd.append("token", token);
-          fd.append("fileName", job.reservedNames[i] || `reserved_photo_${i}.jpg`);
-          fd.append("rank", 8 + i);
-          fd.append("alt_text", job.reservedMeta[i] || "");
-          fd.append("file", blob, job.reservedNames[i] || `reserved_photo_${i}.jpg`);
-          const r = await fetch("/.netlify/functions/imageUpload", { method: "POST", body: fd });
-          if (!r.ok) {
-            const t = await r.text();
-            console.warn("Reserved upload failed", 8 + i, t);
-          } else {
-            if (typeof bumpCreateProgressPerImage === "function") bumpCreateProgressPerImage();
-          }
-        }
-
-        // --- Stage 2: Info (title/desc/tags + SKU)
-        const payload = {
-          listing_id: listingId,
-          title: job.title,
-          description: job.finalDescription,
-          tags: job.tags,
-          skus: [job.sku],
-          sku: job.sku
-        };
-        const infoResp = await fetch(`/.netlify/functions/updateListing?listingId=${encodeURIComponent(listingId)}`, {
-          method: "PUT",
-          headers: { "Content-Type": "application/json", Authorization: "Bearer " + token },
-          body: JSON.stringify(payload)
-        });
-        const infoJson = await infoResp.json().catch(() => ({}));
-        if (!infoResp.ok) throw new Error(`Info update failed ${infoResp.status} — ${JSON.stringify(infoJson)}`);
-
-        // Inventory SKU (same as your current flow)
-        await fetch(
-          `/.netlify/functions/updateListingInventory?listingId=${encodeURIComponent(listingId)}&token=${encodeURIComponent(token)}`,
-          { method: "PUT", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ sku: job.sku }) }
-        ).catch(e => console.warn("Inventory SKU update error:", e));
-
-        if (typeof setCreateProgress === "function") setCreateProgress(100);
-        save({ status: "DONE", progress: 100, completedAt: nowIso() });
-        // Clean up big chunks
-        [...job.photoKeyBases, ...job.reservedKeyBases].forEach(k => lsClearLarge(k));
-
-        // Remove from queue
-        const q = JSON.parse(localStorage.getItem("etsyUploadJobs") || "[]");
-        const idx = q.indexOf(jobId);
-        if (idx > -1) { q.splice(idx, 1); localStorage.setItem("etsyUploadJobs", JSON.stringify(q)); }
-
-        // Also advance window.listingQueue if visible
-        if (window.listingQueue && window.listingQueue.length > 0) {
-          const i = window.listingQueue.indexOf(String(listingId));
-          if (i > -1) window.listingQueue.splice(i, 1);
-          if (typeof loadNextListingInQueue === "function") loadNextListingInQueue();
-        }
-        window.M?.toast?.({ html: "Create Listing complete from queue." });
-      } catch (err) {
-        console.error("Etsy job failed:", err);
-        save({ status: "FAILED", error: String(err && err.message || err) });
-        window.M?.toast?.({ html: "Create Listing error (queued): " + (err?.message || err) });
-      }
-    }
-
-    async function processEtsyJobs() {
-      if (window.__etsyUploadDaemon) return;
-      window.__etsyUploadDaemon = true;
-      try {
-        while (true) {
-          const q = JSON.parse(localStorage.getItem("etsyUploadJobs") || "[]");
-          if (!q.length) break;
-          const nextId = q[0]; // FIFO
-          await runEtsyJob(nextId);
-          // loop will re-read queue after each run
-        }
-      } finally {
-        window.__etsyUploadDaemon = false;
-      }
-    }
-
     // On persistDataBeforeRedirect, store current queue to local storage.
     function persistDataBeforeRedirect() {
       try {
@@ -2183,39 +1942,142 @@ document.getElementById("shopListings").addEventListener("keydown", (e) => {
       }
     });
 
-    // --- Create Listing (LS snapshot + background queue; decoupled from UI)
+    // --- Create Listing: Photos (1/2) then Info (2/2) with a single blue progress bar
     document.getElementById("createListingBtn").addEventListener("click", async () => {
+      const btn = document.getElementById("createListingBtn");
       try {
-        // 1) Resolve a single listingId exactly like before (supports queue or manual input)
-        let listingId = null;
-        window.__lastChosenQueueIndex = -1;
-        if (Array.isArray(window.listingQueue) && window.listingQueue.length > 0) {
-          const idx = Math.floor(Math.random() * window.listingQueue.length);
-          listingId = String(window.listingQueue[idx]);
-          window.__lastChosenQueueIndex = idx;
-          document.getElementById("shopListings").value = listingId;
-        } else {
-          const listingInput = (document.getElementById("shopListings").value || "").trim();
-          if (!listingInput) { M.toast({ html: "Please provide a listing URL or ID in 'Etsy Shop Listings'." }); return; }
-          listingId = /^\d+$/.test(listingInput) ? listingInput : ((listingInput.match(/\/listing\/(\d+)/) || [])[1]);
+    // Resolve listing ID: RANDOM from queue (if available), else fallback to typed input
+    let listingId = null;
+    window.__lastChosenQueueIndex = -1; // remember which index we used, to remove it after success
+
+    if (Array.isArray(window.listingQueue) && window.listingQueue.length > 0) {
+      const idx = Math.floor(Math.random() * window.listingQueue.length);
+      listingId = String(window.listingQueue[idx]);
+      window.__lastChosenQueueIndex = idx;
+      // Reflect the picked ID in the UI for transparency
+      document.getElementById("shopListings").value = listingId;
+    } else {
+      const listingInput = (document.getElementById("shopListings").value || "").trim();
+      if (!listingInput) { M.toast({ html: "Please provide a listing URL or ID in 'Etsy Shop Listings'." }); return; }
+      listingId = /^\d+$/.test(listingInput)
+        ? listingInput
+        : ((listingInput.match(/\/listing\/(\d+)/) || [])[1]);
+    }
+    if (!listingId) { M.toast({ html: "Invalid listing URL or ID." }); return; }
+    if (!window.accessToken) { M.toast({ html: "Please Connect to Etsy first." }); return; }
+
+        // UI: show unified progress + disable button
+        btn && (btn.disabled = true);
+        showCreateProgress(true);
+        resetCreateProgress(); // now sets window._createPct=0 and bar to 0%
+        toggleCheck("createListingCheck", false);
+
+        // ---------------- Stage 1: Upload Photos (main + reserved) ----------------
+        await uploadPhotos();               // existing function
+        await uploadReservedPhotos();       // existing function
+        window.photoUpdateComplete = true;
+
+        // ---------------- Stage 2: Upload Info (title/desc/tags) -----------------
+        const userTitle = (document.getElementById("listingTitle").value || "").trim();
+        const userDescription = document.getElementById("listingDescription").value || "";
+        const finalDescription = userDescription + (window.appendedDescriptionText || "");
+
+        // Build Etsy-safe tags (≤13 items, ≤20 chars each), honoring two-column numbering
+        const raw = (document.getElementById("searchKeyPhrases").value || "");
+        const tags = [];
+        const seen = new Set();
+        const pushTag = (s) => {
+          let tag = (s || "")
+            .normalize("NFKD")
+            .replace(/[^\p{Letter}\p{Number}\s]/gu, " ")
+            .replace(/\s+/g, " ")
+            .trim();
+          if (!tag) return;
+          if (tag.length > 20) {
+            const cut = tag.slice(0, 20); const sp = cut.lastIndexOf(" ");
+            tag = (sp > 7 ? cut.slice(0, sp) : cut).trim();
+          }
+          const key = tag.toLowerCase();
+          if (!seen.has(key)) { seen.add(key); tags.push(tag); }
+        };
+        raw.split("\n").forEach(line => {
+          let foundAny = false;
+          for (const m of line.matchAll(/\b\d{1,2}[.)]\s*([^0-9]+?)(?=(\s+\d{1,2}[.)]\s*|$))/g)) {
+            foundAny = true; pushTag(m[1]); if (tags.length >= 13) break;
+          }
+          if (!foundAny) { const fallback = line.replace(/^\s*\d+[.)]\s*/, ""); pushTag(fallback); }
+        });
+        const slicedTags = tags.slice(0, 13);
+
+        // NEW: generate and include SKU
+        const generatedSku = buildSkuFromTitle(userTitle);
+        const payload = {
+          listing_id: listingId,
+          title: userTitle,
+          description: finalDescription,
+          tags: slicedTags,
+          // Add both common forms; your Netlify function / Etsy API can accept either.
+          skus: [generatedSku],
+          sku: generatedSku
+        };
+        const resp = await fetch(`/.netlify/functions/updateListing?listingId=${encodeURIComponent(listingId)}`, {
+          method: "PUT",
+          headers: { "Content-Type": "application/json", Authorization: "Bearer " + window.accessToken },
+          body: JSON.stringify(payload)
+        });
+        const result = await resp.json();
+        if (!resp.ok) {
+          throw new Error(`Info update failed ${resp.status} — ${JSON.stringify(result)}`);
         }
-        if (!listingId) { M.toast({ html: "Invalid listing URL or ID." }); return; }
-        if (!window.accessToken) { M.toast({ html: "Please Connect to Etsy first." }); return; }
+        window.infoUpdateComplete = true;
 
-        // 2) Snapshot EVERYTHING immediately to localStorage (so Clear won’t affect it)
-        //    (Requires PATCH 1 functions: queueListingUploadFromUI, processEtsyJobs)
-        const jobId = queueListingUploadFromUI(listingId);
+        // NEW: actually set the SKU at the inventory level (where Etsy stores it)
+        try {
+          // Pass token in query AND keep body simple JSON; avoids edge cases where Authorization header is dropped.
+          const invResp = await fetch(
+            `/.netlify/functions/updateListingInventory?listingId=${encodeURIComponent(listingId)}&token=${encodeURIComponent(window.accessToken)}`,
+            {
+              method: "PUT",
+              headers: { "Content-Type": "application/json" },
+              body: JSON.stringify({ sku: generatedSku })
+            }
+          );
+          let invText = await invResp.text();
+          let invJson; try { invJson = JSON.parse(invText); } catch { invJson = { raw: invText }; }
+          if (!invResp.ok) {
+            console.warn("Inventory SKU update failed:", invJson?.error || invJson);
+            console.warn("Details:", invJson?.details || invJson);
+            M.toast?.({ html: "SKU update failed — see console" });
+          } else {
+            console.log("Inventory SKU set:", invJson);
+          }
+        } catch (e) {
+          console.error("Inventory SKU update error:", e);
+          M.toast?.({ html: "Heads up: SKU update threw an error (see console)" });
+        }
 
-        // 3) Kick the background processor; show progress but DO NOT block UI
-        if (typeof showCreateProgress === "function") showCreateProgress(true);
-        if (typeof resetCreateProgress === "function") resetCreateProgress();
-        window.M?.toast?.({ html: `Queued Etsy push (${jobId.slice(-6)}). You can start your next listing.` });
+        setCreateProgress(100);
+        M.toast({ html: "Create Listing complete: Photos + Info updated." });
 
-        // 4) Start/continue the daemon (it runs one job at a time from LS)
-        processEtsyJobs();
+        // Advance queue if present
+        if (window.listingQueue && window.listingQueue.length > 0) {
+         // Remove the exact one we just processed
+        if (typeof window.__lastChosenQueueIndex === "number" && window.__lastChosenQueueIndex >= 0) {
+          window.listingQueue.splice(window.__lastChosenQueueIndex, 1);
+          window.__lastChosenQueueIndex = -1;
+        } else {
+          // Fallback: remove by value (handles rare cases)
+          const i = window.listingQueue.indexOf(String(listingId));
+          if (i > -1) window.listingQueue.splice(i, 1);
+        }
+          if (typeof loadNextListingInQueue === "function") loadNextListingInQueue();
+        }
       } catch (err) {
         console.error(err);
-        M.toast({ html: "Create Listing enqueue error: " + (err?.message || err) });
+        M.toast({ html: "Create Listing error: " + (err?.message || err) });
+      } finally {
+        setTimeout(() => { showCreateProgress(false); resetCreateProgress(); }, 600);
+        btn && (btn.disabled = false);
       }
     });
 
