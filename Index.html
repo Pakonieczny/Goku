@@ -236,11 +236,14 @@
       height: 100%;
     }
     .preview-box img {
-      width: 120px;
-      height: 120px;
-      object-fit: cover;
-      border-radius: 3px;
-      display: block;
+    width: 120px;
+    height: 120px;
+    object-fit: cover;
+    border-radius: 3px;
+    display: block;
+    /* enable smooth zoom/pan like sorting.html */
+    transform-origin: center center;           /* cloned */
+    transition: transform 0.3s ease;           /* cloned */
     }
     .remove-btn {
       position: absolute;
@@ -3214,6 +3217,94 @@ document.getElementById("shopListings").addEventListener("keydown", (e) => {
       updateStaticPreviewGrid();
     });
 
+    /* === cloned from sorting.html: attach zoom/pan listeners to a preview box === */
+    function attachPreviewBoxListeners(box) {
+      let isDragging = false;
+      let isMouseDown = false;
+      let dragStartX = 0, dragStartY = 0;
+      let lastX = 0, lastY = 0;
+      const dragThreshold = 3;
+
+      box.addEventListener("wheel", function (ev) {
+        const img = box.querySelector("img");
+        if (!img) return;
+        ev.preventDefault();
+        let currentScale = parseFloat(img.dataset.scale) || 1;
+        let offX = parseFloat(img.dataset.offsetX) || 0;
+        let offY = parseFloat(img.dataset.offsetY) || 0;
+        if (ev.deltaY < 0) {
+          currentScale *= 1.1;            // zoom in
+        } else {
+          currentScale /= 1.1;            // zoom out
+          if (currentScale <= 1) {        // snap back
+            currentScale = 1;
+            offX = 0; offY = 0;
+          }
+        }
+        if (currentScale > 8) currentScale = 8;
+        img.dataset.scale = currentScale;
+        img.dataset.offsetX = offX;
+        img.dataset.offsetY = offY;
+        img.style.transform = `translate(${offX}px, ${offY}px) scale(${currentScale})`;
+      });
+
+      box.addEventListener("mousedown", function (ev) {
+        const img = box.querySelector("img");
+        if (!img) return;
+        const scaleNow = parseFloat(img.dataset.scale) || 1;
+        if (scaleNow <= 1) return;        // only drag when zoomed
+        ev.preventDefault();
+        isMouseDown = true;
+        isDragging = false;
+        dragStartX = ev.clientX; dragStartY = ev.clientY;
+        lastX = ev.clientX; lastY = ev.clientY;
+      });
+
+      box.addEventListener("mousemove", function (ev) {
+        if (!isMouseDown) return;
+        ev.preventDefault();
+        const dxAll = Math.abs(ev.clientX - dragStartX);
+        const dyAll = Math.abs(ev.clientY - dragStartY);
+        if (dxAll > dragThreshold || dyAll > dragThreshold) isDragging = true;
+
+        const img = box.querySelector("img");
+        if (!img) return;
+        const scaleNow = parseFloat(img.dataset.scale) || 1;
+        let offX = parseFloat(img.dataset.offsetX) || 0;
+        let offY = parseFloat(img.dataset.offsetY) || 0;
+        const dx = ev.clientX - lastX;
+        const dy = ev.clientY - lastY;
+        offX += dx; offY += dy;
+        img.dataset.offsetX = offX;
+        img.dataset.offsetY = offY;
+        img.style.transform = `translate(${offX}px, ${offY}px) scale(${scaleNow})`;
+        lastX = ev.clientX; lastY = ev.clientY;
+      });
+
+      box.addEventListener("mouseup",   () => { isMouseDown = false; });
+      box.addEventListener("mouseleave",() => { isMouseDown = false; });
+
+      box.addEventListener("click", function (ev) {
+        if (isDragging) { isDragging = false; return; }
+        const img = box.querySelector("img");
+        if (!img) return;
+        // center the clicked point and jump to a nice zoom
+        const rect = box.getBoundingClientRect();
+        const boxCenterX = rect.left + box.clientWidth  / 2;
+        const boxCenterY = rect.top  + box.clientHeight / 2;
+        const dx = ev.clientX - boxCenterX;
+        const dy = ev.clientY - boxCenterY;
+        const scale = 5;
+        const fudgeY = 10;
+        const offsetX = -scale * dx;
+        const offsetY = -scale * dy + fudgeY;
+        img.dataset.scale = scale;
+        img.dataset.offsetX = offsetX;
+        img.dataset.offsetY = offsetY;
+        img.style.transform = `translate(${offsetX}px, ${offsetY}px) scale(${scale})`;
+      });
+    }
+
     function updateStaticPreviewGrid() {
       for (let i = 0; i < 10; i++) {
         let cell = document.getElementById("previewCell" + i);
@@ -3230,6 +3321,8 @@ document.getElementById("shopListings").addEventListener("keydown", (e) => {
             let img = document.createElement("img");
             img.src = window.previewImages[i];
             previewBox.appendChild(img);
+            // enable click-to-zoom + drag-to-pan
+            attachPreviewBoxListeners(previewBox);
             let removeBtn = document.createElement("div");
             removeBtn.className = "remove-btn";
             removeBtn.textContent = "X";
@@ -3272,7 +3365,8 @@ document.getElementById("shopListings").addEventListener("keydown", (e) => {
               checkmark.style.left = "5px";
               previewBox.appendChild(checkmark);
             }
-            previewBox.addEventListener("click", () => { showMetadata(i); });
+            // NOTE: click is reserved for zoom/pan. If you still want quick metadata,
+            // map it to Shift+Click or add a small "ℹ" button (easy to wire next).
             cell.appendChild(previewBox);
             let metadataStatus = document.createElement("div");
             metadataStatus.className = "metadata-status";
@@ -3297,6 +3391,8 @@ document.getElementById("shopListings").addEventListener("keydown", (e) => {
             let img = document.createElement("img");
             img.src = window.reservedPhotos[rIndex].src;
             previewBox.appendChild(img);
+            // enable click-to-zoom + drag-to-pan
+            attachPreviewBoxListeners(previewBox);
             let removeBtn = document.createElement("div");
             removeBtn.className = "remove-btn";
             removeBtn.textContent = "X";
@@ -3311,7 +3407,7 @@ document.getElementById("shopListings").addEventListener("keydown", (e) => {
             numOverlay.className = "number-overlay";
             numOverlay.textContent = (i + 1).toString();
             previewBox.appendChild(numOverlay);
-            previewBox.addEventListener("click", () => { showMetadata(i); });
+            // see note above re: Shift+Click or an "ℹ" button if needed
             cell.appendChild(previewBox);
             let metadataStatus = document.createElement("div");
             metadataStatus.className = "metadata-status";
