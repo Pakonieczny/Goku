@@ -3319,7 +3319,9 @@ document.getElementById("shopListings").addEventListener("keydown", (e) => {
         let offY = parseFloat(img.dataset.offsetY) || 0;
         const dx = ev.clientX - lastX;
         const dy = ev.clientY - lastY;
-        offX += dx; offY += dy;
+        // Offsets are stored in PRE-SCALE units, so normalize the screen deltas:
+        offX += dx / scaleNow;
+        offY += dy / scaleNow;
         clampAndApply(img, scaleNow, offX, offY);
         lastX = ev.clientX; lastY = ev.clientY;
       });
@@ -3331,48 +3333,40 @@ document.getElementById("shopListings").addEventListener("keydown", (e) => {
         if (isDragging) { isDragging = false; return; }
         const img = box.querySelector("img");
         if (!img) return;
-
-        // Current transform (pre-scale offsets)
         const s0    = parseFloat(img.dataset.scale)   || 1;
         const offX0 = parseFloat(img.dataset.offsetX) || 0;
         const offY0 = parseFloat(img.dataset.offsetY) || 0;
 
-        // Click in screen space relative to box center
-        const rect = box.getBoundingClientRect();
-        const cx = rect.left + box.clientWidth  / 2;
-        const cy = rect.top  + box.clientHeight / 2;
+        // Use the IMAGE rect (not the box) to avoid subtle vertical bias
+        const rImg = img.getBoundingClientRect();
+        const cx = rImg.left + rImg.width  / 2;
+        const cy = rImg.top  + rImg.height / 2;
         const dx_screen = ev.clientX - cx;
         const dy_screen = ev.clientY - cy;
 
-        // Convert to pre-scale image space:
-        // screen = s0 * (pre + off0)  => pre = screen/s0 - off0
+        // Invert current transform: screen = s0 * (pre + off0)  =>  pre = screen/s0 - off0
         const px = dx_screen / s0 - offX0;
         const py = dy_screen / s0 - offY0;
 
-        // Offsets that place the clicked point exactly at the center
+        // Center the clicked pre-scale point
         let targetOffX = -px;
         let targetOffY = -py;
 
-        // Minimum scale needed so that centering is valid (no blank edges)
+        // Compute the minimum scale that allows those offsets without exposing blank edges
         const halfW = (img.clientWidth  || 120) / 2;
         const halfH = (img.clientHeight || 120) / 2;
-        function requiredScaleFor(delta, half) {
-          const ratio = Math.abs(delta) / half;     // in [0, 1]
-          if (ratio >= 1) return Infinity;          // edge pixel needs infinite scale
-          return 1 / (1 - ratio);                   // solve half*(1 - 1/s) >= |delta|
-        }
-        const needX = requiredScaleFor(targetOffX, halfW);
-        const needY = requiredScaleFor(targetOffY, halfH);
+        const need = (delta, half) => {
+          const ratio = Math.abs(delta) / half;
+          return (ratio >= 1) ? Infinity : 1 / (1 - ratio);
+        };
+        const DESIRED = 5, MAX_S = 8;
+        let s1 = Math.max(DESIRED, s0 * 1.5, need(targetOffX, halfW), need(targetOffY, halfH));
+        if (!Number.isFinite(s1)) s1 = MAX_S;
+        if (s1 > MAX_S) s1 = MAX_S;
 
-        const DESIRED = 5;                          // your preferred zoom jump
-        let s1 = Math.max(DESIRED, s0 * 1.5, needX, needY);
-        if (!Number.isFinite(s1)) s1 = MAX_SCALE;   // defined above in this function
-        if (s1 > MAX_SCALE) s1 = MAX_SCALE;
-
-        // Apply (clampAndApply keeps content inside the 120×120 viewport)
+        // Apply with clamping (scale(...) translate(...) order elsewhere already fixed)
         clampAndApply(img, s1, targetOffX, targetOffY);
       });
-    }
 
     function updateStaticPreviewGrid() {
       for (let i = 0; i < 10; i++) {
