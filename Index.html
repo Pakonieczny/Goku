@@ -456,6 +456,9 @@
       z-index: 3050;
     }
 
+     /* TEMP: hide the Create Listing completion checkmark */
+     #createListingCheck { display: none !important; }
+
   </style>
 </head>
 <body>
@@ -2161,7 +2164,7 @@ document.getElementById("shopListings").addEventListener("keydown", (e) => {
       if (txt) txt.textContent = clamped + "%";
       if (clamped >= 100) {
         showCreateProgress(false);
-        toggleCheck("createListingCheck", true);
+        //toggleCheck("createListingCheck", true);
       }
     }
     function resetCreateProgress() { window._createPct = 0; setCreateProgress(0); }
