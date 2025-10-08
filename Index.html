@@ -3286,7 +3286,7 @@ document.getElementById("shopListings").addEventListener("keydown", (e) => {
           currentScale /= 1.1;            // zoom out
          if (currentScale <= 1) {        // snap back (preserve slight downward nudge)
            currentScale = 1;
-           offX = 0.5; offY = 2;
+           offX = 0.75; offY = 2;
          }
         }
         if (currentScale > MAX_SCALE) currentScale = MAX_SCALE;
@@ -3350,7 +3350,7 @@ document.getElementById("shopListings").addEventListener("keydown", (e) => {
         const py = dy_screen / s0 - offY0;
 
         // Offsets that place the clicked point exactly at the center
-        let targetOffX = -px + 0.5;
+        let targetOffX = -px + 0.75;
         let targetOffY = -py + 2;
 
         // Minimum scale needed so that centering is valid (no blank edges)
