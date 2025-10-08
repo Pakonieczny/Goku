@@ -1151,6 +1151,60 @@ ANTI-REPETITION (TITLE)
 
     // (Shipping-1 stores to LS as pos-<id>-left|top|width|height and applies absolute layout.  [oai_citation:6‡shipping-1.html](file-service://file-UyzPx2tdaLoZi5ZZoE5Zq8))
 
+    // Load an Image from a dataURL
+  function loadImageFromDataURL(src) {
+    return new Promise((resolve, reject) => {
+      const im = new Image();
+      im.onload = () => resolve(im);
+      im.onerror = reject;
+      im.src = src;
+    });
+  }
+
+  /**
+   * Permanently crop previewImages at given indices to match current viewport look.
+   * Reads the live transform state saved by your preview system (scale/offsets). 
+   * (Those are written by clampAndApply / attachPreviewBoxListeners.) 
+   */
+  async function persistVisibleCrops(indices) {
+    const SIZE = 3000;   // match saveCropBtn
+    const BASE = 120;    // preview-box base size used for offsets
+    const UNIT = SIZE / BASE;
+
+    for (const i of indices) {
+      const cell = document.getElementById("previewCell" + i);
+      if (!cell) continue;
+      const imgEl = cell.querySelector(".preview-box img");
+      if (!imgEl) continue;
+
+      const src = (window.previewImages && window.previewImages[i]) || null;
+      if (!src) continue;
+
+      const s    = parseFloat(imgEl.dataset.scale)   || 1;
+      const offX = parseFloat(imgEl.dataset.offsetX) || 0;
+      const offY = parseFloat(imgEl.dataset.offsetY) || 2; // keep your slight down-bias
+
+      const full = await loadImageFromDataURL(src);
+
+      const canvas = document.createElement("canvas");
+      canvas.width = SIZE; canvas.height = SIZE;
+      const ctx = canvas.getContext("2d");
+
+      // Recreate CSS: transform: scale(s) translate(offX, offY) with origin at center.
+      ctx.translate(SIZE/2, SIZE/2);
+      ctx.scale(s, s);
+      ctx.translate(offX * UNIT, offY * UNIT);
+
+      // Draw the full-resolution (already 3000×3000) source centered
+      ctx.drawImage(full, -full.width/2, -full.height/2, full.width, full.height);
+
+      // Persist exactly how saveCropBtn does: 3000×3000 JPEG @ 0.85
+      window.previewImages[i] = canvas.toDataURL("image/jpeg", 0.85);
+    }
+
+    // Rebuild cells so transforms reset to defaults on the newly-cropped images
+    updateStaticPreviewGrid();
+
     function adoptIntoLayoutRoot(el){
     const stage = document.getElementById("layoutRoot");
     if (!stage || !el || el.parentElement === stage) return;
@@ -2257,18 +2311,15 @@ document.getElementById("shopListings").addEventListener("keydown", (e) => {
 
     document.getElementById("analyzeMetadataBtn").addEventListener("click", async () => {
       try {
-         // start: show bar, hide check
         toggleCheck("analyzeMetadataCheck", false);
         showMetadataProgress(true);
         // Work set = previewCell0..6 only (skip reserved 7–9)
         const slots   = [0,1,2,3,4,5,6];
         const workIdx = slots.filter(i => !!(window.previewImages && window.previewImages[i]));
         const total   = workIdx.length;
-        if (!total) {
-          if (window.M?.toast) M.toast({ html: "No images in cells 0–6 to analyze." });
-          showMetadataProgress(false);
-          return;
-        }
+        if (!total) { if (window.M?.toast) M.toast({ html: "No images in cells 0–6 to analyze." }); showMetadataProgress(false); return; }
+        // ⬇️ NEW: lock in the visible crops BEFORE analyzing
+        await persistVisibleCrops(workIdx);
         resetMetadataProgress();
         let done = 0;
         for (const i of workIdx) {
@@ -2280,8 +2331,7 @@ document.getElementById("shopListings").addEventListener("keydown", (e) => {
       } catch (e) {
         console.error(e);
         if (window.M?.toast) M.toast({ html: "Metadata analyze error: " + (e?.message || e) });
-        } finally {
-        // if not already auto-hidden by 100%, ensure hidden when not running
+      } finally {
         const pctText = document.querySelector("#analyzeMetadataProgress .pct")?.textContent || "0%";
         if (pctText !== "100%") showMetadataProgress(false);
       }
@@ -3420,7 +3470,7 @@ document.getElementById("shopListings").addEventListener("keydown", (e) => {
         const needX = requiredScaleFor(targetOffX, halfW);
         const needY = requiredScaleFor(targetOffY, halfH);
 
-        const DESIRED = 3.5;                          // your preferred zoom jump
+        const DESIRED = 2.75;                          // your preferred zoom jump
         let s1 = Math.max(DESIRED, s0 * 1.5, needX, needY);
         if (!Number.isFinite(s1)) s1 = MAX_SCALE;   // defined above in this function
         if (s1 > MAX_SCALE) s1 = MAX_SCALE;
