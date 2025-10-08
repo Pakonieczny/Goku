@@ -3238,7 +3238,7 @@ document.getElementById("shopListings").addEventListener("keydown", (e) => {
       img.dataset.scale = scale;
       img.dataset.offsetX = offX;
       img.dataset.offsetY = offY;
-      img.style.transform = `translate(${offX}px, ${offY}px) scale(${scale})`;
+      img.style.transform = `scale(${scale}) translate(${offX}px, ${offY}px)`;
     }
 
     /* === cloned from sorting.html: attach zoom/pan listeners to a preview box (clamped) === */
@@ -3262,7 +3262,7 @@ document.getElementById("shopListings").addEventListener("keydown", (e) => {
         img.dataset.scale = scale;
         img.dataset.offsetX = offX;
         img.dataset.offsetY = offY;
-        img.style.transform = `translate(${offX}px, ${offY}px) scale(${scale})`;
+        img.style.transform = `scale(${scale}) translate(${offX}px, ${offY}px)`;
       }
 
       let isDragging = false;
