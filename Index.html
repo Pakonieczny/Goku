@@ -3284,10 +3284,10 @@ document.getElementById("shopListings").addEventListener("keydown", (e) => {
           currentScale *= 1.1;            // zoom in
         } else {
           currentScale /= 1.1;            // zoom out
-          if (currentScale <= 1) {        // snap back
-            currentScale = 1;
-            offX = 0; offY = 0;
-          }
+         if (currentScale <= 1) {        // snap back (preserve slight downward nudge)
+           currentScale = 1;
+           offX = 0; offY = 2;
+         }
         }
         if (currentScale > MAX_SCALE) currentScale = MAX_SCALE;
         clampAndApply(img, currentScale, offX, offY);
@@ -3319,9 +3319,7 @@ document.getElementById("shopListings").addEventListener("keydown", (e) => {
         let offY = parseFloat(img.dataset.offsetY) || 0;
         const dx = ev.clientX - lastX;
         const dy = ev.clientY - lastY;
-        // Offsets are stored in PRE-SCALE units, so normalize the screen deltas:
-        offX += dx / scaleNow;
-        offY += dy / scaleNow;
+        offX += dx; offY += dy;
         clampAndApply(img, scaleNow, offX, offY);
         lastX = ev.clientX; lastY = ev.clientY;
       });
@@ -3333,40 +3331,48 @@ document.getElementById("shopListings").addEventListener("keydown", (e) => {
         if (isDragging) { isDragging = false; return; }
         const img = box.querySelector("img");
         if (!img) return;
+
+        // Current transform (pre-scale offsets)
         const s0    = parseFloat(img.dataset.scale)   || 1;
         const offX0 = parseFloat(img.dataset.offsetX) || 0;
         const offY0 = parseFloat(img.dataset.offsetY) || 0;
 
-        // Use the IMAGE rect (not the box) to avoid subtle vertical bias
-        const rImg = img.getBoundingClientRect();
-        const cx = rImg.left + rImg.width  / 2;
-        const cy = rImg.top  + rImg.height / 2;
+        // Click in screen space relative to box center
+        const rect = box.getBoundingClientRect();
+        const cx = rect.left + box.clientWidth  / 2;
+        const cy = rect.top  + box.clientHeight / 2;
         const dx_screen = ev.clientX - cx;
         const dy_screen = ev.clientY - cy;
 
-        // Invert current transform: screen = s0 * (pre + off0)  =>  pre = screen/s0 - off0
+        // Convert to pre-scale image space:
+        // screen = s0 * (pre + off0)  => pre = screen/s0 - off0
         const px = dx_screen / s0 - offX0;
         const py = dy_screen / s0 - offY0;
 
-        // Center the clicked pre-scale point
+        // Offsets that place the clicked point exactly at the center
         let targetOffX = -px;
         let targetOffY = -py;
 
-        // Compute the minimum scale that allows those offsets without exposing blank edges
+        // Minimum scale needed so that centering is valid (no blank edges)
         const halfW = (img.clientWidth  || 120) / 2;
         const halfH = (img.clientHeight || 120) / 2;
-        const need = (delta, half) => {
-          const ratio = Math.abs(delta) / half;
-          return (ratio >= 1) ? Infinity : 1 / (1 - ratio);
-        };
-        const DESIRED = 5, MAX_S = 8;
-        let s1 = Math.max(DESIRED, s0 * 1.5, need(targetOffX, halfW), need(targetOffY, halfH));
-        if (!Number.isFinite(s1)) s1 = MAX_S;
-        if (s1 > MAX_S) s1 = MAX_S;
+        function requiredScaleFor(delta, half) {
+          const ratio = Math.abs(delta) / half;     // in [0, 1]
+          if (ratio >= 1) return Infinity;          // edge pixel needs infinite scale
+          return 1 / (1 - ratio);                   // solve half*(1 - 1/s) >= |delta|
+        }
+        const needX = requiredScaleFor(targetOffX, halfW);
+        const needY = requiredScaleFor(targetOffY, halfH);
 
-        // Apply with clamping (scale(...) translate(...) order elsewhere already fixed)
+        const DESIRED = 5;                          // your preferred zoom jump
+        let s1 = Math.max(DESIRED, s0 * 1.5, needX, needY);
+        if (!Number.isFinite(s1)) s1 = MAX_SCALE;   // defined above in this function
+        if (s1 > MAX_SCALE) s1 = MAX_SCALE;
+
+        // Apply (clampAndApply keeps content inside the 120×120 viewport)
         clampAndApply(img, s1, targetOffX, targetOffY);
       });
+    }
 
     function updateStaticPreviewGrid() {
       for (let i = 0; i < 10; i++) {
@@ -3384,6 +3390,11 @@ document.getElementById("shopListings").addEventListener("keydown", (e) => {
             let img = document.createElement("img");
             img.src = window.previewImages[i];
             previewBox.appendChild(img);
+
+            // Default slight downward nudge so the visual center feels perfect
+            // (positive Y translates the image down)
+            clampAndApply(img, previewBox, 1, 0, 2);
+
             // enable click-to-zoom + drag-to-pan
             attachPreviewBoxListeners(previewBox);
             let removeBtn = document.createElement("div");
@@ -3454,6 +3465,10 @@ document.getElementById("shopListings").addEventListener("keydown", (e) => {
             let img = document.createElement("img");
             img.src = window.reservedPhotos[rIndex].src;
             previewBox.appendChild(img);
+
+            // Match main cells: default 2px downward nudge
+            clampAndApply(img, previewBox, 1, 0, 2);
+
             // enable click-to-zoom + drag-to-pan
             attachPreviewBoxListeners(previewBox);
             let removeBtn = document.createElement("div");
