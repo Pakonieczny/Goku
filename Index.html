@@ -3332,52 +3332,47 @@ document.getElementById("shopListings").addEventListener("keydown", (e) => {
         const img = box.querySelector("img");
         if (!img) return;
 
-        // Current transform
-        const s0   = parseFloat(img.dataset.scale)  || 1;
-        const offX0= parseFloat(img.dataset.offsetX)|| 0;
-        const offY0= parseFloat(img.dataset.offsetY)|| 0;
+        // Current transform (pre-scale offsets)
+        const s0    = parseFloat(img.dataset.scale)   || 1;
+        const offX0 = parseFloat(img.dataset.offsetX) || 0;
+        const offY0 = parseFloat(img.dataset.offsetY) || 0;
 
-        // Click position relative to the preview-box center (screen space)
+        // Click in screen space relative to box center
         const rect = box.getBoundingClientRect();
         const cx = rect.left + box.clientWidth  / 2;
         const cy = rect.top  + box.clientHeight / 2;
         const dx_screen = ev.clientX - cx;
         const dy_screen = ev.clientY - cy;
 
-        // Convert to the image’s pre-scale space
+        // Convert to pre-scale image space:
         // screen = s0 * (pre + off0)  => pre = screen/s0 - off0
         const px = dx_screen / s0 - offX0;
         const py = dy_screen / s0 - offY0;
 
-        // Target offsets that put the clicked point exactly at center
-        // (independent of the scale we choose next)
+        // Offsets that place the clicked point exactly at the center
         let targetOffX = -px;
         let targetOffY = -py;
 
-        // Choose a scale large enough so centering is allowed within bounds.
-        // For a 120×120 viewport and 120×120 base image:
-        // max pre-scale translate = half * (1 - 1/scale)
+        // Minimum scale needed so that centering is valid (no blank edges)
         const halfW = (img.clientWidth  || 120) / 2;
         const halfH = (img.clientHeight || 120) / 2;
-
         function requiredScaleFor(delta, half) {
-          const ratio = Math.abs(delta) / half;           // in [0, 1]
-          if (ratio >= 1) return Infinity;                // edge pixel requires infinite scale
-          return 1 / (1 - ratio);                         // solve  half*(1 - 1/s) >= |delta|
+          const ratio = Math.abs(delta) / half;     // in [0, 1]
+          if (ratio >= 1) return Infinity;          // edge pixel needs infinite scale
+          return 1 / (1 - ratio);                   // solve half*(1 - 1/s) >= |delta|
         }
-
         const needX = requiredScaleFor(targetOffX, halfW);
         const needY = requiredScaleFor(targetOffY, halfH);
 
-        const DESIRED = 5;            // your “nice zoom-in” target
-        const MAX_S   = 8;            // keep in sync with wheel max
+        const DESIRED = 5;                          // your preferred zoom jump
         let s1 = Math.max(DESIRED, s0 * 1.5, needX, needY);
-        if (!Number.isFinite(s1)) s1 = MAX_S;
-        if (s1 > MAX_S) s1 = MAX_S;
+        if (!Number.isFinite(s1)) s1 = MAX_SCALE;   // defined above in this function
+        if (s1 > MAX_SCALE) s1 = MAX_SCALE;
 
-        // Apply with clamping so we never show empty space
+        // Apply (clampAndApply keeps content inside the 120×120 viewport)
         clampAndApply(img, s1, targetOffX, targetOffY);
       });
+    }
 
     function updateStaticPreviewGrid() {
       for (let i = 0; i < 10; i++) {
