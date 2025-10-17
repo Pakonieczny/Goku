@@ -1785,7 +1785,11 @@ https://www.etsy.com/your/shops/me/listing-editor/edit/1822973998
         job = { ...job, ...patch };
         localStorage.setItem(`etsyJob:${jobId}`, JSON.stringify(job));
       };
-      const token = job.accessToken;
+      // Always prefer the freshest token (after OAuth reconnect)
+      let token = (window.accessToken && String(window.accessToken).trim())
+        || (localStorage.getItem("etsyAccessToken") || "").trim()
+        || job.accessToken;
+      if (token && token !== job.accessToken) save({ accessToken: token });
       const listingId = job.listingId;
       save({ status: "RUNNING" });
 
@@ -1806,6 +1810,14 @@ https://www.etsy.com/your/shops/me/listing-editor/edit/1822973998
           const r = await fetch("/.netlify/functions/imageUpload", { method: "POST", body: fd });
           if (!r.ok) {
             const t = await r.text();
+            // NEW: auto-reconnect if token expired during photo uploads
+            if (r.status === 401 && /invalid_token|expired/i.test(t)) {
+              save({ status: "AUTH_NEEDED", error: "token_expired" });
+              window.M?.toast?.({ html: "Etsy session expired — reconnecting…" });
+              if (typeof beginEtsyReconnect === "function") { beginEtsyReconnect(); return; }
+              try { document.getElementById("connectEtsyBtn")?.click(); } catch {}
+              return;
+            }
             console.warn("Photo upload failed", i + 1, t);
           } else {
             if (typeof bumpCreateProgressPerImage === "function") bumpCreateProgressPerImage();
@@ -1827,6 +1839,13 @@ https://www.etsy.com/your/shops/me/listing-editor/edit/1822973998
           const r = await fetch("/.netlify/functions/imageUpload", { method: "POST", body: fd });
           if (!r.ok) {
             const t = await r.text();
+            if (r.status === 401 && /invalid_token|expired/i.test(t)) {
+              save({ status: "AUTH_NEEDED", error: "token_expired" });
+              window.M?.toast?.({ html: "Etsy session expired — reconnecting…" });
+              if (typeof beginEtsyReconnect === "function") { beginEtsyReconnect(); return; }
+              try { document.getElementById("connectEtsyBtn")?.click(); } catch {}
+              return;
+            }
             console.warn("Reserved upload failed", 8 + i, t);
           } else {
             if (typeof bumpCreateProgressPerImage === "function") bumpCreateProgressPerImage();
@@ -1848,7 +1867,19 @@ https://www.etsy.com/your/shops/me/listing-editor/edit/1822973998
           body: JSON.stringify(payload)
         });
         const infoJson = await infoResp.json().catch(() => ({}));
-        if (!infoResp.ok) throw new Error(`Info update failed ${infoResp.status} — ${JSON.stringify(infoJson)}`);
+        if (!infoResp.ok) {
+          // NEW: auto-reconnect on expired/invalid token
+          const msg = JSON.stringify(infoJson || {});
+          if (infoResp.status === 401 && /invalid_token|expired/i.test(msg)) {
+            save({ status: "AUTH_NEEDED", error: "token_expired" });
+            window.M?.toast?.({ html: "Etsy session expired — reconnecting to continue your queued upload…" });
+            if (typeof beginEtsyReconnect === "function") { beginEtsyReconnect(); return; }
+            // Fallback: click the existing Connect button
+            try { document.getElementById("connectEtsyBtn")?.click(); } catch {}
+            return;
+          }
+          throw new Error(`Info update failed ${infoResp.status} — ${JSON.stringify(infoJson)}`);
+        }
 
         // Inventory SKU (same as your current flow)
         await fetch(
@@ -3825,7 +3856,28 @@ document.getElementById("shopListings").addEventListener("keydown", (e) => {
         if (tokenData.access_token) {
           window.accessToken = tokenData.access_token;
           window.etsyUserId = tokenData.user_id; // needed for Etsy v3 Bearer format
+          // Persist latest token so background jobs can read it after redirects
+          localStorage.setItem("etsyAccessToken", window.accessToken);
           M.toast({ html: "Connected to Etsy!" });
+          // NEW: write-through latest token to any queued jobs so they don't use stale tokens
+          try {
+            const q = JSON.parse(localStorage.getItem("etsyUploadJobs") || "[]");
+            for (const id of q) {
+              const key = `etsyJob:${id}`;
+              const job = JSON.parse(localStorage.getItem(key) || "null");
+              if (job && job.accessToken !== window.accessToken) {
+                job.accessToken = window.accessToken;
+                localStorage.setItem(key, JSON.stringify(job));
+              }
+            }
+          } catch {}
+        try {
+            const q = JSON.parse(localStorage.getItem("etsyUploadJobs") || "[]");
+            if (q.length) {
+              M.toast({ html: "Resuming pending Etsy jobs…" });
+              processEtsyJobs && processEtsyJobs();
+            }
+          } catch {}
         } else {
           M.toast({ html: "Error obtaining token: " + JSON.stringify(tokenData) });
         }
@@ -3833,6 +3885,25 @@ document.getElementById("shopListings").addEventListener("keydown", (e) => {
         console.error(error);
         M.toast({ html: "Error exchanging code for token" });
       }
+    }
+
+    // NEW: beginEtsyReconnect — reuse your Connect flow to silently refresh auth
+    async function beginEtsyReconnect() {
+      try { typeof persistDataBeforeRedirect === "function" && persistDataBeforeRedirect(); } catch {}
+      const state = "randomState123";
+      const scope = "listings_w listings_r";
+      const codeVerifier = generateRandomString(64);
+      localStorage.setItem("etsy_code_verifier", codeVerifier);
+      const codeChallenge = await generateCodeChallenge(codeVerifier);
+      const url =
+        `https://www.etsy.com/oauth/connect?response_type=code&client_id=${window.CLIENT_ID}` +
+        `&redirect_uri=${encodeURIComponent(window.REDIRECT_URI)}` +
+        `&scope=${encodeURIComponent(scope)}` +
+        `&state=${state}` +
+        `&code_challenge=${encodeURIComponent(codeChallenge)}` +
+        `&code_challenge_method=S256`;
+      // Redirect—state + queue are persisted; on return, PATCH A resumes jobs.
+      window.location.href = url;
     }
 
     function dataURLtoBlob(dataurl) {
