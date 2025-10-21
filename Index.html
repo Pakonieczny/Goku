@@ -1778,13 +1778,26 @@ https://www.etsy.com/your/shops/me/listing-editor/edit/1822973998
     }
 
     // ---- Job runner (daemon) ----
-    async function runEtsyJob(jobId) {
-      let job = JSON.parse(localStorage.getItem(`etsyJob:${jobId}`) || "null");
-      if (!job) return;
-      const save = (patch) => {
-        job = { ...job, ...patch };
-        localStorage.setItem(`etsyJob:${jobId}`, JSON.stringify(job));
-      };
+      async function runEtsyJob(jobId) {
+        let job = JSON.parse(localStorage.getItem(`etsyJob:${jobId}`) || "null");
+        if (!job) {
+          // Purge stale queue entry to prevent phantom resumes
+          try {
+            const q = JSON.parse(localStorage.getItem("etsyUploadJobs") || "[]");
+            const idx = q.indexOf(jobId);
+            if (idx > -1) {
+              q.splice(idx, 1);
+              localStorage.setItem("etsyUploadJobs", JSON.stringify(q));
+            }
+          } catch (e) {
+            console.warn("Failed to purge stale etsy job:", e);
+          }
+          return;
+        }
+        const save = (patch) => {
+          job = { ...job, ...patch };
+          localStorage.setItem(`etsyJob:${jobId}`, JSON.stringify(job));
+        };
       // Always prefer the freshest token (after OAuth reconnect)
       let token = (window.accessToken && String(window.accessToken).trim())
         || (localStorage.getItem("etsyAccessToken") || "").trim()
@@ -3871,13 +3884,14 @@ document.getElementById("shopListings").addEventListener("keydown", (e) => {
               }
             }
           } catch {}
-        try {
-            const q = JSON.parse(localStorage.getItem("etsyUploadJobs") || "[]");
-            if (q.length) {
-              M.toast({ html: "Resuming pending Etsy jobs…" });
-              processEtsyJobs && processEtsyJobs();
-            }
-          } catch {}
+            // NOTE: Auto-resume disabled to prevent phantom restarts.
+            // try {
+            //   const q = JSON.parse(localStorage.getItem("etsyUploadJobs") || "[]");
+            //   if (q.length) {
+            //     M.toast({ html: "Resuming pending Etsy jobs…" });
+            //     processEtsyJobs && processEtsyJobs();
+            //   }
+            // } catch {}
         } else {
           M.toast({ html: "Error obtaining token: " + JSON.stringify(tokenData) });
         }
