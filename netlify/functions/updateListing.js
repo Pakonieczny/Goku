@@ -13,7 +13,11 @@ exports.handler = async function (event) {
       event.headers['Access-Token'] ||
       event.headers['authorization']?.replace(/^Bearer\s+/i, '');
 
-    const clientId = process.env.CLIENT_ID;
+    const clientId =
+      process.env.CLIENT_ID ||
+      process.env.ETSY_CLIENT_ID ||
+      process.env.ETSY_API_KEY ||
+      process.env.API_KEY;
     const shopId = process.env.SHOP_ID;
 
     if (!listingId) {
@@ -26,7 +30,20 @@ exports.handler = async function (event) {
       return { statusCode: 500, body: JSON.stringify({ error: "SHOP_ID environment variable is not set." }) };
     }
     if (!clientId) {
-      console.error("CLIENT_ID environment variable is not set.");
+      console.error("Missing Etsy app key env var for x-api-key header.");
+      console.log("Env presence:", {
+        CLIENT_ID: !!process.env.CLIENT_ID,
+        ETSY_CLIENT_ID: !!process.env.ETSY_CLIENT_ID,
+        ETSY_API_KEY: !!process.env.ETSY_API_KEY,
+        API_KEY: !!process.env.API_KEY,
+      });
+      return {
+        statusCode: 500,
+        body: JSON.stringify({
+          error: "Missing Etsy app key env var for x-api-key header.",
+          checked: ["CLIENT_ID", "ETSY_CLIENT_ID", "ETSY_API_KEY", "API_KEY"],
+        }),
+      };
     }
 
     // Parse JSON payload (title/description/tags/etc.)

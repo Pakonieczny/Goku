@@ -7,9 +7,27 @@ exports.handler = async function(event, context) {
     const codeVerifier = event.queryStringParameters.code_verifier;
 
     // Retrieve environment variables for Etsy OAuth
-    const CLIENT_ID = process.env.CLIENT_ID;
-    const CLIENT_SECRET = process.env.CLIENT_SECRET;
-    const REDIRECT_URI = process.env.REDIRECT_URI;
+    const CLIENT_ID = process.env.CLIENT_ID || process.env.ETSY_CLIENT_ID || process.env.ETSY_API_KEY || process.env.API_KEY;
+    const CLIENT_SECRET = process.env.CLIENT_SECRET || process.env.ETSY_CLIENT_SECRET;
+    const REDIRECT_URI = process.env.REDIRECT_URI || process.env.ETSY_REDIRECT_URI;
+
+    if (!CLIENT_ID || !CLIENT_SECRET || !REDIRECT_URI) {
+      console.error("Missing Etsy OAuth env vars.");
+      console.log("Env presence:", {
+        CLIENT_ID: !!process.env.CLIENT_ID,
+        ETSY_CLIENT_ID: !!process.env.ETSY_CLIENT_ID,
+        ETSY_API_KEY: !!process.env.ETSY_API_KEY,
+        API_KEY: !!process.env.API_KEY,
+        CLIENT_SECRET: !!process.env.CLIENT_SECRET,
+        ETSY_CLIENT_SECRET: !!process.env.ETSY_CLIENT_SECRET,
+        REDIRECT_URI: !!process.env.REDIRECT_URI,
+        ETSY_REDIRECT_URI: !!process.env.ETSY_REDIRECT_URI,
+      });
+      return {
+        statusCode: 500,
+        body: JSON.stringify({ error: "Missing Etsy OAuth env vars (client id/secret/redirect uri)." }),
+      };
+    }
 
     // Build the request parameters for the Etsy token exchange
     const params = new URLSearchParams({

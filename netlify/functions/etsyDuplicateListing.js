@@ -14,12 +14,28 @@ exports.handler = async function (event, context) {
     console.log("Received token:", token);
 
     // Retrieve CLIENT_ID from environment variables.
-    const clientId = process.env.CLIENT_ID;
-    if (!clientId) {
-      console.error("CLIENT_ID environment variable is not set.");
-    } else {
-      console.log("Using CLIENT_ID:", clientId.slice(0, 5) + "*****");
+    const clientId =
+      process.env.CLIENT_ID ||
+      process.env.ETSY_CLIENT_ID ||
+      process.env.ETSY_API_KEY ||
+      process.env.API_KEY;
+   if (!clientId) {
+      console.error("Missing Etsy app key env var for x-api-key header.");
+      console.log("Env presence:", {
+        CLIENT_ID: !!process.env.CLIENT_ID,
+        ETSY_CLIENT_ID: !!process.env.ETSY_CLIENT_ID,
+        ETSY_API_KEY: !!process.env.ETSY_API_KEY,
+        API_KEY: !!process.env.API_KEY,
+      });
+      return {
+        statusCode: 500,
+        body: JSON.stringify({
+          error: "Missing Etsy app key env var for x-api-key header.",
+          checked: ["CLIENT_ID", "ETSY_CLIENT_ID", "ETSY_API_KEY", "API_KEY"],
+        }),
+      };
     }
+    console.log("Using Etsy app key (masked):", String(clientId).slice(0, 5) + "*****");
 
     // Build GET request URL to fetch original listing details.
     const etsyGetUrl = `https://api.etsy.com/v3/application/listings/${listingId}`;

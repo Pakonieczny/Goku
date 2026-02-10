@@ -6,7 +6,11 @@ exports.handler = async function(event) {
       event.queryStringParameters && event.queryStringParameters.listingId;
     const accessToken =
       event.headers['access-token'] || event.headers['Access-Token'];
-    const clientId = process.env.CLIENT_ID;
+    const clientId =
+      process.env.CLIENT_ID ||
+      process.env.ETSY_CLIENT_ID ||
+      process.env.ETSY_API_KEY ||
+      process.env.API_KEY;
 
     if (!listingId) {
       return {
@@ -21,7 +25,20 @@ exports.handler = async function(event) {
       };
     }
     if (!clientId) {
-      console.error("CLIENT_ID environment variable is not set.");
+      console.error("Missing Etsy app key env var for x-api-key header.");
+      console.log("Env presence:", {
+        CLIENT_ID: !!process.env.CLIENT_ID,
+        ETSY_CLIENT_ID: !!process.env.ETSY_CLIENT_ID,
+        ETSY_API_KEY: !!process.env.ETSY_API_KEY,
+        API_KEY: !!process.env.API_KEY,
+      });
+      return {
+        statusCode: 500,
+        body: JSON.stringify({
+          error: "Missing Etsy app key env var for x-api-key header.",
+          checked: ["CLIENT_ID", "ETSY_CLIENT_ID", "ETSY_API_KEY", "API_KEY"],
+        }),
+      };
     }
 
     const etsyUrl = `https://api.etsy.com/v3/application/listings/${encodeURIComponent(
