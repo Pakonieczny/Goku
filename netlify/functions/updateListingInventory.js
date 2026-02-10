@@ -2,22 +2,56 @@
 const fetch = require("node-fetch");
 
 exports.handler = async (event) => {
+  // --- CORS (needed for browser PUT + preflight) ---
+  const origin = event.headers?.origin || event.headers?.Origin || "*";
+  const CORS = {
+    "Access-Control-Allow-Origin": origin,
+    "Access-Control-Allow-Headers": "Content-Type, Authorization, X-Api-Key, X-Api-Secret, Access-Token",
+    "Access-Control-Allow-Methods": "GET,POST,PUT,OPTIONS",
+    "Access-Control-Max-Age": "86400"
+  };
+
   try {
+    if (event.httpMethod === "OPTIONS") {
+      return { statusCode: 200, headers: CORS, body: "" };
+    }
+
     const listingId = event.queryStringParameters?.listingId;
+
     const token =
       event.queryStringParameters?.token ||
       event.headers["access-token"] ||
       event.headers["Access-Token"] ||
-      event.headers["authorization"]?.replace(/^Bearer\s+/i, "");
-    const clientId =
+      event.headers["authorization"]?.replace(/^Bearer\s+/i, "") ||
+      event.headers["Authorization"]?.replace(/^Bearer\s+/i, "");
+
+    // ✅ Use YOUR env var names:
+    //   CLIENT_ID     = Etsy keystring
+    //   CLIENT_SECRET = Etsy shared secret
+    //
+    // Etsy v3 expects: x-api-key = "KEYSTRING:SHARED_SECRET"
+    const apiKeyRaw =
       event.headers?.["x-api-key"] ||
       event.headers?.["X-Api-Key"] ||
-      process.env.CLIENT_ID ||
-      process.env.ETSY_CLIENT_ID;
+      process.env.CLIENT_ID;
 
-    if (!listingId) return { statusCode: 400, body: JSON.stringify({ error: "Missing listingId parameter" }) };
-    if (!token) return { statusCode: 400, body: JSON.stringify({ error: "Missing access token" }) };
-    if (!clientId) return { statusCode: 500, body: JSON.stringify({ error: "CLIENT_ID not set" }) };
+    const apiSecretRaw =
+      event.headers?.["x-api-secret"] ||
+      event.headers?.["X-Api-Secret"] ||
+      process.env.CLIENT_SECRET;
+
+    const xApiKey = (() => {
+      const k = String(apiKeyRaw || "").trim();
+      const s = String(apiSecretRaw || "").trim();
+      if (!k) return "";
+      if (k.includes(":")) return k;       // already "key:secret"
+      if (s) return `${k}:${s}`;           // build "key:secret"
+      return k;                            // fallback (may 403 if Etsy requires secret)
+    })();
+
+    if (!listingId) return { statusCode: 400, headers: CORS, body: JSON.stringify({ error: "Missing listingId parameter" }) };
+    if (!token) return { statusCode: 400, headers: CORS, body: JSON.stringify({ error: "Missing access token" }) };
+    if (!xApiKey) return { statusCode: 500, headers: CORS, body: JSON.stringify({ error: "CLIENT_ID/CLIENT_SECRET not set (need keystring + shared secret)" }) };
 
     // Body: { sku: "Horse_18789" }  -> when provided, enforce uniform SKU across all products
     let body = {};
@@ -25,13 +59,37 @@ exports.handler = async (event) => {
     const desiredSku = String(body.sku || "").trim();
 
     // 1) GET current inventory (so we can send the full, sanitized products array back)
-    const invUrl = `https://openapi.etsy.com/v3/application/listings/${encodeURIComponent(listingId)}/inventory`;
+    const invUrl = `https://api.etsy.com/v3/application/listings/${encodeURIComponent(listingId)}/inventory`;
+
     const commonHeaders = {
       Accept: "application/json",
-      Authorization: `Bearer ${token}`,
-      "x-api-key": clientId
+      authorization: `Bearer ${token}`,
+      "x-api-key": xApiKey
     };
+
     const invRes = await fetch(invUrl, { method: "GET", headers: commonHeaders });
+
+    // If Etsy rejects auth here, fail fast with clear hints.
+    if (!invRes.ok && (invRes.status === 401 || invRes.status === 403)) {
+      const t = await invRes.text();
+      let d; try { d = JSON.parse(t); } catch { d = { raw: t }; }
+      const reqId =
+        invRes.headers.get("x-etsy-request-id") ||
+        invRes.headers.get("x-request-id") ||
+        undefined;
+
+      return {
+        statusCode: invRes.status,
+        headers: CORS,
+        body: JSON.stringify({
+          error: "Etsy inventory GET rejected (auth/scopes).",
+          etsy_status: invRes.status,
+          etsy_request_id: reqId,
+          hint: "Verify CLIENT_ID/CLIENT_SECRET are correct and the OAuth token has listings_r + listings_w scopes.",
+          details: d
+        })
+      };
+    }
 
     // Hoist on_property arrays so they exist even if GET fails (avoids ReferenceError)
     let price_on_property = [];
@@ -70,7 +128,9 @@ exports.handler = async (event) => {
           }
         }
       })();
-      usesProcessingProfiles = (Array.isArray(readiness_state_on_property) && readiness_state_on_property.length > 0) || (globalReadyId != null);
+      usesProcessingProfiles =
+        (Array.isArray(readiness_state_on_property) && readiness_state_on_property.length > 0) ||
+        (globalReadyId != null);
 
       // Decide SKU policy
       const skuVaries = Array.isArray(sku_on_property) && sku_on_property.length > 0;
@@ -110,12 +170,14 @@ exports.handler = async (event) => {
           .map(o => {
             const raw = toDecimal(o.price);
             const price = Number.isFinite(raw) ? Number(raw.toFixed(2)) : undefined;
+
             // Preserve readiness_state_id; if missing but listing uses processing profiles, fall back to globalReadyId
             const rsidRaw = o?.readiness_state_id;
             const rsidNum = Number(rsidRaw);
             const readiness_state_id = Number.isFinite(rsidNum)
               ? rsidNum
               : (usesProcessingProfiles ? globalReadyId : undefined);
+
             const base = {
               price,
               quantity: (o.quantity == null ? 1 : o.quantity),
@@ -175,7 +237,7 @@ exports.handler = async (event) => {
           // keep variant-specific sku as-is if present
           const keep = (p.sku || "").trim();
           if (keep) prod.sku = keep;
-          // If missing SKU on some variants while varying, omit; Etsy allows differing/blank when sku_on_property declares variance
+          // If missing SKU on some variants while varying, omit
         } else if (skuMode === "none") {
           // omit sku for everyone (consistent "no sku")
         } else {
@@ -218,15 +280,31 @@ exports.handler = async (event) => {
       headers: { ...commonHeaders, "Content-Type": "application/json" },
       body: JSON.stringify(payload)
     });
+
     const text = await putRes.text();
     let data; try { data = JSON.parse(text); } catch { data = { raw: text }; }
 
     if (!putRes.ok) {
       const msg = data?.error || data?.message || data?.raw || "Error updating inventory";
-      return { statusCode: putRes.status, body: JSON.stringify({ error: msg, details: data }) };
+      const reqId =
+        putRes.headers.get("x-etsy-request-id") ||
+        putRes.headers.get("x-request-id") ||
+        undefined;
+
+      return {
+        statusCode: putRes.status,
+        headers: CORS,
+        body: JSON.stringify({
+          error: msg,
+          etsy_status: putRes.status,
+          etsy_request_id: reqId,
+          details: data
+        })
+      };
     }
-    return { statusCode: 200, body: JSON.stringify({ ok: true, inventory: data }) };
+
+    return { statusCode: 200, headers: CORS, body: JSON.stringify({ ok: true, inventory: data }) };
   } catch (err) {
-    return { statusCode: 500, body: JSON.stringify({ error: err.message }) };
+    return { statusCode: 500, headers: CORS, body: JSON.stringify({ error: err.message }) };
   }
 };
