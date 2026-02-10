@@ -61,6 +61,10 @@ exports.handler = async function (event, context) {
 
     // Env sanity
     const clientId = process.env.CLIENT_ID;
+    const clientSecret =
+      process.env.CLIENT_SECRET ||
+      process.env.ETSY_CLIENT_SECRET ||
+      process.env.ETSY_SHARED_SECRET;
     const shopId = process.env.SHOP_ID;
     if (!clientId || !shopId) {
       console.error("Missing envs:", { hasClientId: !!clientId, hasShopId: !!shopId });
@@ -69,6 +73,23 @@ exports.handler = async function (event, context) {
         body: JSON.stringify({ error: "CLIENT_ID and/or SHOP_ID environment variables are not set." }),
       };
     }
+    if (!clientSecret) {
+      console.error("Missing Etsy shared secret env var for x-api-key header.");
+      console.log("Env presence:", {
+        CLIENT_SECRET: !!process.env.CLIENT_SECRET,
+        ETSY_CLIENT_SECRET: !!process.env.ETSY_CLIENT_SECRET,
+        ETSY_SHARED_SECRET: !!process.env.ETSY_SHARED_SECRET,
+      });
+      return {
+        statusCode: 500,
+        body: JSON.stringify({
+          error: "Missing Etsy shared secret env var for x-api-key header.",
+          checked: ["CLIENT_SECRET", "ETSY_CLIENT_SECRET", "ETSY_SHARED_SECRET"],
+        }),
+      };
+    }
+
+    const xApiKey = `${String(clientId).trim()}:${String(clientSecret).trim()}`;
 
     // Input validation from fields
     const listingId = (fields.listingId || "").toString().trim();
@@ -124,7 +145,7 @@ exports.handler = async function (event, context) {
       method: "POST",
       headers: {
         Authorization: `Bearer ${token}`,
-        "x-api-key": clientId,
+        "x-api-key": xApiKey,
         ...formData.getHeaders(),
       },
       body: formData,
