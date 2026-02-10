@@ -2,22 +2,42 @@
 const fetch = require("node-fetch");
 
 exports.handler = async (event) => {
+  const corsHeaders = {
+    "Access-Control-Allow-Origin": "*",
+    "Access-Control-Allow-Headers": "Content-Type, Authorization, access-token, x-api-key",
+    "Access-Control-Allow-Methods": "GET,POST,PUT,PATCH,OPTIONS"
+  };
+
+  if (event.httpMethod === "OPTIONS") {
+    return { statusCode: 204, headers: corsHeaders, body: "" };
+  }
+
   try {
+    const headers = event.headers || {};
     const listingId = event.queryStringParameters?.listingId;
     const token =
       event.queryStringParameters?.token ||
-      event.headers["access-token"] ||
-      event.headers["Access-Token"] ||
-      event.headers["authorization"]?.replace(/^Bearer\s+/i, "");
+      headers["access-token"] ||
+      headers["Access-Token"] ||
+      headers["authorization"] ||
+      headers["Authorization"];
+    const cleanToken = typeof token === "string" ? token.replace(/^Bearer\s+/i, "").trim() : "";
     const clientId =
-      event.headers?.["x-api-key"] ||
-      event.headers?.["X-Api-Key"] ||
+      headers["x-api-key"] ||
+      headers["X-Api-Key"] ||
       process.env.CLIENT_ID ||
       process.env.ETSY_CLIENT_ID;
+    const clientSecret =
+      process.env.CLIENT_SECRET ||
+      process.env.ETSY_CLIENT_SECRET ||
+      process.env.ETSY_SHARED_SECRET;
+    const xApiKey = clientSecret
+      ? `${String(clientId || "").trim()}:${String(clientSecret).trim()}`
+      : (clientId ? String(clientId).trim() : "");
 
-    if (!listingId) return { statusCode: 400, body: JSON.stringify({ error: "Missing listingId parameter" }) };
-    if (!token) return { statusCode: 400, body: JSON.stringify({ error: "Missing access token" }) };
-    if (!clientId) return { statusCode: 500, body: JSON.stringify({ error: "CLIENT_ID not set" }) };
+    if (!listingId) return { statusCode: 400, headers: corsHeaders, body: JSON.stringify({ error: "Missing listingId parameter" }) };
+    if (!cleanToken) return { statusCode: 400, headers: corsHeaders, body: JSON.stringify({ error: "Missing access token" }) };
+    if (!clientId) return { statusCode: 500, headers: corsHeaders, body: JSON.stringify({ error: "CLIENT_ID not set" }) };
 
     // Body: { sku: "Horse_18789" }  -> when provided, enforce uniform SKU across all products
     let body = {};
@@ -28,8 +48,8 @@ exports.handler = async (event) => {
     const invUrl = `https://openapi.etsy.com/v3/application/listings/${encodeURIComponent(listingId)}/inventory`;
     const commonHeaders = {
       Accept: "application/json",
-      Authorization: `Bearer ${token}`,
-      "x-api-key": clientId
+      Authorization: `Bearer ${cleanToken}`,
+      "x-api-key": xApiKey
     };
     const invRes = await fetch(invUrl, { method: "GET", headers: commonHeaders });
 
@@ -223,10 +243,10 @@ exports.handler = async (event) => {
 
     if (!putRes.ok) {
       const msg = data?.error || data?.message || data?.raw || "Error updating inventory";
-      return { statusCode: putRes.status, body: JSON.stringify({ error: msg, details: data }) };
+      return { statusCode: putRes.status, headers: corsHeaders, body: JSON.stringify({ error: msg, details: data }) };
     }
-    return { statusCode: 200, body: JSON.stringify({ ok: true, inventory: data }) };
+    return { statusCode: 200, headers: corsHeaders, body: JSON.stringify({ ok: true, inventory: data }) };
   } catch (err) {
-    return { statusCode: 500, body: JSON.stringify({ error: err.message }) };
+    return { statusCode: 500, headers: corsHeaders, body: JSON.stringify({ error: err.message }) };
   }
 };
