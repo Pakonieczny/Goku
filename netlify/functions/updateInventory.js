@@ -69,7 +69,7 @@ async function updateInventory(newListingId, inventoryData, token, xApiKey) {
   const headers = {
     "Content-Type": "application/json",
     "Authorization": `Bearer ${token}`,
-    "x-api-key": clientId,
+    "x-api-key": xApiKey,
   };
 
   // Attempt PUT update with up to 3 retries
