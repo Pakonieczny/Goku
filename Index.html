@@ -8,8 +8,6 @@
   <!-- Import Google Material Icons and Materialize CSS -->
   <link href="https://fonts.googleapis.com/icon?family=Material+Icons" rel="stylesheet">
   <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/materialize/1.0.0/css/materialize.min.css">
-  <!-- Include PapaParse for CSV parsing -->
-  <script src="https://cdnjs.cloudflare.com/ajax/libs/PapaParse/5.3.2/papaparse.min.js"></script>
   <!-- Include piexifjs for EXIF manipulation -->
   <script src="https://cdn.jsdelivr.net/npm/piexifjs@1.0.4/piexif.min.js"></script>
   <!-- Include SortableJS -->
@@ -23,6 +21,7 @@
       padding: 0;
       width: 100vw;
       font-family: Arial, sans-serif;
+      position: relative; /* anchor absolute children to the page */
     }
     .container {
       width: 100vw;
@@ -65,14 +64,46 @@
       resize: none;
       box-sizing: border-box;
       border: 1px solid grey;
+      font-size: 0.82rem; /* 20% smaller than the 1rem textarea default */
+      font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace;
+      overflow-x: auto;
     }
     #searchKeyPhrases[rows="14"] {
       height: auto;
     }
-    /* Ensure the CSV textarea can receive drop events */
-    #uploadedFilesList {
-      pointer-events: auto;
+
+    /* === SKP inline highlight overlay === */
+    #searchKeyPhrases {
+      background-color: transparent;  /* let the blue highlight show through */
+      caret-color: #000;
     }
+
+    /* Positioned to exactly mirror the textarea; text transparent so only blue blocks show */
+    #skpOverlay {
+      position: absolute !important;
+      white-space: pre;
+      font-family: inherit;
+      font-size: inherit;
+      line-height: inherit;
+      pointer-events: none;
+      z-index: 2999;           /* textarea sits at 3000 in your abs layout */
+      color: transparent;      /* hide overlay text; we only want backgrounds */
+      margin: 0;
+    }
+
+    #skpOverlay .mark {
+      background: rgba(255, 165, 0, 0.35);
+      border-radius: 2px;
+    }
+
+    /* Match fonts to #searchKeyPhrases */
+    #listingTitle,
+    #listingDescription,
+    #listingDescInput {
+      font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace;
+      font-size: 0.82rem;
+    }
+
     .flex-container {
       display: flex;
       gap: 10px;
@@ -87,9 +118,29 @@
       font-size: 1rem;
       line-height: 1.2;
       resize: none;
-      overflow: visible;
+      overflow: auto; /* was visible — content could be clipped with fixed height */
       box-sizing: border-box;
     }
+
+    /* Config mode: show outlines and smooth movement */
+    body.config-mode .configurable {
+      outline: 2px dashed rgba(0,0,0,.45);
+      transition: left .08s linear, top .08s linear, width .08s linear, height .08s linear;
+    }
+    .modal-overlay { transition: opacity .2s ease; }
+
+    /* Config mode: lighten the sheet and let clicks pass through so previews are visible */
+    body.config-mode .modal-overlay {
+      opacity: 0.08 !important;
+      pointer-events: none !important;
+    }
+
+    /* Ensure buttery movement while editing */
+    body.config-mode .layout-abs,
+    body.config-mode .configurable {
+      will-change: left, top, width, height;
+    }
+
     .button-container {
       width: 200px;
       display: flex;
@@ -116,6 +167,12 @@
       margin-bottom: 5px;
       display: inline-block;
     }
+    /* NEW: inline title/section spinner */
+    .inline-spinner{
+      display: none;        /* toggled by JS */
+      vertical-align: middle;
+      margin-left: 8px;     /* sits to the right of the heading */
+    }
     .count-text {
       font-style: italic;
       font-size: 0.9em;
@@ -135,17 +192,6 @@
     /* Hide any unused drop zones */
     #fileDropZonesContainer {
       display: none;
-    }
-    #uploadedFilesList {
-      width: 225px;
-      height: 125px;
-      resize: none;
-      box-sizing: border-box;
-      border: 1px solid grey;
-      margin-left: 85px;
-      position: relative;
-      font-size: 0.875rem;
-      z-index: 10;
     }
     .modal {
       z-index: 9999 !important;
@@ -176,55 +222,85 @@
       border-radius: 3px;
       display: flex;
       flex-direction: column;
-      align-items: center;
-      justify-content: center;
+      align-items: stretch;       /* was center */
+      justify-content: flex-start;/* was center */
       font-size: 12px;
       color: #666;
     }
     .preview-cell.reserved {
       z-index: 2500;
     }
-    .preview-box {
-      position: relative;
-      width: 100%;
-      height: 100%;
-    }
-    .preview-box img {
-      width: 120px;
-      height: 120px;
-      object-fit: cover;
-      border-radius: 3px;
-      display: block;
-    }
-    .remove-btn {
-      position: absolute;
-      top: -5px;
-      left: -5px;
-      width: 15px;
-      height: 15px;
-      background-color: black;
-      color: white;
-      font-size: 10px;
-      text-align: center;
-      cursor: pointer;
-      z-index: 999;
-      border-radius: 50%;
-    }
-    .number-overlay {
-      position: absolute;
-      top: 0;
-      right: 0;
-      width: 16px;
-      height: 16px;
-      background-color: rgba(0,0,0,0.7);
-      color: white;
-      display: flex;
-      align-items: center;
-      justify-content: center;
-      font-size: 10px;
-      z-index: 999;
-      border-radius: 3px;
-    }
+      /* Enforce a 120x120 viewport and clip zoom/pan */
+      .preview-box {
+        position: relative;
+        --btn-size: clamp(18px, 12%, 32px);
+        width: 100%;
+        height: auto;
+        flex: 1 1 auto;
+        overflow: hidden;     /* ← critical: clip the image */
+      }
+
+      /* keep the smooth transform you already have */
+      .preview-box img {
+        width: 100%;
+        height: 100%;
+        object-fit: cover;               /* still crops to fill nicely */
+        transform-origin: center center;
+        transition: transform 0.3s ease;
+        display: block;
+      }
+
+      /* Rule-of-thirds overlay (like cropper) on every preview viewport */
+      .preview-box::after {
+        content: "";
+        position: absolute;
+        inset: 0;
+        pointer-events: none;
+        z-index: 700; /* below .remove-btn/.number-overlay (z=999), above the image */
+
+        /* four thin lines at 1/3 and 2/3 */
+        background-image:
+          linear-gradient(to right, rgba(255,255,255,.25), rgba(255,255,255,.25)),
+          linear-gradient(to right, rgba(255,255,255,.25), rgba(255,255,255,.25)),
+          linear-gradient(to bottom, rgba(255,255,255,.25), rgba(255,255,255,.25)),
+          linear-gradient(to bottom, rgba(255,255,255,.25), rgba(255,255,255,.25));
+        background-size: 1px 100%, 1px 100%, 100% 1px, 100% 1px;
+        background-position: 33.333% 0, 66.666% 0, 0 33.333%, 0 66.666%;
+        background-repeat: no-repeat;
+      }
+
+      .remove-btn {
+        position: absolute;
+        top: 6px;
+        left: 6px;
+        width: var(--btn-size);
+        height: var(--btn-size);
+        background-color: black;
+        color: white;
+        font-size: calc(var(--btn-size) * 0.5);
+        text-align: center;
+        cursor: pointer;
+        z-index: 999;
+        border-radius: 50%;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+      }
+      .number-overlay {
+        position: absolute;
+        top: 6px;
+        right: 6px;
+        width: var(--btn-size);
+        height: var(--btn-size);
+        background-color: rgba(0,0,0,0.7);
+        color: white;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        font-size: calc(var(--btn-size) * 0.5);
+        z-index: 999;
+        border-radius: 3px;
+      }
     .metadata-status {
       margin-top: 5px;
       text-align: center;
@@ -234,20 +310,21 @@
     .metadata-progress {
       width: 90%;
     }
+    /* Let JS absolute positioning take over; remove relative/negative offsets */
     #container13 {
-      position: relative;
+      position: static;
       width: 250px;
-      top: -150px;
+      top: auto;
     }
     #belowSearch {
-      margin-top: -180px;
-      margin-left: 10px;
+      margin-top: 0;
+      margin-left: 0;
     }
     .title-container {
-      margin-top: -50px;
+      margin-top: 0;
     }
     #etsyListingTitleContainer {
-      position: relative;
+      position: static;
       width: 1000px;
     }
     #etsyListingTitleContainer textarea {
@@ -257,16 +334,16 @@
       margin-top: 0px;
     }
     #etsyListingDescriptionContainer {
-      position: relative;
+      position: static;
       width: 1000px;
     }
     #etsyListingDescriptionContainer textarea {
       width: 1000px;
     }
     #userProvidedKeyPhrasesContainer {
-      position: relative;
-      top: 125px;
-      left: 10px;
+      position: static;
+      top: auto;
+      left: auto;
     }
     #topButtons {
       margin: 10px 0;
@@ -303,28 +380,177 @@
     #etsyShopListingsContainer {
       position: relative;
     }
+
+    /* Force the new absolute layout system to win over legacy/author CSS */
+    .layout-abs { position: absolute !important; }
+
+    /* Absolute layout stage: all configurable components live here */
+    #layoutRoot {
+      position: relative;
+      width: 100vw;
+      min-height: 200vh;
+      z-index: 2500;
+    }
+
+    /* keep the neutralize rule, but without .listing-desc-container */
+    .neutralize-wrapper,
+    #descriptionAndFileUploadContainer,
+    #topButtons,
+    #belowSearch,
+    #etsyShopListingsContainer,
+    #previewGridContainer,
+    #previewGridStatic,
+    .flex-container,
+    .title-container,
+    .description-container {
+      position: static !important;
+      display: contents !important;
+    }
+
+    /* make the movable container a real box again */
+    #listingDescContainer { display: block !important; }
+
+    /* Analyze Metadata blue progress bar (absolute-positioned + movable) */
+    #analyzeMetadataProgress {
+      position: absolute;
+      height: 22px;
+      width: 260px;               /* default; layout system will override */
+      border-radius: 6px;
+      overflow: hidden;
+      background: #e3f2fd;        /* light blue track */
+      border: 1px solid #2196f3;  /* blue border */
+      box-shadow: 0 1px 2px rgba(0,0,0,.08);
+      display: none;              /* visible only when running */
+    }
+    #analyzeMetadataProgress .bar {
+      height: 100%;
+      width: 0%;
+      background: #2196f3;        /* blue fill */
+      transition: width .25s ease;
+    }
+    #analyzeMetadataProgress .pct {
+      position: absolute; inset: 0;
+      display: flex; align-items: center; justify-content: center;
+      font-weight: 700; font-size: 12px;
+      color: #fff;                 /* readable on blue */
+      text-shadow: 0 0 2px #000, 0 0 4px #000; /* readable on white */
+      letter-spacing: .2px;
+      pointer-events: none;
+    }
+
+    /* Create Listing blue progress bar (same visuals, hidden initially) */
+    #createListingProgress {
+      position: absolute;
+      height: 22px;
+      width: 260px;               /* layout system can override */
+      border-radius: 6px;
+      overflow: hidden;
+      background: #e3f2fd;        /* light blue track */
+      border: 1px solid #2196f3;  /* blue border */
+      box-shadow: 0 1px 2px rgba(0,0,0,.08);
+      display: none;              /* shown on click */
+    }
+    #createListingProgress .bar { height: 100%; width: 0%; background: #2196f3; transition: width .25s ease; }
+    #createListingProgress .pct { position: absolute; inset: 0; display: flex; align-items: center; justify-content: center; font-weight: 700; font-size: 12px; color: #fff; text-shadow: 0 0 2px #000, 0 0 4px #000; letter-spacing: .2px; pointer-events: none; }
+
+    /* NEW: Duplicate-Listing holistic progress (same look) */
+    #duplicateListingProgress {
+      position: absolute;
+      height: 22px;
+      width: 260px;               /* layout system can override */
+      border-radius: 6px;
+      overflow: hidden;
+      background: #e3f2fd;        /* light blue track */
+      border: 1px solid #2196f3;  /* blue border */
+      box-shadow: 0 1px 2px rgba(0,0,0,.08);
+      display: none;              /* visible only when running */
+    }
+    #duplicateListingProgress .bar { height: 100%; width: 0%; background: #2196f3; transition: width .25s ease; }
+    #duplicateListingProgress .pct { position: absolute; inset: 0; display: flex; align-items: center; justify-content: center; font-weight: 700; font-size: 12px; color: #fff; text-shadow: 0 0 2px #000, 0 0 4px #000; letter-spacing: .2px; pointer-events: none; }
+
+    /* Green completion check (movable) */
+    .progress-check {
+      position: absolute;
+      width: 22px;
+      height: 22px;
+      border-radius: 50%;
+      background: #2e7d32;    /* green */
+      color: #fff;
+      font-weight: 800;
+      font-size: 14px;
+      line-height: 22px;
+      text-align: center;
+      box-shadow: 0 1px 2px rgba(0,0,0,.18);
+      display: none;           /* only shown at 100% */
+      pointer-events: none;
+      z-index: 3050;
+    }
+
+     /* TEMP: hide the Create Listing completion checkmark */
+     #createListingCheck { display: none !important; }
+
+    /* Scales with preview-box using --btn-size */
+    .crop-btn {
+      position: absolute;
+      right: 6px;
+      bottom: 6px;
+      width: var(--btn-size);
+      height: var(--btn-size);
+      border-radius: 50%;
+      background-color: green;
+      color: white;
+      font-size: calc(var(--btn-size) * 0.45);
+      line-height: 1;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      border: none;
+      cursor: pointer;
+    }
+
   </style>
 </head>
 <body>
-  <!-- Include default UI positions (uiPositions.js) -->
-  <script src="uiPositions.js"></script>
+  <!-- Absolute layout stage (every component will be reparented here) -->
+  <div id="layoutRoot"></div>
+  <!-- Legacy uiPositions removed: new layout system is source of truth -->
 
-  <button id="configureButtonsBtn" class="btn waves-effect waves-light configurable">Configure Buttons</button>
+  <button id="openConfigBtn" class="btn waves-effect waves-light configurable" style="margin-left:10px;">Open Config</button>
   
   <div id="descriptionAndFileUploadContainer">
     <div class="listing-desc-container" id="listingDescContainer">
       <h5>Listing Description</h5>
       <input id="listingDescInput" type="text" placeholder="Enter your question here">
     </div>
-    <textarea id="uploadedFilesList" class="materialize-textarea" rows="2" placeholder="Drop CSV files here"></textarea>
   </div>
   
   <div id="topButtons">
     <button id="connectEtsyBtn" class="btn waves-effect waves-light configurable">Connect to Etsy</button>
-    <button id="photoUploadNewBtn" class="btn waves-effect waves-light configurable update-btn" style="margin-left: 10px;">Update Photos</button>
-    <button id="uploadToEtsyBtn" class="btn waves-effect waves-light configurable update-btn" style="margin-left: 10px;">Update Info</button>
+    <button id="createListingBtn" class="btn waves-effect waves-light configurable update-btn" style="margin-left: 10px;">Create Listing</button>
+    <!-- Unified blue progress bar (hidden until clicked) -->
+    <div id="createListingProgress" class="configurable" style="display:none;">
+      <div class="bar"></div>
+      <div class="pct">0%</div>
+    </div>
+    <div id="createListingCheck" class="progress-check configurable" title="Create complete">✓</div>
+
+     <!-- NEW: Duplicate Listing trigger (to the right of Create Listing) -->
+     <button id="duplicateListingBtn" class="btn waves-effect waves-light configurable" style="margin-left: 10px;">
+       Duplicate Listing
+     </button>
+     <!-- NEW: Holistic Duplicate Listing progress (hidden until clicked) -->
+     <div id="duplicateListingProgress" class="configurable" style="display:none;">
+       <div class="bar"></div>
+       <div class="pct">0%</div>
+     </div>
+     <div id="duplicateListingCheck" class="progress-check configurable" title="Duplicate complete">✓</div>
+     <!-- NEW: Clear (red) — appears in UI and Config modal -->
+     <button id="clearBtn" class="btn waves-effect waves-light red darken-1 configurable" style="margin-left:10px;">
+       Clear
+     </button>
+
     <div id="etsyShopListingsContainer">
-      <div class="section-heading configurable">
+      <div id="etsyShopListingsHeading" class="section-heading configurable">
         Etsy Shop Listings
         <span id="listingQueueCount">0</span>
       </div>
@@ -335,28 +561,52 @@
   </div>
   
   <div class="phrases-header configurable" id="userProvidedKeyPhrasesContainer">
-    <span class="section-heading configurable">Search Key Phrases</span>
-    <!-- Clear button deletes files from the vector store -->
-    <button id="clearKeyPhrasesBtn" class="btn-small waves-effect waves-light configurable">Clear CSV Files</button>
+    <span id="searchKeyPhrasesHeading" class="section-heading configurable">
+      Search Key Phrases
+      <span id="searchSpinner" class="inline-spinner preloader-wrapper small">
+        <div class="spinner-layer spinner-blue-only">
+          <div class="circle-clipper left"><div class="circle"></div></div>
+          <div class="gap-patch"><div class="circle"></div></div>
+          <div class="circle-clipper right"><div class="circle"></div></div>
+        </div>
+      </span>
+    </span>
+   
     <div id="dropZone" class="configurable">Image Drop</div>
     <button id="analyzeMetadataBtn" class="btn waves-effect waves-light configurable">Analyze Photos</button>
+    <!-- Blue progress bar for Analyze Photos -->
+    <div id="analyzeMetadataProgress" class="configurable">
+      <div class="bar"></div>
+      <div class="pct">0%</div>
+    </div>
+    <div id="analyzeMetadataCheck" class="progress-check configurable" title="Analyze complete">✓</div>
   </div>
 
   <div id="container13" class="flex-container configurable">
     <div class="textbox-container configurable">
-      <textarea id="searchKeyPhrases" class="materialize-textarea" rows="14"></textarea>
+      <textarea id="searchKeyPhrases" class="materialize-textarea" rows="14" wrap="off"></textarea>
+      <pre id="skpOverlay" aria-hidden="true"></pre>
     </div>
   </div>
   
   <div id="belowSearch">
     <button id="generateBtn" class="btn waves-effect waves-light configurable">Generate</button>
-    <div class="title-container" id="etsyListingTitleContainer" style="margin-top: -50px;">
-      <div class="section-heading configurable">Etsy Listing TITLE</div>
+    <div class="title-container" id="etsyListingTitleContainer" style="margin-top: 0;">
+     <div id="listingTitleHeading" class="section-heading configurable">
+        Etsy Listing TITLE
+        <span id="titleSpinner" class="inline-spinner preloader-wrapper small">
+          <div class="spinner-layer spinner-blue-only">
+            <div class="circle-clipper left"><div class="circle"></div></div>
+            <div class="gap-patch"><div class="circle"></div></div>
+            <div class="circle-clipper right"><div class="circle"></div></div>
+          </div>
+        </span>
+      </div>
       <div class="flex-container configurable">
         <div class="textbox-container configurable">
           <textarea id="listingTitle" class="materialize-textarea" rows="2"></textarea>
         </div>
-        <div class="button-container configurable" style="margin-top: -60px;">
+        <div class="button-container configurable">
           <button id="regenTitleBtn" class="btn-small waves-effect waves-light configurable regen-btn">Re-Gen</button>
           <button id="copyTitleBtn" class="btn-small waves-effect waves-light configurable copy-btn">
             <i class="material-icons">content_copy</i>
@@ -368,7 +618,16 @@
     </div>
     
     <div class="description-container" id="etsyListingDescriptionContainer" style="margin-top: 0px;">
-      <div class="section-heading configurable">Etsy Listing DESCRIPTION</div>
+      <div id="listingDescriptionHeading" class="section-heading configurable">
+        Etsy Listing DESCRIPTION
+        <span id="descriptionSpinner" class="inline-spinner preloader-wrapper small">
+          <div class="spinner-layer spinner-blue-only">
+            <div class="circle-clipper left"><div class="circle"></div></div>
+            <div class="gap-patch"><div class="circle"></div></div>
+            <div class="circle-clipper right"><div class="circle"></div></div>
+          </div>
+        </span>
+      </div>
       <div class="flex-container configurable">
         <div class="textbox-container configurable">
           <textarea id="listingDescription" class="materialize-textarea"></textarea>
@@ -425,8 +684,18 @@ Default Photo Analysis Rules:
 6. Limit the description to 200 characters.
 7. Do not mention earrings unless explicitly identified.
 8. Do not mix necklace and earring descriptions.
-9. Be more to the point with  much less filler words and more jewelry and best fit client focused descriptions
-10. Less narrative and story building with more focus on facts and details about the jewelry and charm to appeal to potential clients.        
+9. - Ban low-value synonyms: never use {token, keepsake, dainty, whimsical, delicate, unique, inspired, design, lightweight, idea, accessory, accessories}.
+10. - Ban the following: "Gift for Him", "Statement Piece", "Unique", "Spiritual Gift", "Outdoor Style", "accessories", "simple", "minimalist", "whimsical", "cute", "filled", "gold filled", "silver", "Vibes", "solid gold", "gold vermeil", "rosegold", "14k", "handmade", "quirky", "delicate", "accessory", "for", "dangle", "gold plated", "jewelry", "custom", "celestial", "design", "lightweight", "Fine Chain Necklace", "Small", "Large", "Nice", "Long", "Dark", "Short", "and", "but", "light", "heavy", "Wanderlust", "Theme", "Minimal Chain Gift", "Tiny Pendant Chain", "Charm Look", "Charm Wear", "Chain Necklace", "Small Pendant Chain", "Everyday", "etched", "detail", "smooth", "polished".
+11. - Semantic near-dup drop: if two tags differ only by a leading adjective (e.g., “tiny bird charm” vs “bird charm”) or only by material (e.g., “gold bird pendant” vs “rosegold bird pendant”), keep the single highest-volume variant and discard the rest.
+12. Be more to the point with  much less filler words and more jewelry and best fit client focused descriptions
+13. ANTI-REPETITION (TITLE)
+  - No repeated bigrams: compute all 2-word sequences; each must be unique across the title.
+  - Do not repeat the same head-noun pair (e.g., “bird pendant”) more than once.
+  - Use at most one subject root twice: if “hummingbird” appears, use “bird” at most once elsewhere.
+  - Material frequency: words {gold, rosegold, silver, 14k} → max 2 total occurrences across the whole title.
+  - “gift for …” phrase appears at most once in the title; avoid stacking variants (“gift for her”, “gift for mom”) in the same title.
+  - Ban filler adjectives in titles as well: {dainty, whimsical, delicate, unique, keepsake, inspired, design, lightweight}.
+14. Less narrative and story building with more focus on facts and details about the jewelry and charm to appeal to potential clients.        
       Descriptions of good fit between client needs and our offerings:  
       Example a. Soccer mom would have an appeal for a soccer ball necklace, or a team jersey.         
       Example b. A nurse would have an appeal for a stethoscope earrings, or syringe.        
@@ -445,33 +714,79 @@ Default Photo Analysis Rules:
     <div class="modal-content">
       <h4>Title Rules</h4>
       <textarea id="titleRulesTextarea" style="width:100%; height:300px;">
-Title Structure & Formatting:
-- Titles MUST begin with the SAME TWO WORDS as in the Listing Description user input text box.
-- Never begin any Listing Title with these words "Charm", "Necklace", "Earrings", "Studs", "Hoops"
-- The second word in every Listing Title must be one of the following "Necklace", "Earrings", "Charm", "Studs", "Hoops". Look for the correct word in the user provided Listing Description text box. 
-- If non of the following words "Necklace", "Earrings","Earring", "Necklaces" are in the "Listing Description" text box then refrain from using these words in the generated Listing Title
-- Generate the Title Listing from 5-7 SEO Etsy optimized long-tail key phrases (2-5 words each) that flow dramatically as proper sentence.
-- Product Type words (Examples: "Fish", "Tree", "Angel", "Volleyball", "Dolphin", "Penguin") must always come first.
-- Ensure grammatical flow and no punctuation.
+TITLE RULES (STRICT — MATCH THE EXAMPLES EXACTLY)
 
-Word Usage & Frequency:
-- No word may appear more than three times.
-- "earrings" must be plural and follow a noun.
-- The word" stud" can only be used if the word "earring" or "earrings" is present in the "Listing Description" text box.
+CORE STRUCTURE (exact order)
+1) Lead = [Action/Style ]{Motif} {Product-Type}
+2) Divider = one colon ":" (exactly one in the whole title)
+3) Materials = 2–4 items (comma-separated; may include "Handmade" once; optional "or" before the last)
+4) Tail = compact category/occasion phrase
+5) Never repeat any of these words more than once: Necklace, Charm, Disc, Stud, Earrings, Hoop, Pendant
 
-Use of "For":
-- "for" must appear at least twice in a grammatically correct manner as part of the Listing Title.
+ALLOWED PRODUCT-TYPES (expanded)
+- Pendant Necklace
+- Charm Necklace
+- Disc Necklace Charm
+- Necklace Charm
+- Necklace
+- Bar Necklace
+- Tag Necklace
+- Hoop Earrings
+- Huggie Hoop Earrings
+- Drop Earrings
+- Stud Earrings
+- Earrings
+- Charm
 
-Title Length & Word Order:
-- Titles must be between 125 and 140 characters.
-- Adjectives must follow nouns.
-- Avoid plurals for "stud" and "animal"; use plurals for "hoops" and "earrings" correctly.
+ALLOWED MATERIAL TOKENS (Materials segment only)
+- Handmade
+- Sterling Silver
+- Gold Filled
+- Rose Gold
+- 14K Solid Gold  (accept "14k" or "14K")
 
-SEO Optimization:
-- The Listing Title should be comprised of at least seven optimized SEO Key Phrases that dramatically flow well together.
+ACTION/STYLE TOKENS (optional, place BEFORE the Motif; Title Case)
+- Running, Flying, Leaping, Soaring, Howling, Dancing, Blooming
+- Customizable, Personalized, Engraved, Initial, Zodiac, Birth Flower
+- Layered, Stackable, Adjustable
 
-Prohibited Words:
-- Exclude: "accessories", "unique", "simple", "minimalist", "whimsical", "cute", "filled", "gold filled", "silver", "solid gold", "gold vermeil", "rosegold", "14k", "handmade", "quirky", "delicate", "accessory", "for", "dangle", "gold plated", "jewelry", "custom", "celestial", "design", "lightweight".
+TAIL — THEME TOKENS (mix 1–2 with at least one of {Jewelry | Pendant | Charm | Studs})
+- Animal, Bird, Floral, Nature, Ocean, Coastal, Nautical, Western, Sports, Zodiac, Astrology, Geometric
+Optional: add "Gift" and at most one of {"for her","for mom"}.
+
+WORD PLACEMENT (strict)
+- Subject/Motif (with optional Action/Style) first, then Product-Type, then colon, then Materials list, then Tail.
+- "Earrings" must be plural; if "Stud" appears it must read "Stud Earrings".
+- "Charm" may appear in the lead OR tail; total uses of "Charm" ≤ 2.
+
+PUNCTUATION & CASING
+- Exactly one colon.
+- Commas with a single space after each comma.
+- Title Case for content words.
+- No hyphens, slashes, quotes, or emojis.
+
+LENGTH
+- 80–120 characters (target 90–110).
+
+REFERENCE EXAMPLES (follow structure/flow)
+a. USA Country Flag Pendant Necklace: 14k Solid Gold, Gold Filled, Silver, Dainty Custom Patriotic Jewelry
+b. Flying Hawk Wildlife Hoop Earrings: Custom Handmade Sterling Silver, 14k Solid Gold Minimalist Bird Charm, Jewelry lover
+c. Pine Tree Lover Charm Necklace: Sterling Silver, Gold Filled, 14K Solid Gold Custom Dainty Nature Pine Needle Pendant
+d. Comedy Tragedy Mask Pendant Necklace: Custom, 14K Solid Gold, Sterling Silver, Gold Filled Tiny Theater, Acting Charm Jewelry
+e. Running Wolf Pendant Necklace: Handmade 14K Solid Gold, Sterling Silver, Gold Filled Minimalist Animal lover Wildlife Gift for mom
+f. Customizable Initial Charm Necklace: Sterling Silver, Gold Filled, 14K Solid Gold Dainty Letter Pendant Gift
+g. Dolphin Huggie Hoop Marine Earrings: Gold Filled, 14K Solid Gold, Sterling Silver Custom Ocean, Beach lover Jewelry
+
+VALIDATION CHECKLIST (all must pass)
+[ ] One colon present; non-empty text on both sides.
+[ ] Lead ends with an allowed Product-Type synonym or similar.
+[ ] Earrings rules satisfied; "Charm" ≤ 2.
+[ ] No hyphens/slashes/quotes/emojis; single space after commas.
+[ ] 80–120 characters inclusive.
+
+SEO Guidance
+Compose the title as a chain of distinct, non-repeating search phrases that still read naturally. Favor concrete nouns (motif, product, material, theme) over filler adjectives.
+
       </textarea>
     </div>
     <div class="modal-footer">
@@ -509,45 +824,30 @@ Option 3:
     <div class="modal-content">
       <h4>Keyword Rules</h4>
       <textarea id="keywordRulesTextarea" style="width:100%; height:300px;">
-Key Phrase Generation Using the .csv Sales Reports and .csv Product List Files:
-- Generate exactly 13 tag phrases. 
-- Each one of the 13 individual Key Phrases CAN NOT exceed a MAXIMUM of 20 characters including spaces, this must be STRICTLY adhered to above all other requirements.
-- It's very important that you DO NOT GENERATE Key Phrases that are too similar to one another. Prioritize using unique key words to offer a wider gamut of possibilities, don't overuse the same word too many time in all 13 Key Phrases.
-- The Key Phrases must be SEO friendly multi word phrases tailored for Etsy listing advertising.
-- Using the attached Vector Store Etsy sales report files extrapolate the best tag phrases based on sales performance of individual listings.
-- Correlate the Vector Store Etsy sales report of the top performing listings (Inclusive of Key Words and Key Phrases) with the user query from the Listing Description user input text box to generate statistically the most successful Key Phrases.
-- Maximize the word count in every Key Phrase to capture more audiences as long as they do not exceed 20 characters long including spaces. 
-- If the following words "Necklace", "Earrings","Earring", "Necklaces" are not present in the Listing Description user input text box then refrain from using these words in the generated Key Phrases
-- Look for the following words in the Listing Description text box "Charm", "Necklace", "Earrings", "Studs", "Hoops".
-- "Charm" must appear at least once in the generated Key Phrases.
-- "Gift for Her" must appear at least once in the generated Key Phrases.
--Good examples of Listing Titles, focus on hey they flow and the Title structure, use these as templates for what a good Listing Title looks like:
-    a. Trex Pendant Dinosaur Jewelry Mini Dino Necklace Gift for Her T-Rex Necklace Dainty Dinosaur Necklace Lover Gift Dinosaur Pendant
-    b. Tennis Earrings Sports Earring Tennis Player Earrings Handmade Jewelry Sports Gifts Game Day Outfit Tennis Player Gift Custom Earring
-    c. Megaphone Necklace Cheerleader Jewelry Gift for Her Cheer Team Charm Cheer Squad Gifts Cheer Coach Gift Cheerleader Necklace Senior Gifts
-    d. Sea Turtle Necklace Cute Turtle Necklace Friend Gift Mother's Day Birthday Gift Turtle Gifts Cute Jewelry Quirky Jewelry
-    e. Baseball Earrings Sports Fan Team Earrings College Gifts Baseball Mom Fun Earring Sports Team Gift Game Day Outfit Small Hoops
-    f. Volleyball Necklace Sports Team Pendant Gift for Her Volleyball Jewelry Personalized Volleyball Mom Charm Sports Necklace Volleyball Coach
-    g. Basketball Charm Necklace Gold Basketball Sports Jewelry Coach Gift Basketball Player Sports Pendant Basketball Gift for Her Basketball Mom
-    h. Hummingbird Earrings Gold Bird Jewelry Gift for Her Mockingjay Stud Earrings Bird Lover Hummingbird Charm Jewelry Hunger Games Bird Earrings
- 
-- Exclude: "Gift for Him", "Statement Piece", "Unique", "Spiritual Gift", "Outdoor Style", "accessories", "simple", "minimalist", "whimsical", "cute", "filled", "gold filled", "silver", "Vibes", "solid gold", "gold vermeil", "rosegold", "14k", "handmade", "quirky", "delicate", "accessory", "for", "dangle", "gold plated", "jewelry", "custom", "celestial", "design", "lightweight", "Fine Chain Necklace", "Small", "Large", "Nice", "Long", "Dark", "Short", "and", "but", "light", "heavy", "Wanderlust", "Theme", "Minimal Chain Gift", "Tiny Pendant Chain", "Charm Look", "Charm Wear", "Chain Necklace", "Small Pendant Chain", "Everyday"
+REPETITION & DEDUP (TAGS)
+- Canonicalize before checking duplicates: lowercase, trim, collapse spaces, singularize simple plurals (charms→charm, earrings→earring), strip leading adjectives {tiny, small, little}.
+- Exact tag uniqueness: no two identical canonical tags.
+- Never repeat the same word noun or adjective more than 2 times across all 13 Tag Phrases.
+ANTI-REPETITION (TITLE)
+- No repeated bigrams: compute all tag phrase sequences; each must be unique across the title.
+- Do not repeat the same head-noun pair (e.g., “bird pendant”) more than once.
+- Use at most one subject root twice: if “hummingbird” appears, use “bird” at most once elsewhere.
+- Material frequency: words {gold, rosegold, silver, 14k} → max 2 total occurrences across the whole title.
+- “gift for …” phrase appears at most once in the title; avoid stacking variants (“gift for her”, “gift for mom”) in the same title.
+- Ban filler adjectives in titles as well: {dainty, whimsical, delicate, unique, keepsake, inspired, design, lightweight}.
+- Head-noun bigram rule: extract the last two nouns of each tag (e.g., “bird pendant”, “bird charm”). Each head-noun bigram may appear AT MOST once across all 13 tags.
+- Phrase families:
+  • “gift for …” → MAX 1 tag total (e.g., “gift for her”, “gift for mom”). Prefer the most relevant variant and drop others.
+  • Materials {gold, rosegold, silver, 14k} → appear in ≤ 2 tags combined.
+- Noun cap: each of {charm, pendant, necklace, earring} may appear in ≤ 2 tags; the same pair (e.g., “bird pendant”) may appear in ≤ 1 tag.
+- Ban low-value synonyms: never use {token, keepsake, dainty, whimsical, delicate, unique, inspired, design, lightweight, idea, accessory, accessories}.
+- Ban the following: "Gift for Him", "Statement Piece", "Unique", "Spiritual Gift", "Outdoor Style", "accessories", "simple", "minimalist", "whimsical", "cute", "filled", "gold filled", "silver", "Vibes", "solid gold", "gold vermeil", "rosegold", "14k", "handmade", "quirky", "delicate", "accessory", "for", "dangle", "gold plated", "jewelry", "custom", "celestial", "design", "lightweight", "Fine Chain Necklace", "Small", "Large", "Nice", "Long", "Dark", "Short", "and", "but", "light", "heavy", "Wanderlust", "Theme", "Minimal Chain Gift", "Tiny Pendant Chain", "Charm Look", "Charm Wear", "Chain Necklace", "Small Pendant Chain", "Everyday"
+- Semantic near-dup drop: if two tags differ only by a leading adjective (e.g., “tiny bird charm” vs “bird charm”) or only by material (e.g., “gold bird pendant” vs “rosegold bird pendant”), keep the single highest-volume variant and discard the rest.
+
       </textarea>
     </div>
     <div class="modal-footer">
       <a href="#!" id="updateKeywordRulesBtn" class="modal-close waves-effect waves-green btn">Update</a>
-    </div>
-  </div>
-  
-  <!-- Button Config Modal -->
-  <div id="buttonConfigModal" class="modal">
-    <div class="modal-content">
-      <h4>Configure Button Positions</h4>
-      <div id="buttonConfigContainer"></div>
-      <textarea id="uploadedFilesListModal" class="materialize-textarea" rows="2" placeholder="Uploaded files will appear here"></textarea>
-    </div>
-    <div class="modal-footer">
-      <a href="#!" id="saveButtonPositionsBtn" class="modal-close waves-effect waves-green btn">Save Positions</a>
     </div>
   </div>
   
@@ -564,32 +864,171 @@ Key Phrase Generation Using the .csv Sales Reports and .csv Product List Files:
       </div>
     </div>
   </div>
-  
-  <!-- New File Content Modal (to view CSV file content) -->
-  <div id="fileContentModal" class="modal">
+
+  <!-- Layout Config Modal (mirrors shipping-1 flow) -->
+  <div id="configModal" class="modal">
     <div class="modal-content">
-      <h4>File Content</h4>
-      <textarea id="fileContentModalText" style="width:100%; height:300px;" readonly></textarea>
+      <h5>Configure Component Positions</h5>
+      <table class="striped" id="configTable">
+        <thead>
+          <tr>
+            <th>Component</th><th>Left</th><th>Top</th><th>Width</th><th>Height</th>
+          </tr>
+        </thead>
+        <tbody></tbody>
+      </table>
     </div>
     <div class="modal-footer">
-      <a href="#!" class="modal-close waves-effect waves-green btn">Close</a>
+      <a id="resetLayoutBtn" class="waves-effect waves-red btn-flat">Reset</a>
+      <a id="saveConfigBtn" class="modal-close waves-effect waves-green btn">Save</a>
     </div>
   </div>
   
   <script src="https://code.jquery.com/jquery-3.6.0.min.js"></script>
   <script src="https://cdnjs.cloudflare.com/ajax/libs/materialize/1.0.0/js/materialize.min.js"></script>
-  <script src="metadataHandler.js"></script>
+  <!-- Fallback: inline metadataHandler to avoid 404 while keeping the same API -->
+  <script>
+    window.metadataHandler = window.metadataHandler || (function(){
+      /**
+       * analyzeAndEmbedMetadata(i)
+       * Minimal implementation:
+       * - Generates a short alt/metadata string from the Listing Description or filename
+       * - Stores it in window.photoMeta[i] so your upload calls use it as alt_text
+       * - Updates the little status text under each preview cell
+       */
+      async function analyzeAndEmbedMetadata(i){
+        try {
+          const imgData = (window.previewImages && window.previewImages[i]) || null;
+          if (!imgData) {
+            if (window.M && M.toast) M.toast({ html: "No image in slot " + (i+1) });
+            return;
+          }
+          const desc = (document.getElementById("listingDescInput")?.value || "").trim();
+          const name = (window.photoNames?.[i] || "").replace(/\.[a-z0-9]+$/i, "");
+          // Build a concise, SEO-ish line (max ~200 chars)
+          const base = (desc || name || "Jewelry photo").replace(/\s+/g, " ").trim();
+          const tag  = base.slice(0, 200);
+          // Persist for your upload paths (used as alt_text later)
+          window.photoMeta[i] = tag;
+          // UI status tick
+          const s = document.getElementById("metadataStatus" + i);
+          if (s) s.textContent = "✓ tagged";
+        } catch (e) {
+          console.error("metadataHandler.analyzeAndEmbedMetadata error:", e);
+          if (window.M && M.toast) M.toast({ html: "Metadata error: " + e.message });
+        }
+      }
+      return { analyzeAndEmbedMetadata };
+    })();
+  </script>
+
+  <!-- Fallback: inline metadataHandler to avoid 404 while keeping the same API -->
+  <script>
+    window.metadataHandler = window.metadataHandler || (function(){
+      async function analyzeAndEmbedMetadata(i) {
+        const txt = (window.previewImages && window.previewImages[i]) ? "OK" : "no image";
+        window.photoMeta = window.photoMeta || [];
+        window.photoMeta[i] = "AUTO: " + txt;
+        const ta = document.getElementById("metadataTextarea");
+        if (ta) {
+          ta.value = Array.from({ length: Math.min(7, window.previewImages.length) }, (_, idx) =>
+            `${idx + 1}. ${window.photoMeta[idx] || ""}`.trim()
+          ).join("\n").trim();
+        }
+      }
+      return { analyzeAndEmbedMetadata };
+    })();
+  </script>
+
+  <!-- ⬇️ Paste your REAL GPT-5 vision-backed handler RIGHT BELOW ⬇️ -->
+  <script>
+    // Real GPT-5 vision-backed metadata generator
+    window.metadataHandler = (function () {
+      async function analyzeAndEmbedMetadata(i) {
+        try {
+          const imgData = (window.previewImages && window.previewImages[i]) || null;
+          if (!imgData) {
+            if (window.M?.toast) M.toast({ html: "No image in slot " + (i + 1) });
+            return;
+          }
+
+          const rules = document.getElementById("analyzeRulesTextarea")?.value?.trim() || "";
+          const listingDesc = document.getElementById("listingDescInput")?.value?.trim() || "";
+          const fileHint = (window.photoNames?.[i] || "").replace(/\.[a-z0-9]+$/i, "");
+
+          const prompt = `
+  You are generating Etsy listing photo metadata.
+  Return ONE concise alt/metadata line (<= 200 chars), plain text only.
+  Prefer concrete product details you can see: material, shape, color, finish, style.
+  If rules conflict with what you see, trust the image.
+  Listing context (optional):
+  ${listingDesc ? ("- " + listingDesc) : ""}
+  Rules (optional):
+  ${rules ? ("- " + rules) : ""}
+  File hint (optional):
+  ${fileHint ? ("- " + fileHint) : ""}
+  `.trim();
+
+          const payload = {
+            model: window.modelName || "gpt-5",
+            input: [
+              { role: "system", content: "Return ONLY one plain-text line, <=200 characters." },
+              {
+                role: "user",
+                content: [
+                  { type: "input_text", text: prompt },
+                  { type: "input_image", image_url: imgData }
+                ]
+              }
+            ],
+            max_output_tokens: 300,
+            reasoning: { effort: "minimal" },
+            text: { verbosity: "medium" }
+          };
+
+          const data = await callOpenAI(payload);
+          const raw = (typeof extractResponseText === "function")
+            ? extractResponseText(data)
+            : (data?.output_text || "").trim();
+
+          const best = (raw || listingDesc || fileHint || "Jewelry photo")
+            .replace(/\s+/g, " ")
+            .slice(0, 200);
+
+          window.photoMeta = window.photoMeta || [];
+          window.photoMeta[i] = best;
+
+          const s = document.getElementById("metadataStatus" + i);
+          if (s) s.textContent = "✓ analyzed";
+
+          const ta = document.getElementById("metadataTextarea");
+          if (ta) {
+            const count = Math.min(7, window.previewImages.length);
+            const lines = Array.from({ length: count }, (_, idx) =>
+              `${idx + 1}. ${window.photoMeta[idx] || ""}`.trim()
+            ).join("\n").trim();
+            if (lines) ta.value = lines;
+          }
+
+          return best;
+        } catch (e) {
+          console.error("metadataHandler.analyzeAndEmbedMetadata error:", e);
+          if (window.M?.toast) M.toast({ html: "Metadata error: " + e.message });
+        }
+      }
+
+      return { analyzeAndEmbedMetadata };
+    })();
+  </script>
+
   <script>
     // The temporary debug toast notifications have been removed.
 
     window.ETSY_SHOP_URL = "https://www.etsy.com/shop/custombrites";
     window.CLIENT_ID = "k75zdspz4r99txpqdji7i2em";
     window.REDIRECT_URI = "https://delicate-tanuki-616ac0.netlify.app/";
-    window.modelName = "chatgpt-4o-latest";
+    window.modelName = "gpt-5";
     window.accessToken;
-    window.soldOrdersCSV = [];
-    window.listingsCSV = [];
-    window.uploadedCSVFileIds = [];
     window.photoNames = [];
     window.previewImages = [];
     window.photoMeta = [];
@@ -601,6 +1040,464 @@ Key Phrase Generation Using the .csv Sales Reports and .csv Product List Files:
     window.listingQueue = [];
     window.photoUpdateComplete = false;
     window.infoUpdateComplete = false;
+
+    // ====== POSITION CONFIG (global, dynamic) ======
+    window.configComponentIDs = [];
+
+    /** Every interactive/visible control we want independently positionable */
+    const AUTO_SELECTORS = [
+      "button",        // all <button>
+      "a.btn",         // Materialize anchors acting as buttons
+      "input", "textarea", "select",
+      "#dropZone",
+      ".preview-cell", // each photo cell
+      ".section-heading",
+      "#titleSpinner",
+      "#listingQueueCount",
+      "#listingDescContainer",
+      "#descriptionSpinner",
+      "#searchSpinner",
+      "#analyzeMetadataProgress",
+      "#createListingProgress",
+      "#duplicateListingProgress",
+      "#titleCount",
+      "#analyzeMetadataCheck",
+      "#createListingCheck",
+      "#duplicateListingCheck"             
+    ];
+
+    function isExcluded(el){
+      // do NOT move overlays or any modal internals (including the config modal itself)
+      return el.closest("#configModal") || el.closest(".modal") || el.classList.contains("modal") || el.classList.contains("modal-overlay");
+    }
+
+    function ensureId(el){
+      if (el.id) return el.id;
+      const id = el.tagName.toLowerCase() + "-" + Math.random().toString(36).slice(2,7);
+      el.id = id;
+      return id;
+    }
+
+    function collectMovables(){
+      const nodes = new Set();
+      AUTO_SELECTORS.forEach(sel => {
+        document.querySelectorAll(sel).forEach(n => { if (!isExcluded(n)) nodes.add(n); });
+      });
+      return Array.from(nodes);
+    }
+
+    // 3.2 Hard defaults — FULLY SPECIFIED per user map (all keys get a concrete value)
+    const defaultPositions = {
+      // Top controls
+      openConfigBtn:           { left: 190,  top: 10,  width: 140, height: 35 },
+      connectEtsyBtn:          { left: 10,   top: 10,  width: 160, height: 35 },
+      createListingBtn:        { left: 550,  top: 10,  width: 160, height: 35 },
+      analyzeMetadataBtn:      { left: 550,  top: 100, width: 160, height: 35 },
+
+      // Generation controls
+      generateBtn:             { left: 10,   top: 455, width: 125, height: 35 },
+      regenTitleBtn:           { left: 285,  top: 492, width: 100, height: 35 },
+      copyTitleBtn:            { left: 410,  top: 492, width: 100, height: 35 },
+      showTitleRulesBtn:       { left: 150,  top: 0,   width: 0,   height: 0  },
+      regenDescriptionBtn:     { left: 285,  top: 603, width: 100, height: 35 },
+      copyDescriptionBtn:      { left: 410,  top: 603, width: 100, height: 35 },
+      showDescriptionRulesBtn: { left: 150,  top: 0,   width: 0,   height: 0  },
+
+      // Text inputs / areas
+      listingDescInput:        { left: 10,   top: 220, width: 490, height: 35 },
+      shopListings:            { left: 10,   top: 110, width: 500, height: 45 },
+      searchKeyPhrases:        { left: 10,   top: 325, width: 500, height: 200 },
+      listingTitle:            { left: 10,   top: 535, width: 1000,height: 45 },
+      listingDescription:      { left: 10,   top: 540, width: 1400,height: 150 },
+      listingDescContainer:    { left: 10,   top: 185, width: 520,  height: 70  },
+      titleCount:              { left: 1030,   top: 558, width: 150,  height: 24  },
+
+      // Drop zone
+      dropZone:                { left: 1340, top: 150, width: 155, height: 350 },
+
+      // Preview cells
+      previewCell0:            { left: 550,  top: 150, width: 148, height: 173 },
+      previewCell1:            { left: 705,  top: 150, width: 148, height: 173 },
+      previewCell2:            { left: 860,  top: 150, width: 148, height: 173 },
+      previewCell3:            { left: 1015, top: 150, width: 148, height: 173 },
+      previewCell4:            { left: 1170, top: 150, width: 148, height: 173 },
+      previewCell5:            { left: 550,  top: 340, width: 148, height: 173 },
+      previewCell6:            { left: 705,  top: 340, width: 148, height: 173 },
+      previewCell7:            { left: 860,  top: 340, width: 148, height: 173 },
+      previewCell8:            { left: 1015, top: 340, width: 148, height: 173 },
+      previewCell9:            { left: 1170, top: 340, width: 148, height: 173 },
+
+      // Auto-assigned heading IDs (current session)
+      etsyShopListingsHeading:   { left: 10,   top: 75,  width: 180, height: 27 },
+      searchKeyPhrasesHeading:   { left: 10,   top: 290, width: 180, height: 27 },
+      listingTitleHeading:       { left: 10,   top: 505, width: 180, height: 27 },
+      titleSpinner:              { left: 160,  top: 507, width: 20,  height: 20 },
+      listingDescriptionHeading: { left: 10,   top: 610, width: 250, height: 27 },
+      searchSpinner:             { left: 177,  top: 292, width: 20,  height: 20 },
+      descriptionSpinner:        { left: 235,  top: 612, width: 20,  height: 20 },
+      duplicateListingBtn:       { left: 1040, top: 10, width: 160, height: 35 },
+      clearBtn:                  { left: 1290, top: 10, width: 110, height: 35 },
+      analyzeMetadataProgress:   { left: 720,  top: 105, width: 160, height: 27 },
+      analyzeMetadataCheck:      { left: 720,  top: 105, width: 22, height: 22 },
+      duplicateListingProgress:  { left: 1170, top: 14, width: 160, height: 27 },
+      duplicateListingCheck:     { left: 1170,  top: 14,  width: 22, height: 22 },   /* adjust as you like */
+      createListingProgress:     { left: 720,  top: 14,  width: 160, height: 27 },
+      createListingCheck:        { left: 720,  top: 14,  width: 22, height: 22 },   /* just left of create bar (870) */
+      
+
+      // Counter chip
+      listingQueueCount:       { left: 190,  top: 75,  width: 25,  height: 27 }
+    };
+
+    // (Shipping-1 stores to LS as pos-<id>-left|top|width|height and applies absolute layout.  [oai_citation:6‡shipping-1.html](file-service://file-UyzPx2tdaLoZi5ZZoE5Zq8))
+
+    function adoptIntoLayoutRoot(el){
+    const stage = document.getElementById("layoutRoot");
+    if (!stage || !el || el.parentElement === stage) return;
+
+    // Compute absolute document coordinates BEFORE moving
+    const r = el.getBoundingClientRect();
+    const L = Math.round(r.left + window.scrollX);
+    const T = Math.round(r.top  + window.scrollY);
+    const W = Math.round(r.width  || el.offsetWidth  || 0);
+    const H = Math.round(r.height || el.offsetHeight || 0);
+
+    stage.appendChild(el); // reparent to stage
+
+    el.classList.add("layout-abs");
+    el.classList.add("configurable"); // dashed outline in config-mode
+    el.style.setProperty("position","absolute","important");
+    el.style.setProperty("left",  L + "px","important");
+    el.style.setProperty("top",   T + "px","important");
+    el.style.setProperty("width", W + "px","important");
+    el.style.setProperty("height",H + "px","important");
+    el.style.setProperty("z-index","3000","important");
+    // strip conflicting layout styles
+    el.style.removeProperty("margin");
+    el.style.removeProperty("margin-left");
+    el.style.removeProperty("margin-top");
+    el.style.removeProperty("right");
+    el.style.removeProperty("bottom");
+  }
+
+  function initAbsoluteLayout(){
+    const stage = document.getElementById("layoutRoot");
+    if (!stage) return;
+
+    const movables = collectMovables();
+    window.configComponentIDs = [];
+    movables.forEach(el => {
+      const id = ensureId(el);
+      window.configComponentIDs.push(id);
+      adoptIntoLayoutRoot(el);
+    });
+    // de-dupe
+    window.configComponentIDs = Array.from(new Set(window.configComponentIDs));
+  }
+
+    // Utility to get a safe numeric value
+    function _num(v, fallback){ v = (v==null? "" : String(v)); var n = parseInt(v,10); return isFinite(n) ? n : fallback; }
+
+    // Remove old wrapper positions/styles we no longer control
+    function cleanupNestedConflicts(){
+      ["descriptionAndFileUploadContainer","topButtons","belowSearch"].forEach(function(id){
+        var el = document.getElementById(id);
+        if (el){
+          el.classList.remove("layout-abs");
+          el.style.removeProperty("position");
+          el.style.removeProperty("left");
+          el.style.removeProperty("top");
+          el.style.removeProperty("width");
+          el.style.removeProperty("height");
+        }
+        ["left","top","width","height"].forEach(function(k){
+          localStorage.removeItem("pos-"+id+"-"+k);
+        });
+      });
+    }
+
+    // ---- ID migration: preserve saved positions after renaming ephemeral IDs ----
+    const ID_MIGRATIONS = {
+      "div-0g0nl": "etsyShopListingsHeading",
+      "span-yr8zb": "searchKeyPhrasesHeading",
+      "div-89qwd": "listingTitleHeading",
+      "div-0cwxn": "listingDescriptionHeading"
+    };
+    function migrateLocalStoragePositions(){
+      Object.entries(ID_MIGRATIONS).forEach(([oldId, newId]) => {
+        ["left","top","width","height"].forEach(k => {
+          const oldKey = "pos-" + oldId + "-" + k;
+          const newKey = "pos-" + newId + "-" + k;
+          const val = localStorage.getItem(oldKey);
+          if (val != null && localStorage.getItem(newKey) == null) {
+            localStorage.setItem(newKey, val);
+          }
+          // Always clear the old keys so they won't clutter storage
+          localStorage.removeItem(oldKey);
+        });
+      });
+    }
+
+    // 3.3 Apply saved (or default) positions — same storage keys as shipping-1
+    function loadPositions(){
+      const ids = window.configComponentIDs || [];
+      for (var i=0; i<ids.length; i++){
+        var id = ids[i];
+        var el = document.getElementById(id);
+        if(!el) continue;
+
+        // If no hard default provided, seed from the live DOM so first-run layout is preserved.
+        var rect = el.getBoundingClientRect();
+        var seed = {
+          left:  Math.round(rect.left + window.scrollX),
+          top:   Math.round(rect.top  + window.scrollY),
+          width: Math.round(rect.width  || el.offsetWidth  || 0),
+          height:Math.round(rect.height || el.offsetHeight || 0)
+        };
+        var def = Object.assign(seed, defaultPositions[id] || {});
+
+        var left = localStorage.getItem("pos-"+id+"-left");
+        var top  = localStorage.getItem("pos-"+id+"-top");
+        var w    = localStorage.getItem("pos-"+id+"-width");
+        var h    = localStorage.getItem("pos-"+id+"-height");
+
+        left = _num(left, def.left);
+        top  = _num(top,  def.top);
+        w    = _num(w,    def.width);
+        h    = _num(h,    def.height);
+
+        el.classList.add("layout-abs");
+        el.classList.add("configurable"); // show dashed outline + transition in config-mode
+        // Use !important to beat author styles and grid/flex side-effects
+        el.style.setProperty("position", "absolute", "important");
+        el.style.setProperty("left",    left + "px", "important");
+        el.style.setProperty("top",     top  + "px", "important");
+        el.style.setProperty("width",   ((w>0 ? w : def.width)) + "px", "important");
+        el.style.setProperty("height",  ((h>0 ? h : def.height)) + "px", "important");
+        // NEW: ensure absolute layout isn't visually offset/hidden
+        el.style.removeProperty("margin");
+        el.style.removeProperty("margin-left");
+        el.style.removeProperty("margin-top");
+        el.style.removeProperty("right");
+        el.style.removeProperty("bottom");
+        el.style.setProperty("z-index", "3000", "important");
+      }
+    }
+
+    function populateConfigTable(){
+      var tbody = document.getElementById("configTable").querySelector("tbody");
+      tbody.innerHTML = "";
+      const ids = window.configComponentIDs || [];
+      for (var i=0; i<ids.length; i++){
+        var id = ids[i];
+        var el = document.getElementById(id);
+        if(!el) continue;
+
+        // Seed exactly like loadPositions(): DOM rect → merged with hard defaults
+        var rect = el.getBoundingClientRect();
+        var seed = {
+          left:  Math.round(rect.left + window.scrollX),
+          top:   Math.round(rect.top  + window.scrollY),
+          width: Math.round(rect.width  || el.offsetWidth  || 0),
+          height:Math.round(rect.height || el.offsetHeight || 0)
+        };
+        var def = Object.assign(seed, defaultPositions[id] || {});
+
+        // Prefer saved values if present
+        var left = _num(localStorage.getItem("pos-"+id+"-left"),   def.left);
+        var top  = _num(localStorage.getItem("pos-"+id+"-top"),    def.top);
+        var w    = _num(localStorage.getItem("pos-"+id+"-width"),  def.width);
+        var h    = _num(localStorage.getItem("pos-"+id+"-height"), def.height);
+
+        var tr = document.createElement("tr");
+        tr.innerHTML = `
+          <td>${id}</td>
+          <td><input id="left_${id}"   type="number" value="${left}"  style="width:90px"></td>
+          <td><input id="top_${id}"    type="number" value="${top}"   style="width:90px"></td>
+          <td><input id="width_${id}"  type="number" value="${w}"     style="width:90px"></td>
+          <td><input id="height_${id}" type="number" value="${h}"     style="width:90px"></td>
+        `;
+        tbody.appendChild(tr);
+        // Live preview while editing numbers (input/change/keyup/mousewheel)
+        ["left","top","width","height"].forEach(function(k){
+          var inp = document.getElementById(k + "_" + id);
+          if (inp) {
+            const handler = function(){ previewFromInputs(id); };
+            ["input","change","keyup","mousewheel"].forEach(evt => inp.addEventListener(evt, handler));
+          }
+        });
+      }
+    }
+
+    /* --- absolute layout helpers --- */
+    function applySinglePosition(id, left, top, width, height) {
+      const el = document.getElementById(id);
+      if (!el) return;
+
+      const cs = window.getComputedStyle(el);
+      const curL = parseInt(cs.left, 10)    || el.offsetLeft  || 0;
+      const curT = parseInt(cs.top, 10)     || el.offsetTop   || 0;
+      const curW = parseInt(cs.width, 10)   || el.offsetWidth || 0;
+      const curH = parseInt(cs.height, 10)  || el.offsetHeight|| 0;
+
+      const L = Number.isFinite(+left)  ? +left  : curL;
+      const T = Number.isFinite(+top)   ? +top   : curT;
+      const W = Number.isFinite(+width) ? +width : curW;
+      const H = Number.isFinite(+height)? +height: curH;
+
+      el.classList.add("layout-abs");
+      el.style.setProperty("position", "absolute", "important");
+      el.style.setProperty("left",  L + "px", "important");
+      el.style.setProperty("top",   T + "px", "important");
+      el.style.setProperty("width", W + "px", "important");
+      el.style.setProperty("height",H + "px", "important");
+      el.style.setProperty("z-index","3000","important");
+
+      // Ensure nothing "fights" absolute placement
+      el.style.removeProperty("margin");
+      el.style.removeProperty("margin-left");
+      el.style.removeProperty("margin-top");
+      el.style.removeProperty("right");
+      el.style.removeProperty("bottom");
+    }
+
+    function previewFromInputs(id) {
+      const l = document.getElementById("left_"   + id)?.value;
+      const t = document.getElementById("top_"    + id)?.value;
+      const w = document.getElementById("width_"  + id)?.value;
+      const h = document.getElementById("height_" + id)?.value;
+      applySinglePosition(id, parseInt(l,10), parseInt(t,10), parseInt(w,10), parseInt(h,10));
+    }
+
+    function forceApplyPositions() {
+      // Apply now, after modal close animation, and once more after paint
+      requestAnimationFrame(() => {
+        if (typeof loadPositions === "function") loadPositions();
+        setTimeout(() => { if (typeof loadPositions === "function") loadPositions(); }, 180);
+      });
+    }
+
+    // 3.5 Wire up modal + save handler (same ids as shipping-1)
+    document.addEventListener("DOMContentLoaded", function(){
+      localStorage.removeItem("buttonPositions"); // purge legacy store once
+      // Cleanup old wrapper keys, adopt EVERY control into the absolute stage, then apply layout
+      cleanupNestedConflicts();
+      initAbsoluteLayout();      // discover, assign IDs, reparent to #layoutRoot
+      migrateLocalStoragePositions(); // move saved positions from old random IDs to new stable IDs
+      loadPositions();           // apply saved/default positions to all
+
+    var configModal = M.Modal.init(document.getElementById("configModal"), {
+      onOpenStart() {
+        document.body.classList.add("config-mode");
+        // So you can see layout changes behind the modal
+        setTimeout(() => {
+          const ov = document.querySelector(".modal-overlay");
+          if (ov) ov.style.opacity = "0.15";
+        }, 0);
+        // NEW: show/animate the spinners during layout editing
+        ["titleSpinner","descriptionSpinner","searchSpinner"].forEach(id => {
+          const sp = document.getElementById(id);
+          if (sp) {
+            sp.style.display = "inline-block";
+            sp.classList.add("active");
+          }
+        });
+      },
+      onCloseEnd() {
+        document.body.classList.remove("config-mode");
+        const ov = document.querySelector(".modal-overlay");
+        if (ov) ov.style.opacity = "";
+        // NEW: return spinners to normal, API-driven visibility on close
+        ["titleSpinner","descriptionSpinner","searchSpinner"].forEach(id => {
+          const sp = document.getElementById(id);
+          if (sp) {
+            sp.classList.remove("active");
+            sp.style.display = ""; // let the generators control visibility
+          }
+        });
+      }
+    });
+    var openBtn = document.getElementById("openConfigBtn");
+    if (openBtn){
+      openBtn.addEventListener("click", function(){
+        populateConfigTable(); // shipping-1 builds table on open.  [oai_citation:8‡shipping-1.html](file-service://file-UyzPx2tdaLoZi5ZZoE5Zq8)
+        configModal.open();
+      });
+    }
+
+      var resetBtn = document.getElementById("resetLayoutBtn");
+      if (resetBtn){
+        resetBtn.addEventListener("click", function(){
+          const ids = window.configComponentIDs || [];
+          ids.forEach(id => ["left","top","width","height"].forEach(k => localStorage.removeItem("pos-"+id+"-"+k)));
+          if (window.M && M.toast) M.toast({ html: "All positions reset." });
+          requestAnimationFrame(() => { if (typeof loadPositions === "function") loadPositions(); });
+        });
+      }
+
+      var saveBtn = document.getElementById("saveConfigBtn");
+      if (saveBtn){
+        saveBtn.addEventListener("click", function(){
+          const ids = window.configComponentIDs || [];
+          for (var i=0; i<ids.length; i++){
+            var id = ids[i];
+            var el = document.getElementById(id);
+            if(!el) continue;
+
+            var cs = window.getComputedStyle(el);
+            var left = _num(document.getElementById("left_"+id)?.value,
+                            _num(localStorage.getItem("pos-"+id+"-left"),  parseInt(cs.left)||el.offsetLeft||0));
+            var top  = _num(document.getElementById("top_"+id)?.value,
+                            _num(localStorage.getItem("pos-"+id+"-top"),   parseInt(cs.top)||el.offsetTop||0));
+            var w    = _num(document.getElementById("width_"+id)?.value,
+                            _num(localStorage.getItem("pos-"+id+"-width"), parseInt(cs.width)||el.offsetWidth||0));
+            var h    = _num(document.getElementById("height_"+id)?.value,
+                            _num(localStorage.getItem("pos-"+id+"-height"),parseInt(cs.height)||el.offsetHeight||0));
+
+            if (left!=null) localStorage.setItem("pos-"+id+"-left",  left);
+            if (top!=null)  localStorage.setItem("pos-"+id+"-top",   top);
+            if (w!=null)    localStorage.setItem("pos-"+id+"-width", w);
+            if (h!=null)    localStorage.setItem("pos-"+id+"-height",h);
+
+            // Live preview (with margin strip + high z-index)
+            if (typeof applySinglePosition === "function") {
+              applySinglePosition(id, left, top, w, h);
+            } else {
+              // Fallback if applySinglePosition() isn't present
+              el.classList.add("layout-abs");
+              el.classList.add("configurable"); // ensure outline/transition are active
+              el.style.setProperty("position", "absolute", "important");
+              el.style.setProperty("left",  L + "px", "important");
+              el.style.setProperty("top",   T + "px", "important");
+              el.style.setProperty("width", W + "px", "important");
+              el.style.setProperty("height",H + "px", "important");
+
+              // show above page content while configuring, but still under the modal content
+              const z = document.body.classList.contains("config-mode") ? 10050 : 3000;
+              el.style.setProperty("z-index", String(z), "important");
+              el.style.removeProperty("margin");
+              el.style.removeProperty("margin-left");
+              el.style.removeProperty("margin-top");
+              el.style.removeProperty("right");
+              el.style.removeProperty("bottom");
+            }
+          }
+
+          // Apply everything once after persisting
+          if (typeof forceApplyPositions === "function") forceApplyPositions();
+
+          if (window.M && M.toast) M.toast({ html: "Layout saved and applied." });
+
+          // Re-assert once more after modal animates closed
+          requestAnimationFrame(loadPositions);
+        });
+      }
+       // Wire up the Clear button
+      var clearBtn = document.getElementById("clearBtn");
+      if (clearBtn) {
+        clearBtn.addEventListener("click", handleClearAll);
+      }
+    });
 
     window.appendedDescriptionText = `
 
@@ -626,7 +1523,7 @@ P A C K A G I N G
 ------------------------------------
 
 E X P E D I T E D • S H I P P I N G
-You will be able to choose faster shipping options in the drop down menu when you check out. Ship times do NOT include production times (1-3 business days). However, if you select expedited shipping, we will try to get your order done faster.
+You will be able to choose faster shipping options in the drop down menu when you check out. Ship times do NOT include production times (3-6 business days). However, if you select expedited shipping, we will try to get your order done faster.
 
 ------------------------------------
 
@@ -654,11 +1551,389 @@ https://www.etsy.com/shop/CustomBrites/policy"
 https://www.etsy.com/your/shops/me/listing-editor/edit/1822973998
 `;
 
+  // Clear UI helper (text, previews 0–6, checks, bars)
+   function handleClearAll() {
+     try {
+       // 1) Text boxes
+       const ids = ["searchKeyPhrases", "listingTitle", "listingDescription", "metadataTextarea"];
+       ids.forEach(id => { const el = document.getElementById(id); if (el) el.value = ""; });
+       // 1a) Overlay tied to searchKeyPhrases
+       const skp = document.getElementById("skpOverlay");
+       if (skp) skp.textContent = "";
+
+        // 2) Preview cells 0–6 — compact reset (don’t leave 'length' inflated)
+        window.previewImages = [];
+        window.photoNames    = [];
+        window.photoMeta     = [];
+        window.photoIds      = []; // keep these in sync too
+
+        for (let i = 0; i <= 6; i++) {
+          const cell = document.getElementById("previewCell" + i);
+          if (cell) cell.innerHTML = "Empty";
+          const status = document.getElementById("metadataStatus" + i);
+          if (status) status.textContent = "";
+        }
+
+        window.draggedIndex = null;
+        updateStaticPreviewGrid();
+
+       // 3) Hide green checkmarks
+       ["analyzeMetadataCheck","createListingCheck","duplicateListingCheck"].forEach(id => {
+         const el = document.getElementById(id);
+         if (el) el.style.display = "none";
+       });
+
+       // 4) Reset & hide progress bars (keeps your “show only while running” invariant)
+       if (typeof resetMetadataProgress === "function") resetMetadataProgress();
+       if (typeof showMetadataProgress  === "function") showMetadataProgress(false);
+       if (typeof resetDuplicateProgress=== "function") resetDuplicateProgress();
+       if (typeof showDuplicateProgress === "function") showDuplicateProgress(false);
+
+       // Optional: toast
+       if (window.M?.toast) M.toast({ html: "Cleared." });
+     } catch (e) {
+       console.error("handleClearAll error:", e);
+       if (window.M?.toast) M.toast({ html: "Clear failed: " + (e?.message || e) });
+     }
+   }
+
+    // Build SKU from first word of title + 5-digit random number (e.g., Horse_18789)
+    function buildSkuFromTitle(title) {
+     const first = (title || "").trim().split(/\s+/)[0] || "SKU";
+      const cleaned = first.replace(/[^A-Za-z0-9_-]/g, "") || "SKU";
+      const rand = Math.floor(10000 + Math.random() * 90000); // 10000–99999
+      return `${cleaned}_${rand}`;
+    }
+
+    // ============================
+    // LS-backed Etsy Upload Queue
+    // ============================
+    // Rationale:
+    // 1) On click, we SNAPSHOT all UI data + images into localStorage (chunked).
+    // 2) A tiny "daemon" processes queued jobs using the snapshot, not the UI.
+    //    So clearing the UI does NOT interrupt the Etsy push.
+    //
+    // Key LS keys:
+    //   etsyUploadJobs                -> ["etsyJob_<id>", ...]
+    //   etsyJob:<jobId>               -> JSON meta for a single job
+    //   <jobId>_p0_c0 / <jobId>_p0_n  -> chunked photo dataURL storage (see helpers)
+    //
+    // ---- Chunked LS helpers (store large data URLs safely) ----
+    const LS_CHUNK_SIZE = 480 * 1024; // ~480KB per chunk
+    function lsSaveLarge(baseKey, str) {
+      const n = Math.ceil((str || "").length / LS_CHUNK_SIZE) || 0;
+      for (let i = 0; i < n; i++) {
+        localStorage.setItem(`${baseKey}_c${i}`, str.slice(i * LS_CHUNK_SIZE, (i + 1) * LS_CHUNK_SIZE));
+      }
+      localStorage.setItem(`${baseKey}_n`, String(n));
+    }
+
+    // ---- IndexedDB blob store (for big images; avoids LS quota) ----
+    const DB_NAME = "etsyUploadDB";
+    const DB_VERSION = 1;
+    let __etsyDB;
+    function idbOpen() {
+      if (__etsyDB) return Promise.resolve(__etsyDB);
+      return new Promise((resolve, reject) => {
+        const req = indexedDB.open(DB_NAME, DB_VERSION);
+        req.onupgradeneeded = () => {
+          const db = req.result;
+          if (!db.objectStoreNames.contains("blobs")) {
+            db.createObjectStore("blobs", { keyPath: "key" });
+          }
+        };
+        req.onsuccess = () => { __etsyDB = req.result; resolve(__etsyDB); };
+        req.onerror = () => reject(req.error);
+      });
+    }
+    async function idbPut(key, dataURL) {
+      const db = await idbOpen();
+      const blob = await (await fetch(dataURL)).blob();
+      await new Promise((resolve, reject) => {
+        const tx = db.transaction("blobs", "readwrite");
+        tx.objectStore("blobs").put({ key, blob });
+        tx.oncomplete = resolve; tx.onerror = () => reject(tx.error);
+      });
+      return key;
+    }
+    async function idbGetBlob(key) {
+      const db = await idbOpen();
+      return await new Promise((resolve, reject) => {
+        const tx = db.transaction("blobs", "readonly");
+        const req = tx.objectStore("blobs").get(key);
+        req.onsuccess = () => resolve(req.result && req.result.blob);
+        req.onerror = () => reject(req.error);
+      });
+    }
+    async function idbDel(key) {
+      const db = await idbOpen();
+      await new Promise((resolve, reject) => {
+        const tx = db.transaction("blobs", "readwrite");
+        tx.objectStore("blobs").delete(key);
+        tx.oncomplete = resolve; tx.onerror = () => reject(tx.error);
+      });
+    }
+
+    function lsLoadLarge(baseKey) {
+      const n = Number(localStorage.getItem(`${baseKey}_n`) || 0);
+      let out = "";
+      for (let i = 0; i < n; i++) out += localStorage.getItem(`${baseKey}_c${i}`) || "";
+      return out;
+    }
+    function lsClearLarge(baseKey) {
+      const n = Number(localStorage.getItem(`${baseKey}_n`) || 0);
+      for (let i = 0; i < n; i++) localStorage.removeItem(`${baseKey}_c${i}`);
+      localStorage.removeItem(`${baseKey}_n`);
+    }
+    function nowIso() { return new Date().toISOString(); }
+
+    // ---- Tag builder (same logic as your Create flow) ----
+    function buildEtsyTagsFromOverlay(rawText) {
+      const raw = String(rawText || "");
+      const tags = [];
+      const seen = new Set();
+      const pushTag = (s) => {
+        let tag = (s || "")
+          .normalize("NFKD")
+          .replace(/[^\p{Letter}\p{Number}\s]/gu, " ")
+          .replace(/\s+/g, " ")
+          .trim();
+        if (!tag) return;
+        if (tag.length > 20) {
+          const cut = tag.slice(0, 20);
+          const sp = cut.lastIndexOf(" ");
+          tag = (sp > 7 ? cut.slice(0, sp) : cut).trim();
+        }
+        const key = tag.toLowerCase();
+        if (!seen.has(key)) { seen.add(key); tags.push(tag); }
+      };
+      raw.split("\n").forEach(line => {
+        let foundAny = false;
+        for (const m of line.matchAll(/\b\d{1,2}[.)]\s*([^0-9]+?)(?=(\s+\d{1,2}[.)]\s*|$))/g)) {
+          foundAny = true; pushTag(m[1]); if (tags.length >= 13) break;
+        }
+        if (!foundAny) { const fallback = line.replace(/^\s*\d+[.)]\s*/, ""); pushTag(fallback); }
+      });
+      return tags.slice(0, 13);
+    }
+
+    // ---- Snapshot the current UI to a durable Job (LS manifest + IDB blobs) ----
+    async function queueListingUploadFromUI(listingId) {
+      const jobId = `etsyJob_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`;
+      const title = (document.getElementById("listingTitle")?.value || "").trim();
+      const userDescription = document.getElementById("listingDescription")?.value || "";
+      const appended = window.appendedDescriptionText || "";
+      const finalDescription = userDescription + appended;
+      const tags = buildEtsyTagsFromOverlay(document.getElementById("searchKeyPhrases")?.value || "");
+      const sku = buildSkuFromTitle(title);
+
+      // Photos (0–6) from previewImages / names / meta
+      const photos = Array.from(window.previewImages || []);
+      const photoNames = Array.from(window.photoNames || []).map((n, i) => n || `uploaded_photo_${i}.jpg`);
+      const photoMeta = Array.from(window.photoMeta || []).map(s => (s || "").slice(0, 250));
+      const photoKeyBases = await Promise.all(photos.map(async (dataURL, i) => {
+        const key = `${jobId}_p${i}`;
+        try { await idbPut(key, dataURL); } catch (e) { console.warn("Photo IDB save failed", i, e); }
+        return key;
+      }));
+
+      // Reserved (7–9) from reservedPhotos [{src,name,meta}]
+      const reserved = Array.from(window.reservedPhotos || []);
+      const reservedSrc = reserved.map(x => x?.src).filter(Boolean);
+      const reservedNames = reserved.map((x, i) => x?.name || `reserved_photo_${i}.jpg`);
+      const reservedMeta = reserved.map(x => (x?.meta || "").slice(0, 250));
+      const reservedKeyBases = await Promise.all(reservedSrc.map(async (dataURL, i) => {
+        const key = `${jobId}_rp${i}`;
+        try { await idbPut(key, dataURL); } catch (e) { console.warn("Reserved IDB save failed", i, e); }
+        return key;
+      }));
+
+      const job = {
+        jobId,
+        createdAt: nowIso(),
+        status: "QUEUED",
+        progress: 0,
+        step: 0,
+        listingId: String(listingId),
+        accessToken: String(window.accessToken || ""), // capture now
+        title,
+        finalDescription,
+        tags,
+        sku,
+        photoCount: photoKeyBases.length,
+        photoKeyBases,
+        photoNames,
+        photoMeta,
+        reservedCount: reservedKeyBases.length,
+        reservedKeyBases,
+        reservedNames,
+        reservedMeta,
+        storage: { photos: "idb", reserved: "idb" } // NEW: where the bytes live
+      };
+      localStorage.setItem(`etsyJob:${jobId}`, JSON.stringify(job));
+      const queue = JSON.parse(localStorage.getItem("etsyUploadJobs") || "[]");
+      queue.push(jobId);
+      localStorage.setItem("etsyUploadJobs", JSON.stringify(queue));
+      return jobId;
+    }
+
+    // ---- Job runner (daemon) ----
+    async function runEtsyJob(jobId) {
+      let job = JSON.parse(localStorage.getItem(`etsyJob:${jobId}`) || "null");
+      if (!job) return;
+      const save = (patch) => {
+        job = { ...job, ...patch };
+        localStorage.setItem(`etsyJob:${jobId}`, JSON.stringify(job));
+      };
+      // Always prefer the freshest token (after OAuth reconnect)
+      let token = (window.accessToken && String(window.accessToken).trim())
+        || (localStorage.getItem("etsyAccessToken") || "").trim()
+        || job.accessToken;
+      if (token && token !== job.accessToken) save({ accessToken: token });
+      const listingId = job.listingId;
+      save({ status: "RUNNING" });
+
+      try {
+        // --- Stage 1: Upload Photos (main 0–6)
+        for (let i = 0; i < job.photoCount; i++) {
+        const blob = job.storage?.photos === "idb"
+          ? (await idbGetBlob(job.photoKeyBases[i]))
+          : await (async () => { const du = lsLoadLarge(job.photoKeyBases[i]); return du ? (await fetch(du)).blob() : null; })();
+        if (!blob) continue;
+          const fd = new FormData();
+          fd.append("listingId", listingId);
+          fd.append("token", token);
+          fd.append("fileName", job.photoNames[i] || `uploaded_photo_${i}.jpg`);
+          fd.append("rank", i + 1);
+          fd.append("alt_text", job.photoMeta[i] || "");
+          fd.append("file", blob, job.photoNames[i] || `uploaded_photo_${i}.jpg`);
+          const r = await fetch("/.netlify/functions/imageUpload", { method: "POST", body: fd });
+          if (!r.ok) {
+            const t = await r.text();
+            // NEW: auto-reconnect if token expired during photo uploads
+            if (r.status === 401 && /invalid_token|expired/i.test(t)) {
+              save({ status: "AUTH_NEEDED", error: "token_expired" });
+              window.M?.toast?.({ html: "Etsy session expired — reconnecting…" });
+              if (typeof beginEtsyReconnect === "function") { beginEtsyReconnect(); return; }
+              try { document.getElementById("connectEtsyBtn")?.click(); } catch {}
+              return;
+            }
+            console.warn("Photo upload failed", i + 1, t);
+          } else {
+            if (typeof bumpCreateProgressPerImage === "function") bumpCreateProgressPerImage();
+          }
+        }
+        // --- Stage 1b: Reserved (7–9)
+        for (let i = 0; i < job.reservedCount; i++) {
+          const blob = job.storage?.reserved === "idb"
+            ? (await idbGetBlob(job.reservedKeyBases[i]))
+            : await (async () => { const du = lsLoadLarge(job.reservedKeyBases[i]); return du ? (await fetch(du)).blob() : null; })();
+          if (!blob) continue;
+          const fd = new FormData();
+          fd.append("listingId", listingId);
+          fd.append("token", token);
+          fd.append("fileName", job.reservedNames[i] || `reserved_photo_${i}.jpg`);
+          fd.append("rank", 8 + i);
+          fd.append("alt_text", job.reservedMeta[i] || "");
+          fd.append("file", blob, job.reservedNames[i] || `reserved_photo_${i}.jpg`);
+          const r = await fetch("/.netlify/functions/imageUpload", { method: "POST", body: fd });
+          if (!r.ok) {
+            const t = await r.text();
+            if (r.status === 401 && /invalid_token|expired/i.test(t)) {
+              save({ status: "AUTH_NEEDED", error: "token_expired" });
+              window.M?.toast?.({ html: "Etsy session expired — reconnecting…" });
+              if (typeof beginEtsyReconnect === "function") { beginEtsyReconnect(); return; }
+              try { document.getElementById("connectEtsyBtn")?.click(); } catch {}
+              return;
+            }
+            console.warn("Reserved upload failed", 8 + i, t);
+          } else {
+            if (typeof bumpCreateProgressPerImage === "function") bumpCreateProgressPerImage();
+          }
+        }
+
+        // --- Stage 2: Info (title/desc/tags + SKU)
+        const payload = {
+          listing_id: listingId,
+          title: job.title,
+          description: job.finalDescription,
+          tags: job.tags,
+          skus: [job.sku],
+          sku: job.sku
+        };
+        const infoResp = await fetch(`/.netlify/functions/updateListing?listingId=${encodeURIComponent(listingId)}`, {
+          method: "PUT",
+          headers: { "Content-Type": "application/json", Authorization: "Bearer " + token },
+          body: JSON.stringify(payload)
+        });
+        const infoJson = await infoResp.json().catch(() => ({}));
+        if (!infoResp.ok) {
+          // NEW: auto-reconnect on expired/invalid token
+          const msg = JSON.stringify(infoJson || {});
+          if (infoResp.status === 401 && /invalid_token|expired/i.test(msg)) {
+            save({ status: "AUTH_NEEDED", error: "token_expired" });
+            window.M?.toast?.({ html: "Etsy session expired — reconnecting to continue your queued upload…" });
+            if (typeof beginEtsyReconnect === "function") { beginEtsyReconnect(); return; }
+            // Fallback: click the existing Connect button
+            try { document.getElementById("connectEtsyBtn")?.click(); } catch {}
+            return;
+          }
+          throw new Error(`Info update failed ${infoResp.status} — ${JSON.stringify(infoJson)}`);
+        }
+
+        // Inventory SKU (same as your current flow)
+        await fetch(
+          `/.netlify/functions/updateListingInventory?listingId=${encodeURIComponent(listingId)}&token=${encodeURIComponent(token)}`,
+          { method: "PUT", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ sku: job.sku }) }
+        ).catch(e => console.warn("Inventory SKU update error:", e));
+
+        if (typeof setCreateProgress === "function") setCreateProgress(100);
+        save({ status: "DONE", progress: 100, completedAt: nowIso() });
+        // Clean up persisted image bytes
+        if (job.storage?.photos === "idb" || job.storage?.reserved === "idb") {
+          for (const k of [...job.photoKeyBases, ...job.reservedKeyBases]) { try { await idbDel(k); } catch {} }
+        } else {
+          [...job.photoKeyBases, ...job.reservedKeyBases].forEach(k => lsClearLarge(k));
+        }
+
+        // Remove from queue
+        const q = JSON.parse(localStorage.getItem("etsyUploadJobs") || "[]");
+        const idx = q.indexOf(jobId);
+        if (idx > -1) { q.splice(idx, 1); localStorage.setItem("etsyUploadJobs", JSON.stringify(q)); }
+
+        // Also advance window.listingQueue if visible
+        if (window.listingQueue && window.listingQueue.length > 0) {
+          const i = window.listingQueue.indexOf(String(listingId));
+          if (i > -1) window.listingQueue.splice(i, 1);
+          if (typeof loadNextListingInQueue === "function") loadNextListingInQueue();
+        }
+        window.M?.toast?.({ html: "Create Listing complete from queue." });
+      } catch (err) {
+        console.error("Etsy job failed:", err);
+        save({ status: "FAILED", error: String(err && err.message || err) });
+        window.M?.toast?.({ html: "Create Listing error (queued): " + (err?.message || err) });
+      }
+    }
+
+    async function processEtsyJobs() {
+      if (window.__etsyUploadDaemon) return;
+      window.__etsyUploadDaemon = true;
+      try {
+        while (true) {
+          const q = JSON.parse(localStorage.getItem("etsyUploadJobs") || "[]");
+          if (!q.length) break;
+          const nextId = q[0]; // FIFO
+          await runEtsyJob(nextId);
+          // loop will re-read queue after each run
+        }
+      } finally {
+        window.__etsyUploadDaemon = false;
+      }
+    }
+
     // On persistDataBeforeRedirect, store current queue to local storage.
     function persistDataBeforeRedirect() {
       try {
-        localStorage.setItem("soldOrdersCSV", JSON.stringify(window.soldOrdersCSV));
-        localStorage.setItem("listingsCSV", JSON.stringify(window.listingsCSV));
         const listingsInputValue = document.getElementById("shopListings").value || "";
         localStorage.setItem("shopListingsText", listingsInputValue);
         localStorage.setItem("listingQueue", JSON.stringify(window.listingQueue));
@@ -678,39 +1953,6 @@ https://www.etsy.com/your/shops/me/listing-editor/edit/1822973998
       modalInstance.open();
     }
 
-    // CSV Drop Listener for uploadedFilesList element
-    const csvDropZone = document.getElementById("uploadedFilesList");
-    csvDropZone.addEventListener("dragover", e => {
-      e.preventDefault();
-      e.stopPropagation();
-      csvDropZone.style.borderColor = "#000";
-    });
-    csvDropZone.addEventListener("dragleave", e => {
-      e.preventDefault();
-      e.stopPropagation();
-      csvDropZone.style.borderColor = "#ccc";
-    });
-    csvDropZone.addEventListener("drop", async e => {
-      e.preventDefault();
-      e.stopPropagation();
-      csvDropZone.style.borderColor = "#ccc";
-      const files = e.dataTransfer.files;
-      for (let file of files) {
-        if (/\.csv$/i.test(file.name)) {
-          try {
-            const fileData = await uploadDocFile(file);
-            M.toast({ html: "CSV file uploaded with ID: " + (fileData.id || "N/A") });
-            window.uploadedCSVFileIds.push(fileData.id);
-            csvDropZone.value = window.uploadedCSVFileIds.join("\n");
-            await updateVectorStore();
-          } catch (err) {
-            console.error(err);
-            M.toast({ html: "Error uploading CSV: " + err.message });
-          }
-        }
-      }
-    });
-
     // Helper function: parseListingNumbers using regex to split by comma with optional whitespace
     function parseListingNumbers(rawInput) {
       const parts = rawInput.split(/\s*,\s*/);
@@ -726,12 +1968,16 @@ https://www.etsy.com/your/shops/me/listing-editor/edit/1822973998
   document.getElementById("shopListings").addEventListener("paste", (e) => {
     e.preventDefault();
     let pasteData = (e.clipboardData || window.clipboardData).getData("text");
+    // NEW: persist raw text immediately (survives refresh)
+    localStorage.setItem("shopListingsText", pasteData);
     window.listingQueue = parseListingNumbers(pasteData);
     loadNextListingInQueue();
   });
 
     // When the user changes the shopListings textarea manually.
   document.getElementById("shopListings").addEventListener("change", () => {
+    // NEW: persist raw text immediately (survives refresh)
+    localStorage.setItem("shopListingsText", rawInput);
     let rawInput = document.getElementById("shopListings").value;
     window.listingQueue = parseListingNumbers(rawInput);
     loadNextListingInQueue();
@@ -770,46 +2016,21 @@ document.getElementById("shopListings").addEventListener("keydown", (e) => {
     // On page load, restore the listing queue from local storage (if available)
     function restoreDataAfterRedirect() {
       try {
-        let soCSV = localStorage.getItem("soldOrdersCSV");
-        if (soCSV) { window.soldOrdersCSV = JSON.parse(soCSV); }
-        let liCSV = localStorage.getItem("listingsCSV");
-        if (liCSV) { window.listingsCSV = JSON.parse(liCSV); }
-        // Load listingQueue from local storage if it exists.
-        let storedQueue = localStorage.getItem("listingQueue");
+        const storedQueue = localStorage.getItem("listingQueue");
+        const storedText  = localStorage.getItem("shopListingsText") || "";
+
         if (storedQueue) {
           window.listingQueue = JSON.parse(storedQueue);
-          // Display only the first number from the restored queue.
-          if (window.listingQueue.length > 0) {
-            document.getElementById("shopListings").value = window.listingQueue[0];
-          }
+        } else if (storedText.trim()) {
+          window.listingQueue = parseListingNumbers(storedText.trim());
+        } else {
+          window.listingQueue = Array.isArray(window.listingQueue) ? window.listingQueue : [];
         }
+
+        // Will set textarea, update counter, and persist.
+        loadNextListingInQueue();
       } catch (err) {
         console.error("Error restoring data after redirect:", err);
-      }
-    }
-
-    // Load button positions (from local storage or default from uiPositions.js)
-    function loadButtonPositions() {
-      let stored = localStorage.getItem("buttonPositions");
-      if (stored) {
-        let positions = JSON.parse(stored);
-        for (let id in positions) {
-          let el = document.getElementById(id);
-          if (el) { 
-            el.style.top = positions[id].top; 
-            el.style.left = positions[id].left; 
-          }
-        }
-      } else if (window.defaultUIPositions) {
-        let positions = window.defaultUIPositions;
-        for (let id in positions) {
-          let el = document.getElementById(id);
-          if (el) { 
-            el.style.top = positions[id].top; 
-            el.style.left = positions[id].left; 
-          }
-        }
-        localStorage.setItem("buttonPositions", JSON.stringify(positions));
       }
     }
 
@@ -875,6 +2096,82 @@ document.getElementById("shopListings").addEventListener("keydown", (e) => {
       M.Modal.getInstance(document.getElementById("photoCropModal")).close();
     });
 
+    // Crops the i-th preview to exactly what you see inside its .preview-box,
+    // exporting a 3000x3000 JPEG @0.85 (same as saveCropBtn).
+    async function cropPreviewAsVisible(i) {
+      // 1) DOM & data
+      const cell = document.getElementById("previewCell" + i);
+      if (!cell) return;
+      const box  = cell.querySelector(".preview-box");
+      const imgEl = box?.querySelector("img");
+      if (!box || !imgEl) return;
+
+      const src = (window.previewImages && window.previewImages[i]) || imgEl.src;
+      if (!src) return;
+
+      // current transform state set by zoom/pan UI
+      const s    = parseFloat(imgEl.dataset.scale)   || 1;
+      const offX = parseFloat(imgEl.dataset.offsetX) || 0;
+      const offY = parseFloat(imgEl.dataset.offsetY) || 0;
+
+      // 2) Load original image (dataURL-safe)
+      const loaded = await new Promise((resolve, reject) => {
+        const im = new Image();
+        im.onload  = () => resolve(im);
+        im.onerror = reject;
+        im.src = src;
+      });
+
+      // 3) “Object-fit: cover” into the preview viewport (usually 120×120),
+      //     then apply the same scale/translate, then render to 3000×3000.
+      const viewportW = box.clientWidth  || 120;
+      const viewportH = box.clientHeight || 120;
+
+      // cover scale to fill the viewport
+      const coverScale = Math.max(viewportW / loaded.naturalWidth,
+                                  viewportH / loaded.naturalHeight);
+      const drawW = loaded.naturalWidth  * coverScale;
+      const drawH = loaded.naturalHeight * coverScale;
+      const baseX = (viewportW - drawW) / 2;
+      const baseY = (viewportH - drawH) / 2;
+
+      // canvas is square to match saveCropBtn (3000×3000)
+      const CANVAS_SIZE = 3000;
+      const canvas = document.createElement("canvas");
+      canvas.width = CANVAS_SIZE;
+      canvas.height = CANVAS_SIZE;
+      const ctx = canvas.getContext("2d");
+
+      // Map viewport units → canvas units
+      const Ux = CANVAS_SIZE / viewportW;
+      const Uy = CANVAS_SIZE / viewportH;
+
+      // Reproduce CSS: transform-origin center; transform: scale(s) translate(offX, offY)
+      // Important: in CSS, translate runs in pre-scale units but gets multiplied by scale.
+      ctx.save();
+      ctx.translate(CANVAS_SIZE / 2, CANVAS_SIZE / 2); // center
+      ctx.scale(s * Ux, s * Uy);                        // scale then translate (CSS order)
+      ctx.translate(offX, offY);
+      ctx.translate(-viewportW / 2, -viewportH / 2);    // move top-left of viewport to origin
+
+      // now draw the original image as it would appear with object-fit: cover
+      ctx.drawImage(loaded, baseX, baseY, drawW, drawH);
+      ctx.restore();
+
+      // 4) Commit permanent crop (same quality + size as saveCropBtn)
+      const out = canvas.toDataURL("image/jpeg", 0.85);
+      window.previewImages[i] = out;
+    }
+
+    // Batch version for 0..6
+    async function cropPreviewsForIndices(indices) {
+      for (const i of indices) {
+        try { await cropPreviewAsVisible(i); } catch (e) { console.error("crop fail @", i, e); }
+      }
+      // re-render the grid with the committed crops
+      if (typeof updateStaticPreviewGrid === "function") updateStaticPreviewGrid();
+    }
+
     async function uploadPhotos() {
       let listingInput = document.getElementById("shopListings").value.trim();
       if (!listingInput) {
@@ -885,6 +2182,12 @@ document.getElementById("shopListings").addEventListener("keydown", (e) => {
         M.toast({ html: "No images to upload. Please drag and drop images first." });
         return;
       }
+
+       if (!window.accessToken || String(window.accessToken).trim() === "") {
+        M.toast({ html: "Not connected to Etsy. Click “Connect to Etsy” first." });
+        return;
+      }
+
       let listingId = /^\d+$/.test(listingInput)
         ? listingInput
         : (listingInput.match(/\/listing\/(\d+)/) || [])[1];
@@ -894,7 +2197,7 @@ document.getElementById("shopListings").addEventListener("keydown", (e) => {
       }
       for (let i = 0; i < window.previewImages.length; i++) {
         let dataURL = window.previewImages[i];
-        let altText = window.photoMeta[i] || "";
+        let altText = (window.photoMeta[i] || "").slice(0, 250); // mirror server clamp
         let rankNumber = i + 1;
         try {
           let res = await fetch(dataURL);
@@ -908,10 +2211,14 @@ document.getElementById("shopListings").addEventListener("keydown", (e) => {
           formData.append("file", blob, window.photoNames[i] || `uploaded_photo_${i}.jpg`);
           let uploadUrl = `/.netlify/functions/imageUpload`;
           let response = await fetch(uploadUrl, { method: "POST", body: formData });
+          const raw = await response.text();
+          let msg = raw;
+          try { msg = JSON.parse(raw).error || JSON.parse(raw).message || raw; } catch {}
           if (!response.ok) {
-            M.toast({ html: `Error uploading photo #${rankNumber}: ` + response.status });
+            M.toast({ html: `Photo #${rankNumber} failed (${response.status}): ${msg}` });
           } else {
             M.toast({ html: `Photo #${rankNumber} uploaded with alt_text!` });
+            bumpCreateProgressPerImage(); // +8% per successful image upload
           }
         } catch (e) {
           console.error(e);
@@ -920,6 +2227,20 @@ document.getElementById("shopListings").addEventListener("keydown", (e) => {
       }
     }
     window.uploadPhotos = uploadPhotos;
+
+    function toTwoColumns(phrases, perCol = 7, gap = 3) {
+      const left = phrases.slice(0, perCol);
+      const right = phrases.slice(perCol, perCol * 2);
+      const leftWidth = Math.max(0, ...left.map(p => p.length));
+      const pad = leftWidth + gap; // space between columns
+      const lines = [];
+      for (let i = 0; i < perCol; i++) {
+        const l = (left[i] || "");
+        const r = (right[i] || "");
+        lines.push(l.padEnd(pad, " ") + r);
+      }
+      return lines.join("\n");
+    }
 
     async function uploadReservedPhotos() {
       let listingInput = document.getElementById("shopListings").value.trim();
@@ -954,10 +2275,14 @@ document.getElementById("shopListings").addEventListener("keydown", (e) => {
           formData.append("file", blob, window.reservedPhotos[i].name || `reserved_photo_${i}.jpg`);
           let uploadUrl = `/.netlify/functions/imageUpload`;
           let response = await fetch(uploadUrl, { method: "POST", body: formData });
+          const raw = await response.text();
+          let msg = raw;
+          try { msg = JSON.parse(raw).error || JSON.parse(raw).message || raw; } catch {}
           if (!response.ok) {
-            M.toast({ html: `Error uploading reserved photo #${rankNumber}: ` + response.status });
+            M.toast({ html: `Photo #${rankNumber} failed (${response.status}): ${msg}` });
           } else {
-            M.toast({ html: `Reserved photo #${rankNumber} uploaded successfully!` });
+            M.toast({ html: `Photo #${rankNumber} uploaded with alt_text!` });
+            bumpCreateProgressPerImage(); // +8% per successful reserved image upload
           }
         } catch (e) {
           console.error(e);
@@ -966,10 +2291,373 @@ document.getElementById("shopListings").addEventListener("keydown", (e) => {
       }
     }
 
+    function setMetadataProgress(pct) {
+      const wrap = document.getElementById("analyzeMetadataProgress");
+      if (!wrap) return;
+      const bar = wrap.querySelector(".bar");
+      const txt = wrap.querySelector(".pct");
+      const clamped = Math.max(0, Math.min(100, Math.round(pct)));
+      if (bar) bar.style.width = clamped + "%";
+      if (txt) txt.textContent = clamped + "%";
+      if (clamped >= 100) {
+        showMetadataProgress(false);
+        toggleCheck("analyzeMetadataCheck", true);
+      }
+    }
+    function resetMetadataProgress() {
+      toggleCheck("analyzeMetadataCheck", false);
+      setMetadataProgress(0);
+    }
+
+    // --- Create Listing unified progress (Photos -> Info)
+    function setCreateProgress(pct) {
+      const wrap = document.getElementById("createListingProgress");
+      if (!wrap) return;
+      const bar = wrap.querySelector(".bar");
+      const txt = wrap.querySelector(".pct");
+      const clamped = Math.max(0, Math.min(100, Math.round(pct)));
+      if (bar) bar.style.width = clamped + "%";
+      if (txt) txt.textContent = clamped + "%";
+      if (clamped >= 100) {
+        showCreateProgress(false);
+        //toggleCheck("createListingCheck", true);
+      }
+    }
+    function resetCreateProgress() { window._createPct = 0; setCreateProgress(0); }
+    function showCreateProgress(show) {
+      const wrap = document.getElementById("createListingProgress");
+      if (wrap) wrap.style.display = show ? "block" : "none";
+    }
+    function bumpCreateProgressPerImage() {
+      const prev = Number(window._createPct || 0);
+      const next = Math.min(100, prev + 8); // 8% per successful upload
+      window._createPct = next;
+      setCreateProgress(next);
+    }
+
+    // Generic UI helpers
+    function toggleCheck(id, on) {
+      const el = document.getElementById(id);
+      if (el) el.style.display = on ? "block" : "none";
+    }
+    function showMetadataProgress(show) {
+      const wrap = document.getElementById("analyzeMetadataProgress");
+      if (wrap) wrap.style.display = show ? "block" : "none";
+    }
+
+    // NEW: Duplicate progress (holistic)
+    function setDuplicateProgress(pct) {
+      const wrap = document.getElementById("duplicateListingProgress");
+      if (!wrap) return;
+      const bar = wrap.querySelector(".bar");
+      const txt = wrap.querySelector(".pct");
+      const clamped = Math.max(0, Math.min(100, Math.round(pct)));
+      if (bar) bar.style.width = clamped + "%";
+      if (txt) txt.textContent = clamped + "%";
+      if (clamped >= 100) {
+        showDuplicateProgress(false);
+        toggleCheck("duplicateListingCheck", true);
+      }
+    }
+    function resetDuplicateProgress(){ window._dupPct = 0; setDuplicateProgress(0); }
+    function showDuplicateProgress(show){ const w = document.getElementById("duplicateListingProgress"); if (w) w.style.display = show ? "block" : "none"; }
+
     document.getElementById("analyzeMetadataBtn").addEventListener("click", async () => {
-      const count = Math.min(7, window.previewImages.length);
-      for (let i = 0; i < count; i++) {
-        await metadataHandler.analyzeAndEmbedMetadata(i);
+      try {
+        // start: show bar, hide check
+        toggleCheck("analyzeMetadataCheck", false);
+        showMetadataProgress(true);
+
+        // Work set = previewCell0..6 only (skip reserved 7–9)
+        const slots   = [0,1,2,3,4,5,6];
+        const workIdx = slots.filter(i => !!(window.previewImages && window.previewImages[i]));
+        const total   = workIdx.length;
+        if (!total) {
+          if (window.M?.toast) M.toast({ html: "No images in cells 0–6 to analyze." });
+          showMetadataProgress(false);
+          return;
+        }
+
+        // NEW: permanently crop each image exactly as it appears in the preview boxes
+        // (same output approach as saveCropBtn: 3000×3000 JPEG @0.85)
+        if (window.M?.toast) M.toast({ html: "Committing visible crops…" });
+        await cropPreviewsForIndices(workIdx);
+
+        // Proceed with your existing analyze loop
+        resetMetadataProgress();
+        let done = 0;
+        for (const i of workIdx) {
+          await metadataHandler.analyzeAndEmbedMetadata(i);
+          done++;
+          setMetadataProgress((done / total) * 100);
+        }
+        if (window.M?.toast) M.toast({ html: `Analyzed metadata for ${total} image${total !== 1 ? "s" : ""} (cells 0–6).` });
+      } catch (e) {
+        console.error(e);
+        if (window.M?.toast) M.toast({ html: "Metadata analyze error: " + (e?.message || e) });
+      } finally {
+        // if not already auto-hidden by 100%, ensure hidden when not running
+        const pctText = document.querySelector("#analyzeMetadataProgress .pct")?.textContent || "0%";
+        if (pctText !== "100%") showMetadataProgress(false);
+      }
+    });
+
+    // --- Create Listing (LS snapshot + background queue; decoupled from UI)
+    document.getElementById("createListingBtn").addEventListener("click", async () => {
+      try {
+        // 1) Resolve a single listingId exactly like before (supports queue or manual input)
+        let listingId = null;
+        window.__lastChosenQueueIndex = -1;
+        if (Array.isArray(window.listingQueue) && window.listingQueue.length > 0) {
+          const idx = Math.floor(Math.random() * window.listingQueue.length);
+          listingId = String(window.listingQueue[idx]);
+          window.__lastChosenQueueIndex = idx;
+          document.getElementById("shopListings").value = listingId;
+        } else {
+          const listingInput = (document.getElementById("shopListings").value || "").trim();
+          if (!listingInput) { M.toast({ html: "Please provide a listing URL or ID in 'Etsy Shop Listings'." }); return; }
+          listingId = /^\d+$/.test(listingInput) ? listingInput : ((listingInput.match(/\/listing\/(\d+)/) || [])[1]);
+        }
+        if (!listingId) { M.toast({ html: "Invalid listing URL or ID." }); return; }
+        if (!window.accessToken) { M.toast({ html: "Please Connect to Etsy first." }); return; }
+
+        // 2) Snapshot EVERYTHING immediately to localStorage (so Clear won’t affect it)
+        //    (Requires PATCH 1 functions: queueListingUploadFromUI, processEtsyJobs)
+        const jobId = await queueListingUploadFromUI(listingId);
+         const short = String(jobId).slice(-6);
+         window.M?.toast?.({ html: `Queued Etsy push (${short}). You can start your next listing.` });
+        // 3) Kick the background processor; show progress but DO NOT block UI
+        if (typeof showCreateProgress === "function") showCreateProgress(true);
+        if (typeof resetCreateProgress === "function") resetCreateProgress();
+        window.M?.toast?.({ html: `Queued Etsy push (${jobId.slice(-6)}). You can start your next listing.` });
+
+        // 4) Start/continue the daemon (it runs one job at a time from LS)
+        processEtsyJobs();
+      } catch (err) {
+        console.error(err);
+        M.toast({ html: "Create Listing enqueue error: " + (err?.message || err) });
+      }
+    });
+
+     // NEW: Ensure Analyze results differ if re-run
+    function _normLine(s){ return String(s||"").toLowerCase().replace(/[^a-z0-9]+/g," ").trim(); }
+    async function _rephraseAltDifferent(prev){
+      const payload = {
+        model: window.modelName || "gpt-5",
+        input: [
+          { role: "system", content: "Return ONLY one plain text line (<=200 chars). Must not be identical to the input. Avoid trivial punctuation-only changes." },
+          { role: "user", content: `Rephrase this Etsy photo alt text so it says the same thing in different words (<=200 chars):\n${prev}` }
+        ],
+        max_output_tokens: 180,
+        reasoning: { effort: "minimal" },
+        text: { verbosity: "low" }
+      };
+      const data = await callOpenAI(payload);
+      const out = (typeof extractResponseText === "function")
+        ? extractResponseText(data)
+        : (data?.output_text || "").trim();
+      const line = (out || prev).replace(/\s+/g, " ").slice(0,200);
+      if (_normLine(line) === _normLine(prev)) {
+        // deterministic tiny nudge to ensure difference if model returned same text
+        return line.replace(/\bcharm\b/i, "pendant");
+      }
+      return line;
+    }
+
+    // GLOBAL guarded generator used by Duplicate flow (skips orange-highlighted SKPs)
+    window.generateTagPhrasesGuarded = async function () {
+      // Show spinner like normal gen
+      if (typeof toggleSpinner === "function") toggleSpinner("searchSpinner", true);
+
+      try {
+        // 1) Gather current + protected (orange) indices
+        const ta = document.getElementById("searchKeyPhrases");
+        const current = (typeof extractSkpPhrasesFromText === "function")
+          ? extractSkpPhrasesFromText(ta?.value || "")
+          : [];
+        const protectedIdx = (typeof getSkpChangedIndices === "function")
+          ? getSkpChangedIndices()
+          : new Set(); // safe fallback
+
+        // 2) Ask model for fresh phrases (same source as normal gen)
+        const question = (document.getElementById("listingDescInput")?.value || "").trim();
+        const keywordRules = document.getElementById("keywordRulesTextarea")?.value || "";
+        let fresh = await getInitialPhrases(question, keywordRules); // array of strings
+
+        // 2b) Enforce ≤20 chars by regenerating offenders (mirrors your normal flow)
+        for (let i = 0; i < fresh.length; i++) {
+          if (fresh[i].length > 20 && typeof regenerateSinglePhrase === "function") {
+            const otherValid = fresh.filter((_, idx) => idx !== i && fresh[idx].length <= 20);
+            fresh[i] = await regenerateSinglePhrase(question, keywordRules, otherValid);
+          }
+        }
+
+        // 3) Canonicalize, de-dup, cap to 13
+        const canon = (s) => {
+          let tag = String(s || "")
+            .normalize("NFKD")
+            .replace(/[^\p{Letter}\p{Number}\s]/gu, " ")
+            .replace(/\s+/g, " ")
+            .trim();
+          if (!tag) return "";
+          if (tag.length > 20) {
+            const cut = tag.slice(0, 20);
+            const sp = cut.lastIndexOf(" ");
+            tag = (sp > 7 ? cut.slice(0, sp) : cut).trim();
+          }
+          return tag;
+        };
+        const seen = new Set();
+        const sanitizedFresh = [];
+        for (const f of fresh) {
+          const t = canon(f);
+          if (!t) continue;
+          const key = t.toLowerCase();
+          if (seen.has(key)) continue;
+          seen.add(key);
+          sanitizedFresh.push(t);
+          if (sanitizedFresh.length >= 13) break;
+        }
+
+        // 4) Merge: keep protected (“orange”) current items; replace the rest
+        const out = new Array(13).fill("");
+        let pick = 0;
+        for (let i = 0; i < 13; i++) {
+          const keep = protectedIdx.has(i) && (current[i] || "").trim();
+          if (keep) {
+            out[i] = current[i];
+          } else {
+            while (pick < sanitizedFresh.length && out.includes(sanitizedFresh[pick])) pick++;
+            out[i] = sanitizedFresh[pick] || current[i] || "";
+            if (pick < sanitizedFresh.length) pick++;
+          }
+        }
+        const phrasesArray = out.slice(0, 13);
+
+        // 5) Render in your fixed two-column, numbered layout (1–7 / 8–14)
+        const left  = phrasesArray.slice(0, 7);
+        const right = phrasesArray.slice(7, 13);
+        const leftLabels  = left.map((p, i) => `${i + 1}. ${p || ""}`);
+        const rightLabels = right.map((p, i) => `${i + 8}. ${p || ""}`);
+        const leftWidth = Math.max(0, ...leftLabels.map(s => s.length));
+        const pad = leftWidth + 3;
+        const colLines = [];
+        for (let i = 0; i < 7; i++) {
+          const L = leftLabels[i]  || `${i + 1}. `;
+          const R = rightLabels[i] || "";
+          colLines.push(L.padEnd(pad, " ") + R);
+        }
+        const outputText = colLines.join("\n");
+
+        // 6) Write textarea + keep overlay/baseline in sync
+        const skp = document.getElementById("searchKeyPhrases");
+        if (skp) {
+          skp.value = outputText;
+          skp.setAttribute("wrap", "off");
+          skp.style.overflowX = "auto";
+          // exact 7-line height lock like your normal flow
+          const cs  = window.getComputedStyle(skp);
+          let lh    = parseFloat(cs.lineHeight);
+          if (!lh || Number.isNaN(lh)) lh = parseFloat(cs.fontSize) * 1.2;
+          const padY = (parseFloat(cs.paddingTop) || 0) + (parseFloat(cs.paddingBottom) || 0);
+          const borderY = (parseFloat(cs.borderTopWidth) || 0) + (parseFloat(cs.borderBottomWidth) || 0);
+          const exactPx = Math.ceil(lh * 7 + padY + borderY);
+          skp.style.setProperty("height",     exactPx + "px", "important");
+          skp.style.setProperty("min-height", exactPx + "px", "important");
+          skp.style.setProperty("max-height", exactPx + "px", "important");
+          skp.style.setProperty("overflow-y", "hidden", "important");
+          skp.scrollTop = 0;
+
+          // Refresh overlay + DO NOT reset baseline; we’re preserving orange.
+          if (typeof refreshSkpOverlay === "function") refreshSkpOverlay();
+        }
+
+        if (window.M?.toast) M.toast({ html: "Guarded Tag Phrases generated." });
+      } catch (err) {
+        console.error(err);
+        if (window.M?.toast) M.toast({ html: "Guarded generation error: " + err.message });
+      } finally {
+        if (typeof toggleSpinner === "function") toggleSpinner("searchSpinner", false);
+      }
+    };
+
+    // NEW: Duplicate Listing sequential orchestrator
+    document.getElementById("duplicateListingBtn").addEventListener("click", async () => {
+      const btn = document.getElementById("duplicateListingBtn");
+      try {
+        btn && (btn.disabled = true);
+        showDuplicateProgress(true);
+        resetDuplicateProgress(); // -> 0%
+
+        // Preserve currently orange SKP lines so they remain orange after this run
+        if (typeof getSkpChangedIndices === "function") {
+          window.skpOrangeLock = getSkpChangedIndices();
+        } else {
+          window.skpOrangeLock = new Set();
+        }
+
+        // 1) Guarded Key Phrases (skip orange)
+        await generateTagPhrasesGuarded();
+        if (typeof refreshSkpOverlay === "function") refreshSkpOverlay();
+        setDuplicateProgress(20);
+
+        // 2) Swap previewCell0 <-> previewCell2 (and keep arrays in sync)
+        const A = 0, B = 2;
+        const haveA = !!(window.previewImages && window.previewImages[A]);
+        const haveB = !!(window.previewImages && window.previewImages[B]);
+        if (haveA && haveB) {
+          const swap = (arr) => { if (Array.isArray(arr)) [arr[A], arr[B]] = [arr[B], arr[A]]; };
+          swap(window.previewImages);
+          swap(window.photoNames);
+          swap(window.photoMeta);
+          swap(window.photoIds);
+          if (typeof updateStaticPreviewGrid === "function") updateStaticPreviewGrid();
+        } else {
+          if (window.M?.toast) M.toast({ html: "Swap skipped: need images in cells 1 and 3 (0 and 2)." });
+        }
+        setDuplicateProgress(40);
+
+        // 3) Re-generate Title
+        await generateTitleOnly();
+        setDuplicateProgress(60);
+
+        // 4) Re-generate Description
+        await generateDescriptionOnly();
+        setDuplicateProgress(80);
+
+        // 5) Re-analyze images (cells 0–6 only), progress from 80% → 100%
+        const slots   = [0,1,2,3,4,5,6];
+        const workIdx = slots.filter(i => !!(window.previewImages && window.previewImages[i]));
+        const count   = workIdx.length;
+        let done = 0;
+
+        for (const i of workIdx) {
+          await metadataHandler.analyzeAndEmbedMetadata(i);
+
+          // Keep the metadata textarea in sync with cells 0–6
+          const metaTA = document.getElementById("metadataTextarea");
+          if (metaTA) {
+            const lines = slots
+              .map(idx => `${idx + 1}. ${window.photoMeta[idx] || ""}`.trim())
+              .join("\n").trim();
+            if (lines) metaTA.value = lines;
+          }
+
+          done++;
+          const pct = 80 + Math.round((done * 20) / Math.max(1, count));
+          setDuplicateProgress(pct);
+        }
+
+        setDuplicateProgress(100);
+        showDuplicateProgress(false);
+        toggleCheck("duplicateListingCheck", true);
+
+      } catch (e) {
+        console.error(e);
+        if (window.M?.toast) M.toast({ html: "Duplicate flow error: " + e.message });
+      } finally {
+        btn && (btn.disabled = false);
+        showDuplicateProgress(false);
       }
     });
 
@@ -979,157 +2667,628 @@ document.getElementById("shopListings").addEventListener("keydown", (e) => {
         M.toast({ html: "Please enter a question in the Listing Description." });
         return;
       }
+
+      // NEW: show blue spinner beside Search Key Phrases
+      toggleSpinner("searchSpinner", true);
+
       try {
-        let phrasesArray = await getInitialPhrases(question, document.getElementById("keywordRulesTextarea").value);
+        let phrasesArray = await getInitialPhrases(
+          question,
+          document.getElementById("keywordRulesTextarea").value
+        );
+
+        // enforce ≤ 20 chars per phrase by regenerating offenders
         for (let i = 0; i < phrasesArray.length; i++) {
           if (phrasesArray[i].length > 20) {
             let otherValid = phrasesArray.filter((_, idx) => idx !== i && phrasesArray[idx].length <= 20);
-            let newPhrase = await regenerateSinglePhrase(question, document.getElementById("keywordRulesTextarea").value, otherValid);
+            let newPhrase = await regenerateSinglePhrase(
+              question,
+              document.getElementById("keywordRulesTextarea").value,
+              otherValid
+            );
             phrasesArray[i] = newPhrase;
           }
         }
         if (phrasesArray.some(p => p.length > 20)) {
           throw new Error("Could not fix some phrases under 20 chars. Please try again.");
         }
-        document.getElementById("searchKeyPhrases").value = phrasesArray.join("\n");
+
+        // build 2-column, numbered (1–7 / 8–14), fixed to 7 lines
+        const left  = phrasesArray.slice(0, 7);
+        const right = phrasesArray.slice(7, 14);
+   // NEW: Guarded generator that preserves orange-highlighted phrases
+    async function generateTagPhrasesGuarded() {
+      // 1) Gather current + protected indices
+      const ta = document.getElementById("searchKeyPhrases");
+      const current = (typeof extractSkpPhrasesFromText === "function")
+        ? extractSkpPhrasesFromText(ta?.value || "")
+        : [];
+     const protectedIdx = (window.skpOrangeLock instanceof Set && window.skpOrangeLock.size)
+       ? new Set(window.skpOrangeLock)    // ← honor the indices locked when "Duplicate" was pressed
+       : ((typeof getSkpChangedIndices === "function")
+            ? getSkpChangedIndices()
+            : new Set());
+      // 2) Ask model for fresh phrases (same source as your normal gen)
+      const question = (document.getElementById("listingDescInput")?.value || "").trim();
+      const keywordRules = document.getElementById("keywordRulesTextarea")?.value || "";
+      const fresh = await getInitialPhrases(question, keywordRules); // returns array of strings
+
+      // 3) Canonicalize, de-dup, cap to 13
+      const canon = (s) => {
+        let tag = String(s || "")
+          .normalize("NFKD")
+          .replace(/[^\p{Letter}\p{Number}\s]/gu, " ")
+          .replace(/\s+/g, " ")
+          .trim();
+        if (!tag) return "";
+        if (tag.length > 20) {
+          const cut = tag.slice(0, 20);
+          const sp = cut.lastIndexOf(" ");
+          tag = (sp > 7 ? cut.slice(0, sp) : cut).trim();
+        }
+        return tag;
+      };
+      const seen = new Set();
+      const sanitizedFresh = [];
+      for (const f of fresh) {
+        const t = canon(f);
+        if (!t) continue;
+        const key = t.toLowerCase();
+        if (seen.has(key)) continue;
+        seen.add(key);
+        sanitizedFresh.push(t);
+        if (sanitizedFresh.length >= 13) break;
+      }
+
+      // 4) Merge: keep protected (“orange”) current items; replace the rest
+      const out = new Array(14).fill("");
+      const just = new Set(); // indices regenerated this run (to paint green)
+      let pick = 0;
+      for (let i = 0; i < 13; i++) {
+        const keep = protectedIdx.has(i) && (current[i] || "").trim();
+        if (keep) {
+          out[i] = current[i];
+        } else {
+          // take the next fresh not already used
+          while (pick < sanitizedFresh.length && out.includes(sanitizedFresh[pick])) pick++;
+          const nextVal = sanitizedFresh[pick] || current[i] || "";
+          out[i] = nextVal;
+          if (nextVal.trim() !== (current[i] || "").trim()) just.add(i);
+          if (pick < sanitizedFresh.length) pick++;
+        }
+      }
+      const phrasesArray = out.slice(0, 13);
+      // expose to overlay so it can paint green with precedence over orange
+      window.skpJustRegenerated = just;
+
+      // 5) Rebuild the exact 2-column, fixed 7-line view (same as your formatter)
+      const left  = phrasesArray.slice(0, 7);
+      const right = phrasesArray.slice(7, 13);
+      const leftLabels  = left.map((p, i) => `${i + 1}. ${p || ""}`);
+      const rightLabels = right.map((p, i) => `${i + 8}. ${p || ""}`);
+      const leftWidth = Math.max(0, ...leftLabels.map(s => s.length));
+      const pad = leftWidth + 3;
+      const colLines = [];
+      for (let i = 0; i < 7; i++) {
+        const L = leftLabels[i]  || `${i + 1}. `;
+        const R = rightLabels[i] || "";
+        colLines.push(L.padEnd(pad, " ") + R);
+      }
+      const outputText = colLines.join("\n");
+
+      if (ta) {
+        ta.value = outputText;
+       // preserve highlights (do NOT reseed baseline here)
+        if (typeof repadSkpColumnsPreserveCaret === "function") repadSkpColumnsPreserveCaret();
+        if (typeof refreshSkpOverlay === "function") refreshSkpOverlay();
+      }
+      M.toast({ html: "Key Phrases updated (orange kept)" });
+    }
+        const leftLabels = left.map((p, i) => `${i + 1}. ${p || ""}`);
+        const rightLabels = right.map((p, i) => `${i + 8}. ${p || ""}`);
+        const leftWidth = Math.max(0, ...leftLabels.map(s => s.length));
+        const pad = leftWidth + 3;
+        const colLines = [];
+        for (let i = 0; i < 7; i++) {
+          const L = leftLabels[i]  || `${i + 1}. `;
+          const R = rightLabels[i] || "";
+          colLines.push(L.padEnd(pad, " ") + R);
+        }
+        const outputText = colLines.join("\n");
+
+        const skp = document.getElementById("searchKeyPhrases");
+        if (skp) {
+          skp.value = outputText;
+          skp.setAttribute("wrap", "off");
+          skp.style.fontFamily = 'ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace';
+          skp.style.overflowX = "auto";
+          skp.style.fontSize = "85%";
+          skp.setAttribute("rows", "7");
+          skp.style.setProperty("height", "auto", "important");
+          const cs = window.getComputedStyle(skp);
+          let lh = parseFloat(cs.lineHeight);
+          if (!lh || Number.isNaN(lh)) lh = parseFloat(cs.fontSize) * 1.2;
+          const padY    = (parseFloat(cs.paddingTop) || 0) + (parseFloat(cs.paddingBottom) || 0);
+          const borderY = (parseFloat(cs.borderTopWidth) || 0) + (parseFloat(cs.borderBottomWidth) || 0);
+          const exactPx = Math.ceil(lh * 7 + padY + borderY);
+          skp.style.setProperty("height",    exactPx + "px", "important");
+          skp.style.setProperty("min-height",exactPx + "px", "important");
+          skp.style.setProperty("max-height",exactPx + "px", "important");
+          skp.style.setProperty("overflow-y","hidden", "important");
+          skp.scrollTop = 0;
+          // === PATCH 4: seed baseline & clear highlights on fresh generation ===
+          if (typeof extractSkpPhrasesFromText === "function" && typeof refreshSkpOverlay === "function") {
+            window.skpBaseline = extractSkpPhrasesFromText(skp.value);
+            refreshSkpOverlay();
+          }
+        }
+
         M.toast({ html: "Tag Phrases generated successfully!" });
       } catch (err) {
         console.error(err);
         M.toast({ html: "Error generating valid tag phrases: " + err.message });
+      } finally {
+        // NEW: hide spinner
+        toggleSpinner("searchSpinner", false);
       }
     }
 
-    async function getInitialPhrases(question, keywordRules) {
-      let store_id = localStorage.getItem("vectorStoreId");
-      let retrievedContext = "";
-      if (store_id) {
-        try {
-          let resp = await fetch("/.netlify/functions/vectorStore", {
-            method: "POST",
-            headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({
-              action: "query",
-              store_id,
-              query: question,
-              topK: 5
-            })
-          });
-          if (resp.ok) {
-            let data = await resp.json();
-            retrievedContext = data?.data || "";
-          } else {
-            M.toast({ html: "Could not retrieve context from store. HTTP " + resp.status });
-          }
-        } catch (err) {
-          console.error("Error retrieving CSV context:", err);
-          M.toast({ html: "Error retrieving context: " + err.message });
+    // Precise double-click selection inside #searchKeyPhrases:
+    // Select ONLY the tag phrase (exclude "1. ", "2. ", and exclude the other column).
+    (function attachTagPhraseDblClick(){
+      const ta = document.getElementById("searchKeyPhrases");
+      if (!ta) return;
+      ta.addEventListener("dblclick", function(e){
+        const text = ta.value;
+        // Use current selectionStart as the click anchor
+        let pos = ta.selectionStart ?? 0;
+        // Identify current line
+        const lineStart = text.lastIndexOf("\n", Math.max(0, pos - 1)) + 1;
+        const nl = text.indexOf("\n", pos);
+        const lineEnd = (nl === -1 ? text.length : nl);
+        const line = text.slice(lineStart, lineEnd);
+        // Line format: "<num>. <leftPhrase><spaces><num>. <rightPhrase>"
+        const mNumLeft = line.match(/^(\s*\d{1,2}\.\s)/);
+        if (!mNumLeft) return;
+        const leftPrefixLen = mNumLeft[0].length;     // includes "1. "
+        const rest = line.slice(leftPrefixLen);
+        const mDelim = /\s{3,}\d{1,2}\.\s/.exec(rest); // gap + "8. "
+        let leftText = rest, rightText = "", rightStartInLine = -1;
+        if (mDelim) {
+          leftText = rest.slice(0, mDelim.index);
+          const rightOffset = mDelim.index + mDelim[0].length;
+          rightText = rest.slice(rightOffset);
+          rightStartInLine = leftPrefixLen + rightOffset;
         }
-      } else {
-        M.toast({ html: "Warning: no vector store ID in localStorage. Possibly no CSV context loaded." });
+        const leftStartInLine = leftPrefixLen;
+        const leftEndInLine   = leftPrefixLen + leftText.length;
+        const clickOffset = (ta.selectionStart ?? 0) - lineStart;
+        // Snap selection to the phrase under the click:
+        if (clickOffset >= leftStartInLine && clickOffset <= leftEndInLine) {
+          ta.setSelectionRange(lineStart + leftStartInLine, lineStart + leftEndInLine);
+          e.preventDefault();
+          return;
+        }
+        if (rightText && clickOffset >= rightStartInLine && clickOffset <= (line.length)) {
+          ta.setSelectionRange(lineStart + rightStartInLine, lineEnd);
+          e.preventDefault();
+        }
+      });
+    })();
+
+    /* === SKP HIGHLIGHT: helpers & wiring === */
+    function _skpEscape(s){
+      const mapEsc = { '&':'&amp;', '<':'&lt;', '>':'&gt;', '"':'&quot;', "'":'&#39;' };
+      return String(s||'').replace(/[&<>"']/g, c => mapEsc[c]);
+    }
+
+    // Parse current 2-col lines into up to 14 phrases (1–7 left, 8–14 right)
+    function extractSkpPhrasesFromText(text){
+      const lines = String(text||"").split("\n");
+      const phrases = [];
+      for (let i=0;i<7;i++){
+        const line = lines[i] ?? "";
+        const mNumLeft = line.match(/^(\s*\d{1,2}\.\s)/);
+        if(!mNumLeft){ phrases[i] = ""; phrases[i+7] = ""; continue; }
+        const leftPrefixLen = mNumLeft[0].length;
+        const rest = line.slice(leftPrefixLen);
+        const mDelim = /\s{3,}\d{1,2}\.\s/.exec(rest); // gap + "8. "
+        if (mDelim){
+          const leftText  = rest.slice(0, mDelim.index);
+          const rightText = rest.slice(mDelim.index + mDelim[0].length);
+          phrases[i]   = leftText.trim();
+          phrases[i+7] = rightText.trim();
+        } else {
+          phrases[i]   = rest.trim();
+          phrases[i+7] = "";
+        }
       }
-      let prompt = `
-Here is some relevant data from our CSV files:
-${retrievedContext}
+      return phrases;
+    }
 
-Listing Description (for emphasis): "${question}"
-Emphasis on SEO and generating effective Etsy tag phrases.
+     // Build overlay HTML from CURRENT TEXT (keeps exact spacing)
+     // orangeSet = previously-changed (baseline/locked), greenSet = regenerated this run
+     function buildOverlayHtmlFromCurrentText(text, orangeSet, greenSet){
+      const lines = String(text||"").split("\n");
+      const out = [];
+      for (let i=0;i<7;i++){
+        const line = lines[i] ?? "";
+        const mNumLeft = line.match(/^(\s*\d{1,2}\.\s)/);
+        if(!mNumLeft){ out.push(_skpEscape(line)); continue; }
 
-Keyword Rules:
-${keywordRules}
+        const pre    = mNumLeft[0];
+        const leftPrefixLen = pre.length;
+        const rest   = line.slice(leftPrefixLen);
+        const mDelim = /\s{3,}\d{1,2}\.\s/.exec(rest);
 
-Generate exactly 13 SEO key phrases (each ≤ 20 characters). Return as plain text.
-      `;
-      let payload = {
-        model: window.modelName,
-        messages: [
-          { role: "system", content: "Use the CSV context above to generate more accurate key phrases." },
+        let leftText="", rightText="", delim="";
+        if (mDelim){
+          leftText  = rest.slice(0, mDelim.index);
+          delim     = rest.slice(mDelim.index, mDelim.index + mDelim[0].length);
+          rightText = rest.slice(mDelim.index + mDelim[0].length);
+        } else {
+          leftText = rest;
+        }
+
+        const leftIdx  = i;      // 0..6
+        const rightIdx = i + 7;  // 7..13
+
+        const isLeftGreen  = greenSet && greenSet.has(leftIdx);
+        const isLeftOrange = orangeSet && orangeSet.has(leftIdx);
+        const isRightGreen  = greenSet && greenSet.has(rightIdx);
+        const isRightOrange = orangeSet && orangeSet.has(rightIdx);
+
+        const leftHTML  = isLeftOrange
+          ? `<span style="background: rgba(255,165,0,0.35); border-radius:2px;">${_skpEscape(leftText)}</span>`
+          : _skpEscape(leftText);
+
+        const rightHTML = rightText !== "" && isRightOrange
+          ? `<span style="background: rgba(255,165,0,0.35); border-radius:2px;">${_skpEscape(rightText)}</span>`
+          : _skpEscape(rightText);
+
+        out.push(_skpEscape(pre) + leftHTML + _skpEscape(delim) + rightHTML);
+      }
+      return out.join("\n");
+    }
+
+    // Keep overlay positioned exactly over the textarea (absolute layout friendly)
+    function syncSkpOverlayPosition(){
+      const ta = document.getElementById("searchKeyPhrases");
+      const ov = document.getElementById("skpOverlay");
+      if(!ta || !ov) return;
+      const cs = getComputedStyle(ta);
+      ov.style.position   = "absolute";
+      ov.style.whiteSpace = "pre";
+      ov.style.fontFamily = cs.fontFamily;
+      ov.style.fontSize   = cs.fontSize;
+      ov.style.lineHeight = cs.lineHeight;
+      ov.style.pointerEvents = "none";
+      ov.style.zIndex = String((parseInt(cs.zIndex)||3000) - 1); // sit just under textarea’s z-index
+      ov.style.color  = "transparent";      // hide overlay text; we only want background marks
+      ov.style.left   = cs.left;
+      ov.style.top    = cs.top;
+      ov.style.width  = cs.width;
+      ov.style.height = cs.height;
+      ov.style.padding = cs.padding;
+      ov.style.border  = "none";
+      ov.style.background = "transparent";
+      ov.style.margin = "0";
+      // match scroll offsets
+      ov.scrollTop  = ta.scrollTop;
+      ov.scrollLeft = ta.scrollLeft;
+    }
+
+    // Ensure overlay node exists; create if missing and wire observers
+    function ensureSkpOverlay(){
+      const ta = document.getElementById("searchKeyPhrases");
+      if(!ta) return null;
+      let ov = document.getElementById("skpOverlay");
+      if(!ov){
+        ov = document.createElement("pre");
+        ov.id = "skpOverlay";
+        ov.setAttribute("aria-hidden","true");
+        ta.insertAdjacentElement("afterend", ov);
+      }
+      // keep in lock-step with textarea scrolling & style changes
+      ta.addEventListener("scroll", syncSkpOverlayPosition);
+      const mo = new MutationObserver(syncSkpOverlayPosition);
+      mo.observe(ta, { attributes: true, attributeFilter: ["style"] });
+      window.addEventListener("resize", syncSkpOverlayPosition);
+      // initial
+      syncSkpOverlayPosition();
+      return ov;
+    }
+
+    // Compute changed phrases vs baseline and repaint overlay
+    window.skpBaseline = window.skpBaseline || [];
+    function refreshSkpOverlay(){
+      const ta = document.getElementById("searchKeyPhrases");
+      const ov = ensureSkpOverlay();
+      if(!ta || !ov) return;
+
+      const current = extractSkpPhrasesFromText(ta.value);
+      const base    = (window.skpBaseline && window.skpBaseline.length) ? window.skpBaseline : extractSkpPhrasesFromText(ta.value);
+
+      const changed = new Set();
+      const cap = Math.max(current.length, base.length);
+      for (let i=0;i<cap;i++){
+        const a = (current[i]||"").trim();
+        const b = (base[i]||"").trim();
+        if (a !== b) changed.add(i);
+      }
+
+      // Keep previously-orange indices locked as orange; add green set supplied by duplicate flow
+      const toSet = (v) => {
+        if (!v) return new Set();
+        if (v instanceof Set) return v;
+        try { return new Set(v); } catch { return new Set(); }
+      };
+
+      const orange = new Set(changed);
+      toSet(window.skpOrangeLock).forEach(i => orange.add(i));
+
+      const green = toSet(window.skpJustRegenerated);
+      // green always overrides orange
+      green.forEach(i => orange.delete(i));
+      ov.innerHTML = buildOverlayHtmlFromCurrentText(ta.value, orange, green);
+      syncSkpOverlayPosition();
+    }
+
+      // indices of phrases that are orange-highlighted (changed vs baseline)
+      function getSkpChangedIndices() {
+        const ta = document.getElementById("searchKeyPhrases");
+        const cur = (typeof extractSkpPhrasesFromText === "function")
+          ? extractSkpPhrasesFromText(ta?.value || "")
+          : [];
+        // match refreshSkpOverlay's fallback: when baseline is empty, use current
+        const base = (Array.isArray(window.skpBaseline) && window.skpBaseline.length)
+          ? window.skpBaseline
+          : cur;
+
+        const changed = new Set();
+        for (let i = 0; i < Math.max(cur.length, base.length); i++) {
+          const a = (cur[i]  || "").trim().toLowerCase();
+          const b = (base[i] || "").trim().toLowerCase();
+          if (a !== b) changed.add(i);
+        }
+        return changed;
+      }
+
+     /* === NEW: keep 2 columns aligned on edit (auto-pad to a fixed tab stop) ===
+     Recomputes the left column max width and re-injects spaces so the right
+     column (8–13) always starts at the same character, regardless of edits.
+     Caret position is preserved. */
+    function repadSkpColumnsPreserveCaret(){
+      const ta = document.getElementById("searchKeyPhrases");
+      if(!ta) return;
+
+      const original = ta.value;
+      const selStart = ta.selectionStart ?? 0;
+      const selEnd   = ta.selectionEnd ?? selStart;
+
+      // Identify current line and whether caret is in left or right phrase
+      const lines = String(original).split("\n");
+      let lineIdx = 0, acc = 0;
+      for (; lineIdx < 7; lineIdx++){
+        const len = (lines[lineIdx] ?? "").length + 1; // +1 for newline
+        if (selStart < acc + len) break;
+        acc += len;
+      }
+      const lineStart = acc;
+      const line = lines[lineIdx] ?? "";
+      const mNumLeft = line.match(/^(\s*\d{1,2}\.\s)/);
+      let caretIsRight = false, caretOffsetInPhrase = 0;
+      let leftText = "", rightText = "";
+      if (mNumLeft){
+        const leftPrefixLen = mNumLeft[0].length;
+        const rest = line.slice(leftPrefixLen);
+        const mDelim = /\s{3,}\d{1,2}\.\s/.exec(rest);
+        if (mDelim){
+          leftText  = rest.slice(0, mDelim.index);
+          const rightOffset = mDelim.index + mDelim[0].length;
+          rightText = rest.slice(rightOffset);
+          const rightAbsStart = lineStart + leftPrefixLen + rightOffset;
+          const leftAbsStart  = lineStart + leftPrefixLen;
+          if (selStart >= rightAbsStart){
+            caretIsRight = true;
+            caretOffsetInPhrase = selStart - rightAbsStart;
+          } else {
+            caretOffsetInPhrase = Math.max(0, Math.min(selStart - leftAbsStart, leftText.length));
+          }
+        } else {
+          leftText = rest;
+          const leftAbsStart  = lineStart + leftPrefixLen;
+          caretOffsetInPhrase = Math.max(0, Math.min(selStart - leftAbsStart, leftText.length));
+        }
+      }
+
+      // Rebuild with a fixed tab-stop using your existing 2-column formatter
+      const phrases = extractSkpPhrasesFromText(original);
+      const left  = phrases.slice(0,7);
+      const right = phrases.slice(7,14);
+      const leftLabels  = left.map((p,i)=>`${i+1}. ${p||""}`);
+      const rightLabels = right.map((p,i)=> right[i] ? `${i+8}. ${right[i]}` : "");
+      const leftWidth = Math.max(0, ...leftLabels.map(s=>s.length));
+      const pad = leftWidth + 3; // ≥ 3 spaces between columns
+
+      const rebuilt = [];
+      const newStarts = [];
+      for (let i=0;i<7;i++){
+        const L = leftLabels[i]  || `${i+1}. `;
+        const R = rightLabels[i] || "";
+        const newLine = L.padEnd(pad," ") + R;
+        newStarts[i] = (i===0 ? 0 : newStarts[i-1] + rebuilt[i-1].length + 1);
+        rebuilt.push(newLine);
+      }
+      const newText = rebuilt.join("\n");
+
+      if (newText !== original){
+        ta.value = newText;
+        // Restore caret at the same logical spot inside the edited phrase
+        let newCaret = selStart;
+        const thisStart = newStarts[lineIdx] ?? 0;
+        const newL = leftLabels[lineIdx] || `${lineIdx+1}. `;
+        const newLeftPrefixLen = (newL.match(/^(\s*\d{1,2}\.\s)/)||[""])[0].length;
+        const newLeftLen   = newL.length;
+        const newLeftPad   = Math.max(pad, newLeftLen); // after padEnd
+        if (caretIsRight){
+          const rightNum = right[lineIdx] ? `${lineIdx+8}. ` : "";
+          newCaret = thisStart + newLeftPad + rightNum.length
+                   + Math.min(caretOffsetInPhrase, (right[lineIdx]||"").length);
+        } else {
+          newCaret = thisStart + newLeftPrefixLen
+                   + Math.min(caretOffsetInPhrase, (left[lineIdx]||"").length);
+        }
+        ta.setSelectionRange(newCaret, newCaret);
+      }
+      // repaint highlights after normalize
+      refreshSkpOverlay();
+    }
+
+    // Wire input handler: normalize columns first, then repaint highlights
+    (function attachSkpInputHighlighter(){
+      const ta = document.getElementById("searchKeyPhrases");
+      if(!ta) return;
+      ta.addEventListener("input", repadSkpColumnsPreserveCaret);
+      const init = () => {
+        window.skpBaseline = extractSkpPhrasesFromText(ta.value);
+        repadSkpColumnsPreserveCaret();
+      };
+      if (document.readyState === "loading") {
+        window.addEventListener("DOMContentLoaded", init);
+      } else {
+        init();
+      }
+    })();
+
+    // --- Unify Responses/Chat return shapes (robust to either) ---
+    function extractResponseText(data) {
+      // 1) Responses API (direct)
+      if (typeof data?.output_text === "string") return data.output_text.trim();
+      if (Array.isArray(data?.output)) {
+        return data.output
+          .flatMap(block => Array.isArray(block?.content) ? block.content : [])
+          .map(part => (typeof part?.text === "string" ? part.text : ""))
+          .join("")
+          .trim();
+      }
+
+      // 2) Responses API (nested under .response)
+      if (typeof data?.response?.output_text === "string") return data.response.output_text.trim();
+      if (Array.isArray(data?.response?.output)) {
+        return data.response.output
+          .flatMap(block => Array.isArray(block?.content) ? block.content : [])
+          .map(part => (typeof part?.text === "string" ? part.text : ""))
+          .join("")
+          .trim();
+      }
+
+      // 3) Chat Completions fallback
+      const chat = (data?.choices?.[0]?.message?.content || "").trim();
+      if (chat) return chat;
+
+      // 4) Last-ditch: common text fields
+      for (const k of ["text", "message", "content"]) {
+        const v = data?.[k];
+        if (typeof v === "string" && v.trim()) return v.trim();
+      }
+      return "";
+    }
+
+    // Fallback description builder (≤ 400 chars; never starts with "gift for her")
+    function buildFallbackDescription({ keyPhrases, rawDescription }) {
+      const phrases = String(keyPhrases || "")
+        .split(/\n+/)
+        .map(s => s.replace(/^\d+\.\s*/, "").trim())
+        .filter(Boolean);
+      const head = (rawDescription || "").trim();
+      const tagLine = phrases.length ? phrases.slice(0, 6).join(", ") : "";
+      let desc = head
+        ? head
+        : `A thoughtful piece made to wear every day. Highlights: ${tagLine}. Ideal for birthdays, holidays, or a sweet gift for mom.`;
+      if (desc.length > 400) desc = desc.slice(0, 397).trimEnd() + "...";
+      return desc;
+    }
+
+    async function getInitialPhrases(question, keywordRules) {
+      const prompt = `
+    Listing Description: "${question}"
+
+    Keyword Rules:
+    ${keywordRules}
+
+    Generate exactly 13 Etsy SEO key phrases (each ≤ 20 characters). Return as plain text, one per line.
+      `.trim();
+
+      const payload = {
+        model: window.modelName,            // "gpt-5"
+        input: [
+          { role: "system", content: "Generate concise, varied Etsy tags. No duplicates. Each tag ≤ 20 chars." },
           { role: "user", content: prompt }
         ],
-        temperature: 0.7,
-        max_tokens: 500
+        max_output_tokens: 120,
+        reasoning: { effort: "minimal" },   // light reasoning = faster/cheaper on GPT-5
+        text: { verbosity: "medium" }
       };
-      let data = await callOpenAI(payload);
-      let answer = data.choices[0].message.content || "";
-      let phrasesArray = answer
+
+      const data = await callOpenAI(payload);
+      const answer = extractResponseText(data);
+      return answer
         .split(/[\n,]+/)
         .map(s => s.replace(/^\d+\.\s*/, "").trim())
-        .filter(p => p);
-      return phrasesArray;
+        .filter(Boolean);
     }
 
     async function regenerateSinglePhrase(question, keywordRules, currentValid, maxAttempts = 5) {
       for (let attempt = 1; attempt <= maxAttempts; attempt++) {
-        let store_id = localStorage.getItem("vectorStoreId");
-        let retrievedContext = "";
-        if (store_id) {
-          try {
-            let resp = await fetch("/.netlify/functions/vectorStore", {
-              method: "POST",
-              headers: { "Content-Type": "application/json" },
-              body: JSON.stringify({
-                action: "query",
-                store_id,
-                query: question,
-                topK: 5
-              })
-            });
-            if (resp.ok) {
-              let data = await resp.json();
-              retrievedContext = data?.data || "";
-            }
-          } catch (err) {
-            console.warn("Could not retrieve CSV context for single phrase regeneration:", err);
-          }
-        }
-        let prompt = `
-We have 12 valid phrases:
-${currentValid.join(", ")}
+        const prompt = `
+    We already have valid phrases:
+    ${currentValid.join(", ")}
 
-Now produce ONE new phrase (≤20 chars) that satisfies the same rules:
+    Produce ONE new Etsy tag (≤ 20 chars) that is not too similar to the above.
 
-Here is some relevant data from our CSV:
-${retrievedContext}
+    Listing Description: "${question}"
 
-Keyword Rules:
-${keywordRules}
-Return only one phrase in plain text.
-        `;
-        let payload = {
+    Keyword Rules:
+    ${keywordRules}
+        `.trim();
+
+        const payload = {
           model: window.modelName,
-          messages: [
-            { role: "system", content: "Generate a single phrase, up to 20 characters." },
+          input: [
+            { role: "system", content: "Return ONE short tag only, no numbering, ≤ 20 chars." },
             { role: "user", content: prompt }
           ],
-          temperature: 0.7,
-          max_tokens: 150
+          max_output_tokens: 220,
+          reasoning: { effort: "minimal" },
+          text: { verbosity: "medium" }
         };
-        let data = await callOpenAI(payload);
-        let answerText = data.choices[0].message.content || "";
-        let candidate = answerText.trim()
-          .replace(/^\d+\.\s*/, "")
-          .split("\n")[0]
-          .trim();
-        if (candidate.length <= 20) {
-          return candidate;
-        }
-        console.warn(`Attempt ${attempt}: Single phrase too long => "${candidate}"`);
+
+        const data = await callOpenAI(payload);
+        const tag = extractResponseText(data).split(/[\n,]+/)[0].trim();
+        if (tag && tag.length <= 20 && !currentValid.includes(tag)) return tag;
       }
-      throw new Error("Failed to generate a single phrase under 20 chars after multiple attempts.");
+      throw new Error("Could not generate a new short tag.");
     }
 
-    async function callOpenAI(payload) {
-      let response = await fetch("/.netlify/functions/openaiProxy", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(payload)
-      });
-      if (!response.ok) {
-        let errorData = await response.json();
-        throw new Error("API Error: " + (errorData.error ? errorData.error.message : response.statusText));
+      async function callOpenAI(payload) {
+        const res = await fetch("/.netlify/functions/openaiProxy", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify(payload)
+        });
+
+        const text = await res.text(); // handle both JSON and plain text error bodies
+        if (!res.ok) {
+          let msg = text;
+          try {
+            const j = JSON.parse(text);
+            msg = j?.error?.message || msg;
+          } catch (_) { /* non-JSON error body */ }
+          throw new Error("API Error: " + msg);
+        }
+        return JSON.parse(text);
       }
-      let jsonData = await response.json();
-      return jsonData;
-    }
 
     function updateTitleCount(text) {
       document.getElementById("titleCount").textContent = "Count: " + text.length;
@@ -1143,166 +3302,18 @@ Return only one phrase in plain text.
       let text = document.getElementById("listingDescription").value;
       navigator.clipboard.writeText(text).catch(err => console.error("Copy error:", err));
     });
-    
-    async function clearStoreCSVFiles() {
-      let storeId = localStorage.getItem("vectorStoreId");
-      if (!storeId) {
-        M.toast({ html: "No vector store ID found. Nothing to clear." });
-        return;
-      }
-      let payload = {
-        action: "clear_csv_files",
-        store_id: storeId
-      };
-      try {
-        let resp = await fetch("/.netlify/functions/vectorStore", {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify(payload)
-        });
-        if (!resp.ok) {
-          M.toast({ html: "Error clearing CSV files, status " + resp.status });
-          return;
-        }
-        let data = await resp.json();
-        M.toast({ html: "Cleared CSV files from the store: " + JSON.stringify(data) });
-        window.uploadedCSVFileIds = [];
-        localStorage.removeItem("uploadedCSVFileIds");
-        document.getElementById("uploadedFilesList").value = "";
-        await listVectorStoreFiles();
-      } catch (err) {
-        console.error(err);
-        M.toast({ html: "clearStoreCSVFiles error: " + err.message });
-      }
-    }
-    document.getElementById("clearKeyPhrasesBtn").addEventListener("click", clearStoreCSVFiles);
 
-    async function listVectorStoreFiles() {
-      let storeId = localStorage.getItem("vectorStoreId");
-      if (!storeId) {
-        M.toast({ html: "No vector store ID found in localStorage. Not listing files." });
-        return;
-      }
-      let payload = {
-        action: "list_files",
-        store_id: storeId
-      };
-      try {
-        let resp = await fetch("/.netlify/functions/vectorStore", {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify(payload)
-        });
-        if (!resp.ok) {
-          M.toast({ html: "listVectorStoreFiles: error " + resp.status });
-          return;
-        }
-        let data = await resp.json();
-        if (!data.data || !Array.isArray(data.data)) {
-          M.toast({ html: "No files found in the store." });
-          return;
-        }
-        let displayNames = data.data.map(f => {
-          let fname = f.filename || "";
-          fname = fname.replace(/(\.csv|\.txt)$/i, "");
-          return fname;
-        });
-        document.getElementById("uploadedFilesList").value = displayNames.join("\n");
-      } catch (err) {
-        console.error(err);
-        M.toast({ html: "Error listing store files: " + err.message });
-      }
+    function updateTitleCount(text) {
+    document.getElementById("titleCount").textContent = "Count: " + text.length;
     }
 
-    document.getElementById("configureButtonsBtn").addEventListener("click", () => {
-      let configContainer = document.getElementById("buttonConfigContainer");
-      configContainer.innerHTML = "";
-      // First, read saved positions from localStorage.
-      let savedPositions = JSON.parse(localStorage.getItem("buttonPositions") || "{}");
-      // Define the selectors we want to display.
-      const selectors = [
-        "#configureButtonsBtn",
-        "#listingDescContainer",
-        "#uploadedFilesList",
-        "#dropZone",
-        "#previewGridContainer",
-        "#container13",
-        "#uploadToEtsyBtn",
-        "#etsyShopListingsContainer",
-        "#userProvidedKeyPhrasesContainer",
-        "#etsyListingTitleContainer",
-        "#etsyListingDescriptionContainer",
-        "#regenTitleBtn",
-        "#copyTitleBtn",
-        "#regenDescriptionBtn",
-        "#copyDescriptionBtn",
-        "#photoUploadNewBtn",
-        "#generateBtn",
-        "#connectEtsyBtn",
-        "#analyzeMetadataBtn",
-        "#showAnalyzeRulesBtn"
-      ].join(", ");
-      let elements = document.querySelectorAll(selectors);
-      let table = document.createElement("table");
-      table.className = "striped";
-      let thead = document.createElement("thead");
-      thead.innerHTML = "<tr><th>Element ID</th><th>Top (px)</th><th>Left (px)</th></tr>";
-      table.appendChild(thead);
-      let tbody = document.createElement("tbody");
-      elements.forEach(el => {
-        let id = el.id;
-        // Use the saved position if available; otherwise use computed style.
-        let pos = savedPositions[id] || {};
-        let currentTop = pos.top || (el.style.top || window.getComputedStyle(el).top || "0");
-        let currentLeft = pos.left || (el.style.left || window.getComputedStyle(el).left || "0");
-        let tr = document.createElement("tr");
-        tr.innerHTML = `<td>${id}</td>
-          <td><input type="number" id="${id}_top" value="${parseInt(currentTop)||0}"></td>
-          <td><input type="number" id="${id}_left" value="${parseInt(currentLeft)||0}"></td>`;
-        let topInput = tr.querySelector(`#${id}_top`);
-        let leftInput = tr.querySelector(`#${id}_left`);
-        topInput.addEventListener("input", () => { el.style.top = topInput.value + "px"; });
-        leftInput.addEventListener("input", () => { el.style.left = leftInput.value + "px"; });
-        tbody.appendChild(tr);
-      });
-      table.appendChild(tbody);
-      configContainer.appendChild(table);
-      let modalElem = document.getElementById("buttonConfigModal");
-      let modalInstance = M.Modal.getInstance(modalElem) || M.Modal.init(modalElem, { preventScrolling: false });
-      modalInstance.open();
-    });
-
-    document.getElementById("saveButtonPositionsBtn").addEventListener("click", () => {
-      const selectors = [
-        "#configureButtonsBtn",
-        "#listingDescContainer",
-        "#uploadedFilesList",
-        "#dropZone",
-        "#previewGridContainer",
-        "#container13",
-        "#uploadToEtsyBtn",
-        "#etsyShopListingsContainer",
-        "#userProvidedKeyPhrasesContainer",
-        "#etsyListingTitleContainer",
-        "#etsyListingDescriptionContainer",
-        "#regenTitleBtn",
-        "#copyTitleBtn",
-        "#regenDescriptionBtn",
-        "#copyDescriptionBtn",
-        "#photoUploadNewBtn",
-        "#generateBtn",
-        "#connectEtsyBtn",
-        "#analyzeMetadataBtn",
-        "#showAnalyzeRulesBtn"
-      ].join(", ");
-      let elements = document.querySelectorAll(selectors);
-      let positions = {};
-      elements.forEach(el => {
-        positions[el.id] = { top: el.style.top || "0px", left: el.style.left || "0px" };
-      });
-      localStorage.setItem("buttonPositions", JSON.stringify(positions));
-      M.toast({ html: "Button positions saved." });
-    });
+    // NEW: show/hide a heading spinner
+    function toggleSpinner(elId, show) {
+      const el = document.getElementById(elId);
+      if (!el) return;
+      el.style.display = show ? "inline-block" : "none";
+      el.classList.toggle("active", !!show); // <— key: Materialize needs this
+    }
 
     function loadReservedPhotos() {
       const stored = localStorage.getItem("reservedPhotos");
@@ -1312,6 +3323,7 @@ Return only one phrase in plain text.
       localStorage.setItem("reservedPhotos", JSON.stringify(window.reservedPhotos));
     }
 
+    // Preserve aspect ratio (COVER) into a square canvas — no stretching.
     async function resizeImage(dataURL, width, height) {
       return new Promise((resolve, reject) => {
         const img = new Image();
@@ -1319,99 +3331,29 @@ Return only one phrase in plain text.
           const canvas = document.createElement("canvas");
           canvas.width = width;
           canvas.height = height;
-          const ctx = canvas.getContext("2d");
-          ctx.drawImage(img, 0, 0, width, height);
+          const ctx = canvas.getContext("2d", { alpha: false });
+          ctx.imageSmoothingEnabled = true;
+          ctx.imageSmoothingQuality = "high";
+
+          const iw = img.naturalWidth || img.width;
+          const ih = img.naturalHeight || img.height;
+
+          // Scale so the *larger side* of the image fits the square (cover),
+          // then center and crop overflow.
+          const scale = Math.max(width / iw, height / ih);
+          const dw = iw * scale;
+          const dh = ih * scale;
+          const dx = (width  - dw) / 2;
+          const dy = (height - dh) / 2;
+
+          ctx.clearRect(0, 0, width, height);
+          ctx.drawImage(img, 0, 0, iw, ih, dx, dy, dw, dh);
+
           resolve(canvas.toDataURL("image/jpeg", 0.85));
         };
         img.onerror = reject;
         img.src = dataURL;
       });
-    }
-
-    async function uploadDocFile(file) {
-      return new Promise((resolve, reject) => {
-        const reader = new FileReader();
-        reader.onload = async (event) => {
-          try {
-            const dataURL = event.target.result;
-            let base64Content;
-            let newFileName = file.name;
-            let contentType = "text/csv";
-            if (/\.csv$/i.test(file.name)) {
-              const csvBase64 = dataURL.split(",")[1];
-              const csvText = csvBase64 ? atob(csvBase64) : "";
-              const parsed = Papa.parse(csvText, { header: false });
-              const plainText = parsed.data.map(row => row.join(" ")).join("\n");
-              base64Content = btoa(plainText);
-              newFileName = file.name.replace(/\.csv$/i, ".txt");
-              contentType = "text/plain";
-            } else {
-              base64Content = dataURL.split(",")[1];
-              if (file.name.toLowerCase().endsWith(".docx")) {
-                contentType = "application/vnd.openxmlformats-officedocument.wordprocessingml.document";
-              } else if (file.name.toLowerCase().endsWith(".doc")) {
-                contentType = "application/msword";
-              }
-            }
-            if (!base64Content) throw new Error("File content is empty.");
-            const payload = { 
-              file: base64Content, 
-              fileName: newFileName, 
-              purpose: "user_data" 
-            };
-            const response = await fetch("/.netlify/functions/uploadFile", {
-              method: "POST",
-              headers: { "Content-Type": "application/json" },
-              body: JSON.stringify(payload)
-            });
-            if (!response.ok) {
-              throw new Error("Upload failed with status " + response.status);
-            }
-            const fileData = await response.json();
-            fileData.name = fileData.name || newFileName;
-            fileData.id = fileData.id || newFileName || ('file-' + Date.now());
-            resolve(fileData);
-          } catch (err) { 
-            reject(err); 
-          }
-        };
-        reader.onerror = (err) => {
-          reject(err);
-        };
-        reader.readAsDataURL(file);
-      });
-    }
-
-    async function updateVectorStore() {
-      const fileIds = window.uploadedCSVFileIds || [];
-      if (fileIds.length === 0) {
-        M.toast({ html: "No CSV files uploaded yet, skipping vector store update." });
-        return;
-      }
-      try {
-        const vectorStorePayload = { 
-          name: "CSV Vector Store", 
-          file_ids: fileIds,
-          model: "text-embedding-ada-002"
-        };
-        const response = await fetch("/.netlify/functions/vectorStore", {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify(vectorStorePayload)
-        });
-        if (!response.ok) {
-          throw new Error("Error creating vector store, status " + response.status);
-        }
-        const data = await response.json();
-        M.toast({ html: "Vector store created/updated. Store ID: " + data.id });
-        if (data && data.id) {
-          localStorage.setItem("vectorStoreId", data.id);
-          M.toast({ html: "Saved store_id in localStorage: " + data.id });
-        }
-      } catch (err) {
-        M.toast({ html: "updateVectorStore error: " + err.message });
-        console.error(err);
-      }
     }
 
     const dropZone = document.getElementById("dropZone");
@@ -1427,7 +3369,7 @@ Return only one phrase in plain text.
       e.preventDefault();
       dropZone.style.borderColor = "#ccc";
       const files = e.dataTransfer.files;
-      const maxRemaining = 10 - window.previewImages.length;
+      const maxRemaining = Math.max(0, 7 - (window.previewImages?.length || 0));
       for (let i = 0; i < Math.min(files.length, maxRemaining); i++) {
         let file = files[i];
         if (/image\/(jpeg|png)/.test(file.type)) {
@@ -1451,8 +3393,174 @@ Return only one phrase in plain text.
         }
       }
       updateStaticPreviewGrid();
-      document.getElementById("uploadedFilesList").value = window.uploadedCSVFileIds.join("\n");
     });
+
+    function clampAndApply(img, box, scale, offX, offY) {
+      // viewport equals the .preview-box (now 120x120)
+      const viewportW = box.clientWidth;      // 120
+      const viewportH = box.clientHeight;     // 120
+      const baseW = img.clientWidth;          // 120 (pre-scale)
+      const baseH = img.clientHeight;         // 120 (pre-scale)
+      const scaledW = baseW * scale;
+      const scaledH = baseH * scale;
+
+      // max pre-scale translate allowed so the image still covers the viewport
+      const maxX = Math.max(0, (scaledW - viewportW) / 2 / scale);
+      const maxY = Math.max(0, (scaledH - viewportH) / 2 / scale);
+
+      offX = Math.max(-maxX, Math.min(maxX, offX));
+      offY = Math.max(-maxY, Math.min(maxY, offY));
+
+      img.dataset.scale = scale;
+      img.dataset.offsetX = offX;
+      img.dataset.offsetY = offY;
+      img.style.transform = `scale(${scale}) translate(${offX}px, ${offY}px)`;
+    }
+
+    /* === cloned from sorting.html: attach zoom/pan listeners to a preview box (clamped) === */
+    function attachPreviewBoxListeners(box) {
+      // Clamp offsets so the image never bleeds outside the .preview-box viewport
+      function clampAndApply(img, scale, offX, offY) {
+        const viewportW = box.clientWidth || 120;
+        const viewportH = box.clientHeight || 120;
+        const baseW = img.clientWidth || 120;   // CSS sets 120x120
+        const baseH = img.clientHeight || 120;
+        const scaledW = baseW * scale;
+        const scaledH = baseH * scale;
+
+        // allowable pre-scale translation so the scaled image still covers viewport
+        const maxX = Math.max(0, (scaledW - viewportW) / 2 / scale);
+        const maxY = Math.max(0, (scaledH - viewportH) / 2 / scale);
+
+        offX = Math.max(-maxX, Math.min(maxX, offX));
+        offY = Math.max(-maxY, Math.min(maxY, offY));
+
+        img.dataset.scale = scale;
+        img.dataset.offsetX = offX;
+        img.dataset.offsetY = offY;
+        img.style.transform = `scale(${scale}) translate(${offX}px, ${offY}px)`;
+      }
+
+      let isDragging = false;
+      let isMouseDown = false;
+      let dragStartX = 0, dragStartY = 0;
+      let lastX = 0, lastY = 0;
+      const dragThreshold = 3;
+      const MAX_SCALE = 8;
+       // Re-clamp the current image when the preview box resizes
+        if (typeof ResizeObserver !== "undefined") {
+          const ro = new ResizeObserver(() => {
+            const img = box.querySelector("img");
+            if (!img) return;
+            const s = parseFloat(img.dataset.scale) || 1;
+            let offX = parseFloat(img.dataset.offsetX) || 0;
+            let offY = parseFloat(img.dataset.offsetY) || 2; // keep slight downward bias
+            clampAndApply(img, s, offX, offY);
+          });
+          ro.observe(box);
+        }
+
+      box.addEventListener("wheel", function (ev) {
+        const img = box.querySelector("img");
+        if (!img) return;
+        ev.preventDefault();
+        let currentScale = parseFloat(img.dataset.scale) || 1;
+        let offX = parseFloat(img.dataset.offsetX) || 0;
+        let offY = parseFloat(img.dataset.offsetY) || 0;
+
+        if (ev.deltaY < 0) {
+          currentScale *= 1.1;            // zoom in
+        } else {
+          currentScale /= 1.1;            // zoom out
+         if (currentScale <= 1) {        // snap back (preserve slight downward nudge)
+           currentScale = 1;
+           offX = 0.75; offY = 2;
+         }
+        }
+        if (currentScale > MAX_SCALE) currentScale = MAX_SCALE;
+        clampAndApply(img, currentScale, offX, offY);
+      });
+
+      box.addEventListener("mousedown", function (ev) {
+        const img = box.querySelector("img");
+        if (!img) return;
+        const scaleNow = parseFloat(img.dataset.scale) || 1;
+        if (scaleNow <= 1) return;        // only drag when zoomed
+        ev.preventDefault();
+        isMouseDown = true;
+        isDragging = false;
+        dragStartX = ev.clientX; dragStartY = ev.clientY;
+        lastX = ev.clientX; lastY = ev.clientY;
+      });
+
+      box.addEventListener("mousemove", function (ev) {
+        if (!isMouseDown) return;
+        ev.preventDefault();
+        const dxAll = Math.abs(ev.clientX - dragStartX);
+        const dyAll = Math.abs(ev.clientY - dragStartY);
+        if (dxAll > dragThreshold || dyAll > dragThreshold) isDragging = true;
+
+        const img = box.querySelector("img");
+        if (!img) return;
+        const scaleNow = parseFloat(img.dataset.scale) || 1;
+        let offX = parseFloat(img.dataset.offsetX) || 0;
+        let offY = parseFloat(img.dataset.offsetY) || 0;
+        const dx = (ev.clientX - lastX) * 0.5;
+        const dy = (ev.clientY - lastY) * 0.5;
+        offX += dx; offY += dy;
+        clampAndApply(img, scaleNow, offX, offY);
+        lastX = ev.clientX; lastY = ev.clientY;
+      });
+
+      box.addEventListener("mouseup",   () => { isMouseDown = false; });
+      box.addEventListener("mouseleave",() => { isMouseDown = false; });
+
+      box.addEventListener("click", function (ev) {
+        if (isDragging) { isDragging = false; return; }
+        const img = box.querySelector("img");
+        if (!img) return;
+
+        // Current transform (pre-scale offsets)
+        const s0    = parseFloat(img.dataset.scale)   || 1;
+        const offX0 = parseFloat(img.dataset.offsetX) || 0;
+        const offY0 = parseFloat(img.dataset.offsetY) || 0;
+
+        // Click in screen space relative to box center
+        const rect = box.getBoundingClientRect();
+        const cx = rect.left + box.clientWidth  / 2;
+        const cy = rect.top  + box.clientHeight / 2;
+        const dx_screen = ev.clientX - cx;
+        const dy_screen = ev.clientY - cy;
+
+        // Convert to pre-scale image space:
+        // screen = s0 * (pre + off0)  => pre = screen/s0 - off0
+        const px = dx_screen / s0 - offX0;
+        const py = dy_screen / s0 - offY0;
+
+        // Offsets that place the clicked point exactly at the center
+        let targetOffX = -px + 0.70;
+        let targetOffY = -py + 7;
+
+        // Minimum scale needed so that centering is valid (no blank edges)
+        const halfW = (img.clientWidth  || 120) / 2;
+        const halfH = (img.clientHeight || 120) / 2;
+        function requiredScaleFor(delta, half) {
+          const ratio = Math.abs(delta) / half;     // in [0, 1]
+          if (ratio >= 1) return Infinity;          // edge pixel needs infinite scale
+          return 1 / (1 - ratio);                   // solve half*(1 - 1/s) >= |delta|
+        }
+        const needX = requiredScaleFor(targetOffX, halfW);
+        const needY = requiredScaleFor(targetOffY, halfH);
+
+        const DESIRED = 1.33;                          // your preferred zoom jump
+        let s1 = Math.max(DESIRED, s0 * 1.5, needX, needY);
+        if (!Number.isFinite(s1)) s1 = MAX_SCALE;   // defined above in this function
+        if (s1 > MAX_SCALE) s1 = MAX_SCALE;
+
+        // Apply (clampAndApply keeps content inside the 120×120 viewport)
+        clampAndApply(img, s1, targetOffX, targetOffY);
+      });
+    }
 
     function updateStaticPreviewGrid() {
       for (let i = 0; i < 10; i++) {
@@ -1470,6 +3578,13 @@ Return only one phrase in plain text.
             let img = document.createElement("img");
             img.src = window.previewImages[i];
             previewBox.appendChild(img);
+
+            // Default slight downward nudge so the visual center feels perfect
+            // (positive Y translates the image down)
+            clampAndApply(img, previewBox, 1, 0, 2);
+
+            // enable click-to-zoom + drag-to-pan
+            attachPreviewBoxListeners(previewBox);
             let removeBtn = document.createElement("div");
             removeBtn.className = "remove-btn";
             removeBtn.textContent = "X";
@@ -1488,14 +3603,7 @@ Return only one phrase in plain text.
             previewBox.appendChild(numOverlay);
             let cropBtn = document.createElement("button");
             cropBtn.textContent = "Crop";
-            cropBtn.style.position = "absolute";
-            cropBtn.style.bottom = "2px";
-            cropBtn.style.right = "2px";
-            cropBtn.style.width = "20px";
-            cropBtn.style.height = "20px";
-            cropBtn.style.borderRadius = "50%";
-            cropBtn.style.backgroundColor = "green";
-            cropBtn.style.color = "white";
+            cropBtn.className = "crop-btn";
             cropBtn.style.fontSize = "10px";
             cropBtn.addEventListener("click", ev => {
               ev.stopPropagation();
@@ -1512,7 +3620,8 @@ Return only one phrase in plain text.
               checkmark.style.left = "5px";
               previewBox.appendChild(checkmark);
             }
-            previewBox.addEventListener("click", () => { showMetadata(i); });
+            // NOTE: click is reserved for zoom/pan. If you still want quick metadata,
+            // map it to Shift+Click or add a small "ℹ" button (easy to wire next).
             cell.appendChild(previewBox);
             let metadataStatus = document.createElement("div");
             metadataStatus.className = "metadata-status";
@@ -1537,6 +3646,12 @@ Return only one phrase in plain text.
             let img = document.createElement("img");
             img.src = window.reservedPhotos[rIndex].src;
             previewBox.appendChild(img);
+
+            // Match main cells: default 2px downward nudge
+            clampAndApply(img, previewBox, 1, 0, 2);
+
+            // enable click-to-zoom + drag-to-pan
+            attachPreviewBoxListeners(previewBox);
             let removeBtn = document.createElement("div");
             removeBtn.className = "remove-btn";
             removeBtn.textContent = "X";
@@ -1551,7 +3666,7 @@ Return only one phrase in plain text.
             numOverlay.className = "number-overlay";
             numOverlay.textContent = (i + 1).toString();
             previewBox.appendChild(numOverlay);
-            previewBox.addEventListener("click", () => { showMetadata(i); });
+            // see note above re: Shift+Click or an "ℹ" button if needed
             cell.appendChild(previewBox);
             let metadataStatus = document.createElement("div");
             metadataStatus.className = "metadata-status";
@@ -1690,7 +3805,7 @@ Return only one phrase in plain text.
     });
 
     document.addEventListener("DOMContentLoaded", async () => {
-      loadButtonPositions();
+      loadPositions();
       loadReservedPhotos();
       restoreDataAfterRedirect();
       let urlParams = new URLSearchParams(window.location.search);
@@ -1709,6 +3824,8 @@ Return only one phrase in plain text.
         loadNextListingInQueue();
       });
       document.getElementById("shopListings").addEventListener("change", () => {
+       // NEW: persist raw text immediately (survives refresh)
+      localStorage.setItem("shopListingsText", rawInput);
         let rawInput = document.getElementById("shopListings").value;
         window.listingQueue = parseListingNumbers(rawInput);
         loadNextListingInQueue();
@@ -1718,12 +3835,13 @@ Return only one phrase in plain text.
         if (e.key === "Enter" && !e.shiftKey) {
           e.preventDefault();
           let rawInput = document.getElementById("shopListings").value;
+          // NEW: persist raw text too
+          localStorage.setItem("shopListingsText", rawInput);
           window.listingQueue = parseListingNumbers(rawInput);
           localStorage.setItem("listingQueue", JSON.stringify(window.listingQueue));
           loadNextListingInQueue();
         }
       });
-      await listVectorStoreFiles();
     });
 
     async function exchangeCodeForToken(code) {
@@ -1737,7 +3855,29 @@ Return only one phrase in plain text.
         let tokenData = await response.json();
         if (tokenData.access_token) {
           window.accessToken = tokenData.access_token;
+          window.etsyUserId = tokenData.user_id; // needed for Etsy v3 Bearer format
+          // Persist latest token so background jobs can read it after redirects
+          localStorage.setItem("etsyAccessToken", window.accessToken);
           M.toast({ html: "Connected to Etsy!" });
+          // NEW: write-through latest token to any queued jobs so they don't use stale tokens
+          try {
+            const q = JSON.parse(localStorage.getItem("etsyUploadJobs") || "[]");
+            for (const id of q) {
+              const key = `etsyJob:${id}`;
+              const job = JSON.parse(localStorage.getItem(key) || "null");
+              if (job && job.accessToken !== window.accessToken) {
+                job.accessToken = window.accessToken;
+                localStorage.setItem(key, JSON.stringify(job));
+              }
+            }
+          } catch {}
+        try {
+            const q = JSON.parse(localStorage.getItem("etsyUploadJobs") || "[]");
+            if (q.length) {
+              M.toast({ html: "Resuming pending Etsy jobs…" });
+              processEtsyJobs && processEtsyJobs();
+            }
+          } catch {}
         } else {
           M.toast({ html: "Error obtaining token: " + JSON.stringify(tokenData) });
         }
@@ -1747,81 +3887,24 @@ Return only one phrase in plain text.
       }
     }
 
-    document.getElementById("uploadToEtsyBtn").addEventListener("click", async () => {
-      let listingInput = document.getElementById("shopListings").value.trim();
-      if (!listingInput) {
-        M.toast({ html: "Please provide a listing URL or ID in 'Etsy Shop Listings'." });
-        return;
-      }
-      let listingId = /^\d+$/.test(listingInput)
-        ? listingInput
-        : (listingInput.match(/\/listing\/(\d+)/) || [])[1];
-      if (!listingId) {
-        M.toast({ html: "Invalid listing URL or ID." });
-        return;
-      }
-      let userDescription = document.getElementById("listingDescription").value || "";
-      let finalDescription = userDescription + window.appendedDescriptionText;
-      let payload = {
-        title: document.getElementById("listingTitle").value,
-        description: finalDescription,
-        tags: document.getElementById("searchKeyPhrases").value.split("\n").map(s => s.trim()).filter(s => s !== "")
-      };
-      M.toast({ html: "Updating Etsy listing info..." });
-      let updateUrl = `/.netlify/functions/updateListing?listingId=${listingId}`;
-      try {
-        let response = await fetch(updateUrl, {
-          method: "POST",
-          headers: {
-            "Content-Type": "application/json",
-            "Authorization": `Bearer ${window.accessToken}`,
-            "Accept": "application/json"
-          },
-          body: JSON.stringify(payload)
-        });
-        if (!response.ok) {
-          let errorText = await response.text();
-          M.toast({ html: "Error updating listing: " + response.status + " - " + errorText });
-        } else {
-          M.toast({ html: "Listing info updated successfully!" });
-          window.infoUpdateComplete = true;
-          if (window.photoUpdateComplete && window.infoUpdateComplete) {
-            window.listingQueue.shift();
-            loadNextListingInQueue();
-          }
-        }
-      } catch (e) {
-        console.error(e);
-        M.toast({ html: "Exception: " + e.message });
-      }
-    });
-
-    document.getElementById("photoUploadNewBtn").addEventListener("click", async () => {
-      let listingInput = document.getElementById("shopListings").value.trim();
-      if (!listingInput) {
-        M.toast({ html: "Please provide a listing URL or ID in 'Etsy Shop Listings'." });
-        return;
-      }
-      let btn = document.getElementById("photoUploadNewBtn");
-      btn.disabled = true;
-      try {
-        M.toast({ html: "Uploading photos to Etsy..." });
-        await uploadPhotos();
-        M.toast({ html: "Uploading reserved photos to Etsy..." });
-        await uploadReservedPhotos();
-        M.toast({ html: "Photos updated successfully!" });
-        window.photoUpdateComplete = true;
-        if (window.photoUpdateComplete && window.infoUpdateComplete) {
-          window.listingQueue.shift();
-          loadNextListingInQueue();
-        }
-      } catch (err) {
-        console.error(err);
-        M.toast({ html: "Error uploading photos: " + err.message });
-      } finally {
-        btn.disabled = false;
-      }
-    });
+    // NEW: beginEtsyReconnect — reuse your Connect flow to silently refresh auth
+    async function beginEtsyReconnect() {
+      try { typeof persistDataBeforeRedirect === "function" && persistDataBeforeRedirect(); } catch {}
+      const state = "randomState123";
+      const scope = "listings_w listings_r";
+      const codeVerifier = generateRandomString(64);
+      localStorage.setItem("etsy_code_verifier", codeVerifier);
+      const codeChallenge = await generateCodeChallenge(codeVerifier);
+      const url =
+        `https://www.etsy.com/oauth/connect?response_type=code&client_id=${window.CLIENT_ID}` +
+        `&redirect_uri=${encodeURIComponent(window.REDIRECT_URI)}` +
+        `&scope=${encodeURIComponent(scope)}` +
+        `&state=${state}` +
+        `&code_challenge=${encodeURIComponent(codeChallenge)}` +
+        `&code_challenge_method=S256`;
+      // Redirect—state + queue are persisted; on return, PATCH A resumes jobs.
+      window.location.href = url;
+    }
 
     function dataURLtoBlob(dataurl) {
       const arr = dataurl.split(',');
@@ -1845,89 +3928,183 @@ Return only one phrase in plain text.
     document.getElementById("generateBtn").addEventListener("click", async () => {
       await Promise.all([generateTitleOnly(), generateDescriptionOnly()]);
     });
+
+    // Re-Gen buttons: run each generator independently
+    document.getElementById("regenTitleBtn").addEventListener("click", async () => {
+      await generateTitleOnly();
+    });
+    document.getElementById("regenDescriptionBtn").addEventListener("click", async () => {
+      await generateDescriptionOnly();
+    });
     
     async function generateTitleOnly() {
-  let etsyLink = window.ETSY_SHOP_URL;
-  let keyPhrases = document.getElementById("searchKeyPhrases").value.trim();
-  let rawDescription = document.getElementById("listingDescInput").value.trim();
-  if (!keyPhrases) {
-    M.toast({ html: "Please provide the search key phrases." });
-    return;
-  }
-  let rulesText = document.getElementById("titleRulesTextarea").value;
-  let promptText = `
-You are ChatGPT using ${window.modelName}.
-Based on the inputs below, generate an Etsy Listing TITLE only.
-Input Context:
-Etsy Link: "${etsyLink}"
-Listing Description: "${rawDescription}"
-Key Phrases: "${keyPhrases}"
---- Rules for TITLE ---
-${rulesText}
-Important: Return ONLY the title as plain text.`;
-  document.getElementById("listingTitle").value = "Generating title...";
-  let payload = {
-    model: window.modelName,
-    messages: [
-      { role: "system", content: "Return ONLY the title as plain text." },
-      { role: "user", content: promptText }
-    ],
-    temperature: 0.7
-  };
-  try {
-    let data = await callOpenAI(payload);
-    if (data.choices && data.choices.length > 0) {
-      let output = data.choices[0].message.content;
-      document.getElementById("listingTitle").value = output || "No title generated.";
-      updateTitleCount(output);
-    } else {
-      document.getElementById("listingTitle").value = "No title generated.";
+      let etsyLink = window.ETSY_SHOP_URL;
+      let keyPhrases = document.getElementById("searchKeyPhrases").value.trim();
+      let rawDescription = document.getElementById("listingDescInput").value.trim();
+      if (!keyPhrases) { M.toast({ html: "Please provide the search key phrases." }); return; }
+
+      let rulesText = document.getElementById("titleRulesTextarea").value;
+      let promptText = `
+    You are ChatGPT using ${window.modelName}.
+    Based on the inputs below, generate an Etsy Listing TITLE only.
+    Input Context:
+    Etsy Link: "${etsyLink}"
+    Listing Description: "${rawDescription}"
+    Key Phrases: "${keyPhrases}"
+    --- Rules for TITLE ---
+    ${rulesText}
+    Important: Return ONLY the title as plain text.`;
+
+        document.getElementById("listingTitle").value = "Generating title...";
+        toggleSpinner("titleSpinner", true);   // NEW: show blue spinner
+      const payload = {
+        model: window.modelName,
+        input: [
+          { role: "system", content: "Return ONLY the title as plain text." },
+          { role: "user", content: promptText }
+        ],
+        max_output_tokens: 120,
+        reasoning: { effort: "minimal" },
+        text: { verbosity: "medium" }
+      };
+
+      try {
+        const data = await callOpenAI(payload);
+        const output = extractResponseText(data);
+        document.getElementById("listingTitle").value = output || "No title generated.";
+        updateTitleCount(output || "");
+      } catch (error) {
+        const msg = (error && error.message) ? error.message : String(error);
+        document.getElementById("listingTitle").value = "Error: " + msg;
+        } finally {
+        toggleSpinner("titleSpinner", false); // NEW: hide spinner
+      }
     }
-  } catch (error) {
-    document.getElementById("listingTitle").value = "Error: " + error;
-  }
-}
+
+   // Sentence-aware finisher:
+   // End at the NEAREST sentence boundary to `limit` (can go over). No ellipsis.
+   function capDescription(s, limit = 400) {
+     const t = (s || "").trim();
+     if (!t) return t;
+
+     // Collect end-of-sentence boundaries (., !, ?, … plus closing quotes/brackets)
+     const ends = [];
+     for (let i = 0; i < t.length; i++) {
+       const ch = t[i];
+       if (ch === "." || ch === "!" || ch === "?" || ch === "…") {
+         let j = i + 1;
+         while (j < t.length && `)"'’”]}`.includes(t[j])) j++;
+         ends.push(j);
+       }
+     }
+
+     // If no sentence punctuation, fall back to word-safe trim near limit
+     if (ends.length === 0) {
+       if (t.length <= limit) return t;
+       let cut = t.slice(0, limit + 1);
+       const lastSpace = cut.lastIndexOf(" ");
+       if (lastSpace > 0) cut = cut.slice(0, lastSpace);
+       return cut.trimEnd();
+     }
+
+     // Pick the nearest boundary to the limit (tie → choose AFTER to honor full sentence)
+     const prev = ends.filter(x => x <= limit).pop();
+     const next = ends.find(x => x >= limit);
+     let chosen = ends[ends.length - 1]; // default to last boundary
+     if (prev == null && next != null) chosen = next;
+     else if (prev != null && next == null) chosen = prev;
+     else if (prev != null && next != null) {
+       const dPrev = limit - prev, dNext = next - limit;
+       chosen = (dNext <= dPrev) ? next : prev;
+     }
+
+     return t.slice(0, chosen).trimEnd();
+   }
 
     async function generateDescriptionOnly() {
-  let etsyLink = window.ETSY_SHOP_URL;
-  let keyPhrases = document.getElementById("searchKeyPhrases").value.trim();
-  let rawDescription = document.getElementById("listingDescInput").value.trim();
-  if (!keyPhrases) {
-    M.toast({ html: "Please provide the search key phrases." });
-    return;
-  }
-  let rulesText = document.getElementById("descriptionRulesTextarea").value;
-  let promptText = `
-You are ChatGPT using ${window.modelName}.
-Based on the inputs below, generate an Etsy Listing DESCRIPTION only.
-Input Context:
-Etsy Link: "${etsyLink}"
-Listing Description: "${rawDescription}"
-Key Phrases: "${keyPhrases}"
---- Rules for DESCRIPTION ---
-${rulesText}
-Important: Return ONLY the description as plain text.`;
-  document.getElementById("listingDescription").value = "Generating description...";
-  let payload = {
-    model: window.modelName,
-    messages: [
-      { role: "system", content: "Return ONLY the description as plain text." },
-      { role: "user", content: promptText }
-    ],
-    temperature: 0.7
-  };
-  try {
-    let data = await callOpenAI(payload);
-    if (data.choices && data.choices.length > 0) {
-      let output = data.choices[0].message.content;
-      document.getElementById("listingDescription").value = output || "No description generated.";
-    } else {
-      document.getElementById("listingDescription").value = "No description generated.";
+      let etsyLink = window.ETSY_SHOP_URL;
+      let keyPhrases = document.getElementById("searchKeyPhrases").value.trim();
+      let rawDescription = document.getElementById("listingDescInput").value.trim();
+
+      if (!keyPhrases) {
+        M.toast({ html: "Please provide the search key phrases." });
+        return;
+      }
+
+      let rulesText = document.getElementById("descriptionRulesTextarea").value;
+
+      let promptText = `
+    You are ChatGPT using ${window.modelName}.
+    Based on the inputs below, generate an Etsy Listing DESCRIPTION only.
+    Input Context:
+    Etsy Link: "${etsyLink}"
+    Listing Description: "${rawDescription}"
+    Key Phrases: "${keyPhrases}"
+    --- Rules for DESCRIPTION ---
+    ${rulesText}
+    Important: Return ONLY the description as plain text.`.trim();
+
+      const out = document.getElementById("listingDescription");
+      out.value = "Generating description...";
+
+      // NEW: show blue spinner beside DESCRIPTION heading
+      toggleSpinner("descriptionSpinner", true);
+
+      try {
+        // Responses API payload for GPT-5
+        const payload = {
+          model: window.modelName, // e.g., "gpt-5"
+          input: [
+            { role: "system", content: "Return ONLY the description as plain text." },
+            { role: "user", content: promptText }
+          ],
+          max_output_tokens: 350,
+          reasoning: { effort: "minimal" },
+          text: { verbosity: "medium" }
+        };
+
+        const data = await callOpenAI(payload);
+
+        // Use global helper if present; otherwise unwrap Responses API locally
+        let text =
+          (typeof extractResponseText === "function")
+            ? extractResponseText(data)
+            : (
+                typeof data?.output_text === "string" ? data.output_text :
+                (Array.isArray(data?.output)
+                  ? data.output
+                      .flatMap(b => Array.isArray(b?.content) ? b.content : [])
+                      .map(p => (typeof p?.text === "string" ? p.text : ""))
+                      .join("")
+                      .trim()
+                  : (data?.choices?.[0]?.message?.content || "")
+                ).trim()
+              );
+
+        text = (text || "").trim();
+
+        // If nothing came back, build a local fallback that respects house rules
+        if (!text) {
+          console.warn("Empty description from API; raw response follows:", data);
+          const fallback = buildFallbackDescription({ keyPhrases, rawDescription });
+          text = fallback || "";
+        }
+
+         // Enforce 400-char cap without ellipsis and without cutting words
+         text = capDescription(text, 400);
+
+        out.value = text;
+      } catch (error) {
+        console.error(error);
+        M.toast({ html: "API Error while generating description." });
+        // Best-effort fallback: end at nearest sentence (can exceed 400)
+        const fbRaw = buildFallbackDescription({ keyPhrases, rawDescription }) || "";
+        out.value = capDescription(fbRaw, 400) || ("Error: " + (error?.message || String(error)));
+      } finally {
+        // NEW: hide spinner once done
+        toggleSpinner("descriptionSpinner", false);
+      }
     }
-  } catch (error) {
-    document.getElementById("listingDescription").value = "Error: " + error;
-  }
-}
 
     async function callOpenAI(payload) {
       let response = await fetch("/.netlify/functions/openaiProxy", {
