@@ -14,10 +14,23 @@ exports.handler = async (event) => {
       event.headers?.["X-Api-Key"] ||
       process.env.CLIENT_ID ||
       process.env.ETSY_CLIENT_ID;
+    const clientSecret =
+      process.env.CLIENT_SECRET ||
+      process.env.ETSY_CLIENT_SECRET ||
+      process.env.ETSY_SHARED_SECRET;
 
     if (!listingId) return { statusCode: 400, body: JSON.stringify({ error: "Missing listingId parameter" }) };
     if (!token) return { statusCode: 400, body: JSON.stringify({ error: "Missing access token" }) };
     if (!clientId) return { statusCode: 500, body: JSON.stringify({ error: "CLIENT_ID not set" }) };
+    if (!clientSecret && !event.headers?.["x-api-key"] && !event.headers?.["X-Api-Key"]) {
+      return { statusCode: 500, body: JSON.stringify({ error: "CLIENT_SECRET not set" }) };
+    }
+
+    // If caller already sent x-api-key, preserve it. Otherwise use env-based app key format used by other functions.
+    const xApiKey =
+      event.headers?.["x-api-key"] ||
+      event.headers?.["X-Api-Key"] ||
+      `${String(clientId).trim()}:${String(clientSecret).trim()}`;
 
     // Body: { sku: "Horse_18789" }  -> when provided, enforce uniform SKU across all products
     let body = {};
@@ -29,7 +42,7 @@ exports.handler = async (event) => {
     const commonHeaders = {
       Accept: "application/json",
       Authorization: `Bearer ${token}`,
-      "x-api-key": clientId
+      "x-api-key": xApiKey
     };
     const invRes = await fetch(invUrl, { method: "GET", headers: commonHeaders });
 
