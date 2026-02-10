@@ -19,6 +19,12 @@ exports.handler = async function (event, context) {
       process.env.ETSY_CLIENT_ID ||
       process.env.ETSY_API_KEY ||
       process.env.API_KEY;
+
+    const clientSecret =
+      process.env.CLIENT_SECRET ||
+      process.env.ETSY_CLIENT_SECRET ||
+      process.env.ETSY_SHARED_SECRET;
+
    if (!clientId) {
       console.error("Missing Etsy app key env var for x-api-key header.");
       console.log("Env presence:", {
@@ -37,13 +43,32 @@ exports.handler = async function (event, context) {
     }
     console.log("Using Etsy app key (masked):", String(clientId).slice(0, 5) + "*****");
 
+
+   if (!clientSecret) {
+      console.error("Missing Etsy shared secret env var for x-api-key header.");
+      console.log("Env presence:", {
+        CLIENT_SECRET: !!process.env.CLIENT_SECRET,
+        ETSY_CLIENT_SECRET: !!process.env.ETSY_CLIENT_SECRET,
+        ETSY_SHARED_SECRET: !!process.env.ETSY_SHARED_SECRET,
+      });
+      return {
+        statusCode: 500,
+        body: JSON.stringify({
+          error: "Missing Etsy shared secret env var for x-api-key header.",
+          checked: ["CLIENT_SECRET", "ETSY_CLIENT_SECRET", "ETSY_SHARED_SECRET"],
+        }),
+      };
+    }
+
+   const xApiKey = `${String(clientId).trim()}:${String(clientSecret).trim()}`;
+
     // Build GET request URL to fetch original listing details.
     const etsyGetUrl = `https://api.etsy.com/v3/application/listings/${listingId}`;
     const getResponse = await fetch(etsyGetUrl, {
       method: "GET",
       headers: {
         "Authorization": `Bearer ${token}`,
-        "x-api-key": clientId,
+        "x-api-key": xApiKey,
       },
     });
     console.log("GET response status:", getResponse.status);
@@ -102,7 +127,7 @@ exports.handler = async function (event, context) {
       headers: {
         "Content-Type": "application/json",
         "Authorization": `Bearer ${token}`,
-        "x-api-key": clientId,
+        "x-api-key": xApiKey,
       },
       body: JSON.stringify(payload),
     });

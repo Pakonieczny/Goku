@@ -18,6 +18,10 @@ exports.handler = async function (event) {
       process.env.ETSY_CLIENT_ID ||
       process.env.ETSY_API_KEY ||
       process.env.API_KEY;
+    const clientSecret =
+      process.env.CLIENT_SECRET ||
+      process.env.ETSY_CLIENT_SECRET ||
+      process.env.ETSY_SHARED_SECRET;
     const shopId = process.env.SHOP_ID;
 
     if (!listingId) {
@@ -45,6 +49,24 @@ exports.handler = async function (event) {
         }),
       };
     }
+
+   if (!clientSecret) {
+      console.error("Missing Etsy shared secret env var for x-api-key header.");
+      console.log("Env presence:", {
+        CLIENT_SECRET: !!process.env.CLIENT_SECRET,
+        ETSY_CLIENT_SECRET: !!process.env.ETSY_CLIENT_SECRET,
+        ETSY_SHARED_SECRET: !!process.env.ETSY_SHARED_SECRET,
+      });
+      return {
+        statusCode: 500,
+        body: JSON.stringify({
+          error: "Missing Etsy shared secret env var for x-api-key header.",
+          checked: ["CLIENT_SECRET", "ETSY_CLIENT_SECRET", "ETSY_SHARED_SECRET"],
+        }),
+      };
+    }
+
+    const xApiKey = `${String(clientId).trim()}:${String(clientSecret).trim()}`;
 
     // Parse JSON payload (title/description/tags/etc.)
     let payload = {};
@@ -84,7 +106,7 @@ exports.handler = async function (event) {
         "Content-Type": "application/x-www-form-urlencoded; charset=utf-8",
         "Accept": "application/json",
         "Authorization": `Bearer ${token}`,
-        "x-api-key": clientId
+        "x-api-key": xApiKey
       },
       body: form.toString()
     });

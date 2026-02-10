@@ -53,7 +53,7 @@ function transformInventoryData(inventoryData) {
 // Function to update inventory data with retries.
 // It first attempts a PUT update; if a 404 (resource not found) is returned,
 // it waits 5 seconds and then attempts a POST to create the inventory resource.
-async function updateInventory(newListingId, inventoryData, token, clientId) {
+async function updateInventory(newListingId, inventoryData, token, xApiKey) {
   if (!inventoryData) {
     console.log("No inventory data available to update.");
     return;
@@ -139,6 +139,11 @@ exports.handler = async function (event, context) {
       process.env.ETSY_CLIENT_ID ||
       process.env.ETSY_API_KEY ||
       process.env.API_KEY;
+    const clientSecret =
+      process.env.CLIENT_SECRET ||
+      process.env.ETSY_CLIENT_SECRET ||
+      process.env.ETSY_SHARED_SECRET;
+
     if (!clientId) {
       console.error("Missing Etsy app key env var for x-api-key header.");
       console.log("Env presence:", {
@@ -155,6 +160,25 @@ exports.handler = async function (event, context) {
         }),
       };
     }
+
+   if (!clientSecret) {
+      console.error("Missing Etsy shared secret env var for x-api-key header.");
+      console.log("Env presence:", {
+        CLIENT_SECRET: !!process.env.CLIENT_SECRET,
+        ETSY_CLIENT_SECRET: !!process.env.ETSY_CLIENT_SECRET,
+        ETSY_SHARED_SECRET: !!process.env.ETSY_SHARED_SECRET,
+      });
+      return {
+        statusCode: 500,
+        body: JSON.stringify({
+          error: "Missing Etsy shared secret env var for x-api-key header.",
+          checked: ["CLIENT_SECRET", "ETSY_CLIENT_SECRET", "ETSY_SHARED_SECRET"],
+        }),
+      };
+    }
+
+    const xApiKey = `${String(clientId).trim()}:${String(clientSecret).trim()}`;
+
     console.log("Using Etsy app key (masked):", String(clientId).slice(0, 5) + "*****");
 
     // Fetch original inventory data from Etsy using the original listing ID.
@@ -164,7 +188,7 @@ exports.handler = async function (event, context) {
       method: "GET",
       headers: {
         "Authorization": `Bearer ${token}`,
-        "x-api-key": clientId,
+        "x-api-key": xApiKey,
       },
     });
     console.log("Inventory fetch response status:", inventoryResponse.status);
@@ -183,7 +207,7 @@ exports.handler = async function (event, context) {
 
     // Update the new listing's inventory.
     try {
-      const updateResult = await updateInventory(listingId, inventoryData, token, clientId);
+      const result = await updateInventory(listingId, inventoryData, token, xApiKey);
       console.log("Final inventory update result:", updateResult);
       return {
         statusCode: 200,

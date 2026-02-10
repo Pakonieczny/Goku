@@ -12,6 +12,11 @@ exports.handler = async function(event) {
       process.env.ETSY_API_KEY ||
       process.env.API_KEY;
 
+    const clientSecret =
+      process.env.CLIENT_SECRET ||
+      process.env.ETSY_CLIENT_SECRET ||
+      process.env.ETSY_SHARED_SECRET;
+
     if (!listingId) {
       return {
         statusCode: 400,
@@ -41,6 +46,24 @@ exports.handler = async function(event) {
       };
     }
 
+  if (!clientSecret) {
+      console.error("Missing Etsy shared secret env var for x-api-key header.");
+      console.log("Env presence:", {
+        CLIENT_SECRET: !!process.env.CLIENT_SECRET,
+        ETSY_CLIENT_SECRET: !!process.env.ETSY_CLIENT_SECRET,
+        ETSY_SHARED_SECRET: !!process.env.ETSY_SHARED_SECRET,
+      });
+      return {
+        statusCode: 500,
+        body: JSON.stringify({
+          error: "Missing Etsy shared secret env var for x-api-key header.",
+          checked: ["CLIENT_SECRET", "ETSY_CLIENT_SECRET", "ETSY_SHARED_SECRET"],
+        }),
+      };
+    }
+
+    const xApiKey = `${String(clientId).trim()}:${String(clientSecret).trim()}`;
+
     const etsyUrl = `https://api.etsy.com/v3/application/listings/${encodeURIComponent(
       listingId
     )}`;
@@ -49,7 +72,7 @@ exports.handler = async function(event) {
       method: "GET",
       headers: {
         "Authorization": `Bearer ${accessToken}`, // Etsy expects the raw access_token here
-        "x-api-key": clientId,
+        "x-api-key": xApiKey,
         "Content-Type": "application/json"
       }
     });
