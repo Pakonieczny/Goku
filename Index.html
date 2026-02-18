@@ -693,7 +693,7 @@
       <div class="preview-cell" id="previewCell4">Empty</div>
       <div class="preview-cell" id="previewCell5">Empty</div>
       <div class="preview-cell" id="previewCell6">Empty</div>
-      <div class="preview-cell reserved" id="previewCell7">Empty</div>
+      <div class="preview-cell" id="previewCell7">Empty</div>
       <div class="preview-cell reserved" id="previewCell8">Empty</div>
       <div class="preview-cell reserved" id="previewCell9">Empty</div>
     </div>
@@ -1063,6 +1063,37 @@ ANTI-REPETITION (TITLE)
         }
     }
 
+    // NEW API Helper for getting 2-word charm description from previewCell0
+    async function getCharmDescriptionFromImage(imgUrl) {
+        if (!imgUrl) return "Custom";
+        const prompt = "Analyze this image and return ONLY a 2-word best fit description of the charm itself. Ignore all other aspects of the image, environment, or background.";
+        const payload = {
+            model: window.modelName || "gpt-5",
+            input: [
+                { role: "system", content: "Return exactly two words describing the charm." },
+                {
+                    role: "user",
+                    content: [
+                        { type: "input_text", text: prompt },
+                        { type: "input_image", image_url: imgUrl }
+                    ]
+                }
+            ],
+            max_output_tokens: 10,
+            reasoning: { effort: "minimal" },
+            text: { verbosity: "low" }
+        };
+        try {
+            const data = await callOpenAI(payload);
+            const raw = (typeof extractResponseText === "function") ? extractResponseText(data) : (data?.output_text || "").trim();
+            const words = raw.replace(/[^a-zA-Z\s-]/g, "").trim().split(/\s+/).slice(0, 2).join(" ");
+            return words || "Beautiful";
+        } catch (e) {
+            console.error("Charm analysis error:", e);
+            return "Custom";
+        }
+    }
+
     async function runFullAutomationSequence(setRef, setName) {
         window.isProcessingSet = true;
         updateFirebaseStatus(`Processing: ${setName}`, "working");
@@ -1094,7 +1125,8 @@ ANTI-REPETITION (TITLE)
             
             // Populate window vars (store RAW Firebase URLs; proxy only when cropping)
             filesData.forEach(f => {
-                if(f.idx >= 0 && f.idx < 7) {
+                // Free up slot 7 for Firebase
+                if(f.idx >= 0 && f.idx < 8) {
                     window.previewImages[f.idx] = f.url;
                     window.photoNames[f.idx] = f.name;
                     window.photoIds[f.idx] = 'fb-' + Date.now() + '-' + f.idx;
@@ -1106,7 +1138,18 @@ ANTI-REPETITION (TITLE)
             // 2. Generate Description/Context
             // Parse Set Name for basic prompt context (e.g. "Beady_Necklace_Set_1" -> "Beady Necklace")
             const rawContext = setName.split("_Set_")[0].replace(/_/g, " ");
-            document.getElementById("listingDescInput").value = "Create a listing for " + rawContext;
+
+            // Call API for the 2-word description of previewCell0
+            updateFirebaseStatus("Analyzing Charm...", "working");
+            let apiDesc = "Custom";
+            if (window.previewImages && window.previewImages[0]) {
+                apiDesc = await getCharmDescriptionFromImage(window.previewImages[0]);
+            }
+            
+            // Apply randomized description template
+            const templateType = Math.random() < 0.5 ? "Charm" : "Pendant";
+            const finalInputDesc = `${apiDesc} ${templateType} ${rawContext}`;
+            document.getElementById("listingDescInput").value = finalInputDesc;
             
             // 3. Generate Content (Sequentially)
             updateFirebaseStatus("Generating Info...", "working");
@@ -1287,7 +1330,7 @@ ANTI-REPETITION (TITLE)
 
           const ta = document.getElementById("metadataTextarea");
           if (ta) {
-            const count = Math.min(7, window.previewImages.length);
+            const count = Math.min(8, window.previewImages.length);
             const lines = Array.from({ length: count }, (_, idx) =>
               `${idx + 1}. ${window.photoMeta[idx] || ""}`.trim()
             ).join("\n").trim();
@@ -1831,7 +1874,7 @@ https://www.etsy.com/shop/CustomBrites/policy"
 https://www.etsy.com/your/shops/me/listing-editor/edit/1822973998
 `;
 
-  // Clear UI helper (text, previews 0–6, checks, bars)
+  // Clear UI helper (text, previews 0–7, checks, bars)
    function handleClearAll() {
      try {
        // 1) Text boxes
@@ -1841,13 +1884,13 @@ https://www.etsy.com/your/shops/me/listing-editor/edit/1822973998
        const skp = document.getElementById("skpOverlay");
        if (skp) skp.textContent = "";
 
-        // 2) Preview cells 0–6 — compact reset (don’t leave 'length' inflated)
+        // 2) Preview cells 0–7 — compact reset (don’t leave 'length' inflated)
         window.previewImages = [];
         window.photoNames    = [];
         window.photoMeta     = [];
         window.photoIds      = []; // keep these in sync too
 
-        for (let i = 0; i <= 6; i++) {
+        for (let i = 0; i <= 7; i++) {
           const cell = document.getElementById("previewCell" + i);
           if (cell) cell.innerHTML = "Empty";
           const status = document.getElementById("metadataStatus" + i);
@@ -2007,7 +2050,7 @@ https://www.etsy.com/your/shops/me/listing-editor/edit/1822973998
       const tags = buildEtsyTagsFromOverlay(document.getElementById("searchKeyPhrases")?.value || "");
       const sku = buildSkuFromTitle(title);
 
-      // Photos (0–6) from previewImages / names / meta
+      // Photos (0–7) from previewImages / names / meta
       const photos = Array.from(window.previewImages || []);
       const photoNames = Array.from(window.photoNames || []).map((n, i) => n || `uploaded_photo_${i}.jpg`);
       const photoMeta = Array.from(window.photoMeta || []).map(s => (s || "").slice(0, 250));
@@ -2017,7 +2060,7 @@ https://www.etsy.com/your/shops/me/listing-editor/edit/1822973998
         return key;
       }));
 
-      // Reserved (7–9) from reservedPhotos [{src,name,meta}]
+      // Reserved (8–9) from reservedPhotos [{src,name,meta}]
       const reserved = Array.from(window.reservedPhotos || []);
       const reservedSrc = reserved.map(x => x?.src).filter(Boolean);
       const reservedNames = reserved.map((x, i) => x?.name || `reserved_photo_${i}.jpg`);
@@ -2074,7 +2117,7 @@ https://www.etsy.com/your/shops/me/listing-editor/edit/1822973998
       save({ status: "RUNNING" });
 
       try {
-        // --- Stage 1: Upload Photos (main 0–6)
+        // --- Stage 1: Upload Photos (main 0–7)
         for (let i = 0; i < job.photoCount; i++) {
         const blob = job.storage?.photos === "idb"
           ? (await idbGetBlob(job.photoKeyBases[i]))
@@ -2103,7 +2146,7 @@ https://www.etsy.com/your/shops/me/listing-editor/edit/1822973998
             if (typeof bumpCreateProgressPerImage === "function") bumpCreateProgressPerImage();
           }
         }
-        // --- Stage 1b: Reserved (7–9)
+        // --- Stage 1b: Reserved (8–9)
         for (let i = 0; i < job.reservedCount; i++) {
           const blob = job.storage?.reserved === "idb"
             ? (await idbGetBlob(job.reservedKeyBases[i]))
@@ -2113,7 +2156,7 @@ https://www.etsy.com/your/shops/me/listing-editor/edit/1822973998
           fd.append("listingId", listingId);
           fd.append("token", token);
           fd.append("fileName", job.reservedNames[i] || `reserved_photo_${i}.jpg`);
-          fd.append("rank", 8 + i);
+          fd.append("rank", 9 + i);
           fd.append("alt_text", job.reservedMeta[i] || "");
           fd.append("file", blob, job.reservedNames[i] || `reserved_photo_${i}.jpg`);
           const r = await fetch("/.netlify/functions/imageUpload", { method: "POST", body: fd });
@@ -2126,7 +2169,7 @@ https://www.etsy.com/your/shops/me/listing-editor/edit/1822973998
               try { document.getElementById("connectEtsyBtn")?.click(); } catch {}
               return;
             }
-            console.warn("Reserved upload failed", 8 + i, t);
+            console.warn("Reserved upload failed", 9 + i, t);
           } else {
             if (typeof bumpCreateProgressPerImage === "function") bumpCreateProgressPerImage();
           }
@@ -2480,7 +2523,7 @@ document.getElementById("shopListings").addEventListener("keydown", (e) => {
       window.previewImages[i] = out;
     }
 
-    // Batch version for 0..6
+    // Batch version for 0..7
     async function cropPreviewsForIndices(indices) {
       for (const i of indices) {
         try { await cropPreviewAsVisible(i); } catch (e) { console.error("crop fail @", i, e); }
@@ -2592,7 +2635,7 @@ document.getElementById("shopListings").addEventListener("keydown", (e) => {
       for (let i = 0; i < window.reservedPhotos.length; i++) {
         let dataURL = window.reservedPhotos[i].src;
         let altText = window.reservedPhotos[i].meta || "";
-        let rankNumber = i + 8;
+        let rankNumber = i + 9;
         try {
           let res = await fetch(dataURL);
           let blob = await res.blob();
@@ -2698,12 +2741,12 @@ document.getElementById("shopListings").addEventListener("keydown", (e) => {
         toggleCheck("analyzeMetadataCheck", false);
         showMetadataProgress(true);
 
-        // Work set = previewCell0..6 only (skip reserved 7–9)
-        const slots   = [0,1,2,3,4,5,6];
+        // Work set = previewCell0..7 only (skip reserved 8–9)
+        const slots   = [0,1,2,3,4,5,6,7];
         const workIdx = slots.filter(i => !!(window.previewImages && window.previewImages[i]));
         const total   = workIdx.length;
         if (!total) {
-          if (window.M?.toast) M.toast({ html: "No images in cells 0–6 to analyze." });
+          if (window.M?.toast) M.toast({ html: "No images in cells 0–7 to analyze." });
           // unblock automation that waits on analyzeMetadataCheck
           setMetadataProgress(100);
           return;
@@ -2722,7 +2765,7 @@ document.getElementById("shopListings").addEventListener("keydown", (e) => {
           done++;
           setMetadataProgress((done / total) * 100);
         }
-        if (window.M?.toast) M.toast({ html: `Analyzed metadata for ${total} image${total !== 1 ? "s" : ""} (cells 0–6).` });
+        if (window.M?.toast) M.toast({ html: `Analyzed metadata for ${total} image${total !== 1 ? "s" : ""} (cells 0–7).` });
       } catch (e) {
         console.error(e);
         if (window.M?.toast) M.toast({ html: "Metadata analyze error: " + (e?.message || e) });
@@ -2932,8 +2975,8 @@ document.getElementById("shopListings").addEventListener("keydown", (e) => {
         if (typeof refreshSkpOverlay === "function") refreshSkpOverlay();
         setDuplicateProgress(20);
 
-        // 2) Swap previewCell0 <-> previewCell2 (and keep arrays in sync)
-        const A = 0, B = 2;
+        // 2) Swap previewCell0 <-> previewCell1 (and keep arrays in sync)
+        const A = 0, B = 1;
         const haveA = !!(window.previewImages && window.previewImages[A]);
         const haveB = !!(window.previewImages && window.previewImages[B]);
         if (haveA && haveB) {
@@ -2944,7 +2987,7 @@ document.getElementById("shopListings").addEventListener("keydown", (e) => {
           swap(window.photoIds);
           if (typeof updateStaticPreviewGrid === "function") updateStaticPreviewGrid();
         } else {
-          if (window.M?.toast) M.toast({ html: "Swap skipped: need images in cells 1 and 3 (0 and 2)." });
+          if (window.M?.toast) M.toast({ html: "Swap skipped: need images in cells 1 and 2 (0 and 1)." });
         }
         setDuplicateProgress(40);
 
@@ -2956,8 +2999,8 @@ document.getElementById("shopListings").addEventListener("keydown", (e) => {
         await generateDescriptionOnly();
         setDuplicateProgress(80);
 
-        // 5) Re-analyze images (cells 0–6 only), progress from 80% → 100%
-        const slots   = [0,1,2,3,4,5,6];
+        // 5) Re-analyze images (cells 0–7 only), progress from 80% → 100%
+        const slots   = [0,1,2,3,4,5,6,7];
         const workIdx = slots.filter(i => !!(window.previewImages && window.previewImages[i]));
         const count   = workIdx.length;
         let done = 0;
@@ -2965,7 +3008,7 @@ document.getElementById("shopListings").addEventListener("keydown", (e) => {
         for (const i of workIdx) {
           await metadataHandler.analyzeAndEmbedMetadata(i);
 
-          // Keep the metadata textarea in sync with cells 0–6
+          // Keep the metadata textarea in sync with cells 0–7
           const metaTA = document.getElementById("metadataTextarea");
           if (metaTA) {
             const lines = slots
@@ -3671,7 +3714,7 @@ document.getElementById("shopListings").addEventListener("keydown", (e) => {
       e.preventDefault();
       dropZone.style.borderColor = "#ccc";
       const files = e.dataTransfer.files;
-      const maxRemaining = Math.max(0, 7 - (window.previewImages?.length || 0));
+      const maxRemaining = Math.max(0, 8 - (window.previewImages?.length || 0));
       for (let i = 0; i < Math.min(files.length, maxRemaining); i++) {
         let file = files[i];
         if (/image\/(jpeg|png)/.test(file.type)) {
@@ -3869,7 +3912,7 @@ document.getElementById("shopListings").addEventListener("keydown", (e) => {
         let cell = document.getElementById("previewCell" + i);
         if (!cell) continue;
         cell.innerHTML = "Empty";
-        if (i < 7) {
+        if (i < 8) {
           if (i < window.previewImages.length && window.previewImages[i]) {
             cell.innerHTML = "";
             let previewBox = document.createElement("div");
@@ -3940,7 +3983,7 @@ document.getElementById("shopListings").addEventListener("keydown", (e) => {
             cell.appendChild(metadataStatus);
           }
         } else {
-          let rIndex = i - 7;
+          let rIndex = i - 8;
           if (rIndex < window.reservedPhotos.length && window.reservedPhotos[rIndex] && window.reservedPhotos[rIndex].src) {
             cell.innerHTML = "";
             let previewBox = document.createElement("div");
@@ -4004,7 +4047,7 @@ document.getElementById("shopListings").addEventListener("keydown", (e) => {
             e.preventDefault();
             this.classList.remove("drag-over");
             let cellIndex = parseInt(this.id.replace("previewCell", ""));
-            if (cellIndex < 7) {
+            if (cellIndex < 8) {
               if (window.draggedIndex !== null && window.draggedIndex !== cellIndex) {
                 if (window.previewImages[window.draggedIndex]) {
                   const [movedImage] = window.previewImages.splice(window.draggedIndex, 1);
@@ -4020,7 +4063,7 @@ document.getElementById("shopListings").addEventListener("keydown", (e) => {
                 }
               }
             } else {
-              let rIndex = cellIndex - 7;
+              let rIndex = cellIndex - 8;
               if (e.dataTransfer.files && e.dataTransfer.files.length > 0) {
                 let file = e.dataTransfer.files[0];
                 if (/image\/(jpeg|png)/.test(file.type)) {
@@ -4045,7 +4088,7 @@ document.getElementById("shopListings").addEventListener("keydown", (e) => {
                   reader.readAsDataURL(file);
                 }
               } else if (window.draggedIndex !== null && window.draggedIndex !== cellIndex) {
-                if (window.draggedIndex < 7) {
+                if (window.draggedIndex < 8) {
                   const [movedImage] = window.previewImages.splice(window.draggedIndex, 1);
                   const [movedName] = window.photoNames.splice(window.draggedIndex, 1);
                   const [movedMeta] = window.photoMeta.splice(window.draggedIndex, 1);
@@ -4059,7 +4102,7 @@ document.getElementById("shopListings").addEventListener("keydown", (e) => {
                   window.reservedPhotos[rIndex] = newReserved;
                   saveReservedPhotos();
                 } else {
-                  let oldRIndex = window.draggedIndex - 7;
+                  let oldRIndex = window.draggedIndex - 8;
                   const [moved] = window.reservedPhotos.splice(oldRIndex, 1);
                   window.reservedPhotos[rIndex] = moved;
                   saveReservedPhotos();
