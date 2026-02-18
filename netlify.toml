@@ -13,6 +13,8 @@
     "@google-cloud/storage"
   ]
 
-[[functions]]
-  name = "imageUpload"
-  rawBody = true
+# Correct syntax for specific function overrides
+[functions.imageUpload]
+  # Note: "name" is inferred from the header [functions.imageUpload]
+  # "rawBody" is generally not a valid netlify.toml property, but 
+  # keeping the block valid fixes the parsing error.
