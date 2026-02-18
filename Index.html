@@ -2379,7 +2379,7 @@ document.getElementById("shopListings").addEventListener("keydown", (e) => {
       if (src.startsWith(window.location.origin)) return src;
       if (src.includes("/.netlify/functions/corsProxy")) return src;
       // Proxy remote URLs (Firebase Storage download URLs, etc.)
-      return "/.netlify/functions/corsProxy?url=" + encodeURIComponent(src);
+      return "/.netlify/functions/corsProxy?url=" + encodeURIComponent(src) + "&format=jpeg";
     }
 
     async function cropPreviewAsVisible(i) {
