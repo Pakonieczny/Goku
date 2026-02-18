@@ -1,7 +1,18 @@
 [build]
-  publish = "."
+  command = "npm run build"
+  publish = "public"
   functions = "netlify/functions"
 
 [functions]
   node_bundler = "esbuild"
-  external_node_modules = ["form-data", "node-fetch", "formidable"]
+  external_node_modules = [
+    "form-data",
+    "node-fetch",
+    "formidable",
+    "firebase-admin",
+    "@google-cloud/storage"
+  ]
+
+[[functions]]
+  name = "imageUpload"
+  rawBody = true
