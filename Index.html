@@ -922,7 +922,7 @@ ANTI-REPETITION (TITLE)
   <script src="https://cdnjs.cloudflare.com/ajax/libs/materialize/1.0.0/js/materialize.min.js"></script>
 
   <script>
-// --- Firebase Logic for Completed Sets ---
+    // --- Firebase Logic for Completed Sets ---
     const firebaseConfig = {
       apiKey: "AIza" + "SyBXhQLsYRa4i0bX1TPTRiElF9Zjy5vSHlA",
       authDomain: "gokudatabase.firebaseapp.com",
@@ -1036,83 +1036,45 @@ ANTI-REPETITION (TITLE)
         }
     }
 
-async function runFullAutomationSequence(setRef, setName) {
-    window.isProcessingSet = true;
-    updateFirebaseStatus(`Processing: ${setName}`, "working");
-    
-    try {
-        // 0. Ensure UI is clear
-        document.getElementById("clearBtn").click();
-        await wait(500);
-
-        // 1. Populate Images (Download from Firebase -> Convert to Base64 DataURL)
-        const setFiles = await setRef.listAll();
+    async function runFullAutomationSequence(setRef, setName) {
+        window.isProcessingSet = true;
+        updateFirebaseStatus(`Processing: ${setName}`, "working");
         
-        // Sort files by slot number (Slot_1, Slot_2...)
-        const sortedItems = setFiles.items.sort((a, b) => {
-            const getNum = name => parseInt(name.match(/Slot_(\d+)/)?.[1] || 999);
-            return getNum(a.name) - getNum(b.name);
-        });
-        
-        // === FIXED: Sequential Fetch with Retry to prevent 502 Errors ===
-        const filesData = [];
-        
-for (const itemRef of sortedItems) {
-    const rawUrl = await itemRef.getDownloadURL();
-    let blob = null;
-    
-    // ✅ Proxy-first: avoids browser CORS blocks on direct Firebase download URLs
-    // (Cache-buster helps with token/caching weirdness.)
-    const proxyUrl = `/.netlify/functions/corsProxy?url=${encodeURIComponent(rawUrl)}&cb=${Date.now()}`;
-    let lastErr = null;
-
-    for (let attempt = 1; attempt <= 3 && !blob; attempt++) {
         try {
-            const res = await fetch(proxyUrl, { method: "GET" });
-            if (!res.ok) {
-                const t = await res.text().catch(() => "");
-                throw new Error(`Proxy status ${res.status} ${res.statusText}${t ? " — " + t.slice(0, 200) : ""}`);
-            }
-            blob = await res.blob();
-        } catch (e) {
-            lastErr = e;
-            console.warn(`Proxy fetch attempt ${attempt} failed for ${itemRef.name}:`, e);
-            await wait(800 * attempt);
-        }
-    }
+            // 0. Ensure UI is clear
+            document.getElementById("clearBtn").click();
+            await wait(500);
 
-    if (!blob) {
-        console.error(`Failed to load ${itemRef.name} via proxy.`, lastErr);
-        continue; // skip this slot instead of killing the whole set
-    }
-
-             if (blob) {
-                 const dataUrl = await new Promise((resolve) => {
-                     const reader = new FileReader();
-                     reader.onloadend = () => resolve(reader.result);
-                     reader.readAsDataURL(blob);
-                 });
-
+            // 1. Populate Images (Download from Firebase)
+            const setFiles = await setRef.listAll();
+            
+            // Sort files by slot number (Slot_1, Slot_2...)
+            const sortedItems = setFiles.items.sort((a, b) => {
+                const getNum = name => parseInt(name.match(/Slot_(\d+)/)?.[1] || 999);
+                return getNum(a.name) - getNum(b.name);
+            });
+            
+            // Fetch URLs
+            const filePromises = sortedItems.map(async (itemRef) => {
+                 const url = await itemRef.getDownloadURL();
+                 // Map Slot_X to correct index (Slot_1 -> 0)
                  const match = itemRef.name.match(/Slot_(\d+)/);
                  const idx = match ? parseInt(match[1]) - 1 : -1;
-                 
-                 filesData.push({ idx, url: dataUrl, name: itemRef.name });
-                 await wait(500); 
-             }
-        }
-        // === END FIX ===
-        
-        // Populate window vars with actual Data URIs
-        filesData.forEach(f => {
-            if(f.idx >= 0 && f.idx < 7) {
-                window.previewImages[f.idx] = f.url; // Now a valid data:image/jpeg;base64... string
-                window.photoNames[f.idx] = f.name;
-                window.photoIds[f.idx] = 'fb-' + Date.now() + '-' + f.idx;
-            }
-        });
-        
-        updateStaticPreviewGrid();
-        await wait(1000); // Give grid time to render
+                 return { idx, url, name: itemRef.name };
+            });
+            
+            const filesData = await Promise.all(filePromises);
+            
+            // Populate window vars
+            filesData.forEach(f => {
+                if(f.idx >= 0 && f.idx < 7) {
+                    window.previewImages[f.idx] = f.url;
+                    window.photoNames[f.idx] = f.name;
+                    window.photoIds[f.idx] = 'fb-' + Date.now() + '-' + f.idx;
+                }
+            });
+            updateStaticPreviewGrid();
+            await wait(1000);
 
             // 2. Generate Description/Context
             // Parse Set Name for basic prompt context (e.g. "Beady_Necklace_Set_1" -> "Beady Necklace")
