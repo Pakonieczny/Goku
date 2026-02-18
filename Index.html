@@ -3,18 +3,19 @@
 <head>
   <meta charset="UTF-8">
   <title>Etsy Listing Generator & Shop Listings</title>
-  <!-- Favicon -->
   <link rel="icon" type="image/png" href="assets/favicon.png">
-  <!-- Import Google Material Icons and Materialize CSS -->
   <link href="https://fonts.googleapis.com/icon?family=Material+Icons" rel="stylesheet">
   <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/materialize/1.0.0/css/materialize.min.css">
-  <!-- Include piexifjs for EXIF manipulation -->
   <script src="https://cdn.jsdelivr.net/npm/piexifjs@1.0.4/piexif.min.js"></script>
-  <!-- Include SortableJS -->
   <script src="https://cdn.jsdelivr.net/npm/sortablejs@1.14.0/Sortable.min.js"></script>
-  <!-- Include CropperJS -->
   <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/cropperjs/1.5.13/cropper.min.css" />
   <script src="https://cdnjs.cloudflare.com/ajax/libs/cropperjs/1.5.13/cropper.min.js"></script>
+  
+  <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-app-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-auth-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-firestore-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-storage-compat.js"></script>
+
   <style>
     html, body {
       margin: 0;
@@ -507,13 +508,39 @@
       border: none;
       cursor: pointer;
     }
+    
+    /* Firebase Status Badge */
+    #firebaseStatus {
+        position: fixed;
+        bottom: 10px;
+        right: 10px;
+        background: rgba(0,0,0,0.8);
+        color: #fff;
+        padding: 6px 12px;
+        border-radius: 20px;
+        font-size: 12px;
+        z-index: 99999;
+        display: flex;
+        align-items: center;
+        gap: 6px;
+    }
+    .status-dot {
+        width: 10px; height: 10px; border-radius: 50%; background: #666;
+    }
+    .status-dot.active { background: #0f0; box-shadow: 0 0 5px #0f0; }
+    .status-dot.working { background: #ff9800; box-shadow: 0 0 5px #ff9800; animation: pulse 1s infinite; }
+    @keyframes pulse { 0% { opacity: 1; } 50% { opacity: 0.5; } 100% { opacity: 1; } }
 
   </style>
 </head>
 <body>
-  <!-- Absolute layout stage (every component will be reparented here) -->
   <div id="layoutRoot"></div>
-  <!-- Legacy uiPositions removed: new layout system is source of truth -->
+  
+  <div id="firebaseStatus">
+      <div class="status-dot" id="fbDot"></div>
+      <span id="fbText">Initializing...</span>
+      <button id="toggleAuto" style="margin-left:5px; font-size:10px; padding:2px 5px; cursor:pointer;">Stop Auto</button>
+  </div>
 
   <button id="openConfigBtn" class="btn waves-effect waves-light configurable" style="margin-left:10px;">Open Config</button>
   
@@ -527,24 +554,20 @@
   <div id="topButtons">
     <button id="connectEtsyBtn" class="btn waves-effect waves-light configurable">Connect to Etsy</button>
     <button id="createListingBtn" class="btn waves-effect waves-light configurable update-btn" style="margin-left: 10px;">Create Listing</button>
-    <!-- Unified blue progress bar (hidden until clicked) -->
     <div id="createListingProgress" class="configurable" style="display:none;">
       <div class="bar"></div>
       <div class="pct">0%</div>
     </div>
     <div id="createListingCheck" class="progress-check configurable" title="Create complete">✓</div>
 
-     <!-- NEW: Duplicate Listing trigger (to the right of Create Listing) -->
      <button id="duplicateListingBtn" class="btn waves-effect waves-light configurable" style="margin-left: 10px;">
        Duplicate Listing
      </button>
-     <!-- NEW: Holistic Duplicate Listing progress (hidden until clicked) -->
      <div id="duplicateListingProgress" class="configurable" style="display:none;">
        <div class="bar"></div>
        <div class="pct">0%</div>
      </div>
      <div id="duplicateListingCheck" class="progress-check configurable" title="Duplicate complete">✓</div>
-     <!-- NEW: Clear (red) — appears in UI and Config modal -->
      <button id="clearBtn" class="btn waves-effect waves-light red darken-1 configurable" style="margin-left:10px;">
        Clear
      </button>
@@ -574,7 +597,6 @@
    
     <div id="dropZone" class="configurable">Image Drop</div>
     <button id="analyzeMetadataBtn" class="btn waves-effect waves-light configurable">Analyze Photos</button>
-    <!-- Blue progress bar for Analyze Photos -->
     <div id="analyzeMetadataProgress" class="configurable">
       <div class="bar"></div>
       <div class="pct">0%</div>
@@ -658,7 +680,6 @@
     </div>
   </div>
   
-  <!-- Metadata Modal -->
   <div id="metadataModal" class="modal">
     <div class="modal-content">
       <h4>Photo Metadata</h4>
@@ -669,7 +690,6 @@
     </div>
   </div>
   
-  <!-- Analyze Rules Modal -->
   <div id="analyzeRulesModal" class="modal">
     <div class="modal-content">
       <h4>Photo Analysis Rules</h4>
@@ -709,7 +729,6 @@ Default Photo Analysis Rules:
     </div>
   </div>
   
-  <!-- Title Rules Modal -->
   <div id="titleRulesModal" class="modal">
     <div class="modal-content">
       <h4>Title Rules</h4>
@@ -794,7 +813,6 @@ Compose the title as a chain of distinct, non-repeating search phrases that stil
     </div>
   </div>
   
-  <!-- Description Rules Modal -->
   <div id="descriptionRulesModal" class="modal">
     <div class="modal-content">
       <h4>Description Rules</h4>
@@ -819,7 +837,6 @@ Option 3:
     </div>
   </div>
   
-  <!-- Keyword Rules Modal -->
   <div id="keywordRulesModal" class="modal">
     <div class="modal-content">
       <h4>Keyword Rules</h4>
@@ -851,7 +868,6 @@ ANTI-REPETITION (TITLE)
     </div>
   </div>
   
-  <!-- Crop Modal -->
   <div id="photoCropModal" class="modal" style="width:650px; height:650px;">
     <div class="crop-container" style="position: relative; width:100%; height:100%;">
       <h4 style="text-align:center; margin:0 0 10px 0;">Crop Photo</h4>
@@ -865,7 +881,6 @@ ANTI-REPETITION (TITLE)
     </div>
   </div>
 
-  <!-- Layout Config Modal (mirrors shipping-1 flow) -->
   <div id="configModal" class="modal">
     <div class="modal-content">
       <h5>Configure Component Positions</h5>
@@ -886,16 +901,241 @@ ANTI-REPETITION (TITLE)
   
   <script src="https://code.jquery.com/jquery-3.6.0.min.js"></script>
   <script src="https://cdnjs.cloudflare.com/ajax/libs/materialize/1.0.0/js/materialize.min.js"></script>
-  <!-- Fallback: inline metadataHandler to avoid 404 while keeping the same API -->
+
+  <script>
+    // --- Firebase Logic for Completed Sets ---
+    const firebaseConfig = {
+      apiKey: "AIzaSyBXhQLsYRa4i0bX1TPTRiElF9Zjy5vSHlA",
+      authDomain: "gokudatabase.firebaseapp.com",
+      projectId: "gokudatabase",
+      storageBucket: "gokudatabase.firebasestorage.app",
+      messagingSenderId: "1078662308113",
+      appId: "1:1078662308113:web:41df0e5d229ff2af7a6cb0"
+    };
+
+    firebase.initializeApp(firebaseConfig);
+    const storage = firebase.storage();
+    const auth = firebase.auth();
+
+    // Login logic
+    auth.signInAnonymously().catch(console.error);
+    
+    // Auto-pilot control vars
+    window.autoProcessingEnabled = true; // default on
+    window.isProcessingSet = false;
+    
+    // Local tracking of processed sets to avoid loops
+    function getProcessedSets() {
+        return JSON.parse(localStorage.getItem('processed_firebase_sets') || '[]');
+    }
+    
+    function markSetProcessed(setName) {
+        const sets = getProcessedSets();
+        if (!sets.includes(setName)) {
+            sets.push(setName);
+            localStorage.setItem('processed_firebase_sets', JSON.stringify(sets));
+        }
+    }
+    
+    function updateFirebaseStatus(status, type) {
+        const dot = document.getElementById('fbDot');
+        const txt = document.getElementById('fbText');
+        txt.textContent = status;
+        dot.className = "status-dot " + (type || "");
+    }
+
+    // Toggle Button
+    document.getElementById("toggleAuto").addEventListener("click", function() {
+        window.autoProcessingEnabled = !window.autoProcessingEnabled;
+        this.textContent = window.autoProcessingEnabled ? "Stop Auto" : "Start Auto";
+        if (window.autoProcessingEnabled) checkFirebaseForSets();
+    });
+
+    async function checkFirebaseForSets() {
+        if (!window.autoProcessingEnabled || window.isProcessingSet) return;
+        
+        updateFirebaseStatus("Scanning...", "working");
+
+        try {
+            const listRef = storage.ref('listing-generator-1/Completed_Sets');
+            const res = await listRef.listAll();
+            
+            // Filter folders (prefixes)
+            const processed = getProcessedSets();
+            // We want folders that are NOT in processed
+            // Note: Firebase prefixes end in '/'
+            const newSets = res.prefixes.filter(p => {
+                const name = p.name.replace(/\/$/, ""); 
+                return !processed.includes(name);
+            });
+            
+            if (newSets.length > 0) {
+                // Pick the first available set
+                const setRef = newSets[0];
+                const setName = setRef.name.replace(/\/$/, "");
+                console.log("Found new set:", setName);
+                await runFullAutomationSequence(setRef, setName);
+            } else {
+                updateFirebaseStatus("Waiting for sets...", "active");
+            }
+
+        } catch (e) {
+            console.error("Firebase scan error:", e);
+            updateFirebaseStatus("Scan Error", "");
+        }
+        
+        // Re-check in 15 seconds
+        if(window.autoProcessingEnabled) {
+            setTimeout(checkFirebaseForSets, 15000);
+        }
+    }
+
+    // Helper: Wait function
+    const wait = ms => new Promise(r => setTimeout(r, ms));
+
+    // Helper: Wait for a condition function to return true
+    async function waitForCondition(predicate, interval = 1000, maxWait = 120000) {
+        const start = Date.now();
+        while (true) {
+            if (await predicate()) return true;
+            if (Date.now() - start > maxWait) return false; // Timeout
+            await wait(interval);
+        }
+    }
+
+    async function runFullAutomationSequence(setRef, setName) {
+        window.isProcessingSet = true;
+        updateFirebaseStatus(`Processing: ${setName}`, "working");
+        
+        try {
+            // 0. Ensure UI is clear
+            document.getElementById("clearBtn").click();
+            await wait(500);
+
+            // 1. Populate Images (Download from Firebase)
+            const setFiles = await setRef.listAll();
+            
+            // Sort files by slot number (Slot_1, Slot_2...)
+            const sortedItems = setFiles.items.sort((a, b) => {
+                const getNum = name => parseInt(name.match(/Slot_(\d+)/)?.[1] || 999);
+                return getNum(a.name) - getNum(b.name);
+            });
+            
+            // Fetch URLs
+            const filePromises = sortedItems.map(async (itemRef) => {
+                 const url = await itemRef.getDownloadURL();
+                 // Map Slot_X to correct index (Slot_1 -> 0)
+                 const match = itemRef.name.match(/Slot_(\d+)/);
+                 const idx = match ? parseInt(match[1]) - 1 : -1;
+                 return { idx, url, name: itemRef.name };
+            });
+            
+            const filesData = await Promise.all(filePromises);
+            
+            // Populate window vars
+            filesData.forEach(f => {
+                if(f.idx >= 0 && f.idx < 7) {
+                    window.previewImages[f.idx] = f.url;
+                    window.photoNames[f.idx] = f.name;
+                    window.photoIds[f.idx] = 'fb-' + Date.now() + '-' + f.idx;
+                }
+            });
+            updateStaticPreviewGrid();
+            await wait(1000);
+
+            // 2. Generate Description/Context
+            // Parse Set Name for basic prompt context (e.g. "Beady_Necklace_Set_1" -> "Beady Necklace")
+            const rawContext = setName.split("_Set_")[0].replace(/_/g, " ");
+            document.getElementById("listingDescInput").value = "Create a listing for " + rawContext;
+            
+            // 3. Generate Content (Sequentially)
+            updateFirebaseStatus("Generating Info...", "working");
+            
+            // i. Key Phrases
+            await generateTagPhrases(); 
+            await wait(2000);
+            
+            // ii, iii, iv. Title & Description
+            await Promise.all([generateTitleOnly(), generateDescriptionOnly()]);
+            await wait(2000);
+            
+            // v. Analyze Metadata
+            updateFirebaseStatus("Analyzing Metadata...", "working");
+            document.getElementById("analyzeMetadataBtn").click();
+            // Wait for analyze checkmark
+            await waitForCondition(() => {
+                return document.getElementById("analyzeMetadataCheck").style.display !== "none";
+            });
+            await wait(1000);
+
+            // vi. Create Listing (1st pass)
+            updateFirebaseStatus("Uploading Original...", "working");
+            // Ensure we have a dummy listing ID loaded (from existing queue logic)
+            if(!document.getElementById("shopListings").value) {
+                console.warn("No Listing ID available in queue. Automation paused.");
+                updateFirebaseStatus("Error: No Listing ID", "");
+                window.isProcessingSet = false;
+                return;
+            }
+            
+            document.getElementById("createListingBtn").click();
+            
+            // Wait for queue to process. The daemon removes jobs from localStorage "etsyUploadJobs".
+            await waitForCondition(() => {
+                const q = JSON.parse(localStorage.getItem("etsyUploadJobs") || "[]");
+                return q.length === 0;
+            }, 2000, 300000); // 5 min timeout for upload
+            
+            await wait(3000);
+
+            // vii. Duplicate Listing
+            updateFirebaseStatus("Duplicating...", "working");
+            document.getElementById("duplicateListingBtn").click();
+            
+            // Wait for Duplicate Checkmark
+            await waitForCondition(() => {
+                 return document.getElementById("duplicateListingCheck").style.display !== "none";
+            });
+            await wait(2000);
+
+            // viii. Create Listing (2nd pass - Variant)
+            updateFirebaseStatus("Uploading Variant...", "working");
+            // The automation logic in duplicateListingBtn has already swapped images and updated text.
+            // We need the NEXT listing ID from the queue.
+            // Note: The createListingBtn logic consumes one ID from window.listingQueue
+            // Ensure we still have one.
+            if(!document.getElementById("shopListings").value) {
+                 console.warn("Ran out of Listing IDs for variant.");
+            } else {
+                 document.getElementById("createListingBtn").click();
+                 await waitForCondition(() => {
+                    const q = JSON.parse(localStorage.getItem("etsyUploadJobs") || "[]");
+                    return q.length === 0;
+                }, 2000, 300000);
+            }
+            
+            // ix. Finish
+            markSetProcessed(setName);
+            updateFirebaseStatus(`Done: ${setName}`, "active");
+            await wait(3000);
+
+        } catch (e) {
+            console.error("Automation sequence failed:", e);
+            updateFirebaseStatus("Auto Error", "");
+        } finally {
+            window.isProcessingSet = false;
+        }
+    }
+
+    // Initialize watcher on load
+    window.addEventListener('load', () => {
+        // Start the watcher after a brief delay to allow auth
+        setTimeout(checkFirebaseForSets, 3000);
+    });
+  </script>
+
   <script>
     window.metadataHandler = window.metadataHandler || (function(){
-      /**
-       * analyzeAndEmbedMetadata(i)
-       * Minimal implementation:
-       * - Generates a short alt/metadata string from the Listing Description or filename
-       * - Stores it in window.photoMeta[i] so your upload calls use it as alt_text
-       * - Updates the little status text under each preview cell
-       */
       async function analyzeAndEmbedMetadata(i){
         try {
           const imgData = (window.previewImages && window.previewImages[i]) || null;
@@ -905,12 +1145,9 @@ ANTI-REPETITION (TITLE)
           }
           const desc = (document.getElementById("listingDescInput")?.value || "").trim();
           const name = (window.photoNames?.[i] || "").replace(/\.[a-z0-9]+$/i, "");
-          // Build a concise, SEO-ish line (max ~200 chars)
           const base = (desc || name || "Jewelry photo").replace(/\s+/g, " ").trim();
           const tag  = base.slice(0, 200);
-          // Persist for your upload paths (used as alt_text later)
           window.photoMeta[i] = tag;
-          // UI status tick
           const s = document.getElementById("metadataStatus" + i);
           if (s) s.textContent = "✓ tagged";
         } catch (e) {
@@ -922,25 +1159,6 @@ ANTI-REPETITION (TITLE)
     })();
   </script>
 
-  <!-- Fallback: inline metadataHandler to avoid 404 while keeping the same API -->
-  <script>
-    window.metadataHandler = window.metadataHandler || (function(){
-      async function analyzeAndEmbedMetadata(i) {
-        const txt = (window.previewImages && window.previewImages[i]) ? "OK" : "no image";
-        window.photoMeta = window.photoMeta || [];
-        window.photoMeta[i] = "AUTO: " + txt;
-        const ta = document.getElementById("metadataTextarea");
-        if (ta) {
-          ta.value = Array.from({ length: Math.min(7, window.previewImages.length) }, (_, idx) =>
-            `${idx + 1}. ${window.photoMeta[idx] || ""}`.trim()
-          ).join("\n").trim();
-        }
-      }
-      return { analyzeAndEmbedMetadata };
-    })();
-  </script>
-
-  <!-- ⬇️ Paste your REAL GPT-5 vision-backed handler RIGHT BELOW ⬇️ -->
   <script>
     // Real GPT-5 vision-backed metadata generator
     window.metadataHandler = (function () {
@@ -1022,8 +1240,6 @@ ANTI-REPETITION (TITLE)
   </script>
 
   <script>
-    // The temporary debug toast notifications have been removed.
-
     window.ETSY_SHOP_URL = "https://www.etsy.com/shop/custombrites";
     window.CLIENT_ID = "k75zdspz4r99txpqdji7i2em";
     window.REDIRECT_URI = "https://delicate-tanuki-616ac0.netlify.app/";
@@ -1148,8 +1364,6 @@ ANTI-REPETITION (TITLE)
       // Counter chip
       listingQueueCount:       { left: 190,  top: 75,  width: 25,  height: 27 }
     };
-
-    // (Shipping-1 stores to LS as pos-<id>-left|top|width|height and applies absolute layout.  [oai_citation:6‡shipping-1.html](file-service://file-UyzPx2tdaLoZi5ZZoE5Zq8))
 
     function adoptIntoLayoutRoot(el){
     const stage = document.getElementById("layoutRoot");
@@ -1976,9 +2190,9 @@ https://www.etsy.com/your/shops/me/listing-editor/edit/1822973998
 
     // When the user changes the shopListings textarea manually.
   document.getElementById("shopListings").addEventListener("change", () => {
+    let rawInput = document.getElementById("shopListings").value;
     // NEW: persist raw text immediately (survives refresh)
     localStorage.setItem("shopListingsText", rawInput);
-    let rawInput = document.getElementById("shopListings").value;
     window.listingQueue = parseListingNumbers(rawInput);
     loadNextListingInQueue();
   });
@@ -2409,7 +2623,7 @@ document.getElementById("shopListings").addEventListener("keydown", (e) => {
         let listingId = null;
         window.__lastChosenQueueIndex = -1;
         if (Array.isArray(window.listingQueue) && window.listingQueue.length > 0) {
-          const idx = Math.floor(Math.random() * window.listingQueue.length);
+          const idx = 0; // Always take the first one
           listingId = String(window.listingQueue[idx]);
           window.__lastChosenQueueIndex = idx;
           document.getElementById("shopListings").value = listingId;
@@ -2696,94 +2910,7 @@ document.getElementById("shopListings").addEventListener("keydown", (e) => {
         // build 2-column, numbered (1–7 / 8–14), fixed to 7 lines
         const left  = phrasesArray.slice(0, 7);
         const right = phrasesArray.slice(7, 14);
-   // NEW: Guarded generator that preserves orange-highlighted phrases
-    async function generateTagPhrasesGuarded() {
-      // 1) Gather current + protected indices
-      const ta = document.getElementById("searchKeyPhrases");
-      const current = (typeof extractSkpPhrasesFromText === "function")
-        ? extractSkpPhrasesFromText(ta?.value || "")
-        : [];
-     const protectedIdx = (window.skpOrangeLock instanceof Set && window.skpOrangeLock.size)
-       ? new Set(window.skpOrangeLock)    // ← honor the indices locked when "Duplicate" was pressed
-       : ((typeof getSkpChangedIndices === "function")
-            ? getSkpChangedIndices()
-            : new Set());
-      // 2) Ask model for fresh phrases (same source as your normal gen)
-      const question = (document.getElementById("listingDescInput")?.value || "").trim();
-      const keywordRules = document.getElementById("keywordRulesTextarea")?.value || "";
-      const fresh = await getInitialPhrases(question, keywordRules); // returns array of strings
 
-      // 3) Canonicalize, de-dup, cap to 13
-      const canon = (s) => {
-        let tag = String(s || "")
-          .normalize("NFKD")
-          .replace(/[^\p{Letter}\p{Number}\s]/gu, " ")
-          .replace(/\s+/g, " ")
-          .trim();
-        if (!tag) return "";
-        if (tag.length > 20) {
-          const cut = tag.slice(0, 20);
-          const sp = cut.lastIndexOf(" ");
-          tag = (sp > 7 ? cut.slice(0, sp) : cut).trim();
-        }
-        return tag;
-      };
-      const seen = new Set();
-      const sanitizedFresh = [];
-      for (const f of fresh) {
-        const t = canon(f);
-        if (!t) continue;
-        const key = t.toLowerCase();
-        if (seen.has(key)) continue;
-        seen.add(key);
-        sanitizedFresh.push(t);
-        if (sanitizedFresh.length >= 13) break;
-      }
-
-      // 4) Merge: keep protected (“orange”) current items; replace the rest
-      const out = new Array(14).fill("");
-      const just = new Set(); // indices regenerated this run (to paint green)
-      let pick = 0;
-      for (let i = 0; i < 13; i++) {
-        const keep = protectedIdx.has(i) && (current[i] || "").trim();
-        if (keep) {
-          out[i] = current[i];
-        } else {
-          // take the next fresh not already used
-          while (pick < sanitizedFresh.length && out.includes(sanitizedFresh[pick])) pick++;
-          const nextVal = sanitizedFresh[pick] || current[i] || "";
-          out[i] = nextVal;
-          if (nextVal.trim() !== (current[i] || "").trim()) just.add(i);
-          if (pick < sanitizedFresh.length) pick++;
-        }
-      }
-      const phrasesArray = out.slice(0, 13);
-      // expose to overlay so it can paint green with precedence over orange
-      window.skpJustRegenerated = just;
-
-      // 5) Rebuild the exact 2-column, fixed 7-line view (same as your formatter)
-      const left  = phrasesArray.slice(0, 7);
-      const right = phrasesArray.slice(7, 13);
-      const leftLabels  = left.map((p, i) => `${i + 1}. ${p || ""}`);
-      const rightLabels = right.map((p, i) => `${i + 8}. ${p || ""}`);
-      const leftWidth = Math.max(0, ...leftLabels.map(s => s.length));
-      const pad = leftWidth + 3;
-      const colLines = [];
-      for (let i = 0; i < 7; i++) {
-        const L = leftLabels[i]  || `${i + 1}. `;
-        const R = rightLabels[i] || "";
-        colLines.push(L.padEnd(pad, " ") + R);
-      }
-      const outputText = colLines.join("\n");
-
-      if (ta) {
-        ta.value = outputText;
-       // preserve highlights (do NOT reseed baseline here)
-        if (typeof repadSkpColumnsPreserveCaret === "function") repadSkpColumnsPreserveCaret();
-        if (typeof refreshSkpOverlay === "function") refreshSkpOverlay();
-      }
-      M.toast({ html: "Key Phrases updated (orange kept)" });
-    }
         const leftLabels = left.map((p, i) => `${i + 1}. ${p || ""}`);
         const rightLabels = right.map((p, i) => `${i + 8}. ${p || ""}`);
         const leftWidth = Math.max(0, ...leftLabels.map(s => s.length));
