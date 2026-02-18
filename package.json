@@ -5,7 +5,7 @@
   "main": "index.js",
   "scripts": {
     "start": "netlify dev",
-    "build": "echo 'No build step required'"
+    "build": "mkdir -p public && cp Index.html public/index.html && (cp -r assets public/assets 2>/dev/null || :)"
   },
   "dependencies": {
     "node-fetch": "^2.6.1",

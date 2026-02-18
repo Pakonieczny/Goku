@@ -1,5 +1,4 @@
 [build]
-  # We execute the npm script 'build' (which now just echoes a message)
   command = "npm run build"
   publish = "public"
   functions = "netlify/functions"
@@ -14,6 +13,5 @@
     "@google-cloud/storage"
   ]
 
-# Specific function overrides
 [functions.imageUpload]
-  # This block allows specific config for the imageUpload function if needed later
+  # Specific config for imageUpload if needed
