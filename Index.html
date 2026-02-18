@@ -1037,8 +1037,9 @@ ANTI-REPETITION (TITLE)
         if (s.startsWith(window.location.origin)) return s;
         if (s.startsWith("/.netlify/functions/corsProxy")) return s;
 
-        // Anything else (Firebase Storage token URLs, etc.) -> proxy
-        return "/.netlify/functions/corsProxy?url=" + encodeURIComponent(s);
+    // Anything else (Firebase Storage token URLs, etc.) -> proxy
+    // IMPORTANT: only use this for canvas/cropping. Do NOT use for normal preview display.
+    return "/.netlify/functions/corsProxy?url=" + encodeURIComponent(s);
     }
 
     // Helper: Wait for a condition function to return true
@@ -1080,10 +1081,10 @@ ANTI-REPETITION (TITLE)
             
             const filesData = await Promise.all(filePromises);
             
-            // Populate window vars
+            // Populate window vars (store RAW Firebase URLs; proxy only when cropping)
             filesData.forEach(f => {
                 if(f.idx >= 0 && f.idx < 7) {
-                    window.previewImages[f.idx] = toCanvasSafeSrc(f.url);
+                    window.previewImages[f.idx] = f.url;
                     window.photoNames[f.idx] = f.name;
                     window.photoIds[f.idx] = 'fb-' + Date.now() + '-' + f.idx;
                 }
@@ -2398,7 +2399,7 @@ document.getElementById("shopListings").addEventListener("keydown", (e) => {
       const offY = parseFloat(imgEl.dataset.offsetY) || 0;
 
       // 2) Load original image (canvas-safe)
-      const canvasSafeSrc = toCanvasSafeSrc(src);
+      const canvasSafeSrc = toCanvasSafeSrc(src); // proxy only here
       const loaded = await new Promise((resolve, reject) => {
         const im = new Image();
         // If this ends up being cross-origin (shouldn't once proxied), keep this harmlessly set.
@@ -3834,10 +3835,10 @@ document.getElementById("shopListings").addEventListener("keydown", (e) => {
             previewBox.setAttribute("draggable", "true");
             previewBox.addEventListener("dragstart", e => { window.draggedIndex = i; });
             let img = document.createElement("img");
-            // === FIX START ===
-            img.crossOrigin = "anonymous"; // Prevents taint when drawn to canvas later
-            // === FIX END ===
-            img.src = toCanvasSafeSrc(window.previewImages[i]);
+            // For normal preview display, load directly (no crossOrigin, no proxy).
+            // Canvas operations use a separate load path inside cropPreviewAsVisible().
+            img.removeAttribute("crossorigin");
+            img.src = window.previewImages[i];
             previewBox.appendChild(img);
 
             // Default slight downward nudge so the visual center feels perfect
