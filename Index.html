@@ -1037,48 +1037,66 @@ ANTI-REPETITION (TITLE)
     }
 
 async function runFullAutomationSequence(setRef, setName) {
-        window.isProcessingSet = true;
-        updateFirebaseStatus(`Processing: ${setName}`, "working");
-        
-        try {
-            // 0. Ensure UI is clear
-            document.getElementById("clearBtn").click();
-            await wait(500);
+    window.isProcessingSet = true;
+    updateFirebaseStatus(`Processing: ${setName}`, "working");
+    
+    try {
+        // 0. Ensure UI is clear
+        document.getElementById("clearBtn").click();
+        await wait(500);
 
-            // 1. Populate Images (Download from Firebase)
-            const setFiles = await setRef.listAll();
-            
-            // Sort files by slot number (Slot_1, Slot_2...)
-            const sortedItems = setFiles.items.sort((a, b) => {
-                const getNum = name => parseInt(name.match(/Slot_(\d+)/)?.[1] || 999);
-                return getNum(a.name) - getNum(b.name);
-            });
-            
-            // Fetch URLs
-            const filePromises = sortedItems.map(async (itemRef) => {
-                 const rawUrl = await itemRef.getDownloadURL();
+        // 1. Populate Images (Download from Firebase -> Convert to Base64 DataURL)
+        const setFiles = await setRef.listAll();
+        
+        // Sort files by slot number (Slot_1, Slot_2...)
+        const sortedItems = setFiles.items.sort((a, b) => {
+            const getNum = name => parseInt(name.match(/Slot_(\d+)/)?.[1] || 999);
+            return getNum(a.name) - getNum(b.name);
+        });
+        
+        // Fetch URLs and convert to Data URIs
+        const filePromises = sortedItems.map(async (itemRef) => {
+             const rawUrl = await itemRef.getDownloadURL();
+             
+             // Use local proxy to fetch the blob
+             const proxyUrl = "/.netlify/functions/corsProxy?url=" + encodeURIComponent(rawUrl);
+             
+             try {
+                 const res = await fetch(proxyUrl);
+                 if (!res.ok) throw new Error(`Proxy fetch failed: ${res.status}`);
+                 const blob = await res.blob();
                  
-                 // METHOD 2: Use local Netlify proxy to bypass CORS
-                 const url = "/.netlify/functions/corsProxy?url=" + encodeURIComponent(rawUrl);
+                 // Convert Blob to Base64 Data URL
+                 const dataUrl = await new Promise((resolve) => {
+                     const reader = new FileReader();
+                     reader.onloadend = () => resolve(reader.result);
+                     reader.readAsDataURL(blob);
+                 });
 
                  // Map Slot_X to correct index (Slot_1 -> 0)
                  const match = itemRef.name.match(/Slot_(\d+)/);
                  const idx = match ? parseInt(match[1]) - 1 : -1;
-                 return { idx, url, name: itemRef.name };
-            });
-            
-            const filesData = await Promise.all(filePromises);
-            
-            // Populate window vars
-            filesData.forEach(f => {
-                if(f.idx >= 0 && f.idx < 7) {
-                    window.previewImages[f.idx] = f.url;
-                    window.photoNames[f.idx] = f.name;
-                    window.photoIds[f.idx] = 'fb-' + Date.now() + '-' + f.idx;
-                }
-            });
-            updateStaticPreviewGrid();
-            await wait(1000);
+                 
+                 return { idx, url: dataUrl, name: itemRef.name };
+             } catch (err) {
+                 console.error("Error loading image:", itemRef.name, err);
+                 return null;
+             }
+        });
+        
+        const filesData = (await Promise.all(filePromises)).filter(Boolean);
+        
+        // Populate window vars with actual Data URIs
+        filesData.forEach(f => {
+            if(f.idx >= 0 && f.idx < 7) {
+                window.previewImages[f.idx] = f.url; // Now a valid data:image/jpeg;base64... string
+                window.photoNames[f.idx] = f.name;
+                window.photoIds[f.idx] = 'fb-' + Date.now() + '-' + f.idx;
+            }
+        });
+        
+        updateStaticPreviewGrid();
+        await wait(1000); // Give grid time to render
 
             // 2. Generate Description/Context
             // Parse Set Name for basic prompt context (e.g. "Beady_Necklace_Set_1" -> "Beady Necklace")
