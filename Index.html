@@ -2351,6 +2351,21 @@ document.getElementById("shopListings").addEventListener("keydown", (e) => {
 
     // Crops the i-th preview to exactly what you see inside its .preview-box,
     // exporting a 3000x3000 JPEG @0.85 (same as saveCropBtn).
+
+    // NOTE: Drawing cross-origin images onto a canvas requires the image response
+    // to include appropriate CORS headers. Firebase Storage often won't include
+    // Access-Control-Allow-Origin for your Netlify domain, causing crop to fail.
+    // We proxy those images through a Netlify Function to make them same-origin.
+    function toCanvasSafeSrc(src) {
+      if (!src) return src;
+      // Already safe (data/blob/local/proxy)
+      if (src.startsWith("data:") || src.startsWith("blob:")) return src;
+      if (src.startsWith(window.location.origin)) return src;
+      if (src.includes("/.netlify/functions/corsProxy")) return src;
+      // Proxy remote URLs (Firebase Storage download URLs, etc.)
+      return "/.netlify/functions/corsProxy?url=" + encodeURIComponent(src);
+    }
+
     async function cropPreviewAsVisible(i) {
       // 1) DOM & data
       const cell = document.getElementById("previewCell" + i);
@@ -2367,15 +2382,15 @@ document.getElementById("shopListings").addEventListener("keydown", (e) => {
       const offX = parseFloat(imgEl.dataset.offsetX) || 0;
       const offY = parseFloat(imgEl.dataset.offsetY) || 0;
 
-      // 2) Load original image (dataURL-safe)
+      // 2) Load original image (canvas-safe)
+      const canvasSafeSrc = toCanvasSafeSrc(src);
       const loaded = await new Promise((resolve, reject) => {
         const im = new Image();
-        // === FIX START ===
-        im.crossOrigin = "anonymous"; // Prevents tainted canvas when loading external URLs
-        // === FIX END ===
+        // If this ends up being cross-origin (shouldn't once proxied), keep this harmlessly set.
+        im.crossOrigin = "anonymous";
         im.onload  = () => resolve(im);
         im.onerror = reject;
-        im.src = src;
+        im.src = canvasSafeSrc;
       });
 
       // 3) “Object-fit: cover” into the preview viewport (usually 120×120),
