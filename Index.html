@@ -531,6 +531,25 @@
     .status-dot.working { background: #ff9800; box-shadow: 0 0 5px #ff9800; animation: pulse 1s infinite; }
     @keyframes pulse { 0% { opacity: 1; } 50% { opacity: 0.5; } 100% { opacity: 1; } }
 
+    /* Better Toggle Button */
+    #toggleAuto {
+        border: none;
+        border-radius: 4px;
+        padding: 4px 10px;
+        cursor: pointer;
+        font-weight: bold;
+        font-size: 11px;
+        margin-left: 8px;
+        transition: background-color 0.3s;
+    }
+    #toggleAuto.running {
+        background-color: #2e7d32; /* green */
+        color: white;
+    }
+    #toggleAuto.stopped {
+        background-color: #c62828; /* red */
+        color: white;
+    }
   </style>
 </head>
 <body>
@@ -539,7 +558,7 @@
   <div id="firebaseStatus">
       <div class="status-dot" id="fbDot"></div>
       <span id="fbText">Initializing...</span>
-      <button id="toggleAuto" style="margin-left:5px; font-size:10px; padding:2px 5px; cursor:pointer;">Stop Auto</button>
+      <button id="toggleAuto" class="running">Stop Auto</button>
   </div>
 
   <button id="openConfigBtn" class="btn waves-effect waves-light configurable" style="margin-left:10px;">Open Config</button>
@@ -944,11 +963,25 @@ ANTI-REPETITION (TITLE)
         dot.className = "status-dot " + (type || "");
     }
 
-    // Toggle Button
+    // Toggle Button Logic (Enhanced)
     document.getElementById("toggleAuto").addEventListener("click", function() {
         window.autoProcessingEnabled = !window.autoProcessingEnabled;
         this.textContent = window.autoProcessingEnabled ? "Stop Auto" : "Start Auto";
-        if (window.autoProcessingEnabled) checkFirebaseForSets();
+        
+        // Update styling
+        if (window.autoProcessingEnabled) {
+            this.classList.remove("stopped");
+            this.classList.add("running");
+            checkFirebaseForSets();
+        } else {
+            this.classList.remove("running");
+            this.classList.add("stopped");
+            if(window.isProcessingSet) {
+                 updateFirebaseStatus("Pausing after set...", "working");
+            } else {
+                 updateFirebaseStatus("Auto Paused", "");
+            }
+        }
     });
 
     async function checkFirebaseForSets() {
@@ -984,7 +1017,7 @@ ANTI-REPETITION (TITLE)
             updateFirebaseStatus("Scan Error", "");
         }
         
-        // Re-check in 15 seconds
+        // Re-check in 15 seconds if still enabled
         if(window.autoProcessingEnabled) {
             setTimeout(checkFirebaseForSets, 15000);
         }
@@ -2331,6 +2364,9 @@ document.getElementById("shopListings").addEventListener("keydown", (e) => {
       // 2) Load original image (dataURL-safe)
       const loaded = await new Promise((resolve, reject) => {
         const im = new Image();
+        // === FIX START ===
+        im.crossOrigin = "anonymous"; // Prevents tainted canvas when loading external URLs
+        // === FIX END ===
         im.onload  = () => resolve(im);
         im.onerror = reject;
         im.src = src;
@@ -3454,6 +3490,9 @@ document.getElementById("shopListings").addEventListener("keydown", (e) => {
     async function resizeImage(dataURL, width, height) {
       return new Promise((resolve, reject) => {
         const img = new Image();
+        // === FIX START ===
+        img.crossOrigin = "anonymous"; // Prevents taint when loading remote images
+        // === FIX END ===
         img.onload = () => {
           const canvas = document.createElement("canvas");
           canvas.width = width;
@@ -3703,6 +3742,9 @@ document.getElementById("shopListings").addEventListener("keydown", (e) => {
             previewBox.setAttribute("draggable", "true");
             previewBox.addEventListener("dragstart", e => { window.draggedIndex = i; });
             let img = document.createElement("img");
+            // === FIX START ===
+            img.crossOrigin = "anonymous"; // Prevents taint when drawn to canvas later
+            // === FIX END ===
             img.src = window.previewImages[i];
             previewBox.appendChild(img);
 
