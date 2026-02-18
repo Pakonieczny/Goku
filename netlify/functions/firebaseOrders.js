@@ -1,4 +1,4 @@
-/*  netlify/functions/firebaseOrders.js  */
+/* netlify/functions/firebaseOrders.js  */
 const admin = require("./firebaseAdmin");
 const db    = admin.firestore();
 
