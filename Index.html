@@ -922,7 +922,7 @@ ANTI-REPETITION (TITLE)
   <script src="https://cdnjs.cloudflare.com/ajax/libs/materialize/1.0.0/js/materialize.min.js"></script>
 
   <script>
-    // --- Firebase Logic for Completed Sets ---
+// --- Firebase Logic for Completed Sets ---
     const firebaseConfig = {
       apiKey: "AIza" + "SyBXhQLsYRa4i0bX1TPTRiElF9Zjy5vSHlA",
       authDomain: "gokudatabase.firebaseapp.com",
@@ -1054,18 +1054,41 @@ async function runFullAutomationSequence(setRef, setName) {
             return getNum(a.name) - getNum(b.name);
         });
         
-        // Fetch URLs and convert to Data URIs
-        const filePromises = sortedItems.map(async (itemRef) => {
+        // === FIXED: Sequential Fetch with Retry to prevent 502 Errors ===
+        const filesData = [];
+        
+        for (const itemRef of sortedItems) {
              const rawUrl = await itemRef.getDownloadURL();
-             
-             // Use local proxy to fetch the blob
              const proxyUrl = "/.netlify/functions/corsProxy?url=" + encodeURIComponent(rawUrl);
              
-             try {
-                 const res = await fetch(proxyUrl);
-                 if (!res.ok) throw new Error(`Proxy fetch failed: ${res.status}`);
-                 const blob = await res.blob();
-                 
+             let blob = null;
+             let attempts = 0;
+             const maxAttempts = 3;
+
+             // Retry loop for robustness
+             while(attempts < maxAttempts && !blob) {
+                 try {
+                     attempts++;
+                     const res = await fetch(proxyUrl);
+                     
+                     if (!res.ok) {
+                        // If 502/504, it's a temp server issue. Wait and retry.
+                        if (res.status === 502 || res.status === 504) {
+                            console.warn(`Proxy 502 for ${itemRef.name}, retrying (Attempt ${attempts})...`);
+                            await wait(2000 * attempts); // Backoff: 2s, 4s...
+                            continue;
+                        }
+                        throw new Error(`Proxy fetch failed: ${res.status}`);
+                     }
+                     blob = await res.blob();
+                 } catch (err) {
+                     console.error(`Error loading image ${itemRef.name}:`, err);
+                     if (attempts >= maxAttempts) break;
+                     await wait(2000);
+                 }
+             }
+
+             if (blob) {
                  // Convert Blob to Base64 Data URL
                  const dataUrl = await new Promise((resolve) => {
                      const reader = new FileReader();
@@ -1077,14 +1100,13 @@ async function runFullAutomationSequence(setRef, setName) {
                  const match = itemRef.name.match(/Slot_(\d+)/);
                  const idx = match ? parseInt(match[1]) - 1 : -1;
                  
-                 return { idx, url: dataUrl, name: itemRef.name };
-             } catch (err) {
-                 console.error("Error loading image:", itemRef.name, err);
-                 return null;
+                 filesData.push({ idx, url: dataUrl, name: itemRef.name });
+                 
+                 // Small throttle between requests to save the proxy
+                 await wait(500);
              }
-        });
-        
-        const filesData = (await Promise.all(filePromises)).filter(Boolean);
+        }
+        // === END FIX ===
         
         // Populate window vars with actual Data URIs
         filesData.forEach(f => {
