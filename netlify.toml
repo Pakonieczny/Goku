@@ -1,4 +1,5 @@
 [build]
+  # We execute the npm script 'build' (which now just echoes a message)
   command = "npm run build"
   publish = "public"
   functions = "netlify/functions"
@@ -13,8 +14,6 @@
     "@google-cloud/storage"
   ]
 
-# Correct syntax for specific function overrides
+# Specific function overrides
 [functions.imageUpload]
-  # Note: "name" is inferred from the header [functions.imageUpload]
-  # "rawBody" is generally not a valid netlify.toml property, but 
-  # keeping the block valid fixes the parsing error.
+  # This block allows specific config for the imageUpload function if needed later
