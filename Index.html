@@ -1095,10 +1095,16 @@ ANTI-REPETITION (TITLE)
             // v. Analyze Metadata
             updateFirebaseStatus("Analyzing Metadata...", "working");
             document.getElementById("analyzeMetadataBtn").click();
-            // Wait for analyze checkmark
-            await waitForCondition(() => {
+            // Wait for analyze checkmark (but never hang forever)
+            const ok = await waitForCondition(() => {
                 return document.getElementById("analyzeMetadataCheck").style.display !== "none";
-            });
+            }, 1000, 240000); // 4 min
+            if (!ok) {
+                console.warn("Metadata step timed out; continuing automation.");
+                toggleCheck("analyzeMetadataCheck", true);
+                showMetadataProgress(false);
+                if (window.M?.toast) M.toast({ html: "Metadata timed out; continuing." });
+            }
             await wait(1000);
 
             // vi. Create Listing (1st pass)
@@ -2624,7 +2630,8 @@ document.getElementById("shopListings").addEventListener("keydown", (e) => {
         const total   = workIdx.length;
         if (!total) {
           if (window.M?.toast) M.toast({ html: "No images in cells 0–6 to analyze." });
-          showMetadataProgress(false);
+          // unblock automation that waits on analyzeMetadataCheck
+          setMetadataProgress(100);
           return;
         }
 
@@ -3434,23 +3441,78 @@ document.getElementById("shopListings").addEventListener("keydown", (e) => {
       throw new Error("Could not generate a new short tag.");
     }
 
-      async function callOpenAI(payload) {
-        const res = await fetch("/.netlify/functions/openaiProxy", {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify(payload)
-        });
+      async function callOpenAI(payload, opts = {}) {
+        const url = "/.netlify/functions/openaiProxy";
+        const timeoutMs   = Number(opts.timeoutMs   ?? 120000); // 2 min
+        const maxRetries  = Number(opts.maxRetries  ?? 4);      // total attempts = 1 + maxRetries
+        const retryBaseMs = Number(opts.retryBaseMs ?? 700);
 
-        const text = await res.text(); // handle both JSON and plain text error bodies
-        if (!res.ok) {
-          let msg = text;
+        const sleep = (ms) => new Promise(r => setTimeout(r, ms));
+        const jitter = (ms) => Math.round(ms * (0.7 + Math.random() * 0.6));
+        const shouldRetryStatus = (s) => [408, 425, 429, 500, 502, 503, 504].includes(Number(s));
+        const looksLikeNetworkErr = (msg) =>
+          /Failed to fetch|NetworkError|ECONNRESET|ETIMEDOUT|ENOTFOUND|EAI_AGAIN|Connection refused/i.test(msg || "");
+
+        let lastErr = null;
+
+        for (let attempt = 0; attempt <= maxRetries; attempt++) {
+          const controller = new AbortController();
+          const t = setTimeout(() => controller.abort(), timeoutMs);
+
           try {
-            const j = JSON.parse(text);
-            msg = j?.error?.message || msg;
-          } catch (_) { /* non-JSON error body */ }
-          throw new Error("API Error: " + msg);
+            const res = await fetch(url, {
+              method: "POST",
+              headers: { "Content-Type": "application/json" },
+              body: JSON.stringify(payload),
+              signal: controller.signal
+            });
+
+            const raw = await res.text().catch(() => "");
+            clearTimeout(t);
+
+            if (!res.ok) {
+              let msg = raw || res.statusText || `HTTP ${res.status}`;
+              try {
+                const j = JSON.parse(raw);
+                msg = j?.error?.message || j?.message || j?.error || msg;
+              } catch (_) { /* non-JSON body */ }
+
+              const err = new Error(`API Error (${res.status}): ${msg}`);
+              err.status = res.status;
+              err.raw = raw;
+
+              if (attempt < maxRetries && shouldRetryStatus(res.status)) {
+                await sleep(jitter(retryBaseMs * Math.pow(2, attempt)));
+                continue;
+              }
+              throw err;
+            }
+
+            if (!raw) return {};
+            try {
+              return JSON.parse(raw);
+            } catch (e) {
+              const err = new Error("API Error: Non-JSON response from openaiProxy.");
+              err.raw = raw;
+              throw err;
+            }
+          } catch (e) {
+            clearTimeout(t);
+            lastErr = e;
+
+            const msg = String(e?.message || e);
+            const isAbort = e?.name === "AbortError";
+            const isNetwork = isAbort || looksLikeNetworkErr(msg);
+
+            if (attempt < maxRetries && isNetwork) {
+              await sleep(jitter(retryBaseMs * Math.pow(2, attempt)));
+              continue;
+            }
+            throw e;
+          }
         }
-        return JSON.parse(text);
+
+        throw lastErr || new Error("API Error: Unknown failure.");
       }
 
     function updateTitleCount(text) {
@@ -4275,20 +4337,79 @@ document.getElementById("shopListings").addEventListener("keydown", (e) => {
       }
     }
 
-    async function callOpenAI(payload) {
-      let response = await fetch("/.netlify/functions/openaiProxy", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(payload)
-      });
-      if (!response.ok) {
-        let errorData = await response.json();
-        throw new Error("API Error: " + (errorData.error ? errorData.error.message : response.statusText));
-      }
-      let jsonData = await response.json();
-      return jsonData;
-    }
+async function callOpenAI(payload, opts = {}) {
+      const url = "/.netlify/functions/openaiProxy";
+      const timeoutMs   = Number(opts.timeoutMs   ?? 120000); // 2 min
+      const maxRetries  = Number(opts.maxRetries  ?? 4);      // total attempts = 1 + maxRetries
+      const retryBaseMs = Number(opts.retryBaseMs ?? 700);
 
+      const sleep = (ms) => new Promise(r => setTimeout(r, ms));
+      const jitter = (ms) => Math.round(ms * (0.7 + Math.random() * 0.6));
+      const shouldRetryStatus = (s) => [408, 425, 429, 500, 502, 503, 504].includes(Number(s));
+      const looksLikeNetworkErr = (msg) =>
+        /Failed to fetch|NetworkError|ECONNRESET|ETIMEDOUT|ENOTFOUND|EAI_AGAIN|Connection refused/i.test(msg || "");
+
+      let lastErr = null;
+
+      for (let attempt = 0; attempt <= maxRetries; attempt++) {
+        const controller = new AbortController();
+        const t = setTimeout(() => controller.abort(), timeoutMs);
+
+        try {
+          const res = await fetch(url, {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify(payload),
+            signal: controller.signal
+          });
+
+          const raw = await res.text().catch(() => "");
+          clearTimeout(t);
+
+          if (!res.ok) {
+            let msg = raw || res.statusText || `HTTP ${res.status}`;
+            try {
+              const j = JSON.parse(raw);
+              msg = j?.error?.message || j?.message || j?.error || msg;
+            } catch (_) { /* non-JSON body */ }
+
+            const err = new Error(`API Error (${res.status}): ${msg}`);
+            err.status = res.status;
+            err.raw = raw;
+
+            if (attempt < maxRetries && shouldRetryStatus(res.status)) {
+              await sleep(jitter(retryBaseMs * Math.pow(2, attempt)));
+              continue;
+            }
+            throw err;
+          }
+
+          if (!raw) return {};
+          try {
+            return JSON.parse(raw);
+          } catch (e) {
+            const err = new Error("API Error: Non-JSON response from openaiProxy.");
+            err.raw = raw;
+            throw err;
+          }
+        } catch (e) {
+          clearTimeout(t);
+          lastErr = e;
+
+          const msg = String(e?.message || e);
+          const isAbort = e?.name === "AbortError";
+          const isNetwork = isAbort || looksLikeNetworkErr(msg);
+
+          if (attempt < maxRetries && isNetwork) {
+            await sleep(jitter(retryBaseMs * Math.pow(2, attempt)));
+            continue;
+          }
+          throw e;
+        }
+      }
+
+      throw lastErr || new Error("API Error: Unknown failure.");
+    }
     function updateTitleCount(text) {
       document.getElementById("titleCount").textContent = "Count: " + text.length;
     }
