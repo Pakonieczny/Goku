@@ -1061,42 +1061,29 @@ for (const itemRef of sortedItems) {
     const rawUrl = await itemRef.getDownloadURL();
     let blob = null;
     
-    // 1. Try Direct Fetch with crossOrigin intent
-    try {
-        const res = await fetch(rawUrl, { 
-            method: 'GET',
-            mode: 'cors', // Force CORS mode
-            credentials: 'omit' 
-        });
-        
-        if (res.ok) {
-            blob = await res.blob();
-        } else {
-            throw new Error(`Direct fetch status: ${res.status}`);
-        }
-    } catch (directErr) {
-        console.warn(`CORS/Direct fetch failed for ${itemRef.name}, using Proxy...`);
-        
-        // 2. Fallback to your Netlify Proxy
-        // We add a timestamp to the proxy URL to bypass potential local cache of a failed CORS attempt
-        const proxyUrl = `/.netlify/functions/corsProxy?url=${encodeURIComponent(rawUrl)}&cb=${Date.now()}`;
-        
-        let attempts = 0;
-        const maxAttempts = 2;
+    // ✅ Proxy-first: avoids browser CORS blocks on direct Firebase download URLs
+    // (Cache-buster helps with token/caching weirdness.)
+    const proxyUrl = `/.netlify/functions/corsProxy?url=${encodeURIComponent(rawUrl)}&cb=${Date.now()}`;
+    let lastErr = null;
 
-        while(attempts < maxAttempts && !blob) {
-            try {
-                attempts++;
-                const res = await fetch(proxyUrl);
-                if (res.ok) {
-                    blob = await res.blob();
-                } else {
-                    await wait(1000 * attempts);
-                }
-            } catch (err) {
-                console.error("Proxy failure:", err);
+    for (let attempt = 1; attempt <= 3 && !blob; attempt++) {
+        try {
+            const res = await fetch(proxyUrl, { method: "GET" });
+            if (!res.ok) {
+                const t = await res.text().catch(() => "");
+                throw new Error(`Proxy status ${res.status} ${res.statusText}${t ? " — " + t.slice(0, 200) : ""}`);
             }
+            blob = await res.blob();
+        } catch (e) {
+            lastErr = e;
+            console.warn(`Proxy fetch attempt ${attempt} failed for ${itemRef.name}:`, e);
+            await wait(800 * attempt);
         }
+    }
+
+    if (!blob) {
+        console.error(`Failed to load ${itemRef.name} via proxy.`, lastErr);
+        continue; // skip this slot instead of killing the whole set
     }
 
              if (blob) {
