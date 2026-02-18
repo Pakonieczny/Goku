@@ -5,7 +5,7 @@
  *   "No 'Access-Control-Allow-Origin' header is present..."
  */
 
-export async function handler(event) {
+exports.handler = async (event) => {
   // Preflight
   if (event.httpMethod === "OPTIONS") {
     return {

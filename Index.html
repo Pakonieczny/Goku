@@ -1026,6 +1026,21 @@ ANTI-REPETITION (TITLE)
     // Helper: Wait function
     const wait = ms => new Promise(r => setTimeout(r, ms));
 
+    // Convert remote image URLs (e.g., Firebase Storage download URLs) into a same-origin proxy URL
+    // so they can be safely used with <img crossOrigin="anonymous"> and drawn to <canvas>.
+    function toCanvasSafeSrc(src) {
+        const s = String(src || "");
+        if (!s) return s;
+
+        // Already safe
+        if (s.startsWith("data:") || s.startsWith("blob:")) return s;
+        if (s.startsWith(window.location.origin)) return s;
+        if (s.startsWith("/.netlify/functions/corsProxy")) return s;
+
+        // Anything else (Firebase Storage token URLs, etc.) -> proxy
+        return "/.netlify/functions/corsProxy?url=" + encodeURIComponent(s);
+    }
+
     // Helper: Wait for a condition function to return true
     async function waitForCondition(predicate, interval = 1000, maxWait = 120000) {
         const start = Date.now();
@@ -1068,7 +1083,7 @@ ANTI-REPETITION (TITLE)
             // Populate window vars
             filesData.forEach(f => {
                 if(f.idx >= 0 && f.idx < 7) {
-                    window.previewImages[f.idx] = f.url;
+                    window.previewImages[f.idx] = toCanvasSafeSrc(f.url);
                     window.photoNames[f.idx] = f.name;
                     window.photoIds[f.idx] = 'fb-' + Date.now() + '-' + f.idx;
                 }
@@ -2390,7 +2405,7 @@ document.getElementById("shopListings").addEventListener("keydown", (e) => {
         im.crossOrigin = "anonymous";
         im.onload  = () => resolve(im);
         im.onerror = reject;
-        im.src = canvasSafeSrc;
+        im.src = toCanvasSafeSrc(src);
       });
 
       // 3) “Object-fit: cover” into the preview viewport (usually 120×120),
@@ -3822,7 +3837,7 @@ document.getElementById("shopListings").addEventListener("keydown", (e) => {
             // === FIX START ===
             img.crossOrigin = "anonymous"; // Prevents taint when drawn to canvas later
             // === FIX END ===
-            img.src = window.previewImages[i];
+            img.src = toCanvasSafeSrc(window.previewImages[i]);
             previewBox.appendChild(img);
 
             // Default slight downward nudge so the visual center feels perfect
