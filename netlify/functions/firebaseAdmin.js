@@ -35,27 +35,30 @@ if (!admin.apps.length) {
   });
 }
 
-/* ─── ensure CORS rule (runs once per cold-start) ───────── */
+/* ─── ensure CORS rule ───────── */
 if (!process.env.CORS_SET) {
   const { Storage } = require("@google-cloud/storage");
-  new Storage({ credentials: serviceAccount })
-    .bucket(DEFAULT_BUCKET)
-.setCorsConfiguration([{
-      origin        : [
+  const storage = new Storage({ credentials: serviceAccount });
+  const bucket = storage.bucket(DEFAULT_BUCKET);
+
+  bucket.setCorsConfiguration([{
+      origin: [
         "https://shipping-1.goldenspike.app",
         "https://listing-generator-1.goldenspike.app",
         "https://design-message.goldenspike.app",
         "https://design-message-1.goldenspike.app",
         "http://localhost:8888",
-        "https://delicate-tanuki-616ac0.netlify.app" // <--- ADD THIS LINE
+        "https://delicate-tanuki-616ac0.netlify.app"
       ],
-      method        : ["GET","POST","PUT","DELETE","HEAD","OPTIONS"],
-      responseHeader: ["Content-Type","Authorization"],
-      maxAgeSeconds : 3600
+      method: ["GET", "POST", "PUT", "DELETE", "HEAD", "OPTIONS"],
+      responseHeader: ["Content-Type", "Authorization", "x-goog-resumable"], // Added resumable header
+      maxAgeSeconds: 3600
     }])
-    .then(() => console.log("CORS confirmed"))
+    .then(() => {
+      console.log("CORS updated for bucket:", DEFAULT_BUCKET);
+      process.env.CORS_SET = "1"; 
+    })
     .catch(err => console.error("CORS error:", err));
-  process.env.CORS_SET = "1";   // prevent repeats on warm invokes
 }
 
 module.exports = admin;
