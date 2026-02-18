@@ -1057,53 +1057,61 @@ async function runFullAutomationSequence(setRef, setName) {
         // === FIXED: Sequential Fetch with Retry to prevent 502 Errors ===
         const filesData = [];
         
-        for (const itemRef of sortedItems) {
+for (const itemRef of sortedItems) {
              const rawUrl = await itemRef.getDownloadURL();
-             const proxyUrl = "/.netlify/functions/corsProxy?url=" + encodeURIComponent(rawUrl);
              
              let blob = null;
-             let attempts = 0;
-             const maxAttempts = 3;
-
-             // Retry loop for robustness
-             while(attempts < maxAttempts && !blob) {
-                 try {
-                     attempts++;
-                     const res = await fetch(proxyUrl);
-                     
-                     if (!res.ok) {
-                        // If 502/504, it's a temp server issue. Wait and retry.
-                        if (res.status === 502 || res.status === 504) {
-                            console.warn(`Proxy 502 for ${itemRef.name}, retrying (Attempt ${attempts})...`);
-                            await wait(2000 * attempts); // Backoff: 2s, 4s...
-                            continue;
-                        }
-                        throw new Error(`Proxy fetch failed: ${res.status}`);
-                     }
+             
+             // 1. Try Direct Fetch (Best/Fastest)
+             try {
+                 const res = await fetch(rawUrl, { mode: 'cors' });
+                 if (res.ok) {
                      blob = await res.blob();
-                 } catch (err) {
-                     console.error(`Error loading image ${itemRef.name}:`, err);
-                     if (attempts >= maxAttempts) break;
-                     await wait(2000);
+                 } else {
+                     throw new Error("Direct fetch failed");
+                 }
+             } catch (directErr) {
+                 console.warn(`Direct fetch failed for ${itemRef.name}, falling back to Proxy...`);
+                 
+                 // 2. Fallback to Proxy (with Retry)
+                 const proxyUrl = "/.netlify/functions/corsProxy?url=" + encodeURIComponent(rawUrl);
+                 let attempts = 0;
+                 const maxAttempts = 3;
+
+                 while(attempts < maxAttempts && !blob) {
+                     try {
+                         attempts++;
+                         const res = await fetch(proxyUrl);
+                         
+                         if (!res.ok) {
+                            if (res.status === 502 || res.status === 504) {
+                                console.warn(`Proxy 502 for ${itemRef.name}, retrying (Attempt ${attempts})...`);
+                                await wait(2000 * attempts); 
+                                continue;
+                            }
+                            throw new Error(`Proxy fetch failed: ${res.status}`);
+                         }
+                         blob = await res.blob();
+                     } catch (err) {
+                         console.error(`Error loading image ${itemRef.name}:`, err);
+                         if (attempts >= maxAttempts) break;
+                         await wait(2000);
+                     }
                  }
              }
 
              if (blob) {
-                 // Convert Blob to Base64 Data URL
                  const dataUrl = await new Promise((resolve) => {
                      const reader = new FileReader();
                      reader.onloadend = () => resolve(reader.result);
                      reader.readAsDataURL(blob);
                  });
 
-                 // Map Slot_X to correct index (Slot_1 -> 0)
                  const match = itemRef.name.match(/Slot_(\d+)/);
                  const idx = match ? parseInt(match[1]) - 1 : -1;
                  
                  filesData.push({ idx, url: dataUrl, name: itemRef.name });
-                 
-                 // Small throttle between requests to save the proxy
-                 await wait(500);
+                 await wait(500); 
              }
         }
         // === END FIX ===

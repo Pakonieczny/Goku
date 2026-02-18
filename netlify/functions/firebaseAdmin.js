@@ -40,13 +40,14 @@ if (!process.env.CORS_SET) {
   const { Storage } = require("@google-cloud/storage");
   new Storage({ credentials: serviceAccount })
     .bucket(DEFAULT_BUCKET)
-    .setCorsConfiguration([{
+.setCorsConfiguration([{
       origin        : [
         "https://shipping-1.goldenspike.app",
         "https://listing-generator-1.goldenspike.app",
         "https://design-message.goldenspike.app",
         "https://design-message-1.goldenspike.app",
-        "http://localhost:8888"
+        "http://localhost:8888",
+        "https://delicate-tanuki-616ac0.netlify.app" // <--- ADD THIS LINE
       ],
       method        : ["GET","POST","PUT","DELETE","HEAD","OPTIONS"],
       responseHeader: ["Content-Type","Authorization"],
