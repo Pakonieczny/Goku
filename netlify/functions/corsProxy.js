@@ -73,7 +73,7 @@ exports.handler = async (event, context) => {
             headers: {
               ...CORS_HEADERS,
               "Content-Type": res.headers['content-type'] || 'application/octet-stream',
-              "Cache-Control": "public, max-age=86400"
+              "Cache-Control": "public, max-age=86400",
               "Vary": "Origin"
             },
             body: buffer.toString('base64'),
