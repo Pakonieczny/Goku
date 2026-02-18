@@ -1029,16 +1029,27 @@ ANTI-REPETITION (TITLE)
     // Convert remote image URLs (e.g., Firebase Storage download URLs) into a same-origin proxy URL
     // so they can be safely used with <img crossOrigin="anonymous"> and drawn to <canvas>.
     function toCanvasSafeSrc(src) {
-        const s = String(src || "");
-        if (!s) return s;
+    const s = String(src || "");
+    if (!s) return s;
 
-        // Already safe
-        if (s.startsWith("data:") || s.startsWith("blob:")) return s;
-        if (s.startsWith(window.location.origin)) return s;
-        if (s.startsWith("/.netlify/functions/corsProxy")) return s;
+    // Already safe
+    if (s.startsWith("data:") || s.startsWith("blob:")) return s;
+    if (s.startsWith(window.location.origin)) return s;
+    if (s.startsWith("/.netlify/functions/corsProxy") || s.includes("/.netlify/functions/corsProxy")) return s;
 
-    // Anything else (Firebase Storage token URLs, etc.) -> proxy
-    // IMPORTANT: only use this for canvas/cropping. Do NOT use for normal preview display.
+    // ✅ Real fix: if it's a Firebase/Google Storage URL, load it directly (no proxy, no 413),
+    // assuming your Firebase Storage CORS is configured.
+    try {
+        const u = new URL(s, window.location.origin);
+        const host = u.hostname;
+        if (host === "firebasestorage.googleapis.com" || host === "storage.googleapis.com") {
+            return u.href;
+        }
+    } catch (e) {
+        // fall through to proxy
+    }
+
+    // Fallback: proxy non-Firebase remote URLs for canvas use.
     return "/.netlify/functions/corsProxy?url=" + encodeURIComponent(s);
     }
 
@@ -2312,8 +2323,16 @@ document.getElementById("shopListings").addEventListener("keydown", (e) => {
       window.currentCropIndex = index;
       let cropModal = document.getElementById("photoCropModal");
       let cropImage = document.getElementById("cropImage");
-      cropImage.src = window.previewImages[index];
+      cropImage.crossOrigin = "anonymous";
+      cropImage.src = toCanvasSafeSrc(window.previewImages[index]);
       cropImage.onload = function() {
+      // If a previous cropper instance exists, destroy it before creating a new one.
+      try {
+        if (window.cropper) {
+          window.cropper.destroy();
+          window.cropper = null;
+        }
+      } catch (e) {}
         window.cropper = new Cropper(cropImage, {
           viewMode: 1,
           autoCropArea: 1,
@@ -2374,12 +2393,23 @@ document.getElementById("shopListings").addEventListener("keydown", (e) => {
     // We proxy those images through a Netlify Function to make them same-origin.
     function toCanvasSafeSrc(src) {
       if (!src) return src;
-      // Already safe (data/blob/local/proxy)
       if (src.startsWith("data:") || src.startsWith("blob:")) return src;
       if (src.startsWith(window.location.origin)) return src;
       if (src.includes("/.netlify/functions/corsProxy")) return src;
-      // Proxy remote URLs (Firebase Storage download URLs, etc.)
-      return "/.netlify/functions/corsProxy?url=" + encodeURIComponent(src) + "&format=jpeg";
+
+      // ✅ Real fix: Firebase/Google Storage URLs can be drawn to canvas when bucket CORS is configured.
+      try {
+        const u = new URL(src, window.location.origin);
+        const host = u.hostname;
+        if (host === "firebasestorage.googleapis.com" || host === "storage.googleapis.com") {
+          return u.href;
+        }
+      } catch (e) {
+        // fall through
+      }
+
+      // Fallback: proxy non-Firebase remote URLs.
+      return "/.netlify/functions/corsProxy?url=" + encodeURIComponent(src);
     }
 
     async function cropPreviewAsVisible(i) {
