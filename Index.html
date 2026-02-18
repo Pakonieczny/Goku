@@ -231,12 +231,12 @@
     .preview-cell.reserved {
       z-index: 2500;
     }
-      /* Enforce a 120x120 viewport and clip zoom/pan */
+      
       .preview-box {
         position: relative;
         --btn-size: clamp(18px, 12%, 32px);
         width: 100%;
-        height: auto;
+        height: 120px; /* fixed viewport so the image is visibly cropped */
         flex: 1 1 auto;
         overflow: hidden;     /* ← critical: clip the image */
       }
@@ -2512,6 +2512,19 @@ document.getElementById("shopListings").addEventListener("keydown", (e) => {
         M.toast({ html: "Invalid listing URL or ID." });
         return;
       }
+
+      // Commit visible crops to JPEG before uploading so Etsy receives what you see.
+      // Only crop items that are still remote URLs (skip ones already committed as data:image/jpeg).
+      const indicesToCrop = window.previewImages
+        .map((v, idx) => ({ v, idx }))
+        .filter(x => typeof x.v === "string" && !x.v.startsWith("data:image/jpeg"))
+        .map(x => x.idx);
+
+      if (indicesToCrop.length) {
+        M.toast({ html: `Committing crops (${indicesToCrop.length})…` });
+        await cropPreviewsForIndices(indicesToCrop);
+      }
+
       for (let i = 0; i < window.previewImages.length; i++) {
         let dataURL = window.previewImages[i];
         let altText = (window.photoMeta[i] || "").slice(0, 250); // mirror server clamp
