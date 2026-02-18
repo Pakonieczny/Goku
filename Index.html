@@ -1036,7 +1036,7 @@ ANTI-REPETITION (TITLE)
         }
     }
 
-    async function runFullAutomationSequence(setRef, setName) {
+async function runFullAutomationSequence(setRef, setName) {
         window.isProcessingSet = true;
         updateFirebaseStatus(`Processing: ${setName}`, "working");
         
@@ -1056,7 +1056,11 @@ ANTI-REPETITION (TITLE)
             
             // Fetch URLs
             const filePromises = sortedItems.map(async (itemRef) => {
-                 const url = await itemRef.getDownloadURL();
+                 const rawUrl = await itemRef.getDownloadURL();
+                 
+                 // METHOD 2: Use local Netlify proxy to bypass CORS
+                 const url = "/.netlify/functions/corsProxy?url=" + encodeURIComponent(rawUrl);
+
                  // Map Slot_X to correct index (Slot_1 -> 0)
                  const match = itemRef.name.match(/Slot_(\d+)/);
                  const idx = match ? parseInt(match[1]) - 1 : -1;
