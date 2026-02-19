@@ -4065,9 +4065,9 @@ document.getElementById("shopListings").addEventListener("keydown", (e) => {
         loadNextListingInQueue();
       });
       document.getElementById("shopListings").addEventListener("change", () => {
-       // NEW: persist raw text immediately (survives refresh)
-      localStorage.setItem("shopListingsText", rawInput);
         let rawInput = document.getElementById("shopListings").value;
+        // NEW: persist raw text immediately (survives refresh)
+        localStorage.setItem("shopListingsText", rawInput);
         window.listingQueue = parseListingNumbers(rawInput);
         loadNextListingInQueue();
       });
