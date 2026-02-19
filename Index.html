@@ -4390,12 +4390,12 @@ document.getElementById("shopListings").addEventListener("keydown", (e) => {
       if (!imgUrl) throw new Error("No image available in previewCell0.");
 
       const prompt = `
-You are analyzing an Etsy-style product image.
-TASK: Describe ONLY the charm/pendant motif in the image.
-IGNORE: chain, model, hands, background, lighting, text overlays, packaging.
-OUTPUT: Return EXACTLY TWO WORDS, lowercase, separated by one space.
-No punctuation, no extra words, no line breaks.
-Examples: "soccer ball", "hamsa hand", "maple leaf".
+      You are analyzing an Etsy-style product image.
+      TASK: Describe ONLY the charm/pendant motif in the image.
+      IGNORE: chain, model, hands, background, lighting, text overlays, packaging.
+      OUTPUT: Return EXACTLY TWO WORDS, lowercase, separated by one space.
+      No punctuation, no extra words, no line breaks.
+      Examples: "soccer ball", "hamsa hand", "maple leaf".
       `.trim();
 
       const payload = {
@@ -4429,7 +4429,7 @@ Examples: "soccer ball", "hamsa hand", "maple leaf".
                     .join("")
                     .trim()
                 : (data?.choices?.[0]?.message?.content || "")
-            ).trim();
+            )).trim();
 
       return String(raw || "").trim();
     }
