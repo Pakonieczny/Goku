@@ -1087,18 +1087,8 @@ ANTI-REPETITION (TITLE)
                     window.previewImages[f.idx] = f.url;
                     window.photoNames[f.idx] = f.name;
                     window.photoIds[f.idx] = 'fb-' + Date.now() + '-' + f.idx;
-                } else if (f.idx >= 7 && f.idx <= 9) {
-                    // Map Slot_8, 9, 10 to reserved photos (cells 7-9)
-                    let rIndex = f.idx - 7;
-                    window.reservedPhotos[rIndex] = {
-                        src: f.url,
-                        name: f.name,
-                        meta: "",
-                        id: 'fb-' + Date.now() + '-' + f.idx
-                    };
                 }
             });
-            if (typeof saveReservedPhotos === "function") saveReservedPhotos();
             updateStaticPreviewGrid();
             await wait(1000);
 
@@ -1840,20 +1830,18 @@ https://www.etsy.com/your/shops/me/listing-editor/edit/1822973998
        const skp = document.getElementById("skpOverlay");
        if (skp) skp.textContent = "";
 
-       // 2) Preview cells 0–9 — compact reset
-       window.previewImages = [];
-       window.photoNames    = [];
-       window.photoMeta     = [];
-       window.photoIds      = []; // keep these in sync too
-       window.reservedPhotos = []; // Clear reserved photos
-       if (typeof saveReservedPhotos === "function") saveReservedPhotos();
+        // 2) Preview cells 0–6 — compact reset (don’t leave 'length' inflated)
+        window.previewImages = [];
+        window.photoNames    = [];
+        window.photoMeta     = [];
+        window.photoIds      = []; // keep these in sync too
 
-       for (let i = 0; i <= 9; i++) {
-         const cell = document.getElementById("previewCell" + i);
-         if (cell) cell.innerHTML = "Empty";
-         const status = document.getElementById("metadataStatus" + i);
-         if (status) status.textContent = "";
-       }
+        for (let i = 0; i <= 6; i++) {
+          const cell = document.getElementById("previewCell" + i);
+          if (cell) cell.innerHTML = "Empty";
+          const status = document.getElementById("metadataStatus" + i);
+          if (status) status.textContent = "";
+        }
 
         window.draggedIndex = null;
         updateStaticPreviewGrid();
@@ -2881,7 +2869,7 @@ document.getElementById("shopListings").addEventListener("keydown", (e) => {
       }
     };
 
-// NEW: Duplicate Listing sequential orchestrator
+    // NEW: Duplicate Listing sequential orchestrator
     document.getElementById("duplicateListingBtn").addEventListener("click", async () => {
       const btn = document.getElementById("duplicateListingBtn");
       try {
@@ -2901,8 +2889,8 @@ document.getElementById("shopListings").addEventListener("keydown", (e) => {
         if (typeof refreshSkpOverlay === "function") refreshSkpOverlay();
         setDuplicateProgress(20);
 
-        // 2) Swap previewCell0 <-> previewCell1 (and keep arrays in sync)
-        const A = 0, B = 1;
+        // 2) Swap previewCell0 <-> previewCell2 (and keep arrays in sync)
+        const A = 0, B = 2;
         const haveA = !!(window.previewImages && window.previewImages[A]);
         const haveB = !!(window.previewImages && window.previewImages[B]);
         if (haveA && haveB) {
@@ -2913,7 +2901,7 @@ document.getElementById("shopListings").addEventListener("keydown", (e) => {
           swap(window.photoIds);
           if (typeof updateStaticPreviewGrid === "function") updateStaticPreviewGrid();
         } else {
-          if (window.M?.toast) M.toast({ html: "Swap skipped: need images in cells 1 and 2 (0 and 1)." });
+          if (window.M?.toast) M.toast({ html: "Swap skipped: need images in cells 1 and 3 (0 and 2)." });
         }
         setDuplicateProgress(40);
 
@@ -3847,8 +3835,9 @@ document.getElementById("shopListings").addEventListener("keydown", (e) => {
             previewBox.setAttribute("draggable", "true");
             previewBox.addEventListener("dragstart", e => { window.draggedIndex = i; });
             let img = document.createElement("img");
-            // Force the browser to ask Firebase for CORS headers so it caches correctly
-            img.crossOrigin = "anonymous";
+            // For normal preview display, load directly (no crossOrigin, no proxy).
+            // Canvas operations use a separate load path inside cropPreviewAsVisible().
+            img.removeAttribute("crossorigin");
             img.src = window.previewImages[i];
             previewBox.appendChild(img);
 
@@ -3917,8 +3906,6 @@ document.getElementById("shopListings").addEventListener("keydown", (e) => {
             previewBox.setAttribute("draggable", "true");
             previewBox.addEventListener("dragstart", e => { window.draggedIndex = i; });
             let img = document.createElement("img");
-            // Force the browser to ask Firebase for CORS headers here too
-            img.crossOrigin = "anonymous";
             img.src = window.reservedPhotos[rIndex].src;
             previewBox.appendChild(img);
 
