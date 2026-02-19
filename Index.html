@@ -693,7 +693,7 @@
       <div class="preview-cell" id="previewCell4">Empty</div>
       <div class="preview-cell" id="previewCell5">Empty</div>
       <div class="preview-cell" id="previewCell6">Empty</div>
-      <div class="preview-cell" id="previewCell7">Empty</div>
+      <div class="preview-cell reserved" id="previewCell7">Empty</div>
       <div class="preview-cell reserved" id="previewCell8">Empty</div>
       <div class="preview-cell reserved" id="previewCell9">Empty</div>
     </div>
@@ -1063,107 +1063,6 @@ ANTI-REPETITION (TITLE)
         }
     }
 
-    // NEW API Helper for getting 2-word charm description from previewCell0
-    async function getCharmDescriptionFromImage(imgUrl) {
-        if (!imgUrl) return "Custom";
-        const prompt = "Analyze this image and return ONLY a 2-word best fit description of the charm itself. Ignore all other aspects of the image, environment, or background.";
-        const payload = {
-            model: window.modelName || "gpt-5",
-            input: [
-                { role: "system", content: "Return exactly two words describing the charm." },
-                {
-                    role: "user",
-                    content: [
-                        { type: "input_text", text: prompt },
-                        { type: "input_image", image_url: imgUrl }
-                    ]
-                }
-            ],
-            max_output_tokens: 10,
-            reasoning: { effort: "minimal" },
-            text: { verbosity: "low" }
-        };
-        try {
-            const data = await callOpenAI(payload);
-            const raw = (typeof extractResponseText === "function") ? extractResponseText(data) : (data?.output_text || "").trim();
-            const words = raw.replace(/[^a-zA-Z\s-]/g, "").trim().split(/\s+/).slice(0, 2).join(" ");
-            return words || "Beautiful";
-        } catch (e) {
-            console.error("Charm analysis error:", e);
-            return "Custom";
-        }
-    }
-
-    function getSetDescriptorFromSetName(setName) {
-        const raw = (setName || "").toString();
-        if (!raw) return "";
-        const base = raw.split("_Set_")[0];
-        return base.replace(/_/g, " ").replace(/\s+/g, " ").trim();
-    }
-
-    async function ensureAllAvailablePreviewsAreJpegDataUrls() {
-        const idxs = [];
-        const max = Math.max(8, (window.previewImages && window.previewImages.length) || 0);
-        for (let i = 0; i < max; i++) {
-            const src = window.previewImages && window.previewImages[i];
-            if (typeof src !== "string" || !src.trim()) continue;
-            if (!src.startsWith("data:image/jpeg")) idxs.push(i);
-        }
-        if (idxs.length) {
-            try {
-                await cropPreviewsForIndices(idxs);
-                if (typeof updateStaticPreviewGrid === "function") updateStaticPreviewGrid();
-            } catch (e) {
-                console.warn("Crop commit failed:", e);
-            }
-        }
-    }
-
-    async function refreshListingDescSeedFromPreview0(opts = {}) {
-        const setName = opts.setName || window.currentSetName || "";
-        const setDescriptor =
-            opts.setDescriptor ||
-            window.currentSetDescriptor ||
-            getSetDescriptorFromSetName(setName);
-
-        if (setName) window.currentSetName = setName;
-        if (setDescriptor) window.currentSetDescriptor = setDescriptor;
-
-        // Ensure slot 0 is a data:image/jpeg for reliable vision + uploads
-        try {
-            if (window.previewImages && typeof window.previewImages[0] === "string" && window.previewImages[0].trim()) {
-                if (!window.previewImages[0].startsWith("data:image/jpeg")) {
-                    await cropPreviewAsVisible(0);
-                    if (typeof updateStaticPreviewGrid === "function") updateStaticPreviewGrid();
-                }
-            }
-        } catch (e) {
-            console.warn("Preview0 crop commit failed:", e);
-        }
-
-        let apiDesc = "Custom";
-        try {
-            if (window.previewImages && window.previewImages[0]) {
-                apiDesc = await getCharmDescriptionFromImage(window.previewImages[0]);
-            }
-        } catch (e) {
-            console.warn("Charm analysis failed:", e);
-        }
-
-        apiDesc = String(apiDesc || "Custom").replace(/\s+/g, " ").trim();
-        apiDesc = apiDesc.split(/\s+/).slice(0, 2).join(" ");
-        if (!apiDesc) apiDesc = "Custom";
-
-        const templateType = Math.random() < 0.5 ? "Charm" : "Pendant";
-        const seed = `${apiDesc} ${templateType} ${setDescriptor}`.replace(/\s+/g, " ").trim();
-
-        window.currentListingDescSeed = seed;
-        const inputEl = document.getElementById("listingDescInput");
-        if (inputEl) inputEl.value = seed;
-
-        return seed;
-    }
-
     async function runFullAutomationSequence(setRef, setName) {
         window.isProcessingSet = true;
         updateFirebaseStatus(`Processing: ${setName}`, "working");
@@ -1172,15 +1071,6 @@ ANTI-REPETITION (TITLE)
             // 0. Ensure UI is clear
             document.getElementById("clearBtn").click();
             await wait(500);
-
-           // Reset working state for this set (avoid sparse arrays / stale values)
-            window.currentSetName = setName;
-            window.currentSetDescriptor = getSetDescriptorFromSetName(setName);
-            window.currentListingDescSeed = "";
-            window.previewImages = new Array(8).fill(null);
-            window.photoNames = new Array(8).fill("");
-            window.photoIds = new Array(8).fill("");
-            window.photoMeta = window.photoMeta || new Array(10).fill("");
 
             // 1. Populate Images (Download from Firebase)
             const setFiles = await setRef.listAll();
@@ -1204,8 +1094,7 @@ ANTI-REPETITION (TITLE)
             
             // Populate window vars (store RAW Firebase URLs; proxy only when cropping)
             filesData.forEach(f => {
-                // Free up slot 7 for Firebase
-                if(f.idx >= 0 && f.idx < 8) {
+                if(f.idx >= 0 && f.idx < 7) {
                     window.previewImages[f.idx] = f.url;
                     window.photoNames[f.idx] = f.name;
                     window.photoIds[f.idx] = 'fb-' + Date.now() + '-' + f.idx;
@@ -1214,14 +1103,13 @@ ANTI-REPETITION (TITLE)
             updateStaticPreviewGrid();
             await wait(1000);
 
-            // 1b. Commit visible crops to JPEG data URLs BEFORE any Etsy upload/vision calls
-            updateFirebaseStatus("Committing Crops…", "working");
-            await ensureAllAvailablePreviewsAreJpegDataUrls();
-            await wait(500);
-
             // 2. Generate Description/Context
-            updateFirebaseStatus("Analyzing Charm…", "working");
-            await refreshListingDescSeedFromPreview0({ setName, setDescriptor: window.currentSetDescriptor });
+            // Parse Set Name for basic prompt context (e.g. "Beady_Necklace_Set_1" -> "Beady Necklace")
+            const rawContext = setName.split("_Set_")[0].replace(/_/g, " ");
+            // Expose current set title for downstream description templating
+            window.currentSetName = setName;
+            window.currentSetDescriptor = rawContext;
+            document.getElementById("listingDescInput").value = "Create a listing for " + rawContext;
             
             // 3. Generate Content (Sequentially)
             updateFirebaseStatus("Generating Info...", "working");
@@ -1297,6 +1185,9 @@ ANTI-REPETITION (TITLE)
             
             // ix. Finish
             markSetProcessed(setName);
+            // Clear current set markers
+            window.currentSetName = null;
+            window.currentSetDescriptor = null;
             updateFirebaseStatus(`Done: ${setName}`, "active");
             await wait(3000);
 
@@ -1402,7 +1293,7 @@ ANTI-REPETITION (TITLE)
 
           const ta = document.getElementById("metadataTextarea");
           if (ta) {
-            const count = Math.min(8, window.previewImages.length);
+            const count = Math.min(7, window.previewImages.length);
             const lines = Array.from({ length: count }, (_, idx) =>
               `${idx + 1}. ${window.photoMeta[idx] || ""}`.trim()
             ).join("\n").trim();
@@ -1946,7 +1837,7 @@ https://www.etsy.com/shop/CustomBrites/policy"
 https://www.etsy.com/your/shops/me/listing-editor/edit/1822973998
 `;
 
-  // Clear UI helper (text, previews 0–7, checks, bars)
+  // Clear UI helper (text, previews 0–6, checks, bars)
    function handleClearAll() {
      try {
        // 1) Text boxes
@@ -1956,13 +1847,13 @@ https://www.etsy.com/your/shops/me/listing-editor/edit/1822973998
        const skp = document.getElementById("skpOverlay");
        if (skp) skp.textContent = "";
 
-        // 2) Preview cells 0–7 — compact reset (don’t leave 'length' inflated)
+        // 2) Preview cells 0–6 — compact reset (don’t leave 'length' inflated)
         window.previewImages = [];
         window.photoNames    = [];
         window.photoMeta     = [];
         window.photoIds      = []; // keep these in sync too
 
-        for (let i = 0; i <= 7; i++) {
+        for (let i = 0; i <= 6; i++) {
           const cell = document.getElementById("previewCell" + i);
           if (cell) cell.innerHTML = "Empty";
           const status = document.getElementById("metadataStatus" + i);
@@ -2122,31 +2013,17 @@ https://www.etsy.com/your/shops/me/listing-editor/edit/1822973998
       const tags = buildEtsyTagsFromOverlay(document.getElementById("searchKeyPhrases")?.value || "");
       const sku = buildSkuFromTitle(title);
 
-      // Ensure everything is a data:image/jpeg first (avoids CORS fetch failures, and guarantees “all available images” upload)
-      await ensureAllAvailablePreviewsAreJpegDataUrls();
-
-      const photos = [];
-      const photoNames = [];
-      const photoMeta = [];
-      const photoIds = [];
-
-      const max = Math.max(8, (window.previewImages && window.previewImages.length) || 0);
-      for (let i = 0; i < max; i++) {
-        const src = window.previewImages && window.previewImages[i];
-        if (typeof src !== "string" || !src.trim()) continue;
-
-        photos.push(src);
-        photoNames.push((window.photoNames && window.photoNames[i]) || `uploaded_photo_${photos.length}.jpg`);
-        photoMeta.push(((window.photoMeta && window.photoMeta[i]) || "").slice(0, 250));
-        photoIds.push((window.photoIds && window.photoIds[i]) || "");
-      }
+      // Photos (0–6) from previewImages / names / meta
+      const photos = Array.from(window.previewImages || []);
+      const photoNames = Array.from(window.photoNames || []).map((n, i) => n || `uploaded_photo_${i}.jpg`);
+      const photoMeta = Array.from(window.photoMeta || []).map(s => (s || "").slice(0, 250));
       const photoKeyBases = await Promise.all(photos.map(async (dataURL, i) => {
         const key = `${jobId}_p${i}`;
         try { await idbPut(key, dataURL); } catch (e) { console.warn("Photo IDB save failed", i, e); }
         return key;
       }));
 
-      // Reserved (8–9) from reservedPhotos [{src,name,meta}]
+      // Reserved (7–9) from reservedPhotos [{src,name,meta}]
       const reserved = Array.from(window.reservedPhotos || []);
       const reservedSrc = reserved.map(x => x?.src).filter(Boolean);
       const reservedNames = reserved.map((x, i) => x?.name || `reserved_photo_${i}.jpg`);
@@ -2203,7 +2080,7 @@ https://www.etsy.com/your/shops/me/listing-editor/edit/1822973998
       save({ status: "RUNNING" });
 
       try {
-        // --- Stage 1: Upload Photos (main 0–7)
+        // --- Stage 1: Upload Photos (main 0–6)
         for (let i = 0; i < job.photoCount; i++) {
         const blob = job.storage?.photos === "idb"
           ? (await idbGetBlob(job.photoKeyBases[i]))
@@ -2232,7 +2109,7 @@ https://www.etsy.com/your/shops/me/listing-editor/edit/1822973998
             if (typeof bumpCreateProgressPerImage === "function") bumpCreateProgressPerImage();
           }
         }
-        // --- Stage 1b: Reserved (8–9)
+        // --- Stage 1b: Reserved (7–9)
         for (let i = 0; i < job.reservedCount; i++) {
           const blob = job.storage?.reserved === "idb"
             ? (await idbGetBlob(job.reservedKeyBases[i]))
@@ -2242,7 +2119,7 @@ https://www.etsy.com/your/shops/me/listing-editor/edit/1822973998
           fd.append("listingId", listingId);
           fd.append("token", token);
           fd.append("fileName", job.reservedNames[i] || `reserved_photo_${i}.jpg`);
-          fd.append("rank", 9 + i);
+          fd.append("rank", 8 + i);
           fd.append("alt_text", job.reservedMeta[i] || "");
           fd.append("file", blob, job.reservedNames[i] || `reserved_photo_${i}.jpg`);
           const r = await fetch("/.netlify/functions/imageUpload", { method: "POST", body: fd });
@@ -2255,7 +2132,7 @@ https://www.etsy.com/your/shops/me/listing-editor/edit/1822973998
               try { document.getElementById("connectEtsyBtn")?.click(); } catch {}
               return;
             }
-            console.warn("Reserved upload failed", 9 + i, t);
+            console.warn("Reserved upload failed", 8 + i, t);
           } else {
             if (typeof bumpCreateProgressPerImage === "function") bumpCreateProgressPerImage();
           }
@@ -2609,7 +2486,7 @@ document.getElementById("shopListings").addEventListener("keydown", (e) => {
       window.previewImages[i] = out;
     }
 
-    // Batch version for 0..7
+    // Batch version for 0..6
     async function cropPreviewsForIndices(indices) {
       for (const i of indices) {
         try { await cropPreviewAsVisible(i); } catch (e) { console.error("crop fail @", i, e); }
@@ -2654,26 +2531,20 @@ document.getElementById("shopListings").addEventListener("keydown", (e) => {
         await cropPreviewsForIndices(indicesToCrop);
       }
 
-      const available = (window.previewImages || [])
-        .map((v, idx) => ({ v, idx }))
-        .filter(x => typeof x.v === "string" && x.v.trim());
-
-      for (let n = 0; n < available.length; n++) {
-        const i = available[n].idx;
-        let dataURL = available[n].v;
-        let altText = ((window.photoMeta && window.photoMeta[i]) || "").slice(0, 250); // mirror server clamp
-        let rankNumber = n + 1;
+      for (let i = 0; i < window.previewImages.length; i++) {
+        let dataURL = window.previewImages[i];
+        let altText = (window.photoMeta[i] || "").slice(0, 250); // mirror server clamp
+        let rankNumber = i + 1;
         try {
           let res = await fetch(dataURL);
           let blob = await res.blob();
           let formData = new FormData();
           formData.append("listingId", listingId);
           formData.append("token", window.accessToken);
-          const fileName = (window.photoNames && window.photoNames[i]) || `uploaded_photo_${rankNumber}.jpg`;
-          formData.append("fileName", fileName);
+          formData.append("fileName", window.photoNames[i] || `uploaded_photo_${i}.jpg`);
           formData.append("rank", rankNumber);
           formData.append("alt_text", altText);
-          formData.append("file", blob, fileName);
+          formData.append("file", blob, window.photoNames[i] || `uploaded_photo_${i}.jpg`);
           let uploadUrl = `/.netlify/functions/imageUpload`;
           let response = await fetch(uploadUrl, { method: "POST", body: formData });
           const raw = await response.text();
@@ -2727,7 +2598,7 @@ document.getElementById("shopListings").addEventListener("keydown", (e) => {
       for (let i = 0; i < window.reservedPhotos.length; i++) {
         let dataURL = window.reservedPhotos[i].src;
         let altText = window.reservedPhotos[i].meta || "";
-        let rankNumber = i + 9;
+        let rankNumber = i + 8;
         try {
           let res = await fetch(dataURL);
           let blob = await res.blob();
@@ -2833,12 +2704,12 @@ document.getElementById("shopListings").addEventListener("keydown", (e) => {
         toggleCheck("analyzeMetadataCheck", false);
         showMetadataProgress(true);
 
-        // Work set = previewCell0..7 only (skip reserved 8–9)
-        const slots   = [0,1,2,3,4,5,6,7];
+        // Work set = previewCell0..6 only (skip reserved 7–9)
+        const slots   = [0,1,2,3,4,5,6];
         const workIdx = slots.filter(i => !!(window.previewImages && window.previewImages[i]));
         const total   = workIdx.length;
         if (!total) {
-          if (window.M?.toast) M.toast({ html: "No images in cells 0–7 to analyze." });
+          if (window.M?.toast) M.toast({ html: "No images in cells 0–6 to analyze." });
           // unblock automation that waits on analyzeMetadataCheck
           setMetadataProgress(100);
           return;
@@ -2857,7 +2728,7 @@ document.getElementById("shopListings").addEventListener("keydown", (e) => {
           done++;
           setMetadataProgress((done / total) * 100);
         }
-        if (window.M?.toast) M.toast({ html: `Analyzed metadata for ${total} image${total !== 1 ? "s" : ""} (cells 0–7).` });
+        if (window.M?.toast) M.toast({ html: `Analyzed metadata for ${total} image${total !== 1 ? "s" : ""} (cells 0–6).` });
       } catch (e) {
         console.error(e);
         if (window.M?.toast) M.toast({ html: "Metadata analyze error: " + (e?.message || e) });
@@ -3067,8 +2938,8 @@ document.getElementById("shopListings").addEventListener("keydown", (e) => {
         if (typeof refreshSkpOverlay === "function") refreshSkpOverlay();
         setDuplicateProgress(20);
 
-        // 2) Swap previewCell0 <-> previewCell1 (and keep arrays in sync)
-        const A = 0, B = 1;
+        // 2) Swap previewCell0 <-> previewCell2 (and keep arrays in sync)
+        const A = 0, B = 2;
         const haveA = !!(window.previewImages && window.previewImages[A]);
         const haveB = !!(window.previewImages && window.previewImages[B]);
         if (haveA && haveB) {
@@ -3079,7 +2950,7 @@ document.getElementById("shopListings").addEventListener("keydown", (e) => {
           swap(window.photoIds);
           if (typeof updateStaticPreviewGrid === "function") updateStaticPreviewGrid();
         } else {
-          if (window.M?.toast) M.toast({ html: "Swap skipped: need images in cells 1 and 2 (0 and 1)." });
+          if (window.M?.toast) M.toast({ html: "Swap skipped: need images in cells 1 and 3 (0 and 2)." });
         }
         setDuplicateProgress(40);
 
@@ -3091,8 +2962,8 @@ document.getElementById("shopListings").addEventListener("keydown", (e) => {
         await generateDescriptionOnly();
         setDuplicateProgress(80);
 
-        // 5) Re-analyze images (cells 0–7 only), progress from 80% → 100%
-        const slots   = [0,1,2,3,4,5,6,7];
+        // 5) Re-analyze images (cells 0–6 only), progress from 80% → 100%
+        const slots   = [0,1,2,3,4,5,6];
         const workIdx = slots.filter(i => !!(window.previewImages && window.previewImages[i]));
         const count   = workIdx.length;
         let done = 0;
@@ -3100,7 +2971,7 @@ document.getElementById("shopListings").addEventListener("keydown", (e) => {
         for (const i of workIdx) {
           await metadataHandler.analyzeAndEmbedMetadata(i);
 
-          // Keep the metadata textarea in sync with cells 0–7
+          // Keep the metadata textarea in sync with cells 0–6
           const metaTA = document.getElementById("metadataTextarea");
           if (metaTA) {
             const lines = slots
@@ -3806,7 +3677,7 @@ document.getElementById("shopListings").addEventListener("keydown", (e) => {
       e.preventDefault();
       dropZone.style.borderColor = "#ccc";
       const files = e.dataTransfer.files;
-      const maxRemaining = Math.max(0, 8 - (window.previewImages?.length || 0));
+      const maxRemaining = Math.max(0, 7 - (window.previewImages?.length || 0));
       for (let i = 0; i < Math.min(files.length, maxRemaining); i++) {
         let file = files[i];
         if (/image\/(jpeg|png)/.test(file.type)) {
@@ -4004,7 +3875,7 @@ document.getElementById("shopListings").addEventListener("keydown", (e) => {
         let cell = document.getElementById("previewCell" + i);
         if (!cell) continue;
         cell.innerHTML = "Empty";
-        if (i < 8) {
+        if (i < 7) {
           if (i < window.previewImages.length && window.previewImages[i]) {
             cell.innerHTML = "";
             let previewBox = document.createElement("div");
@@ -4075,7 +3946,7 @@ document.getElementById("shopListings").addEventListener("keydown", (e) => {
             cell.appendChild(metadataStatus);
           }
         } else {
-          let rIndex = i - 8;
+          let rIndex = i - 7;
           if (rIndex < window.reservedPhotos.length && window.reservedPhotos[rIndex] && window.reservedPhotos[rIndex].src) {
             cell.innerHTML = "";
             let previewBox = document.createElement("div");
@@ -4139,7 +4010,7 @@ document.getElementById("shopListings").addEventListener("keydown", (e) => {
             e.preventDefault();
             this.classList.remove("drag-over");
             let cellIndex = parseInt(this.id.replace("previewCell", ""));
-            if (cellIndex < 8) {
+            if (cellIndex < 7) {
               if (window.draggedIndex !== null && window.draggedIndex !== cellIndex) {
                 if (window.previewImages[window.draggedIndex]) {
                   const [movedImage] = window.previewImages.splice(window.draggedIndex, 1);
@@ -4155,7 +4026,7 @@ document.getElementById("shopListings").addEventListener("keydown", (e) => {
                 }
               }
             } else {
-              let rIndex = cellIndex - 8;
+              let rIndex = cellIndex - 7;
               if (e.dataTransfer.files && e.dataTransfer.files.length > 0) {
                 let file = e.dataTransfer.files[0];
                 if (/image\/(jpeg|png)/.test(file.type)) {
@@ -4180,7 +4051,7 @@ document.getElementById("shopListings").addEventListener("keydown", (e) => {
                   reader.readAsDataURL(file);
                 }
               } else if (window.draggedIndex !== null && window.draggedIndex !== cellIndex) {
-                if (window.draggedIndex < 8) {
+                if (window.draggedIndex < 7) {
                   const [movedImage] = window.previewImages.splice(window.draggedIndex, 1);
                   const [movedName] = window.photoNames.splice(window.draggedIndex, 1);
                   const [movedMeta] = window.photoMeta.splice(window.draggedIndex, 1);
@@ -4194,7 +4065,7 @@ document.getElementById("shopListings").addEventListener("keydown", (e) => {
                   window.reservedPhotos[rIndex] = newReserved;
                   saveReservedPhotos();
                 } else {
-                  let oldRIndex = window.draggedIndex - 8;
+                  let oldRIndex = window.draggedIndex - 7;
                   const [moved] = window.reservedPhotos.splice(oldRIndex, 1);
                   window.reservedPhotos[rIndex] = moved;
                   saveReservedPhotos();
@@ -4461,87 +4332,139 @@ document.getElementById("shopListings").addEventListener("keydown", (e) => {
      return t.slice(0, chosen).trimEnd();
    }
 
-    async function generateDescriptionOnly() {
-      let etsyLink = window.ETSY_SHOP_URL;
-      let keyPhrases = document.getElementById("searchKeyPhrases").value.trim();
-      let rawDescription = document.getElementById("listingDescInput").value.trim();
+    // ===== Listing Description: Charm-only 2-word classifier + template builder =====
+    function normalizeTwoWordCharmDescriptor(input) {
+      const s = String(input || "")
+        .toLowerCase()
+        .replace(/[^a-z\s]/g, " ")
+        .replace(/\s+/g, " ")
+        .trim();
 
-      if (!keyPhrases) {
-        M.toast({ html: "Please provide the search key phrases." });
-        return;
+      const parts = s.split(" ").filter(Boolean);
+      if (parts.length >= 2) return (parts[0] + " " + parts[1]).trim();
+      if (parts.length === 1) return (parts[0] + " charm").trim();
+      return "charm charm";
+    }
+
+    function getPreviewCell0ImageUrl() {
+      // Prefer the canonical source used across the app
+      const fromArray = (window.previewImages && window.previewImages[0]) ? window.previewImages[0] : null;
+      if (fromArray) return fromArray;
+
+      // Fallback: read whatever is currently rendered in the preview cell
+      const img = document.querySelector("#previewCell0 img");
+      const src = img && img.getAttribute("src");
+      return src || null;
+    }
+
+    function getImageSetDescriptorForCccc() {
+      // Primary: the Firebase set folder name -> readable descriptor
+      if (window.currentSetName && typeof window.currentSetName === "string") {
+        const raw = window.currentSetName.split("_Set_")[0].replace(/_/g, " ").trim();
+        if (raw) return raw;
       }
 
-      let rulesText = document.getElementById("descriptionRulesTextarea").value;
+      // Secondary: the already-parsed value stored by the automation runner
+      if (window.currentSetDescriptor && typeof window.currentSetDescriptor === "string") {
+        const raw = window.currentSetDescriptor.replace(/\s+/g, " ").trim();
+        if (raw) return raw;
+      }
 
-      let promptText = `
-    You are ChatGPT using ${window.modelName}.
-    Based on the inputs below, generate an Etsy Listing DESCRIPTION only.
-    Input Context:
-    Etsy Link: "${etsyLink}"
-    Listing Description: "${rawDescription}"
-    Key Phrases: "${keyPhrases}"
-    --- Rules for DESCRIPTION ---
-    ${rulesText}
-    Important: Return ONLY the description as plain text.`.trim();
+      // Fallback: whatever the user typed into the context input
+      const desc = (document.getElementById("listingDescInput")?.value || "").trim();
+      return desc.replace(/^Create\s+a\s+listing\s+for\s+/i, "").trim();
+    }
 
+    async function getTwoWordCharmDescriptorFromPreviewCell0() {
+      const imgUrl = getPreviewCell0ImageUrl();
+      if (!imgUrl) throw new Error("No image available in previewCell0.");
+
+      const prompt = `
+You are analyzing an Etsy-style product image.
+TASK: Describe ONLY the charm/pendant motif in the image.
+IGNORE: chain, model, hands, background, lighting, text overlays, packaging.
+OUTPUT: Return EXACTLY TWO WORDS, lowercase, separated by one space.
+No punctuation, no extra words, no line breaks.
+Examples: "soccer ball", "hamsa hand", "maple leaf".
+      `.trim();
+
+      const payload = {
+        model: window.modelName || "gpt-5",
+        input: [
+          { role: "system", content: "Return exactly two lowercase words describing only the charm/pendant motif. No punctuation. No extra text." },
+          {
+            role: "user",
+            content: [
+              { type: "input_text", text: prompt },
+              { type: "input_image", image_url: imgUrl }
+            ]
+          }
+        ],
+        max_output_tokens: 40,
+        reasoning: { effort: "minimal" },
+        text: { verbosity: "low" }
+      };
+
+      const data = await callOpenAI(payload, { timeoutMs: 120000 });
+
+      const raw =
+        (typeof extractResponseText === "function")
+          ? extractResponseText(data)
+          : (
+              typeof data?.output_text === "string" ? data.output_text :
+              (Array.isArray(data?.output)
+                ? data.output
+                    .flatMap(b => Array.isArray(b?.content) ? b.content : [])
+                    .map(p => (typeof p?.text === "string" ? p.text : ""))
+                    .join("")
+                    .trim()
+                : (data?.choices?.[0]?.message?.content || "")
+            ).trim();
+
+      return String(raw || "").trim();
+    }
+
+    function buildListingDescriptionTemplate(aaaTwoWords, ccccDescriptor) {
+      const aaa = normalizeTwoWordCharmDescriptor(aaaTwoWords);
+      const cccc = String(ccccDescriptor || "").replace(/\s+/g, " ").trim();
+
+      const useCharm = Math.random() < 0.5;
+      const mid = useCharm ? "Charm" : "Pendant";
+
+      // Exact required format:
+      //   i. "aaa" Charm "cccc"
+      //  ii. "aaa" Pendant "cccc"
+      if (cccc) return `"${aaa}" ${mid} "${cccc}"`;
+      return `"${aaa}" ${mid} ""`;
+    }
+
+    async function generateDescriptionOnly() {
       const out = document.getElementById("listingDescription");
       out.value = "Generating description...";
 
-      // NEW: show blue spinner beside DESCRIPTION heading
+      // show blue spinner beside DESCRIPTION heading
       toggleSpinner("descriptionSpinner", true);
 
       try {
-        // Responses API payload for GPT-5
-        const payload = {
-          model: window.modelName, // e.g., "gpt-5"
-          input: [
-            { role: "system", content: "Return ONLY the description as plain text." },
-            { role: "user", content: promptText }
-          ],
-          max_output_tokens: 350,
-          reasoning: { effort: "minimal" },
-          text: { verbosity: "medium" }
-        };
+        // 1) Charm-only 2-word analysis from previewCell0
+        const twoWordsRaw = await getTwoWordCharmDescriptorFromPreviewCell0();
 
-        const data = await callOpenAI(payload);
+        // 2) Extract descriptor from Firebase image-set title (or best available fallback)
+        const cccc = getImageSetDescriptorForCccc();
 
-        // Use global helper if present; otherwise unwrap Responses API locally
-        let text =
-          (typeof extractResponseText === "function")
-            ? extractResponseText(data)
-            : (
-                typeof data?.output_text === "string" ? data.output_text :
-                (Array.isArray(data?.output)
-                  ? data.output
-                      .flatMap(b => Array.isArray(b?.content) ? b.content : [])
-                      .map(p => (typeof p?.text === "string" ? p.text : ""))
-                      .join("")
-                      .trim()
-                  : (data?.choices?.[0]?.message?.content || "")
-                ).trim()
-              );
+        // 3) Build final Listing Description using the required template
+        const text = buildListingDescriptionTemplate(twoWordsRaw, cccc);
 
-        text = (text || "").trim();
-
-        // If nothing came back, build a local fallback that respects house rules
-        if (!text) {
-          console.warn("Empty description from API; raw response follows:", data);
-          const fallback = buildFallbackDescription({ keyPhrases, rawDescription });
-          text = fallback || "";
-        }
-
-         // Enforce 400-char cap without ellipsis and without cutting words
-         text = capDescription(text, 400);
-
-        out.value = text;
+        // Enforce 400-char cap without ellipsis and without cutting words (existing helper)
+        out.value = capDescription(text, 400);
       } catch (error) {
         console.error(error);
-        M.toast({ html: "API Error while generating description." });
-        // Best-effort fallback: end at nearest sentence (can exceed 400)
-        const fbRaw = buildFallbackDescription({ keyPhrases, rawDescription }) || "";
-        out.value = capDescription(fbRaw, 400) || ("Error: " + (error?.message || String(error)));
+        if (window.M?.toast) M.toast({ html: "API Error while generating description." });
+
+        const cccc = getImageSetDescriptorForCccc();
+        const fb = buildListingDescriptionTemplate("charm charm", cccc);
+        out.value = capDescription(fb, 400) || ("Error: " + (error?.message || String(error)));
       } finally {
-        // NEW: hide spinner once done
         toggleSpinner("descriptionSpinner", false);
       }
     }
