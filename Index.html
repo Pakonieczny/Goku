@@ -1029,17 +1029,8 @@ ANTI-REPETITION (TITLE)
     // Convert remote image URLs (e.g., Firebase Storage download URLs) into a same-origin proxy URL
     // so they can be safely used with <img crossOrigin="anonymous"> and drawn to <canvas>.
     function toCanvasSafeSrc(src) {
-        const s = String(src || "");
-        if (!s) return s;
-
-        // Already safe
-        if (s.startsWith("data:") || s.startsWith("blob:")) return s;
-        if (s.startsWith(window.location.origin)) return s;
-        if (s.startsWith("/.netlify/functions/corsProxy")) return s;
-
-    // Anything else (Firebase Storage token URLs, etc.) -> proxy
-    // IMPORTANT: only use this for canvas/cropping. Do NOT use for normal preview display.
-    return "/.netlify/functions/corsProxy?url=" + encodeURIComponent(s);
+        // Firebase CORS is fixed! No proxy needed.
+        return src;
     }
 
     // Helper: Wait for a condition function to return true
@@ -2373,13 +2364,8 @@ document.getElementById("shopListings").addEventListener("keydown", (e) => {
     // Access-Control-Allow-Origin for your Netlify domain, causing crop to fail.
     // We proxy those images through a Netlify Function to make them same-origin.
     function toCanvasSafeSrc(src) {
-      if (!src) return src;
-      // Already safe (data/blob/local/proxy)
-      if (src.startsWith("data:") || src.startsWith("blob:")) return src;
-      if (src.startsWith(window.location.origin)) return src;
-      if (src.includes("/.netlify/functions/corsProxy")) return src;
-      // Proxy remote URLs (Firebase Storage download URLs, etc.)
-      return "/.netlify/functions/corsProxy?url=" + encodeURIComponent(src) + "&format=jpeg";
+      // Firebase CORS is fixed! No proxy needed.
+      return src;
     }
 
     async function cropPreviewAsVisible(i) {
