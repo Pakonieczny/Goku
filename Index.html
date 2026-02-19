@@ -1063,9 +1063,9 @@ ANTI-REPETITION (TITLE)
         }
     }
 
-    // NEW API Helper for getting 2-word charm description from previewCell0
+// NEW API Helper for getting 2-word charm description from previewCell0
     async function getCharmDescriptionFromImage(imgUrl) {
-        if (!imgUrl) return "Custom";
+        if (!imgUrl) return "Beautiful";
         const prompt = "Analyze this image and return ONLY a 2-word best fit description of the charm itself. Ignore all other aspects of the image, environment, or background.";
         const payload = {
             model: window.modelName || "gpt-5",
@@ -1087,10 +1087,12 @@ ANTI-REPETITION (TITLE)
             const data = await callOpenAI(payload);
             const raw = (typeof extractResponseText === "function") ? extractResponseText(data) : (data?.output_text || "").trim();
             const words = raw.replace(/[^a-zA-Z\s-]/g, "").trim().split(/\s+/).slice(0, 2).join(" ");
-            return words || "Beautiful";
+            if (!words) return "Beautiful";
+            // Capitalize each word nicely
+            return words.split(' ').map(w => w.charAt(0).toUpperCase() + w.slice(1)).join(' ');
         } catch (e) {
             console.error("Charm analysis error:", e);
-            return "Custom";
+            return "Beautiful";
         }
     }
 
@@ -1139,14 +1141,20 @@ ANTI-REPETITION (TITLE)
             // Parse Set Name for basic prompt context (e.g. "Beady_Necklace_Set_1" -> "Beady Necklace")
             const rawContext = setName.split("_Set_")[0].replace(/_/g, " ");
 
-            // Call API for the 2-word description of previewCell0
             updateFirebaseStatus("Analyzing Charm...", "working");
-            let apiDesc = "Custom";
+            let apiDesc = "Beautiful";
             if (window.previewImages && window.previewImages[0]) {
+                try {
+                    // Pre-emptively crop the image to Base64 so it avoids remote-URL fetch errors during the OpenAI API call
+                    if (window.previewImages[0].startsWith("http")) {
+                        await cropPreviewAsVisible(0);
+                    }
+                } catch(e) { console.warn("Conversion failed, attempting raw url"); }
+                
                 apiDesc = await getCharmDescriptionFromImage(window.previewImages[0]);
             }
             
-            // Apply randomized description template
+            // Apply randomized description template (xxx [Charm/Pendant] xxxx)
             const templateType = Math.random() < 0.5 ? "Charm" : "Pendant";
             const finalInputDesc = `${apiDesc} ${templateType} ${rawContext}`;
             document.getElementById("listingDescInput").value = finalInputDesc;
@@ -1211,8 +1219,6 @@ ANTI-REPETITION (TITLE)
             updateFirebaseStatus("Uploading Variant...", "working");
             // The automation logic in duplicateListingBtn has already swapped images and updated text.
             // We need the NEXT listing ID from the queue.
-            // Note: The createListingBtn logic consumes one ID from window.listingQueue
-            // Ensure we still have one.
             if(!document.getElementById("shopListings").value) {
                  console.warn("Ran out of Listing IDs for variant.");
             } else {
@@ -2040,7 +2046,7 @@ https://www.etsy.com/your/shops/me/listing-editor/edit/1822973998
       return tags.slice(0, 13);
     }
 
-    // ---- Snapshot the current UI to a durable Job (LS manifest + IDB blobs) ----
+// ---- Snapshot the current UI to a durable Job (LS manifest + IDB blobs) ----
     async function queueListingUploadFromUI(listingId) {
       const jobId = `etsyJob_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`;
       const title = (document.getElementById("listingTitle")?.value || "").trim();
@@ -2051,25 +2057,50 @@ https://www.etsy.com/your/shops/me/listing-editor/edit/1822973998
       const sku = buildSkuFromTitle(title);
 
       // Photos (0–7) from previewImages / names / meta
-      const photos = Array.from(window.previewImages || []);
-      const photoNames = Array.from(window.photoNames || []).map((n, i) => n || `uploaded_photo_${i}.jpg`);
-      const photoMeta = Array.from(window.photoMeta || []).map(s => (s || "").slice(0, 250));
-      const photoKeyBases = await Promise.all(photos.map(async (dataURL, i) => {
-        const key = `${jobId}_p${i}`;
-        try { await idbPut(key, dataURL); } catch (e) { console.warn("Photo IDB save failed", i, e); }
-        return key;
-      }));
+      const validPhotos = [];
+      const validNames = [];
+      const validMeta = [];
+      for (let i = 0; i < 8; i++) {
+          if (window.previewImages && window.previewImages[i]) {
+              validPhotos.push(window.previewImages[i]);
+              validNames.push(window.photoNames[i] || `uploaded_photo_${i}.jpg`);
+              validMeta.push((window.photoMeta[i] || "").slice(0, 250));
+          }
+      }
+      
+      const photoKeyBases = [];
+      // Upload images sequentially to IDB to prevent drop-off and missing images
+      for (let i = 0; i < validPhotos.length; i++) {
+          const key = `${jobId}_p${i}`;
+          try { 
+              await idbPut(key, validPhotos[i]); 
+          } catch (e) { 
+              console.warn("Photo IDB save failed", i, e); 
+          }
+          photoKeyBases.push(key);
+      }
 
       // Reserved (8–9) from reservedPhotos [{src,name,meta}]
-      const reserved = Array.from(window.reservedPhotos || []);
-      const reservedSrc = reserved.map(x => x?.src).filter(Boolean);
-      const reservedNames = reserved.map((x, i) => x?.name || `reserved_photo_${i}.jpg`);
-      const reservedMeta = reserved.map(x => (x?.meta || "").slice(0, 250));
-      const reservedKeyBases = await Promise.all(reservedSrc.map(async (dataURL, i) => {
-        const key = `${jobId}_rp${i}`;
-        try { await idbPut(key, dataURL); } catch (e) { console.warn("Reserved IDB save failed", i, e); }
-        return key;
-      }));
+      const validReserved = [];
+      for (let i = 0; i < (window.reservedPhotos || []).length; i++) {
+          if (window.reservedPhotos[i] && window.reservedPhotos[i].src) {
+              validReserved.push(window.reservedPhotos[i]);
+          }
+      }
+      
+      const reservedKeyBases = [];
+      for (let i = 0; i < validReserved.length; i++) {
+          const key = `${jobId}_rp${i}`;
+          try { 
+              await idbPut(key, validReserved[i].src); 
+          } catch (e) { 
+              console.warn("Reserved IDB save failed", i, e); 
+          }
+          reservedKeyBases.push(key);
+      }
+      
+      const reservedNames = validReserved.map((x, i) => x.name || `reserved_photo_${i}.jpg`);
+      const reservedMeta = validReserved.map(x => (x.meta || "").slice(0, 250));
 
       const job = {
         jobId,
@@ -2085,14 +2116,15 @@ https://www.etsy.com/your/shops/me/listing-editor/edit/1822973998
         sku,
         photoCount: photoKeyBases.length,
         photoKeyBases,
-        photoNames,
-        photoMeta,
+        photoNames: validNames,
+        photoMeta: validMeta,
         reservedCount: reservedKeyBases.length,
         reservedKeyBases,
         reservedNames,
         reservedMeta,
         storage: { photos: "idb", reserved: "idb" } // NEW: where the bytes live
       };
+      
       localStorage.setItem(`etsyJob:${jobId}`, JSON.stringify(job));
       const queue = JSON.parse(localStorage.getItem("etsyUploadJobs") || "[]");
       queue.push(jobId);
