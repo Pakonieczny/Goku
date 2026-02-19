@@ -2869,8 +2869,8 @@ document.getElementById("shopListings").addEventListener("keydown", (e) => {
         if (typeof refreshSkpOverlay === "function") refreshSkpOverlay();
         setDuplicateProgress(20);
 
-        // 2) Swap previewCell0 <-> previewCell2 (and keep arrays in sync)
-        const A = 0, B = 2;
+        // 2) Swap previewCell0 <-> previewCell1 (and keep arrays in sync)
+        const A = 0, B = 1;
         const haveA = !!(window.previewImages && window.previewImages[A]);
         const haveB = !!(window.previewImages && window.previewImages[B]);
         if (haveA && haveB) {
@@ -2881,7 +2881,7 @@ document.getElementById("shopListings").addEventListener("keydown", (e) => {
           swap(window.photoIds);
           if (typeof updateStaticPreviewGrid === "function") updateStaticPreviewGrid();
         } else {
-          if (window.M?.toast) M.toast({ html: "Swap skipped: need images in cells 1 and 3 (0 and 2)." });
+          if (window.M?.toast) M.toast({ html: "Swap skipped: need images in cells 1 and 2 (0 and 1)." });
         }
         setDuplicateProgress(40);
 
