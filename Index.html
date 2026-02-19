@@ -1063,9 +1063,9 @@ ANTI-REPETITION (TITLE)
         }
     }
 
-// NEW API Helper for getting 2-word charm description from previewCell0
+    // NEW API Helper for getting 2-word charm description from previewCell0
     async function getCharmDescriptionFromImage(imgUrl) {
-        if (!imgUrl) return "Beautiful";
+        if (!imgUrl) return "Custom";
         const prompt = "Analyze this image and return ONLY a 2-word best fit description of the charm itself. Ignore all other aspects of the image, environment, or background.";
         const payload = {
             model: window.modelName || "gpt-5",
@@ -1087,13 +1087,81 @@ ANTI-REPETITION (TITLE)
             const data = await callOpenAI(payload);
             const raw = (typeof extractResponseText === "function") ? extractResponseText(data) : (data?.output_text || "").trim();
             const words = raw.replace(/[^a-zA-Z\s-]/g, "").trim().split(/\s+/).slice(0, 2).join(" ");
-            if (!words) return "Beautiful";
-            // Capitalize each word nicely
-            return words.split(' ').map(w => w.charAt(0).toUpperCase() + w.slice(1)).join(' ');
+            return words || "Beautiful";
         } catch (e) {
             console.error("Charm analysis error:", e);
-            return "Beautiful";
+            return "Custom";
         }
+    }
+
+    function getSetDescriptorFromSetName(setName) {
+        const raw = (setName || "").toString();
+        if (!raw) return "";
+        const base = raw.split("_Set_")[0];
+        return base.replace(/_/g, " ").replace(/\s+/g, " ").trim();
+    }
+
+    async function ensureAllAvailablePreviewsAreJpegDataUrls() {
+        const idxs = [];
+        const max = Math.max(8, (window.previewImages && window.previewImages.length) || 0);
+        for (let i = 0; i < max; i++) {
+            const src = window.previewImages && window.previewImages[i];
+            if (typeof src !== "string" || !src.trim()) continue;
+            if (!src.startsWith("data:image/jpeg")) idxs.push(i);
+        }
+        if (idxs.length) {
+            try {
+                await cropPreviewsForIndices(idxs);
+                if (typeof updateStaticPreviewGrid === "function") updateStaticPreviewGrid();
+            } catch (e) {
+                console.warn("Crop commit failed:", e);
+            }
+        }
+    }
+
+    async function refreshListingDescSeedFromPreview0(opts = {}) {
+        const setName = opts.setName || window.currentSetName || "";
+        const setDescriptor =
+            opts.setDescriptor ||
+            window.currentSetDescriptor ||
+            getSetDescriptorFromSetName(setName);
+
+        if (setName) window.currentSetName = setName;
+        if (setDescriptor) window.currentSetDescriptor = setDescriptor;
+
+        // Ensure slot 0 is a data:image/jpeg for reliable vision + uploads
+        try {
+            if (window.previewImages && typeof window.previewImages[0] === "string" && window.previewImages[0].trim()) {
+                if (!window.previewImages[0].startsWith("data:image/jpeg")) {
+                    await cropPreviewAsVisible(0);
+                    if (typeof updateStaticPreviewGrid === "function") updateStaticPreviewGrid();
+                }
+            }
+        } catch (e) {
+            console.warn("Preview0 crop commit failed:", e);
+        }
+
+        let apiDesc = "Custom";
+        try {
+            if (window.previewImages && window.previewImages[0]) {
+                apiDesc = await getCharmDescriptionFromImage(window.previewImages[0]);
+            }
+        } catch (e) {
+            console.warn("Charm analysis failed:", e);
+        }
+
+        apiDesc = String(apiDesc || "Custom").replace(/\s+/g, " ").trim();
+        apiDesc = apiDesc.split(/\s+/).slice(0, 2).join(" ");
+        if (!apiDesc) apiDesc = "Custom";
+
+        const templateType = Math.random() < 0.5 ? "Charm" : "Pendant";
+        const seed = `${apiDesc} ${templateType} ${setDescriptor}`.replace(/\s+/g, " ").trim();
+
+        window.currentListingDescSeed = seed;
+        const inputEl = document.getElementById("listingDescInput");
+        if (inputEl) inputEl.value = seed;
+
+        return seed;
     }
 
     async function runFullAutomationSequence(setRef, setName) {
@@ -1104,6 +1172,15 @@ ANTI-REPETITION (TITLE)
             // 0. Ensure UI is clear
             document.getElementById("clearBtn").click();
             await wait(500);
+
+           // Reset working state for this set (avoid sparse arrays / stale values)
+            window.currentSetName = setName;
+            window.currentSetDescriptor = getSetDescriptorFromSetName(setName);
+            window.currentListingDescSeed = "";
+            window.previewImages = new Array(8).fill(null);
+            window.photoNames = new Array(8).fill("");
+            window.photoIds = new Array(8).fill("");
+            window.photoMeta = window.photoMeta || new Array(10).fill("");
 
             // 1. Populate Images (Download from Firebase)
             const setFiles = await setRef.listAll();
@@ -1137,27 +1214,14 @@ ANTI-REPETITION (TITLE)
             updateStaticPreviewGrid();
             await wait(1000);
 
-            // 2. Generate Description/Context
-            // Parse Set Name for basic prompt context (e.g. "Beady_Necklace_Set_1" -> "Beady Necklace")
-            const rawContext = setName.split("_Set_")[0].replace(/_/g, " ");
+            // 1b. Commit visible crops to JPEG data URLs BEFORE any Etsy upload/vision calls
+            updateFirebaseStatus("Committing Crops…", "working");
+            await ensureAllAvailablePreviewsAreJpegDataUrls();
+            await wait(500);
 
-            updateFirebaseStatus("Analyzing Charm...", "working");
-            let apiDesc = "Beautiful";
-            if (window.previewImages && window.previewImages[0]) {
-                try {
-                    // Pre-emptively crop the image to Base64 so it avoids remote-URL fetch errors during the OpenAI API call
-                    if (window.previewImages[0].startsWith("http")) {
-                        await cropPreviewAsVisible(0);
-                    }
-                } catch(e) { console.warn("Conversion failed, attempting raw url"); }
-                
-                apiDesc = await getCharmDescriptionFromImage(window.previewImages[0]);
-            }
-            
-            // Apply randomized description template (xxx [Charm/Pendant] xxxx)
-            const templateType = Math.random() < 0.5 ? "Charm" : "Pendant";
-            const finalInputDesc = `${apiDesc} ${templateType} ${rawContext}`;
-            document.getElementById("listingDescInput").value = finalInputDesc;
+            // 2. Generate Description/Context
+            updateFirebaseStatus("Analyzing Charm…", "working");
+            await refreshListingDescSeedFromPreview0({ setName, setDescriptor: window.currentSetDescriptor });
             
             // 3. Generate Content (Sequentially)
             updateFirebaseStatus("Generating Info...", "working");
@@ -1219,6 +1283,8 @@ ANTI-REPETITION (TITLE)
             updateFirebaseStatus("Uploading Variant...", "working");
             // The automation logic in duplicateListingBtn has already swapped images and updated text.
             // We need the NEXT listing ID from the queue.
+            // Note: The createListingBtn logic consumes one ID from window.listingQueue
+            // Ensure we still have one.
             if(!document.getElementById("shopListings").value) {
                  console.warn("Ran out of Listing IDs for variant.");
             } else {
@@ -2046,7 +2112,7 @@ https://www.etsy.com/your/shops/me/listing-editor/edit/1822973998
       return tags.slice(0, 13);
     }
 
-// ---- Snapshot the current UI to a durable Job (LS manifest + IDB blobs) ----
+    // ---- Snapshot the current UI to a durable Job (LS manifest + IDB blobs) ----
     async function queueListingUploadFromUI(listingId) {
       const jobId = `etsyJob_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`;
       const title = (document.getElementById("listingTitle")?.value || "").trim();
@@ -2056,51 +2122,40 @@ https://www.etsy.com/your/shops/me/listing-editor/edit/1822973998
       const tags = buildEtsyTagsFromOverlay(document.getElementById("searchKeyPhrases")?.value || "");
       const sku = buildSkuFromTitle(title);
 
-      // Photos (0–7) from previewImages / names / meta
-      const validPhotos = [];
-      const validNames = [];
-      const validMeta = [];
-      for (let i = 0; i < 8; i++) {
-          if (window.previewImages && window.previewImages[i]) {
-              validPhotos.push(window.previewImages[i]);
-              validNames.push(window.photoNames[i] || `uploaded_photo_${i}.jpg`);
-              validMeta.push((window.photoMeta[i] || "").slice(0, 250));
-          }
+      // Ensure everything is a data:image/jpeg first (avoids CORS fetch failures, and guarantees “all available images” upload)
+      await ensureAllAvailablePreviewsAreJpegDataUrls();
+
+      const photos = [];
+      const photoNames = [];
+      const photoMeta = [];
+      const photoIds = [];
+
+      const max = Math.max(8, (window.previewImages && window.previewImages.length) || 0);
+      for (let i = 0; i < max; i++) {
+        const src = window.previewImages && window.previewImages[i];
+        if (typeof src !== "string" || !src.trim()) continue;
+
+        photos.push(src);
+        photoNames.push((window.photoNames && window.photoNames[i]) || `uploaded_photo_${photos.length}.jpg`);
+        photoMeta.push(((window.photoMeta && window.photoMeta[i]) || "").slice(0, 250));
+        photoIds.push((window.photoIds && window.photoIds[i]) || "");
       }
-      
-      const photoKeyBases = [];
-      // Upload images sequentially to IDB to prevent drop-off and missing images
-      for (let i = 0; i < validPhotos.length; i++) {
-          const key = `${jobId}_p${i}`;
-          try { 
-              await idbPut(key, validPhotos[i]); 
-          } catch (e) { 
-              console.warn("Photo IDB save failed", i, e); 
-          }
-          photoKeyBases.push(key);
-      }
+      const photoKeyBases = await Promise.all(photos.map(async (dataURL, i) => {
+        const key = `${jobId}_p${i}`;
+        try { await idbPut(key, dataURL); } catch (e) { console.warn("Photo IDB save failed", i, e); }
+        return key;
+      }));
 
       // Reserved (8–9) from reservedPhotos [{src,name,meta}]
-      const validReserved = [];
-      for (let i = 0; i < (window.reservedPhotos || []).length; i++) {
-          if (window.reservedPhotos[i] && window.reservedPhotos[i].src) {
-              validReserved.push(window.reservedPhotos[i]);
-          }
-      }
-      
-      const reservedKeyBases = [];
-      for (let i = 0; i < validReserved.length; i++) {
-          const key = `${jobId}_rp${i}`;
-          try { 
-              await idbPut(key, validReserved[i].src); 
-          } catch (e) { 
-              console.warn("Reserved IDB save failed", i, e); 
-          }
-          reservedKeyBases.push(key);
-      }
-      
-      const reservedNames = validReserved.map((x, i) => x.name || `reserved_photo_${i}.jpg`);
-      const reservedMeta = validReserved.map(x => (x.meta || "").slice(0, 250));
+      const reserved = Array.from(window.reservedPhotos || []);
+      const reservedSrc = reserved.map(x => x?.src).filter(Boolean);
+      const reservedNames = reserved.map((x, i) => x?.name || `reserved_photo_${i}.jpg`);
+      const reservedMeta = reserved.map(x => (x?.meta || "").slice(0, 250));
+      const reservedKeyBases = await Promise.all(reservedSrc.map(async (dataURL, i) => {
+        const key = `${jobId}_rp${i}`;
+        try { await idbPut(key, dataURL); } catch (e) { console.warn("Reserved IDB save failed", i, e); }
+        return key;
+      }));
 
       const job = {
         jobId,
@@ -2116,15 +2171,14 @@ https://www.etsy.com/your/shops/me/listing-editor/edit/1822973998
         sku,
         photoCount: photoKeyBases.length,
         photoKeyBases,
-        photoNames: validNames,
-        photoMeta: validMeta,
+        photoNames,
+        photoMeta,
         reservedCount: reservedKeyBases.length,
         reservedKeyBases,
         reservedNames,
         reservedMeta,
         storage: { photos: "idb", reserved: "idb" } // NEW: where the bytes live
       };
-      
       localStorage.setItem(`etsyJob:${jobId}`, JSON.stringify(job));
       const queue = JSON.parse(localStorage.getItem("etsyUploadJobs") || "[]");
       queue.push(jobId);
@@ -2600,20 +2654,26 @@ document.getElementById("shopListings").addEventListener("keydown", (e) => {
         await cropPreviewsForIndices(indicesToCrop);
       }
 
-      for (let i = 0; i < window.previewImages.length; i++) {
-        let dataURL = window.previewImages[i];
-        let altText = (window.photoMeta[i] || "").slice(0, 250); // mirror server clamp
-        let rankNumber = i + 1;
+      const available = (window.previewImages || [])
+        .map((v, idx) => ({ v, idx }))
+        .filter(x => typeof x.v === "string" && x.v.trim());
+
+      for (let n = 0; n < available.length; n++) {
+        const i = available[n].idx;
+        let dataURL = available[n].v;
+        let altText = ((window.photoMeta && window.photoMeta[i]) || "").slice(0, 250); // mirror server clamp
+        let rankNumber = n + 1;
         try {
           let res = await fetch(dataURL);
           let blob = await res.blob();
           let formData = new FormData();
           formData.append("listingId", listingId);
           formData.append("token", window.accessToken);
-          formData.append("fileName", window.photoNames[i] || `uploaded_photo_${i}.jpg`);
+          const fileName = (window.photoNames && window.photoNames[i]) || `uploaded_photo_${rankNumber}.jpg`;
+          formData.append("fileName", fileName);
           formData.append("rank", rankNumber);
           formData.append("alt_text", altText);
-          formData.append("file", blob, window.photoNames[i] || `uploaded_photo_${i}.jpg`);
+          formData.append("file", blob, fileName);
           let uploadUrl = `/.netlify/functions/imageUpload`;
           let response = await fetch(uploadUrl, { method: "POST", body: formData });
           const raw = await response.text();
