@@ -1072,6 +1072,12 @@ ANTI-REPETITION (TITLE)
             document.getElementById("clearBtn").click();
             await wait(500);
 
+            // ✅ Ensure arrays exist before we assign into [idx]
+            window.previewImages = Array.isArray(window.previewImages) ? window.previewImages : [];
+            window.photoNames    = Array.isArray(window.photoNames)    ? window.photoNames    : [];
+            window.photoIds      = Array.isArray(window.photoIds)      ? window.photoIds      : [];
+            window.photoMeta     = Array.isArray(window.photoMeta)     ? window.photoMeta     : [];
+
             // 1. Populate Images (Download from Firebase)
             const setFiles = await setRef.listAll();
             
@@ -1317,11 +1323,15 @@ ANTI-REPETITION (TITLE)
     window.REDIRECT_URI = "https://delicate-tanuki-616ac0.netlify.app/";
     window.modelName = "gpt-5";
     window.accessToken;
-    window.photoNames = [];
-    window.previewImages = [];
-    window.photoMeta = [];
     window.draggedIndex = null;
-    window.photoIds = [];
+    window.previewImages = [];
+    window.photoNames    = [];
+    window.photoMeta     = [];
+    window.photoIds      = []; // keep these in sync too
+
+     // Clear current set markers
+    window.currentSetName = null;
+    window.currentSetDescriptor = null;
     window.currentCropIndex = null;
     window.cropper = null;
     window.reservedPhotos = [];
