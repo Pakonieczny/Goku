@@ -2368,7 +2368,7 @@ document.getElementById("shopListings").addEventListener("keydown", (e) => {
       return src;
     }
 
-    async function cropPreviewAsVisible(i) {
+      async function cropPreviewAsVisible(i) {
       // 1) DOM & data
       const cell = document.getElementById("previewCell" + i);
       if (!cell) return;
@@ -2384,27 +2384,28 @@ document.getElementById("shopListings").addEventListener("keydown", (e) => {
       const offX = parseFloat(imgEl.dataset.offsetX) || 0;
       const offY = parseFloat(imgEl.dataset.offsetY) || 0;
 
-      // 2) Load original image (canvas-safe)
-      const canvasSafeSrc = toCanvasSafeSrc(src); // proxy only here
-      const loaded = await new Promise((resolve, reject) => {
-        const im = new Image();
-        // If this ends up being cross-origin (shouldn't once proxied), keep this harmlessly set.
-        im.crossOrigin = "anonymous";
-        im.onload  = () => resolve(im);
-        im.onerror = reject;
-        im.src = toCanvasSafeSrc(src);
-      });
+      // 2) Reuse the image already in the DOM! (Avoids double-fetching)
+      if (!imgEl.complete) {
+        await new Promise((resolve, reject) => {
+          imgEl.onload = resolve;
+          imgEl.onerror = reject;
+        });
+      }
+      
+      if (imgEl.naturalWidth === 0) {
+        console.warn("Image is broken or failed to load:", src);
+        return;
+      }
 
-      // 3) “Object-fit: cover” into the preview viewport (usually 120×120),
-      //     then apply the same scale/translate, then render to 3000×3000.
+      // 3) “Object-fit: cover” into the preview viewport (usually 120×120)
       const viewportW = box.clientWidth  || 120;
       const viewportH = box.clientHeight || 120;
 
       // cover scale to fill the viewport
-      const coverScale = Math.max(viewportW / loaded.naturalWidth,
-                                  viewportH / loaded.naturalHeight);
-      const drawW = loaded.naturalWidth  * coverScale;
-      const drawH = loaded.naturalHeight * coverScale;
+      const coverScale = Math.max(viewportW / imgEl.naturalWidth,
+                                  viewportH / imgEl.naturalHeight);
+      const drawW = imgEl.naturalWidth  * coverScale;
+      const drawH = imgEl.naturalHeight * coverScale;
       const baseX = (viewportW - drawW) / 2;
       const baseY = (viewportH - drawH) / 2;
 
@@ -2419,16 +2420,14 @@ document.getElementById("shopListings").addEventListener("keydown", (e) => {
       const Ux = CANVAS_SIZE / viewportW;
       const Uy = CANVAS_SIZE / viewportH;
 
-      // Reproduce CSS: transform-origin center; transform: scale(s) translate(offX, offY)
-      // Important: in CSS, translate runs in pre-scale units but gets multiplied by scale.
       ctx.save();
       ctx.translate(CANVAS_SIZE / 2, CANVAS_SIZE / 2); // center
       ctx.scale(s * Ux, s * Uy);                        // scale then translate (CSS order)
       ctx.translate(offX, offY);
       ctx.translate(-viewportW / 2, -viewportH / 2);    // move top-left of viewport to origin
 
-      // now draw the original image as it would appear with object-fit: cover
-      ctx.drawImage(loaded, baseX, baseY, drawW, drawH);
+      // Draw the original image directly from the DOM element!
+      ctx.drawImage(imgEl, baseX, baseY, drawW, drawH);
       ctx.restore();
 
       // 4) Commit permanent crop (same quality + size as saveCropBtn)
@@ -3821,9 +3820,7 @@ document.getElementById("shopListings").addEventListener("keydown", (e) => {
             previewBox.setAttribute("draggable", "true");
             previewBox.addEventListener("dragstart", e => { window.draggedIndex = i; });
             let img = document.createElement("img");
-            // For normal preview display, load directly (no crossOrigin, no proxy).
-            // Canvas operations use a separate load path inside cropPreviewAsVisible().
-            img.removeAttribute("crossorigin");
+            img.crossOrigin = "anonymous";
             img.src = window.previewImages[i];
             previewBox.appendChild(img);
 
@@ -3892,6 +3889,7 @@ document.getElementById("shopListings").addEventListener("keydown", (e) => {
             previewBox.setAttribute("draggable", "true");
             previewBox.addEventListener("dragstart", e => { window.draggedIndex = i; });
             let img = document.createElement("img");
+            img.crossOrigin = "anonymous";
             img.src = window.reservedPhotos[rIndex].src;
             previewBox.appendChild(img);
 
