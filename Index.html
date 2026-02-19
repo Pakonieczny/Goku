@@ -231,12 +231,12 @@
     .preview-cell.reserved {
       z-index: 2500;
     }
-      
+      /* Enforce a 120x120 viewport and clip zoom/pan */
       .preview-box {
         position: relative;
         --btn-size: clamp(18px, 12%, 32px);
         width: 100%;
-        height: 120px; /* fixed viewport so the image is visibly cropped */
+        height: auto;
         flex: 1 1 auto;
         overflow: hidden;     /* ← critical: clip the image */
       }
@@ -1029,27 +1029,16 @@ ANTI-REPETITION (TITLE)
     // Convert remote image URLs (e.g., Firebase Storage download URLs) into a same-origin proxy URL
     // so they can be safely used with <img crossOrigin="anonymous"> and drawn to <canvas>.
     function toCanvasSafeSrc(src) {
-    const s = String(src || "");
-    if (!s) return s;
+        const s = String(src || "");
+        if (!s) return s;
 
-    // Already safe
-    if (s.startsWith("data:") || s.startsWith("blob:")) return s;
-    if (s.startsWith(window.location.origin)) return s;
-    if (s.startsWith("/.netlify/functions/corsProxy") || s.includes("/.netlify/functions/corsProxy")) return s;
+        // Already safe
+        if (s.startsWith("data:") || s.startsWith("blob:")) return s;
+        if (s.startsWith(window.location.origin)) return s;
+        if (s.startsWith("/.netlify/functions/corsProxy")) return s;
 
-    // ✅ Real fix: if it's a Firebase/Google Storage URL, load it directly (no proxy, no 413),
-    // assuming your Firebase Storage CORS is configured.
-    try {
-        const u = new URL(s, window.location.origin);
-        const host = u.hostname;
-        if (host === "firebasestorage.googleapis.com" || host === "storage.googleapis.com") {
-            return u.href;
-        }
-    } catch (e) {
-        // fall through to proxy
-    }
-
-    // Fallback: proxy non-Firebase remote URLs for canvas use.
+    // Anything else (Firebase Storage token URLs, etc.) -> proxy
+    // IMPORTANT: only use this for canvas/cropping. Do NOT use for normal preview display.
     return "/.netlify/functions/corsProxy?url=" + encodeURIComponent(s);
     }
 
@@ -1071,12 +1060,6 @@ ANTI-REPETITION (TITLE)
             // 0. Ensure UI is clear
             document.getElementById("clearBtn").click();
             await wait(500);
-
-            // ✅ Ensure arrays exist before we assign into [idx]
-            window.previewImages = Array.isArray(window.previewImages) ? window.previewImages : [];
-            window.photoNames    = Array.isArray(window.photoNames)    ? window.photoNames    : [];
-            window.photoIds      = Array.isArray(window.photoIds)      ? window.photoIds      : [];
-            window.photoMeta     = Array.isArray(window.photoMeta)     ? window.photoMeta     : [];
 
             // 1. Populate Images (Download from Firebase)
             const setFiles = await setRef.listAll();
@@ -1112,9 +1095,6 @@ ANTI-REPETITION (TITLE)
             // 2. Generate Description/Context
             // Parse Set Name for basic prompt context (e.g. "Beady_Necklace_Set_1" -> "Beady Necklace")
             const rawContext = setName.split("_Set_")[0].replace(/_/g, " ");
-            // Expose current set title for downstream description templating
-            window.currentSetName = setName;
-            window.currentSetDescriptor = rawContext;
             document.getElementById("listingDescInput").value = "Create a listing for " + rawContext;
             
             // 3. Generate Content (Sequentially)
@@ -1191,9 +1171,6 @@ ANTI-REPETITION (TITLE)
             
             // ix. Finish
             markSetProcessed(setName);
-            // Clear current set markers
-            window.currentSetName = null;
-            window.currentSetDescriptor = null;
             updateFirebaseStatus(`Done: ${setName}`, "active");
             await wait(3000);
 
@@ -1323,15 +1300,11 @@ ANTI-REPETITION (TITLE)
     window.REDIRECT_URI = "https://delicate-tanuki-616ac0.netlify.app/";
     window.modelName = "gpt-5";
     window.accessToken;
-    window.draggedIndex = null;
+    window.photoNames = [];
     window.previewImages = [];
-    window.photoNames    = [];
-    window.photoMeta     = [];
-    window.photoIds      = []; // keep these in sync too
-
-     // Clear current set markers
-    window.currentSetName = null;
-    window.currentSetDescriptor = null;
+    window.photoMeta = [];
+    window.draggedIndex = null;
+    window.photoIds = [];
     window.currentCropIndex = null;
     window.cropper = null;
     window.reservedPhotos = [];
@@ -2339,16 +2312,8 @@ document.getElementById("shopListings").addEventListener("keydown", (e) => {
       window.currentCropIndex = index;
       let cropModal = document.getElementById("photoCropModal");
       let cropImage = document.getElementById("cropImage");
-      cropImage.crossOrigin = "anonymous";
-      cropImage.src = toCanvasSafeSrc(window.previewImages[index]);
+      cropImage.src = window.previewImages[index];
       cropImage.onload = function() {
-      // If a previous cropper instance exists, destroy it before creating a new one.
-      try {
-        if (window.cropper) {
-          window.cropper.destroy();
-          window.cropper = null;
-        }
-      } catch (e) {}
         window.cropper = new Cropper(cropImage, {
           viewMode: 1,
           autoCropArea: 1,
@@ -2409,23 +2374,12 @@ document.getElementById("shopListings").addEventListener("keydown", (e) => {
     // We proxy those images through a Netlify Function to make them same-origin.
     function toCanvasSafeSrc(src) {
       if (!src) return src;
+      // Already safe (data/blob/local/proxy)
       if (src.startsWith("data:") || src.startsWith("blob:")) return src;
       if (src.startsWith(window.location.origin)) return src;
       if (src.includes("/.netlify/functions/corsProxy")) return src;
-
-      // ✅ Real fix: Firebase/Google Storage URLs can be drawn to canvas when bucket CORS is configured.
-      try {
-        const u = new URL(src, window.location.origin);
-        const host = u.hostname;
-        if (host === "firebasestorage.googleapis.com" || host === "storage.googleapis.com") {
-          return u.href;
-        }
-      } catch (e) {
-        // fall through
-      }
-
-      // Fallback: proxy non-Firebase remote URLs.
-      return "/.netlify/functions/corsProxy?url=" + encodeURIComponent(src);
+      // Proxy remote URLs (Firebase Storage download URLs, etc.)
+      return "/.netlify/functions/corsProxy?url=" + encodeURIComponent(src) + "&format=jpeg";
     }
 
     async function cropPreviewAsVisible(i) {
@@ -2528,19 +2482,6 @@ document.getElementById("shopListings").addEventListener("keydown", (e) => {
         M.toast({ html: "Invalid listing URL or ID." });
         return;
       }
-
-      // Commit visible crops to JPEG before uploading so Etsy receives what you see.
-      // Only crop items that are still remote URLs (skip ones already committed as data:image/jpeg).
-      const indicesToCrop = window.previewImages
-        .map((v, idx) => ({ v, idx }))
-        .filter(x => typeof x.v === "string" && !x.v.startsWith("data:image/jpeg"))
-        .map(x => x.idx);
-
-      if (indicesToCrop.length) {
-        M.toast({ html: `Committing crops (${indicesToCrop.length})…` });
-        await cropPreviewsForIndices(indicesToCrop);
-      }
-
       for (let i = 0; i < window.previewImages.length; i++) {
         let dataURL = window.previewImages[i];
         let altText = (window.photoMeta[i] || "").slice(0, 250); // mirror server clamp
@@ -4342,139 +4283,87 @@ document.getElementById("shopListings").addEventListener("keydown", (e) => {
      return t.slice(0, chosen).trimEnd();
    }
 
-    // ===== Listing Description: Charm-only 2-word classifier + template builder =====
-    function normalizeTwoWordCharmDescriptor(input) {
-      const s = String(input || "")
-        .toLowerCase()
-        .replace(/[^a-z\s]/g, " ")
-        .replace(/\s+/g, " ")
-        .trim();
-
-      const parts = s.split(" ").filter(Boolean);
-      if (parts.length >= 2) return (parts[0] + " " + parts[1]).trim();
-      if (parts.length === 1) return (parts[0] + " charm").trim();
-      return "charm charm";
-    }
-
-    function getPreviewCell0ImageUrl() {
-      // Prefer the canonical source used across the app
-      const fromArray = (window.previewImages && window.previewImages[0]) ? window.previewImages[0] : null;
-      if (fromArray) return fromArray;
-
-      // Fallback: read whatever is currently rendered in the preview cell
-      const img = document.querySelector("#previewCell0 img");
-      const src = img && img.getAttribute("src");
-      return src || null;
-    }
-
-    function getImageSetDescriptorForCccc() {
-      // Primary: the Firebase set folder name -> readable descriptor
-      if (window.currentSetName && typeof window.currentSetName === "string") {
-        const raw = window.currentSetName.split("_Set_")[0].replace(/_/g, " ").trim();
-        if (raw) return raw;
-      }
-
-      // Secondary: the already-parsed value stored by the automation runner
-      if (window.currentSetDescriptor && typeof window.currentSetDescriptor === "string") {
-        const raw = window.currentSetDescriptor.replace(/\s+/g, " ").trim();
-        if (raw) return raw;
-      }
-
-      // Fallback: whatever the user typed into the context input
-      const desc = (document.getElementById("listingDescInput")?.value || "").trim();
-      return desc.replace(/^Create\s+a\s+listing\s+for\s+/i, "").trim();
-    }
-
-    async function getTwoWordCharmDescriptorFromPreviewCell0() {
-      const imgUrl = getPreviewCell0ImageUrl();
-      if (!imgUrl) throw new Error("No image available in previewCell0.");
-
-      const prompt = `
-      You are analyzing an Etsy-style product image.
-      TASK: Describe ONLY the charm/pendant motif in the image.
-      IGNORE: chain, model, hands, background, lighting, text overlays, packaging.
-      OUTPUT: Return EXACTLY TWO WORDS, lowercase, separated by one space.
-      No punctuation, no extra words, no line breaks.
-      Examples: "soccer ball", "hamsa hand", "maple leaf".
-      `.trim();
-
-      const payload = {
-        model: window.modelName || "gpt-5",
-        input: [
-          { role: "system", content: "Return exactly two lowercase words describing only the charm/pendant motif. No punctuation. No extra text." },
-          {
-            role: "user",
-            content: [
-              { type: "input_text", text: prompt },
-              { type: "input_image", image_url: imgUrl }
-            ]
-          }
-        ],
-        max_output_tokens: 40,
-        reasoning: { effort: "minimal" },
-        text: { verbosity: "low" }
-      };
-
-      const data = await callOpenAI(payload, { timeoutMs: 120000 });
-
-      const raw =
-        (typeof extractResponseText === "function")
-          ? extractResponseText(data)
-          : (
-              typeof data?.output_text === "string" ? data.output_text :
-              (Array.isArray(data?.output)
-                ? data.output
-                    .flatMap(b => Array.isArray(b?.content) ? b.content : [])
-                    .map(p => (typeof p?.text === "string" ? p.text : ""))
-                    .join("")
-                    .trim()
-                : (data?.choices?.[0]?.message?.content || "")
-            )).trim();
-
-      return String(raw || "").trim();
-    }
-
-    function buildListingDescriptionTemplate(aaaTwoWords, ccccDescriptor) {
-      const aaa = normalizeTwoWordCharmDescriptor(aaaTwoWords);
-      const cccc = String(ccccDescriptor || "").replace(/\s+/g, " ").trim();
-
-      const useCharm = Math.random() < 0.5;
-      const mid = useCharm ? "Charm" : "Pendant";
-
-      // Exact required format:
-      //   i. "aaa" Charm "cccc"
-      //  ii. "aaa" Pendant "cccc"
-      if (cccc) return `"${aaa}" ${mid} "${cccc}"`;
-      return `"${aaa}" ${mid} ""`;
-    }
-
     async function generateDescriptionOnly() {
+      let etsyLink = window.ETSY_SHOP_URL;
+      let keyPhrases = document.getElementById("searchKeyPhrases").value.trim();
+      let rawDescription = document.getElementById("listingDescInput").value.trim();
+
+      if (!keyPhrases) {
+        M.toast({ html: "Please provide the search key phrases." });
+        return;
+      }
+
+      let rulesText = document.getElementById("descriptionRulesTextarea").value;
+
+      let promptText = `
+    You are ChatGPT using ${window.modelName}.
+    Based on the inputs below, generate an Etsy Listing DESCRIPTION only.
+    Input Context:
+    Etsy Link: "${etsyLink}"
+    Listing Description: "${rawDescription}"
+    Key Phrases: "${keyPhrases}"
+    --- Rules for DESCRIPTION ---
+    ${rulesText}
+    Important: Return ONLY the description as plain text.`.trim();
+
       const out = document.getElementById("listingDescription");
       out.value = "Generating description...";
 
-      // show blue spinner beside DESCRIPTION heading
+      // NEW: show blue spinner beside DESCRIPTION heading
       toggleSpinner("descriptionSpinner", true);
 
       try {
-        // 1) Charm-only 2-word analysis from previewCell0
-        const twoWordsRaw = await getTwoWordCharmDescriptorFromPreviewCell0();
+        // Responses API payload for GPT-5
+        const payload = {
+          model: window.modelName, // e.g., "gpt-5"
+          input: [
+            { role: "system", content: "Return ONLY the description as plain text." },
+            { role: "user", content: promptText }
+          ],
+          max_output_tokens: 350,
+          reasoning: { effort: "minimal" },
+          text: { verbosity: "medium" }
+        };
 
-        // 2) Extract descriptor from Firebase image-set title (or best available fallback)
-        const cccc = getImageSetDescriptorForCccc();
+        const data = await callOpenAI(payload);
 
-        // 3) Build final Listing Description using the required template
-        const text = buildListingDescriptionTemplate(twoWordsRaw, cccc);
+        // Use global helper if present; otherwise unwrap Responses API locally
+        let text =
+          (typeof extractResponseText === "function")
+            ? extractResponseText(data)
+            : (
+                typeof data?.output_text === "string" ? data.output_text :
+                (Array.isArray(data?.output)
+                  ? data.output
+                      .flatMap(b => Array.isArray(b?.content) ? b.content : [])
+                      .map(p => (typeof p?.text === "string" ? p.text : ""))
+                      .join("")
+                      .trim()
+                  : (data?.choices?.[0]?.message?.content || "")
+                ).trim()
+              );
 
-        // Enforce 400-char cap without ellipsis and without cutting words (existing helper)
-        out.value = capDescription(text, 400);
+        text = (text || "").trim();
+
+        // If nothing came back, build a local fallback that respects house rules
+        if (!text) {
+          console.warn("Empty description from API; raw response follows:", data);
+          const fallback = buildFallbackDescription({ keyPhrases, rawDescription });
+          text = fallback || "";
+        }
+
+         // Enforce 400-char cap without ellipsis and without cutting words
+         text = capDescription(text, 400);
+
+        out.value = text;
       } catch (error) {
         console.error(error);
-        if (window.M?.toast) M.toast({ html: "API Error while generating description." });
-
-        const cccc = getImageSetDescriptorForCccc();
-        const fb = buildListingDescriptionTemplate("charm charm", cccc);
-        out.value = capDescription(fb, 400) || ("Error: " + (error?.message || String(error)));
+        M.toast({ html: "API Error while generating description." });
+        // Best-effort fallback: end at nearest sentence (can exceed 400)
+        const fbRaw = buildFallbackDescription({ keyPhrases, rawDescription }) || "";
+        out.value = capDescription(fbRaw, 400) || ("Error: " + (error?.message || String(error)));
       } finally {
+        // NEW: hide spinner once done
         toggleSpinner("descriptionSpinner", false);
       }
     }
