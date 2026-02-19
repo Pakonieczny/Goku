@@ -3847,9 +3847,8 @@ document.getElementById("shopListings").addEventListener("keydown", (e) => {
             previewBox.setAttribute("draggable", "true");
             previewBox.addEventListener("dragstart", e => { window.draggedIndex = i; });
             let img = document.createElement("img");
-            // For normal preview display, load directly (no crossOrigin, no proxy).
-            // Canvas operations use a separate load path inside cropPreviewAsVisible().
-            img.removeAttribute("crossorigin");
+            // Force the browser to ask Firebase for CORS headers so it caches correctly
+            img.crossOrigin = "anonymous";
             img.src = window.previewImages[i];
             previewBox.appendChild(img);
 
@@ -3918,6 +3917,8 @@ document.getElementById("shopListings").addEventListener("keydown", (e) => {
             previewBox.setAttribute("draggable", "true");
             previewBox.addEventListener("dragstart", e => { window.draggedIndex = i; });
             let img = document.createElement("img");
+            // Force the browser to ask Firebase for CORS headers here too
+            img.crossOrigin = "anonymous";
             img.src = window.reservedPhotos[rIndex].src;
             previewBox.appendChild(img);
 
