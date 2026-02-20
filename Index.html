@@ -1158,9 +1158,11 @@ ANTI-REPETITION (TITLE)
                 craftedContext = `Create a listing for ${rawContext}.`;
             }
 
-            // Hard fail-safe against the specific banned statement
-            if (craftedContext.trim().toLowerCase() === "create a listing for beady necklace." || craftedContext.trim().toLowerCase() === "create a listing for beady necklace") {
-                craftedContext = "Create a listing for Beaded Item."; // Replaces the banned phrase entirely
+            // Hard fail-safe against the specific banned statements
+            // This dynamically catches "Create a listing for Beady Necklace with..." as well as the base statement
+            const bannedRegex = /Create a listing for Beady Necklace/gi;
+            if (bannedRegex.test(craftedContext)) {
+                craftedContext = craftedContext.replace(bannedRegex, "Create a listing for Beaded Item"); 
             }
 
             document.getElementById("listingDescInput").value = craftedContext;
