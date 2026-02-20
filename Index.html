@@ -1140,23 +1140,30 @@ ANTI-REPETITION (TITLE)
             updateStaticPreviewGrid();
             await wait(1000);
 
-// 2. Generate Description/Context
+            // 2. Generate Description/Context
             updateFirebaseStatus("Analyzing Details...", "working");
 
             // Parse Set Name to extract the descriptive words
             // Example: "Beady_Necklace_Set_22" -> "Beady Necklace"
+            // Example: "Charm_Set_1" -> "Charm"
             const rawContext = setName.split("_Set_")[0].replace(/_/g, " ");
+            const cleanContext = rawContext.trim();
 
             // Call the OpenAI vision analysis for the focal item
             const focalDescription = await getTwoWordCharmDescription();
 
-            // Combine reversing the order and inserting "Charm" in-between
-            let combinedDescription = rawContext;
+            let combinedDescription = cleanContext;
             if (focalDescription && focalDescription.trim().length > 0) {
-                combinedDescription = `${focalDescription.trim()} Charm ${rawContext.trim()}`;
+                // Check if the parsed folder name is exactly "Charm" (case-insensitive check)
+                if (cleanContext.toLowerCase() === "charm") {
+                    combinedDescription = `${focalDescription.trim()} charm`;
+                } else {
+                    // Standard logic for all other names
+                    combinedDescription = `${focalDescription.trim()} Charm ${cleanContext}`;
+                }
             }
 
-            // Apply and show both inside the "listingDescInput" text box
+            // Apply and show inside the "listingDescInput" text box
             document.getElementById("listingDescInput").value = combinedDescription;
             
             // 3. Generate Content (Sequentially)
