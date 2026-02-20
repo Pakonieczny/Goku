@@ -1154,8 +1154,9 @@ ANTI-REPETITION (TITLE)
 
             let combinedDescription = cleanContext;
             if (focalDescription && focalDescription.trim().length > 0) {
-                // Check if the parsed folder name is exactly "Charm" (case-insensitive check)
-                if (cleanContext.toLowerCase() === "charm") {
+                // Check if the parsed folder name is exactly "Charm" or "Charms" (case-insensitive check)
+                const lowerContext = cleanContext.toLowerCase();
+                if (lowerContext === "charm" || lowerContext === "charms") {
                     combinedDescription = `${focalDescription.trim()} charm`;
                 } else {
                     // Standard logic for all other names
