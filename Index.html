@@ -1156,13 +1156,6 @@ ANTI-REPETITION (TITLE)
                 combinedDescription = `${rawContext} ${focalDescription}`;
             }
 
-            // Optional: Keep your hard fail-safe if you still want to catch specific banned words
-            // before they hit the text box
-            const bannedRegex = /Beady Necklace/gi;
-            if (bannedRegex.test(combinedDescription)) {
-                combinedDescription = combinedDescription.replace(bannedRegex, "Beaded Item"); 
-            }
-
             // Apply and show both inside the "listingDescInput" text box
             document.getElementById("listingDescInput").value = combinedDescription;
             
