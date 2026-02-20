@@ -1140,7 +1140,7 @@ ANTI-REPETITION (TITLE)
             updateStaticPreviewGrid();
             await wait(1000);
 
-            // 2. Generate Description/Context
+// 2. Generate Description/Context
             updateFirebaseStatus("Analyzing Details...", "working");
 
             // Parse Set Name to extract the descriptive words
@@ -1150,10 +1150,10 @@ ANTI-REPETITION (TITLE)
             // Call the OpenAI vision analysis for the focal item
             const focalDescription = await getTwoWordCharmDescription();
 
-            // Combine the extracted folder words with the OpenAI 2-word description
+            // Combine reversing the order and inserting "Charm" in-between
             let combinedDescription = rawContext;
             if (focalDescription && focalDescription.trim().length > 0) {
-                combinedDescription = `${rawContext} ${focalDescription}`;
+                combinedDescription = `${focalDescription.trim()} Charm ${rawContext.trim()}`;
             }
 
             // Apply and show both inside the "listingDescInput" text box
