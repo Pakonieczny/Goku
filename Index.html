@@ -150,7 +150,7 @@
       align-self: flex-start;
     }
     #listingTitle {
-      min-height: 45px;
+      min-height: 60px; /* Increased to allow wrapping without overlap */
     }
     #listingDescInput {
       width: 500px;
@@ -1400,21 +1400,21 @@ ANTI-REPETITION (TITLE)
 
       // Generation controls
       generateBtn:             { left: 10,   top: 455, width: 125, height: 35 },
-      regenTitleBtn:           { left: 285,  top: 492, width: 100, height: 35 },
-      copyTitleBtn:            { left: 410,  top: 492, width: 100, height: 35 },
+      regenTitleBtn:           { left: 285,  top: 500, width: 100, height: 35 },
+      copyTitleBtn:            { left: 410,  top: 500, width: 100, height: 35 },
       showTitleRulesBtn:       { left: 150,  top: 0,   width: 0,   height: 0  },
-      regenDescriptionBtn:     { left: 285,  top: 603, width: 100, height: 35 },
-      copyDescriptionBtn:      { left: 410,  top: 603, width: 100, height: 35 },
+      regenDescriptionBtn:     { left: 285,  top: 615, width: 100, height: 35 },
+      copyDescriptionBtn:      { left: 410,  top: 615, width: 100, height: 35 },
       showDescriptionRulesBtn: { left: 150,  top: 0,   width: 0,   height: 0  },
 
       // Text inputs / areas
       listingDescInput:        { left: 10,   top: 220, width: 490, height: 35 },
       shopListings:            { left: 10,   top: 110, width: 500, height: 45 },
       searchKeyPhrases:        { left: 10,   top: 325, width: 500, height: 200 },
-      listingTitle:            { left: 10,   top: 535, width: 1000,height: 45 },
-      listingDescription:      { left: 10,   top: 540, width: 1400,height: 150 },
+      listingTitle:            { left: 10,   top: 540, width: 1000,height: 60 },
+      listingDescription:      { left: 10,   top: 660, width: 1000,height: 150 },
       listingDescContainer:    { left: 10,   top: 185, width: 520,  height: 70  },
-      titleCount:              { left: 1030,   top: 558, width: 150,  height: 24  },
+      titleCount:              { left: 1030, top: 558, width: 150,  height: 24  },
 
       // Drop zone
       dropZone:                { left: 1340, top: 150, width: 155, height: 350 },
@@ -1435,10 +1435,10 @@ ANTI-REPETITION (TITLE)
       etsyShopListingsHeading:   { left: 10,   top: 75,  width: 180, height: 27 },
       searchKeyPhrasesHeading:   { left: 10,   top: 290, width: 180, height: 27 },
       listingTitleHeading:       { left: 10,   top: 505, width: 180, height: 27 },
-      titleSpinner:              { left: 160,  top: 507, width: 20,  height: 20 },
-      listingDescriptionHeading: { left: 10,   top: 610, width: 250, height: 27 },
+      titleSpinner:              { left: 200,  top: 507, width: 20,  height: 20 },
+      listingDescriptionHeading: { left: 10,   top: 620, width: 250, height: 27 },
       searchSpinner:             { left: 177,  top: 292, width: 20,  height: 20 },
-      descriptionSpinner:        { left: 235,  top: 612, width: 20,  height: 20 },
+      descriptionSpinner:        { left: 250,  top: 622, width: 20,  height: 20 },
       duplicateListingBtn:       { left: 1040, top: 10, width: 160, height: 35 },
       clearBtn:                  { left: 1290, top: 10, width: 110, height: 35 },
       analyzeMetadataProgress:   { left: 720,  top: 105, width: 160, height: 27 },
@@ -1538,6 +1538,11 @@ ANTI-REPETITION (TITLE)
           localStorage.removeItem(oldKey);
         });
       });
+
+      // Fix overlapping description textarea from old cached coordinate
+      if (localStorage.getItem("pos-listingDescription-top") === "540") {
+          localStorage.removeItem("pos-listingDescription-top");
+      }
     }
 
     // 3.3 Apply saved (or default) positions — same storage keys as shipping-1
