@@ -748,11 +748,15 @@ Default Photo Analysis Rules:
     </div>
   </div>
   
-  <div id="titleRulesModal" class="modal">
+<div id="titleRulesModal" class="modal">
     <div class="modal-content">
       <h4>Title Rules</h4>
       <textarea id="titleRulesTextarea" style="width:100%; height:300px;">
 TITLE RULES (STRICT — MATCH THE EXAMPLES EXACTLY)
+
+STRICT PRODUCT TYPE INHERITANCE (CRITICAL)
+- You MUST extract the exact product type directly from the "Listing Description".
+- NEVER invent, assume, or append a product type that is not explicitly stated. If the description says "charm", the {Product-Type} is strictly "Charm". NEVER upgrade a "Charm" to a "Charm Necklace" or "Pendant Necklace" unless the word "Necklace" is explicitly written in the input.
 
 CORE STRUCTURE (exact order)
 1) Lead = [Action/Style ]{Motif} {Product-Type}
