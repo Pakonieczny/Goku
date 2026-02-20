@@ -1043,7 +1043,7 @@ ANTI-REPETITION (TITLE)
         }
     }
 
-        async function getTwoWordCharmDescription() {
+    async function getTwoWordCharmDescription() {
         // Grab the image from previewCell0 (index 0)
         const imgData = window.previewImages && window.previewImages[0];
         if (!imgData) return "";
@@ -1126,9 +1126,21 @@ ANTI-REPETITION (TITLE)
             await wait(1000);
 
             // 2. Generate Description/Context
-            // Parse Set Name for basic prompt context (e.g. "Beady_Necklace_Set_1" -> "Beady Necklace")
+            updateFirebaseStatus("Analyzing Charm...", "working");
+
+            // Parse Set Name for basic prompt context
             const rawContext = setName.split("_Set_")[0].replace(/_/g, " ");
-            document.getElementById("listingDescInput").value = "Create a listing for " + rawContext;
+
+            // NEW: Call the OpenAI vision analysis for the charm
+            const charmDescription = await getTwoWordCharmDescription();
+
+            // Use the 2-word description to craft a more tailored listing description
+            if (charmDescription && charmDescription.length > 0) {
+                document.getElementById("listingDescInput").value = `Create a listing for ${rawContext}, featuring a ${charmDescription} charm.`;
+            } else {
+                // Fallback if the vision API fails or returns empty
+                document.getElementById("listingDescInput").value = "Create a listing for " + rawContext;
+            }
             
             // 3. Generate Content (Sequentially)
             updateFirebaseStatus("Generating Info...", "working");
