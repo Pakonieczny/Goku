@@ -1048,17 +1048,17 @@ ANTI-REPETITION (TITLE)
         const imgData = window.previewImages && window.previewImages[0];
         if (!imgData) return "";
 
-        let retries = 2; // Safety check: allow 1 retry if the vision API times out
+        let retries = 2; 
         
         while (retries > 0) {
             try {
-                // Strict instructions: focus only on charm details, output exactly 2 words
-                const promptText = "Analyze this image and return exactly two highly descriptive words focusing solely on the charm or pendant details. Disregard the chain, background, model, or scale. Output plain text, just the two words, no punctuation.";
+                // Strict negative constraints added to the prompt
+                const promptText = "Analyze this image and return exactly two highly descriptive words focusing solely on the charm/pendant core shape, motif, or subject matter. STRICT RULES: NEVER use material colors. NEVER use words like Gold, Golden, Silver, or Sterling. NEVER use words like Charm, Pendant, dainty, small, large, or cute. Disregard the chain, background, model, or scale. Output plain text, just the two words, no punctuation.";
                 
                 const payload = {
                     model: window.modelName || "gpt-5",
                     input: [
-                        { role: "system", content: "Return ONLY two descriptive words. No punctuation, no extra text." },
+                        { role: "system", content: "Return ONLY two descriptive words. No punctuation, no extra text. Strictly adhere to the negative constraints." },
                         {
                             role: "user",
                             content: [
@@ -1067,26 +1067,32 @@ ANTI-REPETITION (TITLE)
                             ]
                         }
                     ],
-                    max_output_tokens: 20, // FIXED: Increased from 15 to 20 to satisfy model minimums
+                    max_output_tokens: 20, 
                     reasoning: { effort: "minimal" },
                     text: { verbosity: "low" }
                 };
 
                 const data = await callOpenAI(payload);
-                const rawText = (typeof extractResponseText === "function") 
+                let rawText = (typeof extractResponseText === "function") 
                     ? extractResponseText(data) 
                     : (data?.output_text || "");
 
-                // Clean up the output to ensure we just get the words
-                return rawText.replace(/[^a-zA-Z0-9\s]/g, "").trim(); 
+                // Clean up punctuation
+                rawText = rawText.replace(/[^a-zA-Z0-9\s]/g, "").trim(); 
+                
+                // Hardcoded fail-safe: Strip banned words if the AI disobeys
+                const bannedWords = /\b(gold|golden|silver|sterling|charm|pendant|featuring|dainty|small|large|cute|red|blue|green|yellow|pink|purple|orange|black|white|grey|brown)\b/gi;
+                rawText = rawText.replace(bannedWords, "").replace(/\s+/g, " ").trim();
+
+                return rawText;
                 
             } catch (e) {
                 console.warn(`Charm analysis error. Retries left: ${retries - 1}`, e);
                 retries--;
                 if (retries === 0) {
-                    return ""; // Return empty string so automation continues even if API fails entirely
+                    return ""; 
                 }
-                await new Promise(r => setTimeout(r, 1500)); // Pause 1.5s before retrying
+                await new Promise(r => setTimeout(r, 1500)); 
             }
         }
     }
@@ -1135,21 +1141,29 @@ ANTI-REPETITION (TITLE)
             await wait(1000);
 
             // 2. Generate Description/Context
-            updateFirebaseStatus("Analyzing Charm...", "working");
+            updateFirebaseStatus("Analyzing Details...", "working");
 
             // Parse Set Name for basic prompt context
             const rawContext = setName.split("_Set_")[0].replace(/_/g, " ");
 
-            // NEW: Call the OpenAI vision analysis for the charm
-            const charmDescription = await getTwoWordCharmDescription();
+            // NEW: Call the OpenAI vision analysis for the focal item
+            const focalDescription = await getTwoWordCharmDescription();
 
-            // Use the 2-word description to craft a more tailored listing description
-            if (charmDescription && charmDescription.length > 0) {
-                document.getElementById("listingDescInput").value = `Create a listing for ${rawContext}, featuring a ${charmDescription} charm.`;
+            // Use the 2-word description to craft a tailored listing description (avoiding banned words)
+            let craftedContext = "";
+            if (focalDescription && focalDescription.length > 0) {
+                craftedContext = `Create a listing for ${rawContext} with ${focalDescription}.`;
             } else {
                 // Fallback if the vision API fails or returns empty
-                document.getElementById("listingDescInput").value = "Create a listing for " + rawContext;
+                craftedContext = `Create a listing for ${rawContext}.`;
             }
+
+            // Hard fail-safe against the specific banned statement
+            if (craftedContext.trim().toLowerCase() === "create a listing for beady necklace." || craftedContext.trim().toLowerCase() === "create a listing for beady necklace") {
+                craftedContext = "Create a listing for Beaded Item."; // Replaces the banned phrase entirely
+            }
+
+            document.getElementById("listingDescInput").value = craftedContext;
             
             // 3. Generate Content (Sequentially)
             updateFirebaseStatus("Generating Info...", "working");
