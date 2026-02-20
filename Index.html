@@ -1047,22 +1047,32 @@ ANTI-REPETITION (TITLE)
         }
     }
 
-async function getTwoWordCharmDescription() {
+    async function getTwoWordCharmDescription() {
         // Grab the image from previewCell0 (index 0)
         const imgData = window.previewImages && window.previewImages[0];
         if (!imgData) return "";
 
-        let retries = 2; 
+        let retries = 3; 
         
         while (retries > 0) {
             try {
-                // Strict negative constraints and NEW Ear Lobe constraint added to the prompt
-                const promptText = "Analyze this image and return exactly two highly descriptive words focusing solely on the charm/pendant core shape, motif, or subject matter. If a human ear is present in the image, you MUST strictly focus ONLY on the charm attached to the Ear Lobe, completely disregarding any other charms positioned elsewhere on the ear. STRICT RULES: NEVER use material colors. NEVER use words like Gold, Golden, Silver, or Sterling. NEVER use words like Charm, Pendant, dainty, small, large, or cute. Disregard the chain, background, model, or scale. Output plain text, just the two words, no punctuation.";
+                // Proactively list ALL forbidden words to feed into the prompt
+                const forbiddenWords = "gold, golden, silver, sterling, charm, pendant, featuring, dainty, small, large, cute, red, blue, green, yellow, pink, purple, orange, black, white, grey, brown";
                 
+                // Explicitly map out the rules so the AI can't miss them
+                const promptText = `Analyze this image and return exactly two highly descriptive words focusing solely on the charm/pendant core shape, motif, or subject matter. If a human ear is present in the image, you MUST strictly focus ONLY on the charm attached to the Ear Lobe, completely disregarding any other charms positioned elsewhere on the ear. 
+                
+                  STRICT RULES: 
+                  1. NEVER use material colors or any color names. 
+                  2. NEVER use ANY of these exact words: ${forbiddenWords}. 
+                  3. Disregard the chain, background, model, or scale. 
+                  4. Output plain text, exactly two words, no punctuation.`;
+                          
                 const payload = {
                     model: window.modelName || "gpt-5",
                     input: [
-                        { role: "system", content: "Return ONLY two descriptive words. No punctuation, no extra text. Strictly adhere to the negative constraints and focus rules." },
+                        // Reinforce the negative constraints in the system prompt
+                        { role: "system", content: `Return ONLY two descriptive words. No punctuation. You are strictly forbidden from using any of these words: ${forbiddenWords}.` },
                         {
                             role: "user",
                             content: [
@@ -1084,11 +1094,20 @@ async function getTwoWordCharmDescription() {
                 // Clean up punctuation
                 rawText = rawText.replace(/[^a-zA-Z0-9\s]/g, "").trim(); 
                 
-                // Hardcoded fail-safe: Strip banned words if the AI disobeys
-                const bannedWords = /\b(gold|golden|silver|sterling|charm|pendant|featuring|dainty|small|large|cute|red|blue|green|yellow|pink|purple|orange|black|white|grey|brown)\b/gi;
-                rawText = rawText.replace(bannedWords, "").replace(/\s+/g, " ").trim();
+                // Hardcoded fail-safe: Strip banned words if the AI disobeys the strict prompt
+                const bannedRegex = /\b(gold|golden|silver|sterling|charm|pendant|featuring|dainty|small|large|cute|red|blue|green|yellow|pink|purple|orange|black|white|grey|brown)\b/gi;
+                rawText = rawText.replace(bannedRegex, "").replace(/\s+/g, " ").trim();
 
-                return rawText;
+                // Split the remaining text into an array of valid words
+                const wordsArray = rawText.split(" ").filter(w => w.length > 0);
+
+                // Validation check: If we have less than 2 words, force a retry.
+                if (wordsArray.length < 2) {
+                    throw new Error(`AI returned fewer than 2 valid words after filtering: '${rawText}'`);
+                }
+
+                // Strictly grab the first two words just in case the AI returned 3+
+                return wordsArray.slice(0, 2).join(" ");
                 
             } catch (e) {
                 console.warn(`Charm analysis error. Retries left: ${retries - 1}`, e);
