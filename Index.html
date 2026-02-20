@@ -891,7 +891,7 @@ ANTI-REPETITION (TITLE)
     <div class="crop-container" style="position: relative; width:100%; height:100%;">
       <h4 style="text-align:center; margin:0 0 10px 0;">Crop Photo</h4>
       <div class="img-preview-container" style="width:400px; height:400px; margin:0 auto; overflow:hidden;">
-        <img id="cropImage" src="" alt="Crop Image" style="display:block; margin:auto; max-width:none;">
+        <img id="cropImage" src="" alt="Crop Image" crossorigin="anonymous" style="display:block; margin:auto; max-width:none;">
       </div>
       <div style="text-align:center; margin-top:10px;">
         <button id="saveCropBtn" class="btn waves-effect waves-light" style="margin-right:10px;">Save</button>
@@ -1043,6 +1043,45 @@ ANTI-REPETITION (TITLE)
         }
     }
 
+        async function getTwoWordCharmDescription() {
+        // Grab the image from previewCell0 (index 0)
+        const imgData = window.previewImages && window.previewImages[0];
+        if (!imgData) return "";
+
+        try {
+            // Strict instructions: focus only on charm details, output exactly 2 words
+            const promptText = "Analyze this image and return exactly two highly descriptive words focusing solely on the charm or pendant details. Disregard the chain, background, model, or scale. Output plain text, just the two words, no punctuation.";
+            
+            const payload = {
+                model: window.modelName || "gpt-5",
+                input: [
+                    { role: "system", content: "Return ONLY two descriptive words. No punctuation, no extra text." },
+                    {
+                        role: "user",
+                        content: [
+                            { type: "input_text", text: promptText },
+                            { type: "input_image", image_url: imgData }
+                        ]
+                    }
+                ],
+                max_output_tokens: 15,
+                reasoning: { effort: "minimal" },
+                text: { verbosity: "low" }
+            };
+
+            const data = await callOpenAI(payload);
+            const rawText = (typeof extractResponseText === "function") 
+                ? extractResponseText(data) 
+                : (data?.output_text || "");
+
+            // Clean up the output to ensure we just get the words
+            return rawText.replace(/[^a-zA-Z0-9\s]/g, "").trim(); 
+        } catch (e) {
+            console.error("Charm analysis error:", e);
+            return "";
+        }
+    }
+
     async function runFullAutomationSequence(setRef, setName) {
         window.isProcessingSet = true;
         updateFirebaseStatus(`Processing: ${setName}`, "working");
@@ -1067,7 +1106,10 @@ ANTI-REPETITION (TITLE)
                  // Map Slot_X to correct index (Slot_1 -> 0)
                  const match = itemRef.name.match(/Slot_(\d+)/);
                  const idx = match ? parseInt(match[1]) - 1 : -1;
-                 return { idx, url, name: itemRef.name };
+                 
+                 // FIX: Append a cache buster to force fresh CORS headers
+                 const cacheBustedUrl = url + "&cb=" + Date.now();
+                 return { idx, url: cacheBustedUrl, name: itemRef.name };
             });
             
             const filesData = await Promise.all(filePromises);
