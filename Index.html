@@ -1143,29 +1143,28 @@ ANTI-REPETITION (TITLE)
             // 2. Generate Description/Context
             updateFirebaseStatus("Analyzing Details...", "working");
 
-            // Parse Set Name for basic prompt context
+            // Parse Set Name to extract the descriptive words
+            // Example: "Beady_Necklace_Set_22" -> "Beady Necklace"
             const rawContext = setName.split("_Set_")[0].replace(/_/g, " ");
 
-            // NEW: Call the OpenAI vision analysis for the focal item
+            // Call the OpenAI vision analysis for the focal item
             const focalDescription = await getTwoWordCharmDescription();
 
-            // Use the 2-word description to craft a tailored listing description (avoiding banned words)
-            let craftedContext = "";
-            if (focalDescription && focalDescription.length > 0) {
-                craftedContext = `Create a listing for ${rawContext} with ${focalDescription}.`;
-            } else {
-                // Fallback if the vision API fails or returns empty
-                craftedContext = `Create a listing for ${rawContext}.`;
+            // Combine the extracted folder words with the OpenAI 2-word description
+            let combinedDescription = rawContext;
+            if (focalDescription && focalDescription.trim().length > 0) {
+                combinedDescription = `${rawContext} ${focalDescription}`;
             }
 
-            // Hard fail-safe against the specific banned statements
-            // This dynamically catches "Create a listing for Beady Necklace with..." as well as the base statement
-            const bannedRegex = /Create a listing for Beady Necklace/gi;
-            if (bannedRegex.test(craftedContext)) {
-                craftedContext = craftedContext.replace(bannedRegex, "Create a listing for Beaded Item"); 
+            // Optional: Keep your hard fail-safe if you still want to catch specific banned words
+            // before they hit the text box
+            const bannedRegex = /Beady Necklace/gi;
+            if (bannedRegex.test(combinedDescription)) {
+                combinedDescription = combinedDescription.replace(bannedRegex, "Beaded Item"); 
             }
 
-            document.getElementById("listingDescInput").value = craftedContext;
+            // Apply and show both inside the "listingDescInput" text box
+            document.getElementById("listingDescInput").value = combinedDescription;
             
             // 3. Generate Content (Sequentially)
             updateFirebaseStatus("Generating Info...", "working");
