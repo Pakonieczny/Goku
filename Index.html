@@ -1047,7 +1047,7 @@ ANTI-REPETITION (TITLE)
         }
     }
 
-    async function getTwoWordCharmDescription() {
+async function getTwoWordCharmDescription() {
         // Grab the image from previewCell0 (index 0)
         const imgData = window.previewImages && window.previewImages[0];
         if (!imgData) return "";
@@ -1056,13 +1056,13 @@ ANTI-REPETITION (TITLE)
         
         while (retries > 0) {
             try {
-                // Strict negative constraints added to the prompt
-                const promptText = "Analyze this image and return exactly two highly descriptive words focusing solely on the charm/pendant core shape, motif, or subject matter. STRICT RULES: NEVER use material colors. NEVER use words like Gold, Golden, Silver, or Sterling. NEVER use words like Charm, Pendant, dainty, small, large, or cute. Disregard the chain, background, model, or scale. Output plain text, just the two words, no punctuation.";
+                // Strict negative constraints and NEW Ear Lobe constraint added to the prompt
+                const promptText = "Analyze this image and return exactly two highly descriptive words focusing solely on the charm/pendant core shape, motif, or subject matter. If a human ear is present in the image, you MUST strictly focus ONLY on the charm attached to the Ear Lobe, completely disregarding any other charms positioned elsewhere on the ear. STRICT RULES: NEVER use material colors. NEVER use words like Gold, Golden, Silver, or Sterling. NEVER use words like Charm, Pendant, dainty, small, large, or cute. Disregard the chain, background, model, or scale. Output plain text, just the two words, no punctuation.";
                 
                 const payload = {
                     model: window.modelName || "gpt-5",
                     input: [
-                        { role: "system", content: "Return ONLY two descriptive words. No punctuation, no extra text. Strictly adhere to the negative constraints." },
+                        { role: "system", content: "Return ONLY two descriptive words. No punctuation, no extra text. Strictly adhere to the negative constraints and focus rules." },
                         {
                             role: "user",
                             content: [
