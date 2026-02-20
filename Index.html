@@ -1043,6 +1043,45 @@ ANTI-REPETITION (TITLE)
         }
     }
 
+        async function getTwoWordCharmDescription() {
+        // Grab the image from previewCell0 (index 0)
+        const imgData = window.previewImages && window.previewImages[0];
+        if (!imgData) return "";
+
+        try {
+            // Strict instructions: focus only on charm details, output exactly 2 words
+            const promptText = "Analyze this image and return exactly two highly descriptive words focusing solely on the charm or pendant details. Disregard the chain, background, model, or scale. Output plain text, just the two words, no punctuation.";
+            
+            const payload = {
+                model: window.modelName || "gpt-5",
+                input: [
+                    { role: "system", content: "Return ONLY two descriptive words. No punctuation, no extra text." },
+                    {
+                        role: "user",
+                        content: [
+                            { type: "input_text", text: promptText },
+                            { type: "input_image", image_url: imgData }
+                        ]
+                    }
+                ],
+                max_output_tokens: 15,
+                reasoning: { effort: "minimal" },
+                text: { verbosity: "low" }
+            };
+
+            const data = await callOpenAI(payload);
+            const rawText = (typeof extractResponseText === "function") 
+                ? extractResponseText(data) 
+                : (data?.output_text || "");
+
+            // Clean up the output to ensure we just get the words
+            return rawText.replace(/[^a-zA-Z0-9\s]/g, "").trim(); 
+        } catch (e) {
+            console.error("Charm analysis error:", e);
+            return "";
+        }
+    }
+
     async function runFullAutomationSequence(setRef, setName) {
         window.isProcessingSet = true;
         updateFirebaseStatus(`Processing: ${setName}`, "working");
@@ -1086,7 +1125,18 @@ ANTI-REPETITION (TITLE)
             // 2. Generate Description/Context
             // Parse Set Name for basic prompt context (e.g. "Beady_Necklace_Set_1" -> "Beady Necklace")
             const rawContext = setName.split("_Set_")[0].replace(/_/g, " ");
-            document.getElementById("listingDescInput").value = "Create a listing for " + rawContext;
+            
+            // NEW: Analyze previewCell0 for 2 descriptive charm words
+            updateFirebaseStatus("Analyzing Charm...", "working");
+            const charmWords = await getTwoWordCharmDescription();
+            
+            // Merge the generated words into the listing context
+            let finalContext = rawContext;
+            if (charmWords) {
+                finalContext += ` featuring a ${charmWords} charm`;
+            }
+
+            document.getElementById("listingDescInput").value = "Create a listing for " + finalContext;
             
             // 3. Generate Content (Sequentially)
             updateFirebaseStatus("Generating Info...", "working");
