@@ -550,6 +550,39 @@
         background-color: #c62828; /* red */
         color: white;
     }
+
+    /* NEW: Queue Layout Styles */
+    #shopListingsWrapper {
+      display: flex;
+      gap: 6px;
+      align-items: flex-end; /* aligns the inputs to the bottom so labels stack evenly */
+      width: 500px;
+    }
+    .queue-col {
+      flex: 1;
+      display: flex;
+      flex-direction: column;
+      overflow: hidden;
+    }
+    .queue-col label {
+      font-size: 10px;
+      font-weight: 600;
+      color: #333;
+      margin-bottom: 3px;
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+    }
+    .queue-input {
+      height: 24px !important;
+      padding: 0 5px !important;
+      margin: 0 !important;
+      font-size: 11px !important;
+      border: 1px solid #9e9e9e !important;
+      border-radius: 2px;
+      background: transparent;
+      box-sizing: border-box;
+    }
   </style>
 </head>
 <body>
@@ -596,8 +629,12 @@
         Etsy Shop Listings
         <span id="listingQueueCount">0</span>
       </div>
-      <div class="textbox-container configurable">
-        <textarea id="shopListings" class="materialize-textarea" rows="2" placeholder="Enter up to 250 comma-separated 10-digit listing IDs" style="width:500px;"></textarea>
+      <div id="shopListingsWrapper" class="configurable">
+        <div class="queue-col"><label>Reg Necklace</label><input type="text" id="queueRegNecklace" class="queue-input" placeholder="IDs..."></div>
+        <div class="queue-col"><label>Beady Necklace</label><input type="text" id="queueBeadyNecklace" class="queue-input" placeholder="IDs..."></div>
+        <div class="queue-col"><label>Stud Earrings</label><input type="text" id="queueStudEarrings" class="queue-input" placeholder="IDs..."></div>
+        <div class="queue-col"><label>Hoop Earrings</label><input type="text" id="queueHoopEarrings" class="queue-input" placeholder="IDs..."></div>
+        <div class="queue-col"><label>Charms Only</label><input type="text" id="queueCharms" class="queue-input" placeholder="IDs..."></div>
       </div>
     </div>
   </div>
@@ -926,6 +963,9 @@ ANTI-REPETITION (TITLE)
   <script src="https://cdnjs.cloudflare.com/ajax/libs/materialize/1.0.0/js/materialize.min.js"></script>
 
   <script>
+    // NEW: Global array defining our 5 queues
+    const QUEUE_IDS = ["queueRegNecklace", "queueBeadyNecklace", "queueStudEarrings", "queueHoopEarrings", "queueCharms"];
+
     // --- Firebase Logic for Completed Sets ---
     const firebaseConfig = {
       apiKey: "AIza" + "SyBXhQLsYRa4i0bX1TPTRiElF9Zjy5vSHlA",
@@ -1218,9 +1258,21 @@ ANTI-REPETITION (TITLE)
 
             // vi. Create Listing (1st pass)
             updateFirebaseStatus("Uploading Original...", "working");
-            // Ensure we have a dummy listing ID loaded (from existing queue logic)
-            if(!document.getElementById("shopListings").value) {
-                console.warn("No Listing ID available in queue. Automation paused.");
+            
+            // Map folder context to proper listing ID queue
+            let targetQueueId = "queueRegNecklace";
+            const lowerCtx = cleanContext.toLowerCase();
+            if (lowerCtx.includes("beady")) targetQueueId = "queueBeadyNecklace";
+            else if (lowerCtx.includes("stud")) targetQueueId = "queueStudEarrings";
+            else if (lowerCtx.includes("hoop")) targetQueueId = "queueHoopEarrings";
+            else if (lowerCtx.includes("charm")) targetQueueId = "queueCharms";
+            
+            // Lock in our queue choice globally so Create Listing knows where to look
+            window.__activeAutomationQueueId = targetQueueId;
+
+            const qEl = document.getElementById(targetQueueId);
+            if(!qEl || !qEl.value.trim()) {
+                console.warn(`No Listing ID available in queue (${targetQueueId}). Automation paused.`);
                 updateFirebaseStatus("Error: No Listing ID", "");
                 window.isProcessingSet = false;
                 return;
@@ -1249,10 +1301,9 @@ ANTI-REPETITION (TITLE)
             // viii. Create Listing (2nd pass - Variant)
             updateFirebaseStatus("Uploading Variant...", "working");
             // The automation logic in duplicateListingBtn has already swapped images and updated text.
-            // We need the NEXT listing ID from the queue.
-            // Note: The createListingBtn logic consumes one ID from window.listingQueue
-            // Ensure we still have one.
-            if(!document.getElementById("shopListings").value) {
+            // We need the NEXT listing ID from the active queue.
+            const qEl2 = document.getElementById(window.__activeAutomationQueueId);
+            if(!qEl2 || !qEl2.value.trim()) {
                  console.warn("Ran out of Listing IDs for variant.");
             } else {
                  document.getElementById("createListingBtn").click();
@@ -1401,7 +1452,6 @@ ANTI-REPETITION (TITLE)
     window.currentCropIndex = null;
     window.cropper = null;
     window.reservedPhotos = [];
-    window.listingQueue = [];
     window.photoUpdateComplete = false;
     window.infoUpdateComplete = false;
 
@@ -1416,6 +1466,7 @@ ANTI-REPETITION (TITLE)
       "#dropZone",
       ".preview-cell", // each photo cell
       ".section-heading",
+      "#shopListingsWrapper", // NEW wrapper for 5 queues
       "#titleSpinner",
       "#listingQueueCount",
       "#listingDescContainer",
@@ -1431,6 +1482,8 @@ ANTI-REPETITION (TITLE)
     ];
 
     function isExcluded(el){
+      // Prevent individual 5 queue inputs inside the wrapper from being absolutely positioned
+      if (el.closest('#shopListingsWrapper') && el.id !== 'shopListingsWrapper') return true;
       // do NOT move overlays or any modal internals (including the config modal itself)
       return el.closest("#configModal") || el.closest(".modal") || el.classList.contains("modal") || el.classList.contains("modal-overlay");
     }
@@ -1469,7 +1522,7 @@ ANTI-REPETITION (TITLE)
 
       // Text inputs / areas
       listingDescInput:        { left: 10,   top: 220, width: 490, height: 35 },
-      shopListings:            { left: 10,   top: 110, width: 500, height: 45 },
+      shopListingsWrapper:     { left: 10,   top: 110, width: 500, height: 45 },
       searchKeyPhrases:        { left: 10,   top: 325, width: 500, height: 200 },
       listingTitle:            { left: 10,   top: 540, width: 1000,height: 60 },
       listingDescription:      { left: 10,   top: 660, width: 1000,height: 150 },
@@ -1781,13 +1834,13 @@ ANTI-REPETITION (TITLE)
             sp.classList.remove("active");
             sp.style.display = ""; // let the generators control visibility
           }
-        });
+        } );
       }
     });
     var openBtn = document.getElementById("openConfigBtn");
     if (openBtn){
       openBtn.addEventListener("click", function(){
-        populateConfigTable(); // shipping-1 builds table on open.  [oai_citation:8‡shipping-1.html](file-service://file-UyzPx2tdaLoZi5ZZoE5Zq8)
+        populateConfigTable(); // shipping-1 builds table on open.
         configModal.open();
       });
     }
@@ -1965,6 +2018,23 @@ https://www.etsy.com/your/shops/me/listing-editor/edit/1822973998
       const cleaned = first.replace(/[^A-Za-z0-9_-]/g, "") || "SKU";
       const rand = Math.floor(10000 + Math.random() * 90000); // 10000–99999
       return `${cleaned}_${rand}`;
+    }
+
+    // Helper to get manual listing ID from any available queue
+    function getFirstAvailableListingId() {
+        let targetInputId = window.__activeAutomationQueueId; 
+        let qEl = targetInputId ? document.getElementById(targetInputId) : null;
+        if (!qEl || !qEl.value.trim()) {
+             targetInputId = QUEUE_IDS.find(id => {
+                 const el = document.getElementById(id);
+                 return el && el.value.trim() !== "";
+             });
+             if(!targetInputId) return null;
+             qEl = document.getElementById(targetInputId);
+        }
+        const rawVal = qEl.value.trim();
+        let queueArr = parseListingNumbers(rawVal);
+        return queueArr[0] ? String(queueArr[0]) : null;
     }
 
     // ============================
@@ -2263,12 +2333,6 @@ https://www.etsy.com/your/shops/me/listing-editor/edit/1822973998
         const idx = q.indexOf(jobId);
         if (idx > -1) { q.splice(idx, 1); localStorage.setItem("etsyUploadJobs", JSON.stringify(q)); }
 
-        // Also advance window.listingQueue if visible
-        if (window.listingQueue && window.listingQueue.length > 0) {
-          const i = window.listingQueue.indexOf(String(listingId));
-          if (i > -1) window.listingQueue.splice(i, 1);
-          if (typeof loadNextListingInQueue === "function") loadNextListingInQueue();
-        }
         window.M?.toast?.({ html: "Create Listing complete from queue." });
       } catch (err) {
         console.error("Etsy job failed:", err);
@@ -2293,15 +2357,47 @@ https://www.etsy.com/your/shops/me/listing-editor/edit/1822973998
       }
     }
 
-    // On persistDataBeforeRedirect, store current queue to local storage.
+    function updateListingQueueCount() {
+      let total = 0;
+      QUEUE_IDS.forEach(id => {
+        const el = document.getElementById(id);
+        if(el && el.value.trim()) {
+           total += parseListingNumbers(el.value).length;
+        }
+      });
+      const countEl = document.getElementById("listingQueueCount");
+      if(countEl) countEl.textContent = total;
+    }
+
+    function saveQueue(id) {
+      const el = document.getElementById(id);
+      if(el) {
+        const parsed = parseListingNumbers(el.value).join(", ");
+        el.value = parsed;
+        localStorage.setItem(id, parsed);
+      }
+      updateListingQueueCount();
+    }
+
+    function restoreDataAfterRedirect() {
+      try {
+        QUEUE_IDS.forEach(id => {
+          const el = document.getElementById(id);
+          if(el) {
+            el.value = localStorage.getItem(id) || "";
+          }
+        });
+        updateListingQueueCount();
+      } catch (err) { console.error(err); }
+    }
+
     function persistDataBeforeRedirect() {
       try {
-        const listingsInputValue = document.getElementById("shopListings").value || "";
-        localStorage.setItem("shopListingsText", listingsInputValue);
-        localStorage.setItem("listingQueue", JSON.stringify(window.listingQueue));
-      } catch (err) {
-        console.error("Error persisting data before redirect:", err);
-      }
+        QUEUE_IDS.forEach(id => {
+          const el = document.getElementById(id);
+          if(el) localStorage.setItem(id, el.value);
+        });
+      } catch (err) { console.error(err); }
     }
 
     // Show metadata in modal
@@ -2320,80 +2416,6 @@ https://www.etsy.com/your/shops/me/listing-editor/edit/1822973998
       const parts = rawInput.split(/\s*,\s*/);
       const cleaned = parts.filter(p => /^\d{10}$/.test(p));
       return Array.from(new Set(cleaned)).slice(0, 250);
-    }
-
-    // Attach event listeners to shopListings:
-    // - "paste": parse pasted text and update queue (but do not save immediately)
-    // - "change": update queue on manual change
-    // - "keydown": on Enter (without Shift) update local storage (overwrite saved numbers)
-    // When the user pastes into the shopListings textarea.
-  document.getElementById("shopListings").addEventListener("paste", (e) => {
-    e.preventDefault();
-    let pasteData = (e.clipboardData || window.clipboardData).getData("text");
-    // NEW: persist raw text immediately (survives refresh)
-    localStorage.setItem("shopListingsText", pasteData);
-    window.listingQueue = parseListingNumbers(pasteData);
-    loadNextListingInQueue();
-  });
-
-    // When the user changes the shopListings textarea manually.
-  document.getElementById("shopListings").addEventListener("change", () => {
-    let rawInput = document.getElementById("shopListings").value;
-    // NEW: persist raw text immediately (survives refresh)
-    localStorage.setItem("shopListingsText", rawInput);
-    window.listingQueue = parseListingNumbers(rawInput);
-    loadNextListingInQueue();
-  });
-
-// When the user presses "Enter" (without Shift) in the shopListings textarea,
-// update the listingQueue, save it to local storage, and display only the first number.
-document.getElementById("shopListings").addEventListener("keydown", (e) => {
-  if (e.key === "Enter" && !e.shiftKey) {
-    e.preventDefault();
-    let rawInput = document.getElementById("shopListings").value;
-    window.listingQueue = parseListingNumbers(rawInput);
-    localStorage.setItem("listingQueue", JSON.stringify(window.listingQueue));
-    loadNextListingInQueue();
-  }
-});
-
-    // loadNextListingInQueue displays only the first number from the queue and updates local storage.
-    function loadNextListingInQueue() {
-      window.photoUpdateComplete = false;
-      window.infoUpdateComplete = false;
-      if (window.listingQueue.length > 0) {
-        document.getElementById("shopListings").value = window.listingQueue[0];
-      } else {
-        document.getElementById("shopListings").value = "";
-      }
-      updateListingQueueCount();
-      localStorage.setItem("listingQueue", JSON.stringify(window.listingQueue));
-    }
-
-    // updateListingQueueCount updates the counter element.
-    function updateListingQueueCount() {
-      document.getElementById("listingQueueCount").textContent = window.listingQueue.length;
-    }
-
-    // On page load, restore the listing queue from local storage (if available)
-    function restoreDataAfterRedirect() {
-      try {
-        const storedQueue = localStorage.getItem("listingQueue");
-        const storedText  = localStorage.getItem("shopListingsText") || "";
-
-        if (storedQueue) {
-          window.listingQueue = JSON.parse(storedQueue);
-        } else if (storedText.trim()) {
-          window.listingQueue = parseListingNumbers(storedText.trim());
-        } else {
-          window.listingQueue = Array.isArray(window.listingQueue) ? window.listingQueue : [];
-        }
-
-        // Will set textarea, update counter, and persist.
-        loadNextListingInQueue();
-      } catch (err) {
-        console.error("Error restoring data after redirect:", err);
-      }
     }
 
     window.addEventListener("load", () => {
@@ -2460,16 +2482,6 @@ document.getElementById("shopListings").addEventListener("keydown", (e) => {
 
     // Crops the i-th preview to exactly what you see inside its .preview-box,
     // exporting a 3000x3000 JPEG @0.85 (same as saveCropBtn).
-
-    // NOTE: Drawing cross-origin images onto a canvas requires the image response
-    // to include appropriate CORS headers. Firebase Storage often won't include
-    // Access-Control-Allow-Origin for your Netlify domain, causing crop to fail.
-    // We proxy those images through a Netlify Function to make them same-origin.
-    function toCanvasSafeSrc(src) {
-      // Firebase CORS is fixed! No proxy needed.
-      return src;
-    }
-
       async function cropPreviewAsVisible(i) {
       // 1) DOM & data
       const cell = document.getElementById("previewCell" + i);
@@ -2547,9 +2559,9 @@ document.getElementById("shopListings").addEventListener("keydown", (e) => {
     }
 
     async function uploadPhotos() {
-      let listingInput = document.getElementById("shopListings").value.trim();
+      let listingInput = getFirstAvailableListingId();
       if (!listingInput) {
-        M.toast({ html: "Please provide a listing URL or ID in 'Etsy Shop Listings'." });
+        M.toast({ html: "Please provide a listing URL or ID in one of the 'Etsy Shop Listings' areas." });
         return;
       }
       if (!window.previewImages.length) {
@@ -2617,9 +2629,9 @@ document.getElementById("shopListings").addEventListener("keydown", (e) => {
     }
 
     async function uploadReservedPhotos() {
-      let listingInput = document.getElementById("shopListings").value.trim();
+      let listingInput = getFirstAvailableListingId();
       if (!listingInput) {
-        M.toast({ html: "Please provide a listing URL or ID in 'Etsy Shop Listings'." });
+        M.toast({ html: "Please provide a listing URL or ID in one of the 'Etsy Shop Listings' areas." });
         return;
       }
       if (!window.reservedPhotos.length) {
@@ -2780,19 +2792,35 @@ document.getElementById("shopListings").addEventListener("keydown", (e) => {
     // --- Create Listing (LS snapshot + background queue; decoupled from UI)
     document.getElementById("createListingBtn").addEventListener("click", async () => {
       try {
-        // 1) Resolve a single listingId exactly like before (supports queue or manual input)
+        // 1) Resolve a single listingId dynamically from 5 separate queues
         let listingId = null;
-        window.__lastChosenQueueIndex = -1;
-        if (Array.isArray(window.listingQueue) && window.listingQueue.length > 0) {
-          const idx = 0; // Always take the first one
-          listingId = String(window.listingQueue[idx]);
-          window.__lastChosenQueueIndex = idx;
-          document.getElementById("shopListings").value = listingId;
-        } else {
-          const listingInput = (document.getElementById("shopListings").value || "").trim();
-          if (!listingInput) { M.toast({ html: "Please provide a listing URL or ID in 'Etsy Shop Listings'." }); return; }
-          listingId = /^\d+$/.test(listingInput) ? listingInput : ((listingInput.match(/\/listing\/(\d+)/) || [])[1]);
+        let targetInputId = window.__activeAutomationQueueId; 
+        
+        let qEl = targetInputId ? document.getElementById(targetInputId) : null;
+
+        // If no automation runs, or the chosen queue is empty, fallback to manual (first available)
+        if (!qEl || !qEl.value.trim()) {
+             targetInputId = QUEUE_IDS.find(id => {
+                 const el = document.getElementById(id);
+                 return el && el.value.trim() !== "";
+             });
+             if(!targetInputId) {
+                 M.toast({ html: "Please provide a listing URL or ID in one of the Listing ID boxes." });
+                 return;
+             }
+             qEl = document.getElementById(targetInputId);
         }
+
+        const rawVal = qEl.value.trim();
+        let queueArr = parseListingNumbers(rawVal);
+        listingId = queueArr[0];
+
+        // Consume (pop out) the ID we just used and update UI/Storage
+        queueArr.shift();
+        qEl.value = queueArr.join(", ");
+        localStorage.setItem(targetInputId, qEl.value);
+        if (typeof updateListingQueueCount === "function") updateListingQueueCount();
+        
         if (!listingId) { M.toast({ html: "Invalid listing URL or ID." }); return; }
         if (!window.accessToken) { M.toast({ html: "Please Connect to Etsy first." }); return; }
 
@@ -4164,31 +4192,19 @@ document.getElementById("shopListings").addEventListener("keydown", (e) => {
       }
       updateStaticPreviewGrid();
       initializeCellDragAndDrop();
-      // Attach paste and change events to process multiple comma-separated numbers
-      document.getElementById("shopListings").addEventListener("paste", (e) => {
-        e.preventDefault();
-        let pasteData = (e.clipboardData || window.clipboardData).getData('text');
-        window.listingQueue = parseListingNumbers(pasteData);
-        loadNextListingInQueue();
-      });
-      document.getElementById("shopListings").addEventListener("change", () => {
-        let rawInput = document.getElementById("shopListings").value;
-        // NEW: persist raw text immediately (survives refresh)
-        localStorage.setItem("shopListingsText", rawInput);
-        window.listingQueue = parseListingNumbers(rawInput);
-        loadNextListingInQueue();
-      });
-      // Pressing Enter (without Shift) will update local storage and overwrite any saved listings.
-      document.getElementById("shopListings").addEventListener("keydown", (e) => {
-        if (e.key === "Enter" && !e.shiftKey) {
-          e.preventDefault();
-          let rawInput = document.getElementById("shopListings").value;
-          // NEW: persist raw text too
-          localStorage.setItem("shopListingsText", rawInput);
-          window.listingQueue = parseListingNumbers(rawInput);
-          localStorage.setItem("listingQueue", JSON.stringify(window.listingQueue));
-          loadNextListingInQueue();
-        }
+      
+      // Attach paste/change/keydown events to all 5 inputs
+      QUEUE_IDS.forEach(id => {
+        const el = document.getElementById(id);
+        if(!el) return;
+        el.addEventListener("paste", () => setTimeout(() => saveQueue(id), 50));
+        el.addEventListener("change", () => saveQueue(id));
+        el.addEventListener("keydown", (e) => {
+            if (e.key === "Enter" && !e.shiftKey) {
+                e.preventDefault();
+                saveQueue(id);
+            }
+        });
       });
     });
 
