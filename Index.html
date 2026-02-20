@@ -1048,37 +1048,46 @@ ANTI-REPETITION (TITLE)
         const imgData = window.previewImages && window.previewImages[0];
         if (!imgData) return "";
 
-        try {
-            // Strict instructions: focus only on charm details, output exactly 2 words
-            const promptText = "Analyze this image and return exactly two highly descriptive words focusing solely on the charm or pendant details. Disregard the chain, background, model, or scale. Output plain text, just the two words, no punctuation.";
-            
-            const payload = {
-                model: window.modelName || "gpt-5",
-                input: [
-                    { role: "system", content: "Return ONLY two descriptive words. No punctuation, no extra text." },
-                    {
-                        role: "user",
-                        content: [
-                            { type: "input_text", text: promptText },
-                            { type: "input_image", image_url: imgData }
-                        ]
-                    }
-                ],
-                max_output_tokens: 15,
-                reasoning: { effort: "minimal" },
-                text: { verbosity: "low" }
-            };
+        let retries = 2; // Safety check: allow 1 retry if the vision API times out
+        
+        while (retries > 0) {
+            try {
+                // Strict instructions: focus only on charm details, output exactly 2 words
+                const promptText = "Analyze this image and return exactly two highly descriptive words focusing solely on the charm or pendant details. Disregard the chain, background, model, or scale. Output plain text, just the two words, no punctuation.";
+                
+                const payload = {
+                    model: window.modelName || "gpt-5",
+                    input: [
+                        { role: "system", content: "Return ONLY two descriptive words. No punctuation, no extra text." },
+                        {
+                            role: "user",
+                            content: [
+                                { type: "input_text", text: promptText },
+                                { type: "input_image", image_url: imgData }
+                            ]
+                        }
+                    ],
+                    max_output_tokens: 20, // FIXED: Increased from 15 to 20 to satisfy model minimums
+                    reasoning: { effort: "minimal" },
+                    text: { verbosity: "low" }
+                };
 
-            const data = await callOpenAI(payload);
-            const rawText = (typeof extractResponseText === "function") 
-                ? extractResponseText(data) 
-                : (data?.output_text || "");
+                const data = await callOpenAI(payload);
+                const rawText = (typeof extractResponseText === "function") 
+                    ? extractResponseText(data) 
+                    : (data?.output_text || "");
 
-            // Clean up the output to ensure we just get the words
-            return rawText.replace(/[^a-zA-Z0-9\s]/g, "").trim(); 
-        } catch (e) {
-            console.error("Charm analysis error:", e);
-            return "";
+                // Clean up the output to ensure we just get the words
+                return rawText.replace(/[^a-zA-Z0-9\s]/g, "").trim(); 
+                
+            } catch (e) {
+                console.warn(`Charm analysis error. Retries left: ${retries - 1}`, e);
+                retries--;
+                if (retries === 0) {
+                    return ""; // Return empty string so automation continues even if API fails entirely
+                }
+                await new Promise(r => setTimeout(r, 1500)); // Pause 1.5s before retrying
+            }
         }
     }
 
