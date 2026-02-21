@@ -1405,15 +1405,39 @@ ANTI-REPETITION (TITLE)
                 const destPath = `listing-generator-1/Listed_Sets/${setName}`;
                 const itemsToMove = await setRef.listAll();
                 
-                // Fetch, Upload, and Delete each image
+                // Fetch, Upload, and Delete each image with Retry Logic
                 for (const itemRef of itemsToMove.items) {
-                    const url = await itemRef.getDownloadURL();
-                    const response = await fetch(url + "&cb=" + Date.now()); // bypass browser cache
-                    const blob = await response.blob();
+                    let moveRetries = 4; // Try up to 4 times per image
+                    let moveSuccess = false;
                     
-                    const newRef = storage.ref(`${destPath}/${itemRef.name}`);
-                    await newRef.put(blob);
-                    await itemRef.delete(); // Delete original after secure upload
+                    while (moveRetries > 0 && !moveSuccess) {
+                        try {
+                            const url = await itemRef.getDownloadURL();
+                            // Fetch with cache-busting to ensure a fresh network request
+                            const response = await fetch(url + "&cb=" + Date.now()); 
+                            
+                            if (!response.ok) {
+                                throw new Error(`HTTP error! status: ${response.status}`);
+                            }
+                            
+                            const blob = await response.blob();
+                            const newRef = storage.ref(`${destPath}/${itemRef.name}`);
+                            
+                            await newRef.put(blob);
+                            await itemRef.delete(); // Delete original ONLY after secure upload
+                            
+                            moveSuccess = true; // Mark as successful to break the retry loop
+                        } catch (attemptErr) {
+                            console.warn(`Fetch/Move attempt failed for ${itemRef.name}. Retries remaining: ${moveRetries - 1}`, attemptErr);
+                            moveRetries--;
+                            
+                            if (moveRetries === 0) {
+                                throw new Error(`Failed to move ${itemRef.name} after multiple attempts.`); 
+                            }
+                            // Wait 2.5 seconds before trying again to let the network stabilize
+                            await wait(2500); 
+                        }
+                    }
                 }
                 console.log(`Successfully moved ${setName} to Listed_Sets`);
             } catch (moveErr) {
