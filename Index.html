@@ -981,19 +981,6 @@ ANTI-REPETITION (TITLE)
     window.autoProcessingEnabled = false; // default off
     window.isProcessingSet = false;
     
-    // Local tracking of processed sets to avoid loops
-    function getProcessedSets() {
-        return JSON.parse(localStorage.getItem('processed_firebase_sets') || '[]');
-    }
-    
-    function markSetProcessed(setName) {
-        const sets = getProcessedSets();
-        if (!sets.includes(setName)) {
-            sets.push(setName);
-            localStorage.setItem('processed_firebase_sets', JSON.stringify(sets));
-        }
-    }
-    
     function updateFirebaseStatus(status, type) {
         const dot = document.getElementById('fbDot');
         const txt = document.getElementById('fbText');
@@ -1032,21 +1019,29 @@ ANTI-REPETITION (TITLE)
         }
     });
 
-      async function checkFirebaseForSets() {
+async function checkFirebaseForSets() {
         if (!window.autoProcessingEnabled || window.isProcessingSet) return;
         
         updateFirebaseStatus("Scanning...", "working");
 
         try {
+            // 1. Cross-reference: Get list of already completed/listed sets from Firebase
+            const listedRef = storage.ref('listing-generator-1/Listed_Sets');
+            let processedNames = [];
+            try {
+                const listedRes = await listedRef.listAll();
+                processedNames = listedRes.prefixes.map(p => p.name.replace(/\/$/, ""));
+            } catch(e) {
+                console.warn("Could not fetch Listed_Sets (might be empty).", e);
+            }
+
             const listRef = storage.ref('listing-generator-1/Completed_Sets');
             const res = await listRef.listAll();
             
-            // Filter folders (prefixes)
-            const processed = getProcessedSets();
-            // We want folders that are NOT in processed
+            // 2. Filter folders (prefixes): Skip if it's already in Listed_Sets
             const newSets = res.prefixes.filter(p => {
                 const name = p.name.replace(/\/$/, ""); 
-                return !processed.includes(name);
+                return !processedNames.includes(name);
             });
             
             if (newSets.length > 0) {
@@ -1062,36 +1057,29 @@ ANTI-REPETITION (TITLE)
                 for (const setRef of newSets) {
                     const setName = setRef.name.replace(/\/$/, "");
 
-                    // 1. Check if we skipped this folder recently
+                    // Check if we skipped this folder recently
                     if (window.__incompleteSetsTracker[setName]) {
                         const lastChecked = window.__incompleteSetsTracker[setName];
-                        // If 10 minutes haven't passed yet, skip it and check the next folder
-                        if (now - lastChecked < TEN_MINUTES) {
-                            continue;
-                        }
+                        if (now - lastChecked < TEN_MINUTES) continue;
                     }
 
-                    // 2. Look inside the folder to count the images
+                    // Look inside the folder to count the images
                     const setFiles = await setRef.listAll();
                     const imageCount = setFiles.items.length;
 
                     if (imageCount < 7) {
                         console.warn(`Skipping ${setName}: Only found ${imageCount} images. Retrying in 10 minutes.`);
-                        // Log the current time so we don't check this specific folder again for 10 mins
                         window.__incompleteSetsTracker[setName] = now;
                         continue; 
                     }
 
-                    // 3. If we reach here, the folder has 7+ images and is ready to go!
+                    // Ready to go!
                     readySetRef = setRef;
                     readySetName = setName;
-                    
-                    // Clear it from the incomplete tracker just in case it was previously there
                     delete window.__incompleteSetsTracker[setName];
-                    break; // Stop looping, we found our next job
+                    break; 
                 }
 
-                // If we found a ready set, run it. Otherwise, go back to waiting.
                 if (readySetRef) {
                     console.log("Found ready set:", readySetName);
                     await runFullAutomationSequence(readySetRef, readySetName);
@@ -1108,7 +1096,6 @@ ANTI-REPETITION (TITLE)
             updateFirebaseStatus("Scan Error", "");
         }
         
-        // Re-check in 15 seconds if still enabled
         if(window.autoProcessingEnabled) {
             setTimeout(checkFirebaseForSets, 15000);
         }
@@ -1360,8 +1347,27 @@ ANTI-REPETITION (TITLE)
                 }, 2000, 300000);
             }
             
-            // ix. Finish
-            markSetProcessed(setName);
+            // ix. Finish - Move Folder to Listed_Sets
+            updateFirebaseStatus("Moving to Listed...", "working");
+            try {
+                const destPath = `listing-generator-1/Listed_Sets/${setName}`;
+                const itemsToMove = await setRef.listAll();
+                
+                // Fetch, Upload, and Delete each image
+                for (const itemRef of itemsToMove.items) {
+                    const url = await itemRef.getDownloadURL();
+                    const response = await fetch(url + "&cb=" + Date.now()); // bypass browser cache
+                    const blob = await response.blob();
+                    
+                    const newRef = storage.ref(`${destPath}/${itemRef.name}`);
+                    await newRef.put(blob);
+                    await itemRef.delete(); // Delete original after secure upload
+                }
+                console.log(`Successfully moved ${setName} to Listed_Sets`);
+            } catch (moveErr) {
+                console.error(`Error moving ${setName} to Listed_Sets:`, moveErr);
+            }
+            
             updateFirebaseStatus(`Done: ${setName}`, "active");
             await wait(3000);
 
