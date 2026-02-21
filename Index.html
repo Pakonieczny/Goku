@@ -545,7 +545,7 @@
     #shopListingsWrapper {
       display: flex;
       gap: 6px;
-      align-items: flex-end; /* aligns the inputs to the bottom so labels stack evenly */
+      align-items: flex-start; /* Stack vertically top aligned */
       width: 500px;
     }
     .queue-col {
@@ -575,6 +575,12 @@
     }
     .q-count {
       color: #2196f3;
+      font-weight: bold;
+    }
+    .fb-folder-count {
+      font-size: 10px;
+      color: #1976d2; 
+      margin-top: 3px;
       font-weight: bold;
     }
   </style>
@@ -624,11 +630,31 @@
         <span id="listingQueueCount">0</span>
       </div>
     <div id="shopListingsWrapper" class="configurable">
-            <div class="queue-col"><label>Reg Necklace <span id="count_queueRegNecklace" class="q-count">(0)</span></label><input type="text" id="queueRegNecklace" class="queue-input" placeholder="IDs..."></div>
-            <div class="queue-col"><label>Beady Necklace <span id="count_queueBeadyNecklace" class="q-count">(0)</span></label><input type="text" id="queueBeadyNecklace" class="queue-input" placeholder="IDs..."></div>
-            <div class="queue-col"><label>Stud Earrings <span id="count_queueStudEarrings" class="q-count">(0)</span></label><input type="text" id="queueStudEarrings" class="queue-input" placeholder="IDs..."></div>
-            <div class="queue-col"><label>Hoop Earrings <span id="count_queueHoopEarrings" class="q-count">(0)</span></label><input type="text" id="queueHoopEarrings" class="queue-input" placeholder="IDs..."></div>
-            <div class="queue-col"><label>Charms Only <span id="count_queueCharms" class="q-count">(0)</span></label><input type="text" id="queueCharms" class="queue-input" placeholder="IDs..."></div>
+            <div class="queue-col">
+                <label>Reg Necklace <span id="count_queueRegNecklace" class="q-count">(0)</span></label>
+                <input type="text" id="queueRegNecklace" class="queue-input" placeholder="IDs...">
+                <div id="fb_count_queueRegNecklace" class="fb-folder-count">0 Folders</div>
+            </div>
+            <div class="queue-col">
+                <label>Beady Necklace <span id="count_queueBeadyNecklace" class="q-count">(0)</span></label>
+                <input type="text" id="queueBeadyNecklace" class="queue-input" placeholder="IDs...">
+                <div id="fb_count_queueBeadyNecklace" class="fb-folder-count">0 Folders</div>
+            </div>
+            <div class="queue-col">
+                <label>Stud Earrings <span id="count_queueStudEarrings" class="q-count">(0)</span></label>
+                <input type="text" id="queueStudEarrings" class="queue-input" placeholder="IDs...">
+                <div id="fb_count_queueStudEarrings" class="fb-folder-count">0 Folders</div>
+            </div>
+            <div class="queue-col">
+                <label>Hoop Earrings <span id="count_queueHoopEarrings" class="q-count">(0)</span></label>
+                <input type="text" id="queueHoopEarrings" class="queue-input" placeholder="IDs...">
+                <div id="fb_count_queueHoopEarrings" class="fb-folder-count">0 Folders</div>
+            </div>
+            <div class="queue-col">
+                <label>Charms Only <span id="count_queueCharms" class="q-count">(0)</span></label>
+                <input type="text" id="queueCharms" class="queue-input" placeholder="IDs...">
+                <div id="fb_count_queueCharms" class="fb-folder-count">0 Folders</div>
+            </div>
           </div>
         </div>
       </div>
@@ -980,6 +1006,7 @@ ANTI-REPETITION (TITLE)
     // Auto-pilot control vars
     window.autoProcessingEnabled = false; // default off
     window.isProcessingSet = false;
+    window.__isScanningFB = false; // Prevents overlapping poll ticks
     
     function updateFirebaseStatus(status, type) {
         const dot = document.getElementById('fbDot');
@@ -1007,7 +1034,6 @@ ANTI-REPETITION (TITLE)
             this.classList.remove("stopped", "red", "darken-1");
             this.classList.add("running", "green", "darken-2");
             updateFirebaseStatus("Auto Started", "active");
-            checkFirebaseForSets(); // Trigger fetch
         } else {
             this.classList.remove("running", "green", "darken-2");
             this.classList.add("stopped", "red", "darken-1");
@@ -1019,21 +1045,27 @@ ANTI-REPETITION (TITLE)
         }
     });
 
-async function checkFirebaseForSets() {
-        if (!window.autoProcessingEnabled || window.isProcessingSet) return;
-        
-        updateFirebaseStatus("Scanning...", "working");
+    async function checkFirebaseForSets() {
+        // Prevent concurrent polling or polling while processing
+        if (window.isProcessingSet || window.__isScanningFB) {
+             if (!window.isProcessingSet) setTimeout(checkFirebaseForSets, 15000);
+             return;
+        }
+        window.__isScanningFB = true;
+        let foundReadySet = false;
 
         try {
+            if (window.autoProcessingEnabled && !window.isProcessingSet) {
+                updateFirebaseStatus("Scanning...", "working");
+            }
+
             // 1. Cross-reference: Get list of already completed/listed sets from Firebase
             const listedRef = storage.ref('listing-generator-1/Listed_Sets');
             let processedNames = [];
             try {
                 const listedRes = await listedRef.listAll();
                 processedNames = listedRes.prefixes.map(p => p.name.replace(/\/$/, ""));
-            } catch(e) {
-                console.warn("Could not fetch Listed_Sets (might be empty).", e);
-            }
+            } catch(e) { }
 
             const listRef = storage.ref('listing-generator-1/Completed_Sets');
             const res = await listRef.listAll();
@@ -1044,61 +1076,81 @@ async function checkFirebaseForSets() {
                 return !processedNames.includes(name);
             });
             
-            if (newSets.length > 0) {
-                // Initialize our tracker for incomplete folders if it doesn't exist
-                window.__incompleteSetsTracker = window.__incompleteSetsTracker || {};
-                const now = Date.now();
-                const TEN_MINUTES = 10 * 60 * 1000;
-                
-                let readySetRef = null;
-                let readySetName = null;
+            // --- NEW: UI Folder Counters UPDATE ---
+            let folderCounts = { queueRegNecklace: 0, queueBeadyNecklace: 0, queueStudEarrings: 0, queueHoopEarrings: 0, queueCharms: 0 };
+            newSets.forEach(setRef => {
+                const name = setRef.name.toLowerCase();
+                if (name.includes("beady")) folderCounts.queueBeadyNecklace++;
+                else if (name.includes("stud")) folderCounts.queueStudEarrings++;
+                else if (name.includes("hoop")) folderCounts.queueHoopEarrings++;
+                else if (name.includes("charm")) folderCounts.queueCharms++;
+                else folderCounts.queueRegNecklace++;
+            });
+            
+            Object.keys(folderCounts).forEach(id => {
+               const el = document.getElementById("fb_count_" + id);
+               if (el) el.textContent = folderCounts[id] + " Folders";
+            });
+            // --------------------------------------
 
-                // Loop through available new sets to find one that is completely ready
-                for (const setRef of newSets) {
-                    const setName = setRef.name.replace(/\/$/, "");
+            if (window.autoProcessingEnabled && !window.isProcessingSet) {
+                if (newSets.length > 0) {
+                    window.__incompleteSetsTracker = window.__incompleteSetsTracker || {};
+                    const now = Date.now();
+                    const TEN_MINUTES = 10 * 60 * 1000;
+                    
+                    let readySetRef = null;
+                    let readySetName = null;
 
-                    // Check if we skipped this folder recently
-                    if (window.__incompleteSetsTracker[setName]) {
-                        const lastChecked = window.__incompleteSetsTracker[setName];
-                        if (now - lastChecked < TEN_MINUTES) continue;
+                    // Loop through available new sets to find one that is completely ready
+                    for (const setRef of newSets) {
+                        const setName = setRef.name.replace(/\/$/, "");
+
+                        // Check if we skipped this folder recently
+                        if (window.__incompleteSetsTracker[setName]) {
+                            const lastChecked = window.__incompleteSetsTracker[setName];
+                            if (now - lastChecked < TEN_MINUTES) continue;
+                        }
+
+                        // Look inside the folder to count the images
+                        const setFiles = await setRef.listAll();
+                        const imageCount = setFiles.items.length;
+
+                        if (imageCount < 7) {
+                            console.warn(`Skipping ${setName}: Only found ${imageCount} images. Retrying in 10 minutes.`);
+                            window.__incompleteSetsTracker[setName] = now;
+                            continue; 
+                        }
+
+                        // Ready to go!
+                        readySetRef = setRef;
+                        readySetName = setName;
+                        delete window.__incompleteSetsTracker[setName];
+                        break; 
                     }
 
-                    // Look inside the folder to count the images
-                    const setFiles = await setRef.listAll();
-                    const imageCount = setFiles.items.length;
-
-                    if (imageCount < 7) {
-                        console.warn(`Skipping ${setName}: Only found ${imageCount} images. Retrying in 10 minutes.`);
-                        window.__incompleteSetsTracker[setName] = now;
-                        continue; 
+                    if (readySetRef) {
+                        console.log("Found ready set:", readySetName);
+                        foundReadySet = true;
+                        window.__isScanningFB = false; // release lock to allow processing to run cleanly
+                        await runFullAutomationSequence(readySetRef, readySetName);
+                    } else {
+                        updateFirebaseStatus("Waiting for ready sets...", "active");
                     }
-
-                    // Ready to go!
-                    readySetRef = setRef;
-                    readySetName = setName;
-                    delete window.__incompleteSetsTracker[setName];
-                    break; 
-                }
-
-                if (readySetRef) {
-                    console.log("Found ready set:", readySetName);
-                    await runFullAutomationSequence(readySetRef, readySetName);
                 } else {
-                    updateFirebaseStatus("Waiting for ready sets...", "active");
+                    updateFirebaseStatus("Waiting for sets...", "active");
                 }
-
-            } else {
-                updateFirebaseStatus("Waiting for sets...", "active");
             }
 
         } catch (e) {
             console.error("Firebase scan error:", e);
-            updateFirebaseStatus("Scan Error", "");
+            if (window.autoProcessingEnabled) updateFirebaseStatus("Scan Error", "");
+        } finally {
+            if (!foundReadySet) window.__isScanningFB = false;
         }
         
-        if(window.autoProcessingEnabled) {
-            setTimeout(checkFirebaseForSets, 15000);
-        }
+        // Loop continuously regardless of autoPilot so UI counters stay updated
+        setTimeout(checkFirebaseForSets, foundReadySet ? 5000 : 15000);
     }
 
     // Helper: Wait function
@@ -1576,7 +1628,7 @@ async function checkFirebaseForSets() {
 
       // Text inputs / areas
       listingDescInput:        { left: 10,   top: 220, width: 490, height: 35 },
-      shopListingsWrapper:     { left: 10,   top: 110, width: 500, height: 45 },
+      shopListingsWrapper:     { left: 10,   top: 110, width: 500, height: 60 },
       searchKeyPhrases:        { left: 10,   top: 325, width: 500, height: 200 },
       listingTitle:            { left: 10,   top: 540, width: 1000,height: 60 },
       listingDescription:      { left: 10,   top: 660, width: 1000,height: 150 },
@@ -4267,7 +4319,21 @@ https://www.etsy.com/your/shops/me/listing-editor/edit/1822973998
       QUEUE_IDS.forEach(id => {
         const el = document.getElementById(id);
         if(!el) return;
-        el.addEventListener("paste", () => setTimeout(() => saveQueue(id), 50));
+        
+        // INTERCEPT PASTE to strictly append new IDs instead of overwriting the field
+        el.addEventListener("paste", (e) => {
+            e.preventDefault();
+            const pastedText = (e.clipboardData || window.clipboardData).getData('text');
+            const existingIds = parseListingNumbers(el.value); // current valid IDs
+            const newIds = parseListingNumbers(pastedText);    // freshly pasted valid IDs
+            
+            // Combine while removing exact duplicates, capping at 250
+            const combined = Array.from(new Set([...existingIds, ...newIds])).slice(0, 250);
+            
+            el.value = combined.join(", ");
+            saveQueue(id);
+        });
+
         el.addEventListener("change", () => saveQueue(id));
         el.addEventListener("keydown", (e) => {
             if (e.key === "Enter" && !e.shiftKey) {
