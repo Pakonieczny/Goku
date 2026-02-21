@@ -1032,7 +1032,7 @@ ANTI-REPETITION (TITLE)
         }
     });
 
-    async function checkFirebaseForSets() {
+      async function checkFirebaseForSets() {
         if (!window.autoProcessingEnabled || window.isProcessingSet) return;
         
         updateFirebaseStatus("Scanning...", "working");
@@ -1044,18 +1044,61 @@ ANTI-REPETITION (TITLE)
             // Filter folders (prefixes)
             const processed = getProcessedSets();
             // We want folders that are NOT in processed
-            // Note: Firebase prefixes end in '/'
             const newSets = res.prefixes.filter(p => {
                 const name = p.name.replace(/\/$/, ""); 
                 return !processed.includes(name);
             });
             
             if (newSets.length > 0) {
-                // Pick the first available set
-                const setRef = newSets[0];
-                const setName = setRef.name.replace(/\/$/, "");
-                console.log("Found new set:", setName);
-                await runFullAutomationSequence(setRef, setName);
+                // Initialize our tracker for incomplete folders if it doesn't exist
+                window.__incompleteSetsTracker = window.__incompleteSetsTracker || {};
+                const now = Date.now();
+                const TEN_MINUTES = 10 * 60 * 1000;
+                
+                let readySetRef = null;
+                let readySetName = null;
+
+                // Loop through available new sets to find one that is completely ready
+                for (const setRef of newSets) {
+                    const setName = setRef.name.replace(/\/$/, "");
+
+                    // 1. Check if we skipped this folder recently
+                    if (window.__incompleteSetsTracker[setName]) {
+                        const lastChecked = window.__incompleteSetsTracker[setName];
+                        // If 10 minutes haven't passed yet, skip it and check the next folder
+                        if (now - lastChecked < TEN_MINUTES) {
+                            continue;
+                        }
+                    }
+
+                    // 2. Look inside the folder to count the images
+                    const setFiles = await setRef.listAll();
+                    const imageCount = setFiles.items.length;
+
+                    if (imageCount < 7) {
+                        console.warn(`Skipping ${setName}: Only found ${imageCount} images. Retrying in 10 minutes.`);
+                        // Log the current time so we don't check this specific folder again for 10 mins
+                        window.__incompleteSetsTracker[setName] = now;
+                        continue; 
+                    }
+
+                    // 3. If we reach here, the folder has 7+ images and is ready to go!
+                    readySetRef = setRef;
+                    readySetName = setName;
+                    
+                    // Clear it from the incomplete tracker just in case it was previously there
+                    delete window.__incompleteSetsTracker[setName];
+                    break; // Stop looping, we found our next job
+                }
+
+                // If we found a ready set, run it. Otherwise, go back to waiting.
+                if (readySetRef) {
+                    console.log("Found ready set:", readySetName);
+                    await runFullAutomationSequence(readySetRef, readySetName);
+                } else {
+                    updateFirebaseStatus("Waiting for ready sets...", "active");
+                }
+
             } else {
                 updateFirebaseStatus("Waiting for sets...", "active");
             }
@@ -1511,7 +1554,7 @@ ANTI-REPETITION (TITLE)
     const defaultPositions = {
       // Top controls
       openConfigBtn:           { left: 190,  top: 10,  width: 140, height: 35 },
-      toggleAuto:              { left: 340,  top: 10,  width: 140, height: 35 },
+      toggleAuto:              { left: 350,  top: 10,  width: 140, height: 35 },
       connectEtsyBtn:          { left: 10,   top: 10,  width: 160, height: 35 },
       createListingBtn:        { left: 550,  top: 10,  width: 160, height: 35 },
       analyzeMetadataBtn:      { left: 550,  top: 100, width: 160, height: 35 },
