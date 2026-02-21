@@ -531,24 +531,14 @@
     .status-dot.working { background: #ff9800; box-shadow: 0 0 5px #ff9800; animation: pulse 1s infinite; }
     @keyframes pulse { 0% { opacity: 1; } 50% { opacity: 0.5; } 100% { opacity: 1; } }
 
-    /* Better Toggle Button */
-    #toggleAuto {
-        border: none;
-        border-radius: 4px;
-        padding: 4px 10px;
-        cursor: pointer;
-        font-weight: bold;
-        font-size: 11px;
-        margin-left: 8px;
-        transition: background-color 0.3s;
-    }
+    /* Toggle Button Colors */
     #toggleAuto.running {
-        background-color: #2e7d32; /* green */
-        color: white;
+        background-color: #2e7d32 !important; /* green */
+        color: white !important;
     }
     #toggleAuto.stopped {
-        background-color: #c62828; /* red */
-        color: white;
+        background-color: #e53935 !important; /* red */
+        color: white !important;
     }
 
     /* NEW: Queue Layout Styles */
@@ -592,13 +582,13 @@
 <body>
   <div id="layoutRoot"></div>
   
-  <div id="firebaseStatus">
+<div id="firebaseStatus">
       <div class="status-dot" id="fbDot"></div>
-      <span id="fbText">Initializing...</span>
-      <button id="toggleAuto" class="running">Stop Auto</button>
+      <span id="fbText">Waiting...</span>
   </div>
 
   <button id="openConfigBtn" class="btn waves-effect waves-light configurable" style="margin-left:10px;">Open Config</button>
+  <button id="toggleAuto" class="btn waves-effect waves-light configurable red darken-1 stopped" style="margin-left:10px;">Start Auto</button>
   
   <div id="descriptionAndFileUploadContainer">
     <div class="listing-desc-container" id="listingDescContainer">
@@ -988,7 +978,7 @@ ANTI-REPETITION (TITLE)
     auth.signInAnonymously().catch(console.error);
     
     // Auto-pilot control vars
-    window.autoProcessingEnabled = true; // default on
+    window.autoProcessingEnabled = false; // default off
     window.isProcessingSet = false;
     
     // Local tracking of processed sets to avoid loops
@@ -1011,19 +1001,29 @@ ANTI-REPETITION (TITLE)
         dot.className = "status-dot " + (type || "");
     }
 
-    // Toggle Button Logic (Enhanced)
+    // Toggle Button Logic (Enhanced with Etsy Safeguard)
     document.getElementById("toggleAuto").addEventListener("click", function() {
+        
+        // Safeguard: Before starting, verify Etsy API is connected
+        if (!window.autoProcessingEnabled) { 
+            if (!window.accessToken || String(window.accessToken).trim() === "") {
+                M.toast({ html: "Cannot Start: Please Connect to Etsy first!", classes: "red" });
+                return; // Abort the start sequence
+            }
+        }
+
         window.autoProcessingEnabled = !window.autoProcessingEnabled;
         this.textContent = window.autoProcessingEnabled ? "Stop Auto" : "Start Auto";
         
         // Update styling
         if (window.autoProcessingEnabled) {
-            this.classList.remove("stopped");
-            this.classList.add("running");
-            checkFirebaseForSets();
+            this.classList.remove("stopped", "red", "darken-1");
+            this.classList.add("running", "green", "darken-2");
+            updateFirebaseStatus("Auto Started", "active");
+            checkFirebaseForSets(); // Trigger fetch
         } else {
-            this.classList.remove("running");
-            this.classList.add("stopped");
+            this.classList.remove("running", "green", "darken-2");
+            this.classList.add("stopped", "red", "darken-1");
             if(window.isProcessingSet) {
                  updateFirebaseStatus("Pausing after set...", "working");
             } else {
@@ -1511,6 +1511,7 @@ ANTI-REPETITION (TITLE)
     const defaultPositions = {
       // Top controls
       openConfigBtn:           { left: 190,  top: 10,  width: 140, height: 35 },
+      toggleAuto:              { left: 340,  top: 10,  width: 140, height: 35 },
       connectEtsyBtn:          { left: 10,   top: 10,  width: 160, height: 35 },
       createListingBtn:        { left: 550,  top: 10,  width: 160, height: 35 },
       analyzeMetadataBtn:      { left: 550,  top: 100, width: 160, height: 35 },
