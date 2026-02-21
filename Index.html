@@ -1643,7 +1643,7 @@ ANTI-REPETITION (TITLE)
       "div-89qwd": "listingTitleHeading",
       "div-0cwxn": "listingDescriptionHeading"
     };
-    function migrateLocalStoragePositions(){
+      function migrateLocalStoragePositions(){
       Object.entries(ID_MIGRATIONS).forEach(([oldId, newId]) => {
         ["left","top","width","height"].forEach(k => {
           const oldKey = "pos-" + oldId + "-" + k;
@@ -1661,6 +1661,11 @@ ANTI-REPETITION (TITLE)
       if (localStorage.getItem("pos-listingDescription-top") === "540") {
           localStorage.removeItem("pos-listingDescription-top");
       }
+
+      // FORCE FIX: Clear the old cached coordinates for the Start/Stop button
+      // so it cleanly snaps to the top row next to Open Config.
+      localStorage.removeItem("pos-toggleAuto-top");
+      localStorage.removeItem("pos-toggleAuto-left");
     }
 
     // 3.3 Apply saved (or default) positions — same storage keys as shipping-1
