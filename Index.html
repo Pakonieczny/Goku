@@ -583,6 +583,10 @@
       background: transparent;
       box-sizing: border-box;
     }
+    .q-count {
+      color: #2196f3;
+      font-weight: bold;
+    }
   </style>
 </head>
 <body>
@@ -629,15 +633,15 @@
         Etsy Shop Listings
         <span id="listingQueueCount">0</span>
       </div>
-      <div id="shopListingsWrapper" class="configurable">
-        <div class="queue-col"><label>Reg Necklace</label><input type="text" id="queueRegNecklace" class="queue-input" placeholder="IDs..."></div>
-        <div class="queue-col"><label>Beady Necklace</label><input type="text" id="queueBeadyNecklace" class="queue-input" placeholder="IDs..."></div>
-        <div class="queue-col"><label>Stud Earrings</label><input type="text" id="queueStudEarrings" class="queue-input" placeholder="IDs..."></div>
-        <div class="queue-col"><label>Hoop Earrings</label><input type="text" id="queueHoopEarrings" class="queue-input" placeholder="IDs..."></div>
-        <div class="queue-col"><label>Charms Only</label><input type="text" id="queueCharms" class="queue-input" placeholder="IDs..."></div>
+    <div id="shopListingsWrapper" class="configurable">
+            <div class="queue-col"><label>Reg Necklace <span id="count_queueRegNecklace" class="q-count">(0)</span></label><input type="text" id="queueRegNecklace" class="queue-input" placeholder="IDs..."></div>
+            <div class="queue-col"><label>Beady Necklace <span id="count_queueBeadyNecklace" class="q-count">(0)</span></label><input type="text" id="queueBeadyNecklace" class="queue-input" placeholder="IDs..."></div>
+            <div class="queue-col"><label>Stud Earrings <span id="count_queueStudEarrings" class="q-count">(0)</span></label><input type="text" id="queueStudEarrings" class="queue-input" placeholder="IDs..."></div>
+            <div class="queue-col"><label>Hoop Earrings <span id="count_queueHoopEarrings" class="q-count">(0)</span></label><input type="text" id="queueHoopEarrings" class="queue-input" placeholder="IDs..."></div>
+            <div class="queue-col"><label>Charms Only <span id="count_queueCharms" class="q-count">(0)</span></label><input type="text" id="queueCharms" class="queue-input" placeholder="IDs..."></div>
+          </div>
+        </div>
       </div>
-    </div>
-  </div>
   
   <div class="phrases-header configurable" id="userProvidedKeyPhrasesContainer">
     <span id="searchKeyPhrasesHeading" class="section-heading configurable">
@@ -2361,10 +2365,19 @@ https://www.etsy.com/your/shops/me/listing-editor/edit/1822973998
       let total = 0;
       QUEUE_IDS.forEach(id => {
         const el = document.getElementById(id);
+        const countSpan = document.getElementById("count_" + id);
+        let queueTotal = 0;
+        
         if(el && el.value.trim()) {
-           total += parseListingNumbers(el.value).length;
+           queueTotal = parseListingNumbers(el.value).length;
+           total += queueTotal;
         }
+        
+        // Update the individual queue counter next to the title
+        if(countSpan) countSpan.textContent = `(${queueTotal})`;
       });
+      
+      // Update the main grand total counter
       const countEl = document.getElementById("listingQueueCount");
       if(countEl) countEl.textContent = total;
     }
@@ -2411,11 +2424,13 @@ https://www.etsy.com/your/shops/me/listing-editor/edit/1822973998
       modalInstance.open();
     }
 
-    // Helper function: parseListingNumbers using regex to split by comma with optional whitespace
+    // Helper function: Robust parser to extract unique 10-digit IDs from mixed text, spaces, or URLs
     function parseListingNumbers(rawInput) {
-      const parts = rawInput.split(/\s*,\s*/);
-      const cleaned = parts.filter(p => /^\d{10}$/.test(p));
-      return Array.from(new Set(cleaned)).slice(0, 250);
+      if (!rawInput) return [];
+      // \b\d{10}\b finds any distinct sequence of exactly 10 digits
+      const matches = rawInput.match(/\b\d{10}\b/g) || [];
+      // Convert to Set to remove duplicates, then back to Array, capping at 250
+      return Array.from(new Set(matches)).slice(0, 250);
     }
 
     window.addEventListener("load", () => {
