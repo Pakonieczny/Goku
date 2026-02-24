@@ -31,10 +31,6 @@ const corsHeaders = {
       process.env.ETSY_CLIENT_ID ||
       process.env.ETSY_API_KEY ||
       process.env.API_KEY;
-    const clientSecret =
-      process.env.CLIENT_SECRET ||
-      process.env.ETSY_CLIENT_SECRET ||
-      process.env.ETSY_SHARED_SECRET;
     const shopId = process.env.SHOP_ID;
 
     if (!listingId) {
@@ -64,24 +60,9 @@ const corsHeaders = {
       };
     }
 
-   if (!clientSecret) {
-      console.error("Missing Etsy shared secret env var for x-api-key header.");
-      console.log("Env presence:", {
-        CLIENT_SECRET: !!process.env.CLIENT_SECRET,
-        ETSY_CLIENT_SECRET: !!process.env.ETSY_CLIENT_SECRET,
-        ETSY_SHARED_SECRET: !!process.env.ETSY_SHARED_SECRET,
-      });
-      return {
-        statusCode: 500,
-        headers: corsHeaders,
-        body: JSON.stringify({
-          error: "Missing Etsy shared secret env var for x-api-key header.",
-          checked: ["CLIENT_SECRET", "ETSY_CLIENT_SECRET", "ETSY_SHARED_SECRET"],
-        }),
-      };
-    }
-
-    const xApiKey = `${String(clientId).trim()}:${String(clientSecret).trim()}`;
+    // Etsy's x-api-key header must be the app key (client id) only.
+    // Including the shared secret here triggers 403 responses.
+    const xApiKey = String(clientId).trim();
 
     // Parse JSON payload (title/description/tags/etc.)
     let payload = {};
