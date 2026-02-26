@@ -1,0 +1,909 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <title>Game-Generator-1</title>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js"></script>
+  <style>
+    :root { --bg:#0b0d12; --card:#121624; --muted:#8b93a7; --text:#e9ecf5; --line:#242a3d; --accent: #2b6cff; --success: #7fdb96; --danger: #fca5a5; }
+    body{ margin:0; font-family: ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, Arial; background:var(--bg); color:var(--text); }
+    .wrap{ padding:14px; display:grid; grid-template-columns: 350px 1fr; gap:14px; max-width: 1600px; margin: 0 auto;}
+    .card{ background:var(--card); border:1px solid var(--line); border-radius:14px; padding:16px; }
+    h1{ font-size:18px; margin:0 0 14px 0; color: #fff;}
+    h2{ font-size:14px; margin:0 0 10px 0; color: var(--muted);}
+    label{ display:block; font-size:12px; color:var(--muted); margin:10px 0 6px; }
+    select, input, textarea { width:100%; border-radius:10px; border:1px solid var(--line); background:#0e1220; color:var(--text); padding:10px; box-sizing:border-box; outline: none; font-family: inherit; }
+    textarea { line-height: 1.4; }
+    .row{ display:flex; gap:8px; align-items: center; }
+    .btn{ cursor:pointer; border-radius:12px; border:1px solid var(--line); padding:10px 12px; background:#0e1220; color:var(--text); font-weight: 600; transition: all 0.2s;}
+    .btn:hover{ background: #1a1e2b; }
+    .btnPrimary { background: var(--accent); color: #fff; border-color: #1a4bbf; }
+    .btnPrimary:hover { background: #1a4bbf; }
+    .btnDanger { color: var(--danger); border-color: #7a3838; background: #3d1c1c; }
+    .btnDanger:hover { background: #5c2424; }
+    .btnSmall{ padding:6px 10px; border-radius:8px; font-size:11px; line-height:1; }
+    .btn:disabled{ opacity:0.5; cursor:not-allowed; }
+    
+    .drop-zone {
+      border: 2px dashed #3a4262; border-radius: 14px; padding: 16px; background: #0e1220;
+      transition: all 0.2s ease; display: flex; flex-direction: column; gap: 10px; margin-bottom: 14px;
+    }
+    .drop-zone.hover { border-color: var(--success); background: #13221c; }
+    .drop-header { display: flex; justify-content: space-between; align-items: center; }
+    .drop-header strong { font-size: 14px; color: #fff; }
+    .drop-header span { font-size: 11px; color: var(--muted); background: #1a1e2b; padding: 3px 8px; border-radius: 999px; }
+    
+    .file-list { display: flex; flex-direction: column; gap: 6px; }
+    .file-item { 
+      display: flex; justify-content: space-between; align-items: center; 
+      background: #0b0d12; border: 1px solid var(--line); padding: 8px 12px; border-radius: 8px; font-size: 12px;
+    }
+    .file-name { word-break: break-all; margin-right: 10px; }
+    .file-actions { display: flex; gap: 6px; }
+
+    /* Review Panel Styles */
+    .review-panel { 
+        margin-top: 20px; border: 1px dashed var(--accent); border-radius: 14px; 
+        padding: 16px; background: rgba(43, 108, 255, 0.05); display: none; 
+    }
+    .review-panel.active { display: block; }
+    .review-list { display: grid; grid-template-columns: 1fr; gap: 8px; margin-top: 10px; }
+    .review-item { 
+        display: flex; justify-content: space-between; align-items: center; 
+        background: var(--card); border: 1px solid var(--accent); padding: 8px 12px; border-radius: 8px; font-size: 12px;
+    }
+
+    /* Progress UI */
+    .status-bar { margin-top: 10px; padding: 10px; border-radius: 10px; background: #0e1220; border: 1px solid var(--line); font-size: 12px; color: var(--success); display: none;}
+    .status-bar.active { display: block; }
+
+    /* Visual Feedback for AI Updates */
+    @keyframes pulse-border {
+      0% { border-color: var(--line); box-shadow: 0 0 0 rgba(127, 219, 150, 0); }
+      50% { border-color: var(--success); box-shadow: 0 0 10px rgba(127, 219, 150, 0.4); }
+      100% { border-color: var(--line); box-shadow: 0 0 0 rgba(127, 219, 150, 0); }
+    }
+    .pulse-update {
+      animation: pulse-border 2s ease-out;
+    }
+
+    /* Game Asset Library Styles */
+    .asset-library { margin-top: 20px; border: 1px dashed var(--success); border-radius: 14px; padding: 16px; background: rgba(127, 219, 150, 0.05); display: none; }
+    .asset-library.active { display: block; }
+    .asset-item { display: flex; align-items: center; justify-content: space-between; padding: 10px; border-bottom: 1px solid var(--line); font-size: 12px; transition: background 0.2s; }
+    .asset-item:hover { background: var(--card); }
+    .asset-item:last-child { border-bottom: none; }
+    .asset-item label { display: flex; align-items: center; gap: 10px; cursor: pointer; margin: 0; color: var(--text); flex: 1; font-weight: 500;}
+    .asset-date { color: var(--muted); font-size: 11px; }
+    input[type="checkbox"].asset-checkbox { width: 16px; height: 16px; accent-color: var(--success); cursor: pointer; margin: 0; }
+  </style>
+</head>
+
+<body>
+  <div class="wrap">
+    
+    <div class="card">
+      <h1>Game Generator Projects</h1>
+      
+      <label>Active Project</label>
+      <select id="projectSelect">
+        <option value="">Loading projects...</option>
+      </select>
+
+      <div style="margin-top: 20px; border-top: 1px solid var(--line); padding-top: 20px;">
+        <label>Create New Project</label>
+        <div class="row">
+          <input type="text" id="newProjectName" placeholder="e.g. SpaceShooter_v1" />
+          <button class="btn btnPrimary" id="createProjectBtn">Create</button>
+        </div>
+      </div>
+
+      <div id="globalStatus" class="status-bar">System ready.</div>
+      <div id="progressContainer" style="display: none; margin-top: 10px; background: var(--line); border-radius: 8px; height: 8px; overflow: hidden;">
+        <div id="progressBar" style="width: 0%; height: 100%; background: var(--accent); transition: width 0.2s ease;"></div>
+      </div>
+    </div>
+
+    <div class="card" id="mainPanel" style="opacity: 0.5; pointer-events: none;">
+      <div class="row" style="justify-content: space-between; margin-bottom: 20px;">
+        <h1>Project Assets Manager</h1>
+        <div class="row">
+            <button class="btn btnPrimary" id="generateGameBtn" disabled>Generate Game Zip</button>
+        </div>
+      </div>
+
+      <div id="dropZones">
+      </div>
+
+      <div id="reviewPanel" class="review-panel">
+        <div class="row" style="justify-content: space-between;">
+            <h2 style="color: var(--accent); margin:0;">AI Changes Review (Copies)</h2>
+            <button class="btn btnSmall" id="clearReviewBtn">Dismiss All</button>
+        </div>
+        <div id="reviewFileList" class="review-list"></div>
+      </div>
+
+      <div id="assetLibrary" class="asset-library">
+        <div class="row" style="justify-content: space-between; margin-bottom: 10px;">
+            <h2 style="color: var(--success); margin:0;">Game Assets Library</h2>
+            <span style="font-size: 11px; color: var(--muted);">Select files to include in your next AI prompt</span>
+        </div>
+        <div id="assetList" style="display:flex; flex-direction:column; max-height: 250px; overflow-y:auto; border: 1px solid var(--line); border-radius: 8px; background: #0b0d12;">
+            </div>
+      </div>
+
+      <div style="margin-top: 30px; border-top: 1px solid var(--line); padding-top: 20px;">
+        <h2>AI Context Window</h2>
+        <div style="display: flex; flex-direction: column; gap: 10px;">
+          <div id="aiChatLog" style="height: 150px; overflow-y: auto; background: #0b0d12; border: 1px solid var(--line); border-radius: 10px; padding: 10px; font-size: 12px; font-family: monospace; display: flex; flex-direction: column; gap: 8px;">
+            <div style="color: var(--muted);">AI Context ready. Enter instructions below to modify the active project.</div>
+          </div>
+          
+          <textarea id="aiPromptInput" placeholder="e.g., 'Change the player movement speed in main.js to 500 and update the index.html title...'" style="min-height: 80px; resize: vertical;"></textarea>
+          
+          <div class="row" style="justify-content: flex-end;">
+            <button class="btn btnPrimary" id="sendToAiBtn">Apply AI Update</button>
+          </div>
+        </div>
+      </div>
+
+    </div>
+  </div>
+
+  <script type="module">
+    import { initializeApp } from "https://www.gstatic.com/firebasejs/9.23.0/firebase-app.js";
+    import { getStorage, ref, uploadBytesResumable, uploadString, getDownloadURL, listAll, deleteObject, getMetadata } from "https://www.gstatic.com/firebasejs/9.23.0/firebase-storage.js";
+    import { getAuth, signInAnonymously, onAuthStateChanged } from "https://www.gstatic.com/firebasejs/9.23.0/firebase-auth.js";
+
+    const ROOT = "game-generator-1/projects";
+    
+    // Config matches your Listing Generator
+    const firebaseConfig = {
+      apiKey: "AIzaSyBXhQLsYRa4i0bX1TPTRiElF9Zjy5vSHlA",
+      authDomain: "gokudatabase.firebaseapp.com",
+      projectId: "gokudatabase",
+      storageBucket: "gokudatabase.firebasestorage.app",
+      messagingSenderId: "1078662308113",
+      appId: "1:1078662308113:web:41df0e5d229ff2af7a6cb0"
+    };
+
+    const app = initializeApp(firebaseConfig);
+    const storage = getStorage(app);
+    const auth = getAuth(app);
+
+    // Categories config
+const FILE_CATEGORIES = [
+      { id: "assets", title: "Game Assets (Images/Audio)", accepts: "image/*,audio/*,.png,.jpg,.jpeg,.mp3,.wav", folder: "assets" },
+      { id: "models", title: "Models, Logic & HTML", accepts: ".obj,.glb,.fbx,.js,.mtl,.html", folder: "models" },
+      { id: "json", title: "JSON Configs", accepts: ".json", folder: "json" },
+      { id: "reference", title: "Reference Project ZIP", accepts: ".zip", folder: "reference_zip" }
+    ];
+
+    let currentProject = null;
+
+    // --- UI Elements ---
+    const projectSelect = document.getElementById('projectSelect');
+    const newProjectName = document.getElementById('newProjectName');
+    const createProjectBtn = document.getElementById('createProjectBtn');
+    const mainPanel = document.getElementById('mainPanel');
+    const dropZonesContainer = document.getElementById('dropZones');
+    const globalStatus = document.getElementById('globalStatus');
+    const generateGameBtn = document.getElementById('generateGameBtn');
+    const progressContainer = document.getElementById('progressContainer');
+    const progressBar = document.getElementById('progressBar');
+
+    // AI UI Elements
+    const aiPromptInput = document.getElementById('aiPromptInput');
+    const sendToAiBtn = document.getElementById('sendToAiBtn');
+    const aiChatLog = document.getElementById('aiChatLog');
+
+    // Review UI Elements
+    const reviewPanel = document.getElementById('reviewPanel');
+    const reviewFileList = document.getElementById('reviewFileList');
+    const clearReviewBtn = document.getElementById('clearReviewBtn');
+
+    function setStatus(msg) {
+        globalStatus.textContent = msg;
+        globalStatus.classList.add('active');
+        setTimeout(() => globalStatus.classList.remove('active'), 4000);
+    }
+
+    // --- Auth Initialization ---
+    async function ensureAuth() {
+      if (auth.currentUser) return auth.currentUser;
+      try { await signInAnonymously(auth); } catch(e) { console.error("Auth failed", e); }
+      return new Promise(resolve => {
+        const unsub = onAuthStateChanged(auth, u => {
+          if (u) { unsub(); resolve(u); }
+        });
+      });
+    }
+
+    // --- Project Management ---
+    async function loadProjects() {
+      await ensureAuth();
+      const listRef = ref(storage, ROOT);
+      try {
+        const res = await listAll(listRef);
+        projectSelect.innerHTML = res.prefixes.length > 0 ? '' : '<option value="">No projects found</option>';
+        
+        res.prefixes.forEach(folderRef => {
+          const opt = document.createElement('option');
+          opt.value = folderRef.name;
+          opt.textContent = folderRef.name;
+          projectSelect.appendChild(opt);
+        });
+
+        if (res.prefixes.length > 0) {
+          selectProject(projectSelect.value);
+        }
+      } catch (e) {
+        console.error("Error loading projects", e);
+        projectSelect.innerHTML = '<option value="">Error loading</option>';
+      }
+    }
+
+    createProjectBtn.addEventListener('click', async () => {
+      const name = newProjectName.value.trim().replace(/[^a-zA-Z0-9_-]/g, '_');
+      if (!name) return alert("Enter a valid project name.");
+      
+      setStatus(`Creating project: ${name}...`);
+      await ensureAuth();
+      
+      const dummyRef = ref(storage, `${ROOT}/${name}/meta.json`);
+      const blob = new Blob([JSON.stringify({ created: new Date() })], { type: 'application/json' });
+      await uploadBytesResumable(dummyRef, blob);
+      
+      newProjectName.value = '';
+      await loadProjects();
+      projectSelect.value = name;
+      selectProject(name);
+    });
+
+    projectSelect.addEventListener('change', (e) => selectProject(e.target.value));
+
+    function selectProject(name) {
+      if (!name) return;
+      currentProject = name;
+      mainPanel.style.opacity = '1';
+      mainPanel.style.pointerEvents = 'all';
+      
+      generateGameBtn.disabled = false; 
+
+      setStatus(`Switched to project: ${name}`);
+      renderDropZones();
+      refreshAllFiles();
+      refreshReviewList();
+      refreshAssetLibrary();
+      aiChatLog.innerHTML = `<div style="color: var(--muted);">AI Context ready for project: ${name}. Enter instructions below.</div>`;
+    }
+
+    // --- Drag & Drop UI & Logic ---
+    function renderDropZones() {
+      dropZonesContainer.innerHTML = '';
+      
+      FILE_CATEGORIES.forEach(cat => {
+        const zone = document.createElement('div');
+        zone.className = 'drop-zone';
+        zone.id = `zone_${cat.id}`;
+        
+        zone.innerHTML = `
+          <div class="drop-header">
+            <strong>${cat.title}</strong>
+            <span>Accepts: ${cat.accepts}</span>
+          </div>
+          <div class="file-list" id="list_${cat.id}">
+             <div style="font-size:11px; color:var(--muted);">Loading files...</div>
+          </div>
+          <input type="file" accept="${cat.accepts}" id="input_${cat.id}" style="display:none;" />
+          <button class="btn btnSmall" onclick="document.getElementById('input_${cat.id}').click()" style="width: max-content;">+ Upload File</button>
+        `;
+
+        zone.addEventListener('dragover', (e) => { e.preventDefault(); zone.classList.add('hover'); });
+        zone.addEventListener('dragleave', () => zone.classList.remove('hover'));
+        zone.addEventListener('drop', async (e) => {
+          e.preventDefault();
+          zone.classList.remove('hover');
+          handleFiles(e.dataTransfer.files, cat);
+        });
+
+        const fileInput = zone.querySelector(`#input_${cat.id}`);
+        fileInput.addEventListener('change', (e) => {
+          handleFiles(e.target.files, cat);
+          fileInput.value = ''; 
+        });
+
+        dropZonesContainer.appendChild(zone);
+      });
+    }
+
+    async function handleFiles(files, categoryConfig, specificName = null) {
+      if (!files || files.length === 0) return;
+      await ensureAuth();
+
+      const validExts = categoryConfig.accepts.split(',');
+      const isWildcard = categoryConfig.accepts.includes('*');
+      
+      for (let i = 0; i < files.length; i++) {
+        const file = files[i];
+        
+        const parts = file.name.split('.');
+        const hasExtension = parts.length > 1;
+        const fileExt = hasExtension ? '.' + parts.pop().toLowerCase() : '';
+        
+        if (hasExtension && !validExts.includes(fileExt) && !isWildcard) {
+           alert(`Invalid file: ${file.name}. Expected ${categoryConfig.accepts}`);
+           continue;
+        }
+
+        const fileName = specificName || file.name.replace(/[^a-zA-Z0-9_.-]/g, '_');
+        const path = `${ROOT}/${currentProject}/${categoryConfig.folder}/${fileName}`;
+        const targetRef = ref(storage, path);
+        
+        setStatus(`Uploading ${fileName}...`);
+        
+        try {
+          await new Promise((resolve, reject) => {
+            const task = uploadBytesResumable(targetRef, file);
+            task.on('state_changed', null, reject, resolve);
+          });
+        } catch(e) {
+          console.error("Upload failed", e);
+          alert(`Upload failed for ${fileName}`);
+        }
+      }
+      
+      setStatus(`Uploads complete.`);
+      refreshFileList(categoryConfig);
+    }
+
+    // --- File Listing & Actions ---
+    async function refreshAllFiles() {
+      FILE_CATEGORIES.forEach(cat => refreshFileList(cat));
+    }
+
+    async function refreshFileList(categoryConfig) {
+      if (!currentProject) return;
+      const listContainer = document.getElementById(`list_${categoryConfig.id}`);
+      if (!listContainer) return;
+      
+      const folderRef = ref(storage, `${ROOT}/${currentProject}/${categoryConfig.folder}`);
+      
+      try {
+        const res = await listAll(folderRef);
+        listContainer.innerHTML = '';
+        
+        if (res.items.length === 0) {
+            listContainer.innerHTML = `<div style="font-size:11px; color:var(--muted);">No files uploaded. Drag & Drop here.</div>`;
+            return;
+        }
+
+        res.items.forEach(itemRef => {
+          const itemDiv = document.createElement('div');
+          itemDiv.className = 'file-item';
+          itemDiv.id = `item_${itemRef.name.replace(/[^a-zA-Z0-9]/g, '_')}`; // For animations
+          
+          itemDiv.innerHTML = `
+            <div class="file-name">${itemRef.name}</div>
+            <div class="file-actions">
+               <input type="file" style="display:none;" id="replace_${itemRef.name.replace(/\./g,'_')}" accept="${categoryConfig.accepts}">
+               <button class="btn btnSmall" onclick="document.getElementById('replace_${itemRef.name.replace(/\./g,'_')}').click()">Replace</button>
+               <button class="btn btnSmall btnDanger" id="del_${itemRef.name.replace(/\./g,'_')}">Delete</button>
+            </div>
+          `;
+
+          itemDiv.querySelector(`[id="del_${itemRef.name.replace(/\./g,'_')}"]`).addEventListener('click', async () => {
+             if(confirm(`Delete ${itemRef.name}?`)) {
+                 setStatus(`Deleting ${itemRef.name}...`);
+                 await deleteObject(itemRef);
+                 refreshFileList(categoryConfig);
+                 setStatus(`Deleted.`);
+             }
+          });
+
+          itemDiv.querySelector(`[id="replace_${itemRef.name.replace(/\./g,'_')}"]`).addEventListener('change', (e) => {
+              handleFiles(e.target.files, categoryConfig, itemRef.name);
+          });
+
+          listContainer.appendChild(itemDiv);
+        });
+
+        // Trigger refresh of the asset library preview if we're dealing with assets or models
+        if (categoryConfig.id === 'assets' || categoryConfig.id === 'models') refreshAssetLibrary();
+
+      } catch (e) {
+        console.error(`Error loading files for ${categoryConfig.id}`, e);
+        listContainer.innerHTML = `<div style="font-size:11px; color:var(--danger);">Error fetching files.</div>`;
+      }
+    }
+
+// --- Game Assets Library Rendering ---
+async function refreshAssetLibrary() {
+        if (!currentProject) return;
+        const libraryContainer = document.getElementById('assetLibrary');
+        const listContainer = document.getElementById('assetList');
+        
+        // Fetch from BOTH assets and models folders
+        const assetsRef = ref(storage, `${ROOT}/${currentProject}/assets`);
+        const modelsRef = ref(storage, `${ROOT}/${currentProject}/models`);
+
+        try {
+            const [assetsRes, modelsRes] = await Promise.all([
+                listAll(assetsRef).catch(() => ({items:[]})),
+                listAll(modelsRef).catch(() => ({items:[]}))
+            ]);
+            
+            const allItems = [...assetsRes.items, ...modelsRes.items];
+
+            if (allItems.length === 0) {
+                libraryContainer.classList.remove('active');
+                listContainer.innerHTML = '';
+                return;
+            }
+
+            let htmlBuffer = '';
+
+            for (const itemRef of allItems) {
+                const meta = await getMetadata(itemRef);
+                const url = await getDownloadURL(itemRef);
+                const dateStr = new Date(meta.timeCreated).toLocaleString();
+                // Dynamically get the parent folder (assets or models) for the correct path
+                const dataPath = `${itemRef.parent.name}/${itemRef.name}`;
+
+                htmlBuffer += `
+                    <div class="asset-item">
+                        <label>
+                            <input type="checkbox" class="asset-checkbox" 
+                                data-path="${dataPath}" 
+                                data-url="${url}" 
+                                data-type="${meta.contentType || ''}" 
+                                data-name="${itemRef.name}">
+                            <span>✨ ${itemRef.name}</span>
+                        </label>
+                        <span class="asset-date">${itemRef.parent.name.toUpperCase()} • ${dateStr}</span>
+                    </div>
+                `;
+            }
+            
+            listContainer.innerHTML = htmlBuffer;
+            libraryContainer.classList.add('active');
+
+        } catch (e) { 
+            console.error("Asset library error", e); 
+        }
+    }
+
+    // --- AI Review Persistence Logic ---
+    async function refreshReviewList() {
+        if (!currentProject) return;
+        const reviewFolderRef = ref(storage, `${ROOT}/${currentProject}/review`);
+
+        try {
+            const res = await listAll(reviewFolderRef);
+            if (res.items.length === 0) {
+                reviewPanel.classList.remove('active');
+                return;
+            }
+
+            reviewPanel.classList.add('active');
+            reviewFileList.innerHTML = '';
+
+            for (const itemRef of res.items) {
+                const itemDiv = document.createElement('div');
+                itemDiv.className = 'review-item';
+                itemDiv.innerHTML = `
+                    <div class="file-name">✨ ${itemRef.name}</div>
+                    <div class="file-actions">
+                        <button class="btn btnSmall" id="dl_rev_${itemRef.name.replace(/\./g,'_')}">Download</button>
+                        <button class="btn btnSmall btnDanger" id="del_rev_${itemRef.name.replace(/\./g,'_')}">Delete Copy</button>
+                    </div>
+                `;
+
+                // Download Link
+                itemDiv.querySelector(`#dl_rev_${itemRef.name.replace(/\./g,'_')}`).onclick = async () => {
+                    const url = await getDownloadURL(itemRef);
+                    const a = document.createElement('a');
+                    a.href = url;
+                    a.download = `PREVIEW_${itemRef.name}`;
+                    a.click();
+                };
+
+                // Delete only the copy
+                itemDiv.querySelector(`#del_rev_${itemRef.name.replace(/\./g,'_')}`).onclick = async () => {
+                    await deleteObject(itemRef);
+                    refreshReviewList();
+                };
+
+                reviewFileList.appendChild(itemDiv);
+            }
+        } catch (e) { console.error("Review list error", e); }
+    }
+
+    clearReviewBtn.onclick = async () => {
+        const reviewFolderRef = ref(storage, `${ROOT}/${currentProject}/review`);
+        const res = await listAll(reviewFolderRef);
+        await Promise.all(res.items.map(item => deleteObject(item)));
+        refreshReviewList();
+    };
+
+    // --- AI Context Window Logic & Loop ---
+    function appendToChatLog(sender, message, type = 'normal') {
+      const msgDiv = document.createElement('div');
+      const color = sender === 'AI' ? 'var(--success)' : (type === 'error' ? 'var(--danger)' : 'var(--text)');
+      msgDiv.innerHTML = `<strong style="color: ${color}">${sender}:</strong> ${message}`;
+      aiChatLog.appendChild(msgDiv);
+      aiChatLog.scrollTop = aiChatLog.scrollHeight;
+    }
+
+    const sleep = (ms) => new Promise(r => setTimeout(r, ms));
+
+sendToAiBtn.addEventListener('click', async () => {
+      const prompt = aiPromptInput.value.trim();
+      if (!prompt || !currentProject) return;
+
+      aiPromptInput.value = '';
+      sendToAiBtn.disabled = true;
+      appendToChatLog('You', prompt);
+      
+      try {
+        // 1. Read Reference ZIP and Map Structure
+        appendToChatLog('System', 'Mapping project structure from Reference ZIP...', 'muted');
+        let projectStructure = "Project Directory Map:\n";
+        const refFolder = ref(storage, `${ROOT}/${currentProject}/reference_zip`);
+        let zipFound = false;
+        
+        try {
+          const refList = await listAll(refFolder);
+          if (refList.items.length > 0) {
+            const refUrl = await getDownloadURL(refList.items[0]);
+            const refRes = await fetch(refUrl);
+            const refBlob = await refRes.blob();
+            
+            const zip = new JSZip();
+            await zip.loadAsync(refBlob);
+            // Extract all file and folder paths
+            projectStructure += Object.keys(zip.files).join('\n');
+            zipFound = true;
+          }
+        } catch (e) {
+          console.warn("Could not read Reference ZIP for structure.", e);
+        }
+
+        if (!zipFound) {
+            projectStructure += "(No Reference ZIP uploaded yet)";
+        }
+
+        // 2. Gather explicitly targeted files ('2', '23', and 'assets.json')
+        appendToChatLog('System', 'Gathering logic file "2", HTML file "23", and config "assets.json"...', 'muted');
+        const projectFiles = {};
+        const targetFiles = [
+          { folder: 'models', name: '2' },
+          { folder: 'models', name: '23' },
+          { folder: 'json', name: 'assets.json' }
+        ];
+
+        for (const target of targetFiles) {
+          const fileRef = ref(storage, `${ROOT}/${currentProject}/${target.folder}/${target.name}`);
+          try { 
+            const url = await getDownloadURL(fileRef);
+            const fetched = await fetch(url + '&v=' + Date.now(), { cache: 'no-store' });
+            if (fetched.ok) {
+                projectFiles[`${target.folder}/${target.name}`] = await fetched.text(); 
+            }
+          } catch (e) { 
+             console.warn(`Skipped ${target.name} - not found in Firebase storage.`); 
+          } 
+        }
+
+        if (Object.keys(projectFiles).length === 0) {
+          throw new Error("Could not find '2', '23', or 'assets.json'. Please upload them first.");
+        }
+
+        // Gather Selected Assets (Moved up BEFORE step 3 so it initializes properly)
+        const selectedAssetNodes = document.querySelectorAll('.asset-checkbox:checked');
+        const selectedAssets = Array.from(selectedAssetNodes).map(cb => ({
+            name: cb.dataset.name,
+            path: cb.dataset.path,
+            url: cb.dataset.url,
+            type: cb.dataset.type
+        }));
+
+        let assetString = "";
+        if (selectedAssets.length > 0) {
+            assetString = "\n\nCRITICAL: The user has explicitly selected the following files. You MUST use these exact file paths/keys in your code when referencing them:\n";
+            selectedAssets.forEach(a => { assetString += `- ${a.path}\n`; });
+        }
+
+        // 3. Combine Structure Map & Selected Assets with the User Prompt
+        const enhancedPrompt = `Here is the full project structure for reference:\n${projectStructure}${assetString}\n\nCRITICAL SYSTEM RULE: The main logic file is named "2" and the main HTML file is named "23", both located in the "models" folder. You MUST use the exact name "2" instead of "WorldController.js" and "23" instead of "document.html" in all your code, updates, references, and output paths. Never save or output a file named "WorldController.js" or "document.html".\n\nASSET CONFIGURATION RULE: You must update the "assets.json" file (located in the "json" folder) whenever new assets or files are added to the project. When updating "assets.json", the "key" name and the corresponding file/asset name MUST always match exactly. You must continue using sequential numbers for both the "key" and corresponding file names when adding new entries.\n\nUser Request: ${prompt}`;
+
+        // 4. Prepare Storage references and clean up old runs
+        const projectPath = `${ROOT}/${currentProject}`;
+        const responseFileRef = ref(storage, `${projectPath}/ai_response.json`);
+        const errorFileRef = ref(storage, `${projectPath}/ai_error.json`);
+        
+        try { await deleteObject(responseFileRef); } catch(e) {}
+        try { await deleteObject(errorFileRef); } catch(e) {}
+
+        // 5. Trigger Gemini Background Proxy
+        appendToChatLog('System', 'Sending targeted files and map to AI...', 'muted');
+        setStatus('AI is processing files (This may take a minute)...');
+        
+        await fetch('/.netlify/functions/geminiCodeProxy-background', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          // Sending the 'enhancedPrompt' which contains the ZIP structure map
+          body: JSON.stringify({ prompt: enhancedPrompt, files: projectFiles, projectPath, selectedAssets })
+        });
+
+        // 6. Poll Firebase Storage for the result file
+        let result = null;
+        let attempts = 0;
+        
+        while (!result && attempts < 60) { // Poll for up to 5 minutes
+          await sleep(5000);
+          attempts++;
+
+          // Check for error file first
+          let hasErrorFile = false;
+          let errorMessage = "AI Generation Failed";
+          try {
+            const errUrl = await getDownloadURL(errorFileRef);
+            const errRes = await fetch(errUrl);
+            const errData = await errRes.json();
+            errorMessage = errData.error || errorMessage;
+            hasErrorFile = true;
+          } catch(e) {
+            // Ignore missing error file
+          }
+
+          if (hasErrorFile) {
+            throw new Error(errorMessage);
+          }
+
+          // Check for success file
+          try {
+            const url = await getDownloadURL(responseFileRef);
+            const res = await fetch(url + `&v=${Date.now()}`);
+            result = await res.json();
+          } catch(e) {
+             // Not found yet, keep waiting
+          }
+        }
+
+        if (!result) throw new Error("AI request timed out waiting for background completion.");
+
+        // 7. Write updated files back to Firebase
+        appendToChatLog('System', `Writing ${result.updatedFiles.length} updated files to Firebase...`, 'muted');
+        
+        for (const file of result.updatedFiles) {
+          let cleanContent = file.content.trim();
+          if (cleanContent.startsWith('```')) {
+              const lines = cleanContent.split('\n');
+              if (lines[0].startsWith('```')) lines.shift();
+              if (lines[lines.length - 1].trim().startsWith('```')) lines.pop();
+              cleanContent = lines.join('\n').trim();
+          }
+
+          let fileName = file.path.split('/').pop(); 
+          let safePath = file.path;
+
+          // Enforce rule: never save WorldController.js or document.html, force "2" and "23", secure assets.json
+          if (fileName.toLowerCase() === 'worldcontroller.js' || fileName === '2.js') {
+              fileName = '2';
+              safePath = 'models/2';
+          } else if (fileName.toLowerCase() === 'document.html' || fileName === '23.html') {
+              fileName = '23';
+              safePath = 'models/23';
+          } else if (fileName.toLowerCase() === 'assets.json') {
+              fileName = 'assets.json';
+              safePath = 'json/assets.json';
+          }
+
+          const originalFileKey = Object.keys(projectFiles).find(k => k.toLowerCase().endsWith('/' + fileName.toLowerCase()));
+          
+          if (originalFileKey) {
+             safePath = originalFileKey; 
+          } else {
+             const ext = fileName.includes('.') ? fileName.split('.').pop().toLowerCase() : '';
+             if (fileName === '2') safePath = `models/2`;
+             else if (fileName === '23') safePath = `models/23`;
+             else if (ext === 'json') safePath = `json/${fileName}`;
+             else safePath = `models/${fileName}`; // Default everything else (js, html, models) to models
+          }
+
+          const targetRef = ref(storage, `${ROOT}/${currentProject}/${safePath}`);
+          await uploadString(targetRef, cleanContent);
+          
+          const catFolder = safePath.split('/')[0];
+          const catConfig = FILE_CATEGORIES.find(c => c.folder === catFolder);
+          if (catConfig) {
+            const zone = document.getElementById(`zone_${catConfig.id}`);
+            if (zone) {
+              zone.classList.remove('pulse-update');
+              void zone.offsetWidth; 
+              zone.classList.add('pulse-update');
+            }
+          }
+        }
+
+        // 8. Update UI
+        appendToChatLog('AI', result.message || "Files have been updated successfully.");
+        setStatus('AI update complete.');
+        
+        refreshAllFiles();
+        refreshReviewList(); 
+        document.querySelectorAll('.asset-checkbox').forEach(cb => cb.checked = false);
+
+      } catch (error) {
+        console.error("AI Update Error:", error);
+        appendToChatLog('System', `Error: ${error.message}`, 'error');
+        setStatus('AI update failed.');
+      } finally {
+        sendToAiBtn.disabled = false;
+      }
+    });
+
+// --- Zip Generation Logic (Template Matcher) ---
+    generateGameBtn.addEventListener('click', async () => {
+      if (!currentProject) return;
+      
+      try {
+        generateGameBtn.disabled = true;
+        progressContainer.style.display = 'block';
+        progressBar.style.width = '5%';
+        setStatus(`Fetching Reference ZIP for ${currentProject}...`);
+        
+        const refFolder = ref(storage, `${ROOT}/${currentProject}/reference_zip`);
+        const refList = await listAll(refFolder);
+        
+        if (refList.items.length === 0) {
+           alert("No Reference ZIP found! Please upload one to the Reference Project ZIP drop zone first.");
+           throw new Error("Missing reference zip");
+        }
+        
+        const referenceZipRef = refList.items[0]; 
+        const refUrl = await getDownloadURL(referenceZipRef);
+        const refCacheBust = refUrl.includes('?') ? `${refUrl}&_ts=${new Date().getTime()}` : `${refUrl}?_ts=${new Date().getTime()}`;
+
+        const refRes = await fetch(refCacheBust, {
+            cache: 'no-store'
+        });
+        const refBlob = await refRes.blob();
+        
+        progressBar.style.width = '15%';
+        setStatus(`Loading template ZIP into memory...`);
+        const zip = new JSZip();
+        await zip.loadAsync(refBlob);
+        const zipPaths = Object.keys(zip.files);
+        
+        progressBar.style.width = '20%';
+        setStatus(`Indexing project files...`);
+        let totalFiles = 0;
+        let processedFiles = 0;
+        const cachedCategories = {};
+
+        for (const cat of FILE_CATEGORIES) {
+          if (cat.id === 'reference') continue;
+          const folderRef = ref(storage, `${ROOT}/${currentProject}/${cat.folder}`);
+          try { 
+             const res = await listAll(folderRef); 
+             cachedCategories[cat.id] = res.items;
+             totalFiles += res.items.length;
+          } catch(e) { 
+             cachedCategories[cat.id] = []; 
+          }
+        }
+
+        for (const cat of FILE_CATEGORIES) {
+          if (cat.id === 'reference') continue; 
+          
+          const items = cachedCategories[cat.id];
+          
+          for (const itemRef of items) {
+            setStatus(`Processing ${itemRef.name}...`);
+          const url = await getDownloadURL(itemRef);
+          const cacheBustUrl = url.includes('?') ? `${url}&_ts=${new Date().getTime()}` : `${url}?_ts=${new Date().getTime()}`;
+
+          const response = await fetch(cacheBustUrl, { 
+              cache: 'no-store'
+          });
+          const blob = await response.blob();
+            
+            // If we are evaluating the '2' or '23' file in models, target the template's equivalents
+            let searchName = itemRef.name;
+            if (cat.folder === 'models' && itemRef.name === '2') {
+                searchName = 'WorldController.js';
+            } else if (cat.folder === 'models' && itemRef.name === '23') {
+                searchName = 'document.html';
+            }
+
+            // Filter out Mac hidden folders and hidden files starting with a dot
+            let possibleMatches = zipPaths.filter(p => 
+                !p.includes('__MACOSX') && 
+                !p.split('/').some(part => part.startsWith('.')) && 
+                (p.toLowerCase() === searchName.toLowerCase() || p.toLowerCase().endsWith('/' + searchName.toLowerCase()))
+            );
+            
+            // Sort by length to guarantee we overwrite the direct file
+            possibleMatches.sort((a,b) => a.length - b.length);
+            const match = possibleMatches.length > 0 ? possibleMatches[0] : null;
+
+            if (match) {
+               // If this is our "2" or "23" file overwriting the template's file, rename it in the zip
+               if (cat.folder === 'models' && itemRef.name === '2') {
+                   zip.remove(match);
+                   const newMatchPath = match.replace(/WorldController\.js$/i, '2');
+                   zip.file(newMatchPath, blob);
+               } else if (cat.folder === 'models' && itemRef.name === '23') {
+                   zip.remove(match);
+                   const newMatchPath = match.replace(/document\.html$/i, '23');
+                   zip.file(newMatchPath, blob);
+               } else {
+                   zip.file(match, blob);
+               }
+            } else {
+               let newPath;
+               
+               if (cat.id === 'assets') {
+                   newPath = `files/${itemRef.name}`; 
+               } else if (cat.folder === 'models' && itemRef.name === '2') {
+                   newPath = `models/2`; 
+               } else if (cat.folder === 'models' && itemRef.name === '23') {
+                   newPath = `models/23`; 
+               } else {
+                   newPath = `${cat.folder}/${itemRef.name}`;
+               }
+               
+               zip.file(newPath, blob);
+            }
+
+            processedFiles++;
+            if (totalFiles > 0) {
+               const percentComplete = 20 + ((processedFiles / totalFiles) * 65);
+               progressBar.style.width = `${percentComplete}%`;
+            }
+          }
+        }
+        
+        progressBar.style.width = '90%';
+        setStatus(`Compiling final Game ZIP...`);
+        
+        const finalZipBlob = await zip.generateAsync({ type: "blob", compression: "STORE" });
+        
+        progressBar.style.width = '100%';
+        setStatus(`Game Zip Generated Successfully! Downloading...`);
+
+        const downloadUrl = URL.createObjectURL(finalZipBlob);
+        const a = document.createElement('a');
+        a.href = downloadUrl;
+        a.download = `${currentProject}_Custom_Build.zip`;
+        document.body.appendChild(a);
+        a.click();
+        
+        document.body.removeChild(a);
+        URL.revokeObjectURL(downloadUrl);
+
+      } catch (error) {
+        console.error("Zip generation error:", error);
+        setStatus(`Error generating zip. Check console.`);
+        progressBar.style.backgroundColor = 'var(--danger)';
+      } finally {
+        generateGameBtn.disabled = false;
+        generateGameBtn.textContent = "Generate Game Zip"; 
+        
+        setTimeout(() => {
+           progressContainer.style.display = 'none';
+           progressBar.style.width = '0%';
+           progressBar.style.backgroundColor = 'var(--accent)';
+        }, 3000);
+      }
+    });
+
+    window.addEventListener('DOMContentLoaded', () => {
+      loadProjects();
+    });
+  </script>
+</body>
+</html>
