@@ -1067,7 +1067,7 @@ ANTI-REPETITION (TITLE)
                 processedNames = listedRes.prefixes.map(p => p.name.replace(/\/$/, ""));
             } catch(e) { }
 
-            const listRef = storage.ref('listing-generator-1/Completed_Sets');
+            const listRef = storage.ref('listing-generator-1/Generated_Listing_Sets/Approved_Listing_Sets');
             const res = await listRef.listAll();
             
             // 2. Filter folders (prefixes): Skip if it's already in Listed_Sets
