@@ -686,6 +686,19 @@
       <pre id="skpOverlay" aria-hidden="true"></pre>
     </div>
   </div>
+
+  <div id="globalUploadCount" class="configurable" style="font-weight: bold; color: #2e7d32; font-size: 13px; display: flex; align-items: center; justify-content: center; border: 1px solid #2e7d32; border-radius: 4px; background: #e8f5e9;">Uploads: 0</div>
+<button id="expandUploadHistoryBtn" class="btn-small waves-effect waves-light configurable blue">Expand</button>
+
+<div id="uploadHistoryModal" class="modal">
+  <div class="modal-content">
+    <h4>Upload History</h4>
+    <ul id="uploadHistoryList" class="collection"></ul>
+  </div>
+  <div class="modal-footer">
+    <a href="#!" class="modal-close waves-effect waves-green btn-flat">Close</a>
+  </div>
+</div>
   
   <div id="belowSearch">
     <button id="generateBtn" class="btn waves-effect waves-light configurable">Generate</button>
@@ -1029,21 +1042,32 @@ ANTI-REPETITION (TITLE)
         window.autoProcessingEnabled = !window.autoProcessingEnabled;
         this.textContent = window.autoProcessingEnabled ? "Stop Auto" : "Start Auto";
         
-        // Update styling
-        if (window.autoProcessingEnabled) {
-            this.classList.remove("stopped", "red", "darken-1");
-            this.classList.add("running", "green", "darken-2");
-            updateFirebaseStatus("Auto Started", "active");
-        } else {
-            this.classList.remove("running", "green", "darken-2");
-            this.classList.add("stopped", "red", "darken-1");
-            if(window.isProcessingSet) {
-                 updateFirebaseStatus("Pausing after set...", "working");
-            } else {
-                 updateFirebaseStatus("Auto Paused", "");
-            }
-        }
-    });
+      // Update styling
+              if (window.autoProcessingEnabled) {
+                  this.classList.remove("stopped", "red", "darken-1");
+                  this.classList.add("running", "green", "darken-2");
+                  updateFirebaseStatus("Auto Started", "active");
+                  
+                  // --- NEW: Log new Auto session ---
+                  let history = JSON.parse(localStorage.getItem("etsyUploadHistory") || "[]");
+                  history.push({
+                      id: 'auto_' + Date.now(),
+                      startTime: new Date().toLocaleString(),
+                      count: 0,
+                      isManual: false
+                  });
+                  localStorage.setItem("etsyUploadHistory", JSON.stringify(history));
+                  
+              } else {
+                  this.classList.remove("running", "green", "darken-2");
+                  this.classList.add("stopped", "red", "darken-1");
+                  if(window.isProcessingSet) {
+                       updateFirebaseStatus("Pausing after set...", "working");
+                  } else {
+                       updateFirebaseStatus("Auto Paused", "");
+                  }
+              }
+          });
 
     async function checkFirebaseForSets() {
         // Prevent concurrent polling or polling while processing
@@ -1607,7 +1631,10 @@ ANTI-REPETITION (TITLE)
       "#titleCount",
       "#analyzeMetadataCheck",
       "#createListingCheck",
-      "#duplicateListingCheck"             
+      "#duplicateListingCheck",
+      // --- NEW ELEMENTS ---
+      "#globalUploadCount",
+      "#expandUploadHistoryBtn"            
     ];
 
     function isExcluded(el){
@@ -1649,6 +1676,8 @@ ANTI-REPETITION (TITLE)
       regenDescriptionBtn:     { left: 285,  top: 615, width: 100, height: 35 },
       copyDescriptionBtn:      { left: 410,  top: 615, width: 100, height: 35 },
       showDescriptionRulesBtn: { left: 150,  top: 0,   width: 0,   height: 0  },
+      globalUploadCount:       { left: 550,  top: 55,  width: 100, height: 27 },
+      expandUploadHistoryBtn:  { left: 660,  top: 55,  width: 70,  height: 27 },
 
       // Text inputs / areas
       listingDescInput:        { left: 10,   top: 220, width: 490, height: 35 },
@@ -2456,6 +2485,8 @@ https://www.etsy.com/your/shops/me/listing-editor/edit/1822973998
 
         if (typeof setCreateProgress === "function") setCreateProgress(100);
         save({ status: "DONE", progress: 100, completedAt: nowIso() });
+        // --- NEW: Increment tracker ---
+        if (typeof incrementUploadCount === "function") incrementUploadCount();
         // Clean up persisted image bytes
         if (job.storage?.photos === "idb" || job.storage?.reserved === "idb") {
           for (const k of [...job.photoKeyBases, ...job.reservedKeyBases]) { try { await idbDel(k); } catch {} }
@@ -4715,6 +4746,68 @@ async function callOpenAI(payload, opts = {}) {
       let text = document.getElementById("listingDescription").value;
       navigator.clipboard.writeText(text).catch(err => console.error("Copy error:", err));
     });
+
+// --- UPLOAD HISTORY TRACKING LOGIC ---
+    function incrementUploadCount() {
+        let history = JSON.parse(localStorage.getItem("etsyUploadHistory") || "[]");
+        
+        // If no history exists, or Auto is OFF, attribute it to 'Manual'
+        if (history.length === 0 || !window.autoProcessingEnabled) {
+            let manualSession = history.find(s => s.isManual);
+            if (!manualSession) {
+                manualSession = { id: 'manual', startTime: new Date().toLocaleString(), count: 0, isManual: true };
+                history.push(manualSession);
+            }
+            manualSession.count++;
+        } else {
+            // Attribute to the current active Auto session (the last one pushed)
+            let currentSession = history[history.length - 1];
+            currentSession.count++;
+        }
+        
+        localStorage.setItem("etsyUploadHistory", JSON.stringify(history));
+        updateUploadCounterUI();
+    }
+
+    function updateUploadCounterUI() {
+        let history = JSON.parse(localStorage.getItem("etsyUploadHistory") || "[]");
+        let total = history.reduce((sum, session) => sum + session.count, 0);
+        let countEl = document.getElementById("globalUploadCount");
+        if (countEl) countEl.textContent = `Uploads: ${total}`;
+    }
+
+    // Initialize UI and Expand Button Listener on Load
+    document.addEventListener("DOMContentLoaded", () => {
+        updateUploadCounterUI();
+        
+        let expandBtn = document.getElementById("expandUploadHistoryBtn");
+        if (expandBtn) {
+            expandBtn.addEventListener("click", () => {
+                let history = JSON.parse(localStorage.getItem("etsyUploadHistory") || "[]");
+                let listEl = document.getElementById("uploadHistoryList");
+                listEl.innerHTML = "";
+                
+                // Show newest sessions at the top
+                let displayHistory = [...history].reverse();
+                
+                if(displayHistory.length === 0) {
+                     listEl.innerHTML = "<li class='collection-item'>No uploads recorded yet.</li>";
+                } else {
+                     displayHistory.forEach(session => {
+                        let li = document.createElement("li");
+                        li.className = "collection-item";
+                        let typeText = session.isManual ? "Manual Uploads" : "Auto-Pilot Session";
+                        li.innerHTML = `<strong>${typeText}</strong> (${session.startTime}) <span class="badge blue white-text">${session.count} Uploads</span>`;
+                        listEl.appendChild(li);
+                    });
+                }
+                
+                let modalInst = M.Modal.getInstance(document.getElementById("uploadHistoryModal")) || M.Modal.init(document.getElementById("uploadHistoryModal"));
+                modalInst.open();
+            });
+        }
+    });
+
   </script>
 </body>
 </html>
