@@ -559,9 +559,14 @@
       font-weight: 600;
       color: #333;
       margin-bottom: 3px;
-      white-space: nowrap;
-      overflow: hidden;
-      text-overflow: ellipsis;
+      /* Allow the label to wrap onto a second line if the column is
+         narrow. Previously we used white-space:nowrap + ellipsis which
+         clipped the (count) off the right edge whenever the label was
+         too long, leaving users with no visible count for those
+         columns. Wrapping is the simpler, more reliable answer. */
+      white-space: normal;
+      line-height: 1.15;
+      min-height: 2.3em; /* reserve two lines so all columns align */
     }
     .queue-input {
       height: 24px !important;
@@ -649,11 +654,6 @@
                 <label>Hoop Earrings <span id="count_queueHoopEarrings" class="q-count">(0)</span></label>
                 <input type="text" id="queueHoopEarrings" class="queue-input" placeholder="IDs...">
                 <div id="fb_count_queueHoopEarrings" class="fb-folder-count">0 Folders</div>
-            </div>
-            <div class="queue-col">
-                <label>Bracelets <span id="count_queueBracelets" class="q-count">(0)</span></label>
-                <input type="text" id="queueBracelets" class="queue-input" placeholder="IDs...">
-                <div id="fb_count_queueBracelets" class="fb-folder-count">0 Folders</div>
             </div>
             <div class="queue-col">
                 <label>Charms Only <span id="count_queueCharms" class="q-count">(0)</span></label>
@@ -1001,15 +1001,16 @@ ANTI-REPETITION (TITLE)
   <script src="https://cdnjs.cloudflare.com/ajax/libs/materialize/1.0.0/js/materialize.min.js"></script>
 
   <script>
-    // Queue IDs in display order. Bracelets was added so that approved
-    // Bracelets sets coming from Listing-Generator-1 don't silently fall
-    // through into the "Reg Necklace" queue.
+    // Queue IDs in display order. Bracelets is intentionally NOT a
+    // visible queue right now — the column was hidden in the UI, but
+    // Bracelets sets still arrive from the Listing Generator. They are
+    // routed to queueRegNecklace below (see ROUTES) so they continue
+    // to be auto-processed using the Reg Necklace listing-ID pool.
     const QUEUE_IDS = [
       "queueRegNecklace",
       "queueBeadyNecklace",
       "queueStudEarrings",
       "queueHoopEarrings",
-      "queueBracelets",
       "queueCharms",
     ];
 
@@ -1031,7 +1032,11 @@ ANTI-REPETITION (TITLE)
         { prefix: "Beady_Necklace",   queueId: "queueBeadyNecklace",  category: "Beady_Necklace"   },
         { prefix: "Stud_Earrings",    queueId: "queueStudEarrings",   category: "Stud_Earrings"    },
         { prefix: "Hoop_Earrings",    queueId: "queueHoopEarrings",   category: "Hoop_Earrings"    },
-        { prefix: "Bracelets",        queueId: "queueBracelets",      category: "Bracelets"        },
+        // Bracelets routes to the Reg Necklace queue (its UI column is
+        // hidden — see QUEUE_IDS comment above). To give Bracelets its
+        // own queue again, restore the column markup, restore queueBracelets
+        // in QUEUE_IDS, and change the queueId below back to queueBracelets.
+        { prefix: "Bracelets",        queueId: "queueRegNecklace",    category: "Bracelets"        },
         { prefix: "Charms",           queueId: "queueCharms",         category: "Charms"           },
       ];
       for (const r of ROUTES) {
@@ -1166,15 +1171,15 @@ ANTI-REPETITION (TITLE)
                 return !processedNames.includes(name);
             });
             
-            // --- UI Folder Counters UPDATE ---
-            // Use the shared routeFolderName() helper instead of substring
-            // matching, so that Bracelets sets land in the Bracelets queue
-            // (not Reg Necklace) and Regular_Necklace sets are detected
-            // explicitly rather than falling through to the default.
+            // Use the shared routeFolderName() helper to avoid substring
+            // collisions ("Beady_Necklace" must not match a "Necklace"
+            // rule, "Charms_Set_8" must not match a "Charm" rule, etc.).
+            // Bracelets routes to queueRegNecklace per ROUTES above —
+            // the Bracelets column is hidden in the UI right now.
             let folderCounts = {
               queueRegNecklace: 0, queueBeadyNecklace: 0,
               queueStudEarrings: 0, queueHoopEarrings: 0,
-              queueBracelets: 0, queueCharms: 0,
+              queueCharms: 0,
             };
             newSets.forEach(setRef => {
                 const route = routeFolderName(setRef.name);
