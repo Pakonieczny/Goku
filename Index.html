@@ -651,6 +651,11 @@
                 <div id="fb_count_queueHoopEarrings" class="fb-folder-count">0 Folders</div>
             </div>
             <div class="queue-col">
+                <label>Bracelets <span id="count_queueBracelets" class="q-count">(0)</span></label>
+                <input type="text" id="queueBracelets" class="queue-input" placeholder="IDs...">
+                <div id="fb_count_queueBracelets" class="fb-folder-count">0 Folders</div>
+            </div>
+            <div class="queue-col">
                 <label>Charms Only <span id="count_queueCharms" class="q-count">(0)</span></label>
                 <input type="text" id="queueCharms" class="queue-input" placeholder="IDs...">
                 <div id="fb_count_queueCharms" class="fb-folder-count">0 Folders</div>
@@ -996,8 +1001,49 @@ ANTI-REPETITION (TITLE)
   <script src="https://cdnjs.cloudflare.com/ajax/libs/materialize/1.0.0/js/materialize.min.js"></script>
 
   <script>
-    // NEW: Global array defining our 5 queues
-    const QUEUE_IDS = ["queueRegNecklace", "queueBeadyNecklace", "queueStudEarrings", "queueHoopEarrings", "queueCharms"];
+    // Queue IDs in display order. Bracelets was added so that approved
+    // Bracelets sets coming from Listing-Generator-1 don't silently fall
+    // through into the "Reg Necklace" queue.
+    const QUEUE_IDS = [
+      "queueRegNecklace",
+      "queueBeadyNecklace",
+      "queueStudEarrings",
+      "queueHoopEarrings",
+      "queueBracelets",
+      "queueCharms",
+    ];
+
+    // Single source of truth for routing a Listing-Generator-1 folder
+    // name (e.g. "Beady_Necklace_Set_42", "Bracelets_Set_3") to the right
+    // queue. The Listing Generator names its destination folders as
+    // `${Category}_${SetName}` where Category is one of the six values
+    // from its CATEGORY list. We match on prefix, NOT substring, so
+    // "Beady_Necklace_Set_42" cannot accidentally match a "Necklace"
+    // rule and "Charms_Set_8" cannot bleed into a "Charm" check, etc.
+    //
+    // Returns { queueId, category, setName } or null if unmatched.
+    function routeFolderName(folderName) {
+      const cleanName = String(folderName || "").replace(/\/$/, "");
+      // Recognised categories, ordered longest-prefix-first so that
+      // "Regular_Necklace" matches before "Necklace" wouldn't, etc.
+      const ROUTES = [
+        { prefix: "Regular_Necklace", queueId: "queueRegNecklace",    category: "Regular_Necklace" },
+        { prefix: "Beady_Necklace",   queueId: "queueBeadyNecklace",  category: "Beady_Necklace"   },
+        { prefix: "Stud_Earrings",    queueId: "queueStudEarrings",   category: "Stud_Earrings"    },
+        { prefix: "Hoop_Earrings",    queueId: "queueHoopEarrings",   category: "Hoop_Earrings"    },
+        { prefix: "Bracelets",        queueId: "queueBracelets",      category: "Bracelets"        },
+        { prefix: "Charms",           queueId: "queueCharms",         category: "Charms"           },
+      ];
+      for (const r of ROUTES) {
+        if (cleanName.startsWith(r.prefix + "_") || cleanName === r.prefix) {
+          // setName is everything after the category prefix, e.g.
+          //   "Beady_Necklace_Set_42" → "Set_42"
+          const setName = cleanName.slice(r.prefix.length + 1);
+          return { queueId: r.queueId, category: r.category, setName };
+        }
+      }
+      return null;
+    }
 
     // --- Firebase Logic for Completed Sets ---
     const firebaseConfig = {
@@ -1083,15 +1129,35 @@ ANTI-REPETITION (TITLE)
                 updateFirebaseStatus("Scanning...", "working");
             }
 
-            // 1. Cross-reference: Get list of already completed/listed sets from Firebase
-            const listedRef = storage.ref('listing-generator-1/Listed_Sets');
+            // 1. Cross-reference: skip sets we've already processed.
+            //
+            // ARCHITECTURE NOTE — coordination with Listing-Generator-1.html:
+            //   * Listing Generator writes approved sets into:
+            //       listing-generator-1/Generated_Listing_Sets/Completed_Listing_Sets/{Category}_{SetName}
+            //     This is its hand-off queue to us.
+            //   * We process each set, list it on Etsy, then move the files into:
+            //       listing-generator-1/Generated_Listing_Sets/Approved_Listing_Sets/{SetName}
+            //     This is our done pile, also visible in the Listing Generator's
+            //     read-only "Approved Sets" tab.
+            //   * The legacy Listed_Sets folder is also kept up to date as a
+            //     backwards-compatible alias (writes go to BOTH so anything
+            //     that already references Listed_Sets keeps working).
+            const approvedRef = storage.ref('listing-generator-1/Generated_Listing_Sets/Approved_Listing_Sets');
+            const legacyListedRef = storage.ref('listing-generator-1/Listed_Sets');
             let processedNames = [];
             try {
-                const listedRes = await listedRef.listAll();
-                processedNames = listedRes.prefixes.map(p => p.name.replace(/\/$/, ""));
+                const approvedRes = await approvedRef.listAll();
+                processedNames = approvedRes.prefixes.map(p => p.name.replace(/\/$/, ""));
+            } catch(e) { }
+            try {
+                const legacyRes = await legacyListedRef.listAll();
+                for (const p of legacyRes.prefixes) {
+                    const n = p.name.replace(/\/$/, "");
+                    if (!processedNames.includes(n)) processedNames.push(n);
+                }
             } catch(e) { }
 
-            const listRef = storage.ref('listing-generator-1/Generated_Listing_Sets/Approved_Listing_Sets');
+            const listRef = storage.ref('listing-generator-1/Generated_Listing_Sets/Completed_Listing_Sets');
             const res = await listRef.listAll();
             
             // 2. Filter folders (prefixes): Skip if it's already in Listed_Sets
@@ -1100,15 +1166,25 @@ ANTI-REPETITION (TITLE)
                 return !processedNames.includes(name);
             });
             
-            // --- NEW: UI Folder Counters UPDATE ---
-            let folderCounts = { queueRegNecklace: 0, queueBeadyNecklace: 0, queueStudEarrings: 0, queueHoopEarrings: 0, queueCharms: 0 };
+            // --- UI Folder Counters UPDATE ---
+            // Use the shared routeFolderName() helper instead of substring
+            // matching, so that Bracelets sets land in the Bracelets queue
+            // (not Reg Necklace) and Regular_Necklace sets are detected
+            // explicitly rather than falling through to the default.
+            let folderCounts = {
+              queueRegNecklace: 0, queueBeadyNecklace: 0,
+              queueStudEarrings: 0, queueHoopEarrings: 0,
+              queueBracelets: 0, queueCharms: 0,
+            };
             newSets.forEach(setRef => {
-                const name = setRef.name.toLowerCase();
-                if (name.includes("beady")) folderCounts.queueBeadyNecklace++;
-                else if (name.includes("stud")) folderCounts.queueStudEarrings++;
-                else if (name.includes("hoop")) folderCounts.queueHoopEarrings++;
-                else if (name.includes("charm")) folderCounts.queueCharms++;
-                else folderCounts.queueRegNecklace++;
+                const route = routeFolderName(setRef.name);
+                if (route && folderCounts[route.queueId] != null) {
+                  folderCounts[route.queueId]++;
+                } else {
+                  // Unknown prefix — count as Reg Necklace by default so
+                  // the user still notices something is up via the count.
+                  folderCounts.queueRegNecklace++;
+                }
             });
             
             Object.keys(folderCounts).forEach(id => {
@@ -1136,9 +1212,15 @@ ANTI-REPETITION (TITLE)
                             if (now - lastChecked < TEN_MINUTES) continue;
                         }
 
-                        // Look inside the folder to count the images
+                        // Look inside the folder. Listing-Generator-1 always
+                        // writes a manifest.json next to the slot images;
+                        // exclude it from the count so the threshold reflects
+                        // image slots only.
                         const setFiles = await setRef.listAll();
-                        const imageCount = setFiles.items.length;
+                        const imageItems = setFiles.items.filter(
+                          (it) => !/manifest\.json$/i.test(it.name)
+                        );
+                        const imageCount = imageItems.length;
 
                         if (imageCount < 7) {
                             console.warn(`Skipping ${setName}: Only found ${imageCount} images. Retrying in 10 minutes.`);
@@ -1369,13 +1451,15 @@ ANTI-REPETITION (TITLE)
             // vi. Create Listing (1st pass)
             updateFirebaseStatus("Uploading Original...", "working");
             
-            // Map folder context to proper listing ID queue
-            let targetQueueId = "queueRegNecklace";
-            const lowerCtx = cleanContext.toLowerCase();
-            if (lowerCtx.includes("beady")) targetQueueId = "queueBeadyNecklace";
-            else if (lowerCtx.includes("stud")) targetQueueId = "queueStudEarrings";
-            else if (lowerCtx.includes("hoop")) targetQueueId = "queueHoopEarrings";
-            else if (lowerCtx.includes("charm")) targetQueueId = "queueCharms";
+            // Map folder context to proper listing ID queue.
+            // Use routeFolderName() (prefix-based, not substring-based) so
+            // Bracelets routes to queueBracelets and Charms doesn't bleed
+            // into other categories' substrings.
+            const route = routeFolderName(setName);
+            let targetQueueId = route ? route.queueId : "queueRegNecklace";
+            if (!route) {
+                console.warn(`No category match for folder "${setName}"; defaulting to Reg Necklace queue.`);
+            }
             
             // Lock in our queue choice globally so Create Listing knows where to look
             window.__activeAutomationQueueId = targetQueueId;
@@ -1423,10 +1507,19 @@ ANTI-REPETITION (TITLE)
                 }, 2000, 300000);
             }
             
-            // ix. Finish - Move Folder to Listed_Sets
-            updateFirebaseStatus("Moving to Listed...", "working");
+            // ix. Finish — Move folder to Approved_Listing_Sets.
+            //
+            // ARCHITECTURE NOTE: This is the second half of the hand-off
+            // with Listing-Generator-1.html. The set originally arrived in
+            // Completed_Listing_Sets/{Category}_{SetName} when the user
+            // clicked "Approve set" in Listing Generator. We now move it
+            // into Approved_Listing_Sets/{Category}_{SetName}, which is
+            // the folder the Listing Generator's read-only "Approved Sets"
+            // tab displays. This closes the loop: a green chip in that tab
+            // means "this set has been listed on Etsy".
+            updateFirebaseStatus("Moving to Approved...", "working");
             try {
-                const destPath = `listing-generator-1/Listed_Sets/${setName}`;
+                const destPath = `listing-generator-1/Generated_Listing_Sets/Approved_Listing_Sets/${setName}`;
                 const itemsToMove = await setRef.listAll();
                 
                 // Fetch, Upload, and Delete each image with Retry Logic
@@ -1463,9 +1556,9 @@ ANTI-REPETITION (TITLE)
                         }
                     }
                 }
-                console.log(`Successfully moved ${setName} to Listed_Sets`);
+                console.log(`Successfully moved ${setName} to Approved_Listing_Sets`);
             } catch (moveErr) {
-                console.error(`Error moving ${setName} to Listed_Sets:`, moveErr);
+                console.error(`Error moving ${setName} to Approved_Listing_Sets:`, moveErr);
             }
             
             updateFirebaseStatus(`Done: ${setName}`, "active");
