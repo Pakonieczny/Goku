@@ -4880,28 +4880,125 @@ async function callOpenAI(payload, opts = {}) {
         
         let expandBtn = document.getElementById("expandUploadHistoryBtn");
         if (expandBtn) {
-            expandBtn.addEventListener("click", () => {
-                let history = JSON.parse(localStorage.getItem("etsyUploadHistory") || "[]");
+            expandBtn.addEventListener("click", async () => {
                 let listEl = document.getElementById("uploadHistoryList");
-                listEl.innerHTML = "";
-                
-                // Show newest sessions at the top
-                let displayHistory = [...history].reverse();
-                
-                if(displayHistory.length === 0) {
-                     listEl.innerHTML = "<li class='collection-item'>No uploads recorded yet.</li>";
-                } else {
-                     displayHistory.forEach(session => {
-                        let li = document.createElement("li");
-                        li.className = "collection-item";
-                        let typeText = session.isManual ? "Manual Uploads" : "Auto-Pilot Session";
-                        li.innerHTML = `<strong>${typeText}</strong> (${session.startTime}) <span class="badge blue white-text">${session.count} Uploads</span>`;
-                        listEl.appendChild(li);
-                    });
-                }
-                
-                let modalInst = M.Modal.getInstance(document.getElementById("uploadHistoryModal")) || M.Modal.init(document.getElementById("uploadHistoryModal"));
+                let modalEl = document.getElementById("uploadHistoryModal");
+                let titleEl = modalEl ? modalEl.querySelector("h4") : null;
+                if (titleEl) titleEl.textContent = "Listed Sets in Firebase";
+
+                listEl.innerHTML = "<li class='collection-item'>Loading from Firebase…</li>";
+
+                // Open the modal immediately so the user sees the loading
+                // state instead of staring at an unresponsive button.
+                let modalInst = M.Modal.getInstance(modalEl) || M.Modal.init(modalEl);
                 modalInst.open();
+
+                try {
+                    // Pull from BOTH the new "done" pile (Approved_Listing_Sets,
+                    // the folder this app moves finished sets to after listing
+                    // them on Etsy) AND the legacy Listed_Sets folder (kept for
+                    // backwards compatibility with sets processed before the
+                    // folder rename). De-duplicate by folder name.
+                    const approvedRef = storage.ref(
+                        'listing-generator-1/Generated_Listing_Sets/Approved_Listing_Sets'
+                    );
+                    const legacyRef = storage.ref('listing-generator-1/Listed_Sets');
+
+                    const seen = new Map(); // name → {ref, source}
+                    try {
+                        const approvedRes = await approvedRef.listAll();
+                        for (const p of approvedRes.prefixes) {
+                            const name = p.name.replace(/\/$/, "");
+                            seen.set(name, { ref: p, source: "Approved_Listing_Sets" });
+                        }
+                    } catch (e) { console.warn("Couldn't list Approved_Listing_Sets:", e); }
+                    try {
+                        const legacyRes = await legacyRef.listAll();
+                        for (const p of legacyRes.prefixes) {
+                            const name = p.name.replace(/\/$/, "");
+                            if (!seen.has(name)) {
+                                seen.set(name, { ref: p, source: "Listed_Sets (legacy)" });
+                            }
+                        }
+                    } catch (e) { console.warn("Couldn't list Listed_Sets:", e); }
+
+                    const folders = [...seen.entries()].map(([name, info]) => ({
+                        name, ...info
+                    }));
+                    // Newest first by Set_N suffix; fall back to name order.
+                    folders.sort((a, b) => {
+                        const aN = parseInt((a.name.match(/Set_(\d+)/) || [])[1] || 0, 10);
+                        const bN = parseInt((b.name.match(/Set_(\d+)/) || [])[1] || 0, 10);
+                        return bN - aN || b.name.localeCompare(a.name);
+                    });
+
+                    listEl.innerHTML = "";
+
+                    // Header summary line
+                    const summary = document.createElement("li");
+                    summary.className = "collection-item";
+                    summary.style.background = "#e8f5e9";
+                    summary.style.fontWeight = "bold";
+                    summary.textContent = `${folders.length} listed set${folders.length === 1 ? "" : "s"} in Firebase`;
+                    listEl.appendChild(summary);
+
+                    if (folders.length === 0) {
+                        const empty = document.createElement("li");
+                        empty.className = "collection-item";
+                        empty.textContent = "No listed sets yet. Sets appear here after Index.html finishes processing them.";
+                        listEl.appendChild(empty);
+                    } else {
+                        // Render folders. We don't fetch image counts up front
+                        // (each folder requires a separate listAll call which
+                        // gets expensive at scale); we do it lazily on click.
+                        for (const f of folders) {
+                            const li = document.createElement("li");
+                            li.className = "collection-item";
+                            const route = (typeof routeFolderName === "function")
+                                ? routeFolderName(f.name)
+                                : null;
+                            const catLabel = route ? route.category.replace(/_/g, " ") : "Uncategorised";
+                            const sourceTag = f.source === "Approved_Listing_Sets"
+                                ? "<span class='badge green white-text'>current</span>"
+                                : "<span class='badge grey white-text'>legacy</span>";
+                            li.innerHTML = `
+                                <div style="display:flex; justify-content:space-between; align-items:center; gap:8px;">
+                                  <div>
+                                    <strong>${f.name}</strong>
+                                    <div style="font-size:11px; color:#666;">${catLabel}</div>
+                                  </div>
+                                  <div>${sourceTag}</div>
+                                </div>
+                            `;
+                            listEl.appendChild(li);
+                        }
+                    }
+
+                    // Local session history kept as a small footer section
+                    // so the upload-counter context isn't lost.
+                    let history = JSON.parse(localStorage.getItem("etsyUploadHistory") || "[]");
+                    if (history.length > 0) {
+                        const sep = document.createElement("li");
+                        sep.className = "collection-item";
+                        sep.style.background = "#fafafa";
+                        sep.style.fontWeight = "bold";
+                        sep.style.marginTop = "12px";
+                        sep.textContent = "Recent upload sessions (this browser only)";
+                        listEl.appendChild(sep);
+                        const recent = [...history].reverse().slice(0, 10);
+                        for (const session of recent) {
+                            const li = document.createElement("li");
+                            li.className = "collection-item";
+                            li.style.fontSize = "12px";
+                            const typeText = session.isManual ? "Manual" : "Auto-Pilot";
+                            li.innerHTML = `${typeText} · ${session.startTime} <span class='badge blue white-text'>${session.count}</span>`;
+                            listEl.appendChild(li);
+                        }
+                    }
+                } catch (err) {
+                    console.error("Failed to load listed sets:", err);
+                    listEl.innerHTML = `<li class='collection-item' style='color:#c62828;'>Failed to load: ${err.message || err}</li>`;
+                }
             });
         }
     });
