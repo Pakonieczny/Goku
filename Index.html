@@ -1207,6 +1207,12 @@ ANTI-REPETITION (TITLE)
                     let readySetRef = null;
                     let readySetName = null;
 
+                    // Track whether we saw any ready folders that we had to
+                    // skip purely because their category had no Listing ID
+                    // available. Used purely for the status text below so the
+                    // user understands WHY auto-pilot is idling.
+                    let skippedForMissingId = false;
+
                     // Loop through available new sets to find one that is completely ready
                     for (const setRef of newSets) {
                         const setName = setRef.name.replace(/\/$/, "");
@@ -1215,6 +1221,31 @@ ANTI-REPETITION (TITLE)
                         if (window.__incompleteSetsTracker[setName]) {
                             const lastChecked = window.__incompleteSetsTracker[setName];
                             if (now - lastChecked < TEN_MINUTES) continue;
+                        }
+
+                        // --- NEW: Pre-flight queue check ---
+                        // Auto-pilot must only pick a folder whose target
+                        // queue has at least one Listing ID waiting. Without
+                        // this, the scan happily grabs the first ready folder
+                        // it sees (e.g. one of 222 Beady_Necklace folders)
+                        // even though there's no Beady Necklace Listing ID
+                        // to pair it with — wasting an OpenAI round-trip and
+                        // confusing the user with a generated title/desc
+                        // for the wrong category. The downstream check in
+                        // runFullAutomationSequence (around the
+                        // createListingBtn click) is kept as a safety net.
+                        const route = routeFolderName(setName);
+                        const targetQueueId = route ? route.queueId : "queueRegNecklace";
+                        const qEl = document.getElementById(targetQueueId);
+                        if (!qEl || !qEl.value.trim()) {
+                            // No Listing ID for this category right now. Skip
+                            // this folder — don't add to __incompleteSetsTracker
+                            // because the lack-of-ID state can change at any
+                            // time when the user pastes a new ID, and we want
+                            // to re-evaluate on the very next scan.
+                            console.log(`Auto: skipping ${setName} — no Listing ID in ${targetQueueId}.`);
+                            skippedForMissingId = true;
+                            continue;
                         }
 
                         // Look inside the folder. Listing-Generator-1 always
@@ -1245,6 +1276,10 @@ ANTI-REPETITION (TITLE)
                         foundReadySet = true;
                         window.__isScanningFB = false; // release lock to allow processing to run cleanly
                         await runFullAutomationSequence(readySetRef, readySetName);
+                    } else if (skippedForMissingId) {
+                        // Distinct status so the user knows it's an ID
+                        // shortage, not a "no folders yet" situation.
+                        updateFirebaseStatus("Waiting — paste a Listing ID for a ready category", "active");
                     } else {
                         updateFirebaseStatus("Waiting for ready sets...", "active");
                     }
