@@ -1302,36 +1302,105 @@ ANTI-REPETITION (TITLE)
     // Helper: Wait function
     const wait = ms => new Promise(r => setTimeout(r, ms));
 
-    // Convert remote image URLs (e.g., Firebase Storage download URLs) into a same-origin proxy URL
-    // so they can be safely used with <img crossOrigin="anonymous"> and drawn to <canvas>.
+    // After fetchImageViaChunkedProxy() hydrates a Firebase URL into a
+    // same-origin blob: URL, that's what ends up in window.previewImages —
+    // and blob:/data: URLs don't trip CORS in any of <img>, canvas, or
+    // fetch(). So this helper has very little to do in normal operation.
     //
-    // Firebase Storage does NOT currently send Access-Control-Allow-Origin for
-    // this site's origin (confirmed via console: "blocked by CORS policy: No
-    // 'Access-Control-Allow-Origin' header is present on the requested
-    // resource"). Until the bucket-level CORS config is fixed via `gsutil cors
-    // set`, we route image loads through netlify/functions/corsProxy.js, which
-    // refetches the URL server-side and re-serves it with proper CORS headers.
-    //
-    // We deliberately leave data: / blob: URLs and non-Firebase hosts alone so
-    // we don't add unnecessary proxy hops for things that already work.
+    // It still exists as a safety net: if a code path somehow stores a raw
+    // Firebase URL in previewImages (e.g. a future regression, or a manual
+    // paste), the display layer will route that one URL through the proxy
+    // rather than silently fail with CORS. The proxy is now a chunked
+    // passthrough so quality is preserved either way.
     function toCanvasSafeSrc(src) {
         if (!src) return src;
-        // Pass-through for non-network URLs — they don't trigger CORS.
+        // Pass-through for blob:/data: URLs — same-origin, no CORS issue.
         if (/^(data:|blob:)/i.test(src)) return src;
         // Pass-through if already proxied (idempotent).
         if (src.indexOf("/.netlify/functions/corsProxy") !== -1) return src;
         try {
             const u = new URL(src, window.location.href);
-            const needsProxy =
+            const isFirebase =
                 u.hostname === "firebasestorage.googleapis.com" ||
                 u.hostname === "storage.googleapis.com";
-            if (needsProxy) {
+            if (isFirebase) {
+                // Fallback: chunked passthrough returns chunk 0 only, which
+                // covers any image up to 4 MB without any further work. For
+                // larger images, prefer fetchImageViaChunkedProxy() upstream.
                 return "/.netlify/functions/corsProxy?url=" + encodeURIComponent(src);
             }
         } catch (e) {
             // Unparseable — fall through and return src unchanged.
         }
         return src;
+    }
+
+    // Fetch a Firebase-hosted image via the chunked corsProxy and return a
+    // same-origin blob: URL pointing to the assembled bytes.
+    //
+    // Why: Firebase Storage does not send CORS headers for this origin, so
+    // direct <img>/canvas/fetch() access is blocked. Netlify Functions also
+    // cap individual responses at ~6 MB. The proxy works around both: it
+    // serves byte ranges (Range upstream → Firebase honors it) one chunk at
+    // a time. We assemble the chunks here, hand back a blob URL, and the
+    // resulting image is BIT-FOR-BIT identical to the source — no recompression,
+    // no resize, no quality loss.
+    //
+    // The returned URL stays valid until URL.revokeObjectURL() is called or
+    // the document is unloaded. Callers should treat it as a replacement for
+    // the original Firebase URL for browser-side use.
+    async function fetchImageViaChunkedProxy(firebaseUrl) {
+        const buffers = [];
+        let contentType = "application/octet-stream";
+        let chunkIndex = 0;
+        const MAX_CHUNKS = 32; // 128 MB hard ceiling — well past any reasonable image.
+
+        while (chunkIndex < MAX_CHUNKS) {
+            const proxyUrl =
+                "/.netlify/functions/corsProxy"
+                + "?url=" + encodeURIComponent(firebaseUrl)
+                + "&chunk=" + chunkIndex;
+            const resp = await fetch(proxyUrl);
+            if (!resp.ok) {
+                throw new Error(`Chunk ${chunkIndex} failed: HTTP ${resp.status}`);
+            }
+            if (chunkIndex === 0) {
+                contentType = resp.headers.get("Content-Type") || contentType;
+            }
+            buffers.push(await resp.arrayBuffer());
+
+            const isLast = resp.headers.get("X-Is-Last-Chunk") === "true";
+            if (isLast) break;
+            chunkIndex++;
+        }
+        if (chunkIndex >= MAX_CHUNKS) {
+            throw new Error("Image exceeds maximum chunk count");
+        }
+
+        const blob = new Blob(buffers, { type: contentType });
+        return URL.createObjectURL(blob);
+    }
+
+    // For OpenAI vision calls: the request body flows browser → openaiProxy →
+    // OpenAI. OpenAI's server fetches whichever URL we hand it (server-side,
+    // no browser CORS in play). Sending the lightweight Firebase URL keeps
+    // request bodies tiny — sending a 5 MB base64 data URL inflates every
+    // vision request and risks Netlify's 6 MB request cap on openaiProxy.
+    //
+    // So: prefer the cached-original Firebase URL keyed by photoId, but
+    // only when previewImages[i] is still our untouched blob: URL. If the
+    // user (or auto-crop) has replaced the slot with a data: URL, that data:
+    // URL IS the new ground truth — hand it to OpenAI directly.
+    function imageDataForVision(i) {
+        const cur = window.previewImages && window.previewImages[i];
+        if (typeof cur === "string" && cur.indexOf("blob:") === 0) {
+            const id = window.photoIds && window.photoIds[i];
+            const orig = id && window.previewOriginalByPhotoId
+                ? window.previewOriginalByPhotoId[id]
+                : null;
+            if (orig) return orig;
+        }
+        return cur || null;
     }
 
     // Helper: Wait for a condition function to return true
@@ -1345,8 +1414,10 @@ ANTI-REPETITION (TITLE)
     }
 
     async function getTwoWordCharmDescription() {
-        // Grab the image from previewCell0 (index 0)
-        const imgData = window.previewImages && window.previewImages[0];
+        // Grab the image from previewCell0 (index 0). Prefer the original
+        // Firebase URL when available (lightweight server-side fetch) over
+        // sending a 5+ MB base64 data URL through openaiProxy.
+        const imgData = imageDataForVision(0);
         if (!imgData) return "";
 
         let retries = 3; 
@@ -1448,13 +1519,45 @@ ANTI-REPETITION (TITLE)
             });
             
             const filesData = await Promise.all(filePromises);
-            
-            // Populate window vars (store RAW Firebase URLs; proxy only when cropping)
-            filesData.forEach(f => {
-                if(f.idx >= 0 && f.idx < 8) {
-                    window.previewImages[f.idx] = f.url;
+
+            // Hydrate each Firebase URL into a same-origin blob: URL via the
+            // chunked proxy. The proxy transfers original bytes in 4 MB
+            // chunks (preserving full quality), and we assemble them client-
+            // side into a Blob. The resulting blob: URL:
+            //   - displays cleanly in <img> with crossOrigin="anonymous"
+            //   - works with canvas.drawImage() without tainting
+            //   - works with fetch() during the IndexedDB save in idbPut()
+            // We also remember the original Firebase URL keyed by photoId so
+            // OpenAI vision calls can keep using the lightweight URL (server-
+            // side fetch, no CORS) instead of paying a 5+ MB base64 payload
+            // per request. See imageDataForVision().
+            updateFirebaseStatus("Downloading images...", "working");
+            const hydrated = await Promise.all(filesData.map(async (f) => {
+                if (f.idx < 0 || f.idx >= 8) return f;
+                try {
+                    const blobUrl = await fetchImageViaChunkedProxy(f.url);
+                    return { ...f, displayUrl: blobUrl, originalUrl: f.url };
+                } catch (e) {
+                    console.error(`Chunked fetch failed for ${f.name}:`, e);
+                    // Last-resort fallback: store the raw URL. Display may
+                    // fail with CORS, but OpenAI calls (server-side) will
+                    // still see a usable URL.
+                    return { ...f, displayUrl: f.url, originalUrl: f.url };
+                }
+            }));
+
+            // Populate window vars. previewImages holds the same-origin
+            // blob: URL for browser use; the original Firebase URL is kept
+            // in the photoId-keyed map for OpenAI vision calls.
+            hydrated.forEach(f => {
+                if (f.idx >= 0 && f.idx < 8) {
+                    const photoId = 'fb-' + Date.now() + '-' + f.idx;
+                    window.previewImages[f.idx] = f.displayUrl;
                     window.photoNames[f.idx] = f.name;
-                    window.photoIds[f.idx] = 'fb-' + Date.now() + '-' + f.idx;
+                    window.photoIds[f.idx] = photoId;
+                    if (f.originalUrl) {
+                        window.previewOriginalByPhotoId[photoId] = f.originalUrl;
+                    }
                 }
             });
             updateStaticPreviewGrid();
@@ -1648,7 +1751,8 @@ ANTI-REPETITION (TITLE)
     window.metadataHandler = window.metadataHandler || (function(){
       async function analyzeAndEmbedMetadata(i){
         try {
-          const imgData = (window.previewImages && window.previewImages[i]) || null;
+          // Prefer the original Firebase URL when available — see imageDataForVision().
+          const imgData = imageDataForVision(i);
           if (!imgData) {
             if (window.M && M.toast) M.toast({ html: "No image in slot " + (i+1) });
             return;
@@ -1674,7 +1778,8 @@ ANTI-REPETITION (TITLE)
     window.metadataHandler = (function () {
       async function analyzeAndEmbedMetadata(i) {
         try {
-          const imgData = (window.previewImages && window.previewImages[i]) || null;
+          // Prefer the original Firebase URL when available — see imageDataForVision().
+          const imgData = imageDataForVision(i);
           if (!imgData) {
             if (window.M?.toast) M.toast({ html: "No image in slot " + (i + 1) });
             return;
@@ -1760,6 +1865,11 @@ ANTI-REPETITION (TITLE)
     window.photoMeta = [];
     window.draggedIndex = null;
     window.photoIds = [];
+    // Map of photoId → original Firebase URL. Lets OpenAI vision calls keep
+    // using the lightweight URL (server-side fetch, no CORS) even after we
+    // replace previewImages[i] with a same-origin blob: URL for browser-side
+    // display. See imageDataForVision().
+    window.previewOriginalByPhotoId = {};
     window.currentCropIndex = null;
     window.cropper = null;
     window.reservedPhotos = [];
@@ -2299,10 +2409,20 @@ https://www.etsy.com/your/shops/me/listing-editor/edit/1822973998
        if (skp) skp.textContent = "";
 
         // 2) Preview cells 0–7 — compact reset (don’t leave 'length' inflated)
+        // Revoke any blob: URLs we own so the underlying Blob can be GC'd.
+        // Other URL forms (data:, http(s):) are no-ops for revokeObjectURL.
+        (window.previewImages || []).forEach(u => {
+          if (typeof u === "string" && u.indexOf("blob:") === 0) {
+            try { URL.revokeObjectURL(u); } catch (e) {}
+          }
+        });
         window.previewImages = [];
         window.photoNames    = [];
         window.photoMeta     = [];
         window.photoIds      = []; // keep these in sync too
+        // OpenAI-original lookup is keyed by photoId; clearing the array of
+        // photoIds orphans every entry, so drop the map too.
+        window.previewOriginalByPhotoId = {};
 
         for (let i = 0; i <= 7; i++) {
           const cell = document.getElementById("previewCell" + i);
@@ -4300,6 +4420,17 @@ https://www.etsy.com/your/shops/me/listing-editor/edit/1822973998
             removeBtn.textContent = "X";
             removeBtn.addEventListener("click", ev => {
               ev.stopPropagation();
+              // Free the underlying Blob (no-op for data:/http URLs).
+              const dyingUrl = window.previewImages[i];
+              if (typeof dyingUrl === "string" && dyingUrl.indexOf("blob:") === 0) {
+                try { URL.revokeObjectURL(dyingUrl); } catch (e) {}
+              }
+              // Drop the matching OpenAI-original lookup entry before we
+              // splice photoIds and lose the key.
+              const dyingId = window.photoIds[i];
+              if (dyingId && window.previewOriginalByPhotoId) {
+                delete window.previewOriginalByPhotoId[dyingId];
+              }
               window.previewImages.splice(i, 1);
               window.photoNames.splice(i, 1);
               window.photoMeta.splice(i, 1);

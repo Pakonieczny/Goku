@@ -1,154 +1,149 @@
 /**
- * corsProxy
- * - Server-side proxy for Firebase Storage download URLs so the browser can use them in <canvas>.
- * - Prevents CORS failures like:
- *   "No 'Access-Control-Allow-Origin' header is present..."
+ * corsProxy — chunked, lossless passthrough
  *
- * Update:
- * - Adds optional image conversion to JPEG (NO RESIZE) to reduce payload size and avoid 413.
- * - Uses sharp if available; otherwise falls back to passthrough.
+ * Server-side proxy for Firebase Storage download URLs so the browser can use
+ * them in <img>, <canvas>, and fetch() despite the bucket not sending CORS
+ * headers for this origin.
+ *
+ * Design:
+ *   Netlify Functions cap each response body at ~6 MB (base64-encoded, which
+ *   inflates by ~33%, so the practical binary ceiling is ~4.5 MB). Earlier
+ *   versions of this function compressed/resized images to fit, which
+ *   degraded photo quality. We now transfer the ORIGINAL bytes in chunks
+ *   using HTTP Range requests against Firebase upstream (Firebase Storage
+ *   honors Range natively). The client assembles the chunks into a Blob and
+ *   uses URL.createObjectURL() to get a same-origin URL with the original
+ *   bytes intact — bit-for-bit identical to the source. Zero quality loss.
  *
  * Query params:
- *   ?url=<encoded>
- *   &format=jpeg|png|webp   (default: jpeg)
- *   &quality=1..100         (default: 85)
+ *   ?url=<encoded>          (required)  — full Firebase download URL
+ *   &chunk=<index>          (optional)  — 0-indexed chunk number, default 0
+ *
+ * Response (200):
+ *   Body: raw bytes (base64-encoded by Netlify)
+ *   Headers:
+ *     Content-Type: forwarded from upstream
+ *     X-Total-Size: total bytes for the whole resource (decimal)
+ *     X-Chunk-Index: echo of requested chunk index
+ *     X-Chunk-Bytes-Start / X-Chunk-Bytes-End: inclusive byte range returned
+ *     X-Is-Last-Chunk: "true" when this chunk completes the resource
+ *     Access-Control-Expose-Headers: lists the X-* headers so the browser
+ *                                    can read them from a CORS response
  */
 
-// Netlify Functions runtime can vary; ensure fetch exists.
+// 4 MB binary → ~5.3 MB base64. Comfortable margin under Netlify's ~6 MB cap.
+const CHUNK_SIZE = 4_000_000;
+
 async function getFetch() {
   if (typeof fetch === "function") return fetch;
   const mod = await import("node-fetch");
   return mod.default;
 }
 
-// Best-effort: use sharp if present. If not installed, we fall back to passthrough.
-async function getSharp() {
-  try {
-    const mod = await import("sharp");
-    return mod.default || mod;
-  } catch {
-    return null;
-  }
+const CORS_HEADERS = {
+  "Access-Control-Allow-Origin": "*",
+  "Access-Control-Allow-Methods": "GET,OPTIONS",
+  "Access-Control-Allow-Headers": "*",
+};
+
+function errorResponse(statusCode, message) {
+  return {
+    statusCode,
+    headers: { ...CORS_HEADERS, "Content-Type": "text/plain" },
+    body: String(message),
+  };
 }
 
 exports.handler = async (event) => {
-  // Preflight
+  // CORS preflight
   if (event.httpMethod === "OPTIONS") {
-    return {
-      statusCode: 204,
-      headers: {
-        "Access-Control-Allow-Origin": "*",
-        "Access-Control-Allow-Methods": "GET,OPTIONS",
-        "Access-Control-Allow-Headers": "*",
-      },
-      body: "",
-    };
+    return { statusCode: 204, headers: CORS_HEADERS, body: "" };
   }
 
+  const url = event.queryStringParameters?.url;
+  if (!url) return errorResponse(400, "Missing required query param: url");
+
+  // SSRF guard — only allow Firebase/Google Storage hosts.
+  let u;
   try {
-    const url = event.queryStringParameters?.url;
-    if (!url) {
-      return {
-        statusCode: 400,
-        headers: { "Access-Control-Allow-Origin": "*" },
-        body: "Missing required query param: url",
-      };
+    u = new URL(url);
+  } catch {
+    return errorResponse(400, "Invalid url");
+  }
+  const allowedHosts = new Set([
+    "firebasestorage.googleapis.com",
+    "storage.googleapis.com",
+  ]);
+  if (!allowedHosts.has(u.hostname)) {
+    return errorResponse(400, "Disallowed host");
+  }
+
+  // Parse chunk index. Default 0.
+  const chunkRaw = event.queryStringParameters?.chunk;
+  const chunkIndex = Math.max(0, parseInt(chunkRaw ?? "0", 10) || 0);
+  const start = chunkIndex * CHUNK_SIZE;
+  const end = start + CHUNK_SIZE - 1; // inclusive
+
+  const _fetch = await getFetch();
+  const controller = new AbortController();
+  const timer = setTimeout(() => controller.abort(), 20000); // 20s upstream timeout
+
+  try {
+    const resp = await _fetch(url, {
+      headers: { Range: `bytes=${start}-${end}` },
+      redirect: "follow",
+      signal: controller.signal,
+    });
+    clearTimeout(timer);
+
+    // Firebase returns 206 for honored Range requests, 200 for whole-file
+    // responses (e.g. when the requested range covers the entire file).
+    if (resp.status !== 200 && resp.status !== 206) {
+      const upstreamBody = await resp.text();
+      return errorResponse(
+        resp.status,
+        `Upstream returned ${resp.status}: ${upstreamBody.slice(0, 500)}`
+      );
     }
 
-    // Transform knobs (NO RESIZE)
-    const format = String(event.queryStringParameters?.format || "jpeg").toLowerCase();
-    const quality = Math.min(100, Math.max(1, Number(event.queryStringParameters?.quality ?? 85)));
+    const buf = Buffer.from(await resp.arrayBuffer());
 
-    // Basic SSRF guard: only allow known Firebase/Google Storage hosts.
-    const u = new URL(url);
-    const allowedHosts = new Set([
-      "firebasestorage.googleapis.com",
-      "storage.googleapis.com",
-    ]);
-    if (!allowedHosts.has(u.hostname)) {
-      return {
-        statusCode: 400,
-        headers: { "Access-Control-Allow-Origin": "*" },
-        body: "Disallowed host",
-      };
+    // Determine total resource size. With 206, Content-Range looks like:
+    //   "bytes 0-3999999/12345678"
+    // With 200, Content-Length is the whole file size.
+    let totalSize = buf.length;
+    const contentRange = resp.headers.get("content-range");
+    if (contentRange) {
+      const m = /\/(\d+)\s*$/.exec(contentRange);
+      if (m) totalSize = parseInt(m[1], 10) || totalSize;
+    } else {
+      const cl = resp.headers.get("content-length");
+      if (cl) totalSize = parseInt(cl, 10) || totalSize;
     }
 
-    const _fetch = await getFetch();
-
-    // Timeout guard so we don't hang and surface as 502
-    const controller = new AbortController();
-    const t = setTimeout(() => controller.abort(), 20000); // 20s
-
-    const resp = await _fetch(url, { redirect: "follow", signal: controller.signal });
-    clearTimeout(t);
-
-    let contentType = resp.headers.get("content-type") || "application/octet-stream";
-    const cacheControl = resp.headers.get("cache-control") || "public, max-age=86400";
-
-    let buf = Buffer.from(await resp.arrayBuffer());
-
-    // If it's an image, try to convert format (NO RESIZE).
-    const looksLikeImage = /^image\//i.test(contentType);
-    if (looksLikeImage) {
-      const sharp = await getSharp();
-      if (sharp) {
-        try {
-          let pipeline = sharp(buf, { failOnError: false }).rotate();
-
-          if (format === "webp") {
-            pipeline = pipeline.webp({ quality });
-            contentType = "image/webp";
-          } else if (format === "png") {
-            pipeline = pipeline.png({ compressionLevel: 9 });
-            contentType = "image/png";
-          } else {
-            // Default: JPEG (most effective size drop vs PNG)
-            pipeline = pipeline.jpeg({ quality, mozjpeg: true });
-            contentType = "image/jpeg";
-          }
-
-          buf = await pipeline.toBuffer();
-        } catch {
-          // Transform failed — fall back to original bytes.
-        }
-      }
-    }
-
-    // Safety: avoid returning extremely large base64 payloads that can trip platform limits.
-    // If this triggers, the proper fix is Firebase bucket CORS (so you don't need proxy for canvas).
-    const MAX_BYTES = 8_000_000; // raised since JPEG conversion usually shrinks PNG a lot
-    if (buf.length > MAX_BYTES) {
-      return {
-        statusCode: 413,
-        headers: {
-          "Access-Control-Allow-Origin": "*",
-          "Access-Control-Allow-Methods": "GET,OPTIONS",
-          "Access-Control-Allow-Headers": "*",
-          "Content-Type": "text/plain",
-        },
-        body:
-          "Image too large to proxy via Netlify Function. Try proxy params (format=jpeg&quality=80) or configure Firebase Storage CORS for your domain.",
-      };
-    }
+    const chunkEnd = start + buf.length - 1;
+    const isLastChunk = chunkEnd + 1 >= totalSize;
 
     return {
-      statusCode: resp.status,
+      statusCode: 200,
       headers: {
-        "Access-Control-Allow-Origin": "*",
-        "Access-Control-Allow-Methods": "GET,OPTIONS",
-        "Access-Control-Allow-Headers": "*",
-        "Content-Type": contentType,
-        // Keep caching reasonable; these Firebase token URLs are already effectively versioned.
-        "Cache-Control": cacheControl,
+        ...CORS_HEADERS,
+        "Content-Type": resp.headers.get("content-type") || "application/octet-stream",
+        "Cache-Control": resp.headers.get("cache-control") || "public, max-age=86400",
+        "X-Total-Size": String(totalSize),
+        "X-Chunk-Index": String(chunkIndex),
+        "X-Chunk-Bytes-Start": String(start),
+        "X-Chunk-Bytes-End": String(chunkEnd),
+        "X-Is-Last-Chunk": isLastChunk ? "true" : "false",
+        // Without this, browsers can't read the X-* headers from a CORS response.
+        "Access-Control-Expose-Headers":
+          "X-Total-Size, X-Chunk-Index, X-Chunk-Bytes-Start, X-Chunk-Bytes-End, X-Is-Last-Chunk",
       },
       body: buf.toString("base64"),
       isBase64Encoded: true,
     };
   } catch (err) {
-    return {
-      statusCode: 500,
-      headers: { "Access-Control-Allow-Origin": "*" },
-      body: "Proxy error: " + (err?.message || String(err)),
-    };
+    clearTimeout(timer);
+    return errorResponse(500, "Proxy error: " + (err?.message || String(err)));
   }
 };
