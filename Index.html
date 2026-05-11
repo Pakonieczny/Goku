@@ -1304,8 +1304,33 @@ ANTI-REPETITION (TITLE)
 
     // Convert remote image URLs (e.g., Firebase Storage download URLs) into a same-origin proxy URL
     // so they can be safely used with <img crossOrigin="anonymous"> and drawn to <canvas>.
+    //
+    // Firebase Storage does NOT currently send Access-Control-Allow-Origin for
+    // this site's origin (confirmed via console: "blocked by CORS policy: No
+    // 'Access-Control-Allow-Origin' header is present on the requested
+    // resource"). Until the bucket-level CORS config is fixed via `gsutil cors
+    // set`, we route image loads through netlify/functions/corsProxy.js, which
+    // refetches the URL server-side and re-serves it with proper CORS headers.
+    //
+    // We deliberately leave data: / blob: URLs and non-Firebase hosts alone so
+    // we don't add unnecessary proxy hops for things that already work.
     function toCanvasSafeSrc(src) {
-        // Firebase CORS is fixed! No proxy needed.
+        if (!src) return src;
+        // Pass-through for non-network URLs — they don't trigger CORS.
+        if (/^(data:|blob:)/i.test(src)) return src;
+        // Pass-through if already proxied (idempotent).
+        if (src.indexOf("/.netlify/functions/corsProxy") !== -1) return src;
+        try {
+            const u = new URL(src, window.location.href);
+            const needsProxy =
+                u.hostname === "firebasestorage.googleapis.com" ||
+                u.hostname === "storage.googleapis.com";
+            if (needsProxy) {
+                return "/.netlify/functions/corsProxy?url=" + encodeURIComponent(src);
+            }
+        } catch (e) {
+            // Unparseable — fall through and return src unchanged.
+        }
         return src;
     }
 
@@ -2737,7 +2762,7 @@ https://www.etsy.com/your/shops/me/listing-editor/edit/1822973998
       window.currentCropIndex = index;
       let cropModal = document.getElementById("photoCropModal");
       let cropImage = document.getElementById("cropImage");
-      cropImage.src = window.previewImages[index];
+      cropImage.src = toCanvasSafeSrc(window.previewImages[index]);
       cropImage.onload = function() {
         window.cropper = new Cropper(cropImage, {
           viewMode: 1,
@@ -4261,7 +4286,7 @@ https://www.etsy.com/your/shops/me/listing-editor/edit/1822973998
             previewBox.addEventListener("dragstart", e => { window.draggedIndex = i; });
             let img = document.createElement("img");
             img.crossOrigin = "anonymous";
-            img.src = window.previewImages[i];
+            img.src = toCanvasSafeSrc(window.previewImages[i]);
             previewBox.appendChild(img);
 
             // Default slight downward nudge so the visual center feels perfect
@@ -4330,7 +4355,7 @@ https://www.etsy.com/your/shops/me/listing-editor/edit/1822973998
             previewBox.addEventListener("dragstart", e => { window.draggedIndex = i; });
             let img = document.createElement("img");
             img.crossOrigin = "anonymous";
-            img.src = window.reservedPhotos[rIndex].src;
+            img.src = toCanvasSafeSrc(window.reservedPhotos[rIndex].src);
             previewBox.appendChild(img);
 
             // Match main cells: default 2px downward nudge
