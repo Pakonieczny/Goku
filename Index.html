@@ -487,6 +487,70 @@
       z-index: 3050;
     }
 
+    /* Duplicate Mode toggle (sits near the Duplicate Listing button) */
+    #duplicateModeToggle {
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      gap: 8px;
+      padding: 0 8px;
+      background: #f4f7f9;
+      border: 1px solid #cfd6db;
+      border-radius: 6px;
+      font-size: 12px;
+      font-weight: 700;
+      color: #37474f;
+      user-select: none;
+      cursor: pointer;
+      box-shadow: 0 1px 2px rgba(0,0,0,.06);
+      white-space: nowrap;
+      overflow: hidden;
+      box-sizing: border-box;
+      line-height: 1;
+    }
+    #duplicateModeToggle .dmt-track {
+      position: relative;
+      display: inline-block;
+      width: 34px;
+      height: 18px;
+      flex: 0 0 34px;
+      background-color: #b0bec5;
+      border-radius: 18px;
+      transition: background-color .2s ease;
+      box-sizing: border-box;
+      vertical-align: middle;
+    }
+    #duplicateModeToggle .dmt-knob {
+      position: absolute;
+      top: 2px;
+      left: 2px;
+      width: 14px;
+      height: 14px;
+      background-color: #fff;
+      border-radius: 50%;
+      box-shadow: 0 1px 2px rgba(0,0,0,.25);
+      transition: transform .2s ease;
+      box-sizing: border-box;
+    }
+    #duplicateModeToggle[aria-checked="true"] .dmt-track {
+      background-color: #26a69a;
+    }
+    #duplicateModeToggle[aria-checked="true"] .dmt-knob {
+      transform: translateX(16px);   /* 34 - 14 - 2 - 2 */
+    }
+    #duplicateModeToggle .dmt-state {
+      display: inline-block;
+      width: 22px;
+      text-align: left;
+      font-size: 11px;
+      font-weight: 700;
+      color: #26a69a;
+      line-height: 1;
+    }
+    #duplicateModeToggle[aria-checked="false"] .dmt-state {
+      color: #90a4ae;
+    }
+
      /* TEMP: hide the Create Listing completion checkmark */
      #createListingCheck { display: none !important; }
 
@@ -625,6 +689,17 @@
        <div class="pct">0%</div>
      </div>
      <div id="duplicateListingCheck" class="progress-check configurable" title="Duplicate complete">✓</div>
+
+     <!-- Duplicate Mode Toggle: lets the user choose whether the auto pipeline
+          runs the Duplicate Listing pass (publishing two variants per folder)
+          or runs in Single mode (one publish per folder, skip duplicate). -->
+     <div id="duplicateModeToggle" class="configurable" role="switch" aria-checked="true" tabindex="0" title="When OFF, the auto pipeline publishes a single listing per folder and skips the duplicate pass.">
+       <span class="dmt-track">
+         <span class="dmt-knob"></span>
+       </span>
+       <span id="duplicateModeState" class="dmt-state">ON</span>
+     </div>
+
      <button id="clearBtn" class="btn waves-effect waves-light red darken-1 configurable" style="margin-left:10px;">
        Clear
      </button>
@@ -1050,6 +1125,33 @@ ANTI-REPETITION (TITLE)
       return null;
     }
 
+    // ---------------------------------------------------------------
+    // decrementFolderCount(queueId)
+    // ---------------------------------------------------------------
+    // Reads the "N Folders" label for a given queue, subtracts one,
+    // clamps at zero, and writes the new value back. Used after each
+    // successful publish so the "X Folders" badge under each Etsy
+    // Shop Listings column reflects work immediately, without waiting
+    // for the next ~5-15s Firebase scan to refresh the count.
+    //
+    // The scan loop in checkFirebaseForSets() still re-computes counts
+    // from the live storage listing on every pass, so this local
+    // decrement is just for snappy UI feedback. Any drift is
+    // self-correcting on the next scan.
+    function decrementFolderCount(queueId) {
+      if (!queueId) return;
+      const el = document.getElementById("fb_count_" + queueId);
+      if (!el) return;
+      const m = (el.textContent || "").match(/(\d+)/);
+      let n = m ? parseInt(m[1], 10) : 0;
+      if (!Number.isFinite(n)) n = 0;
+      n = Math.max(0, n - 1);
+      el.textContent = n + " Folders";
+    }
+    // Expose globally for any other code paths that publish
+    // independently of runFullAutomationSequence().
+    window.decrementFolderCount = decrementFolderCount;
+
     // --- Firebase Logic for Completed Sets ---
     const firebaseConfig = {
       apiKey: "AIza" + "SyBXhQLsYRa4i0bX1TPTRiElF9Zjy5vSHlA",
@@ -1213,8 +1315,55 @@ ANTI-REPETITION (TITLE)
                     // user understands WHY auto-pilot is idling.
                     let skippedForMissingId = false;
 
-                    // Loop through available new sets to find one that is completely ready
+                    // -----------------------------------------------------------
+                    // Requirement 2: round-robin across categories.
+                    //
+                    // Group available folders by their target queue and then
+                    // cycle through categories one at a time. This way, when a
+                    // section like Stud Earrings runs out of folders, the
+                    // auto-pilot naturally rolls over to the next section that
+                    // still has work — and when multiple sections have folders
+                    // ready, we don't drain one category completely before
+                    // touching the others.
+                    //
+                    // The rotation index is persisted on window so it advances
+                    // every successful processing cycle.
+                    // -----------------------------------------------------------
+                    const CATEGORY_ORDER = [
+                      "queueRegNecklace",
+                      "queueBeadyNecklace",
+                      "queueStudEarrings",
+                      "queueHoopEarrings",
+                      "queueCharms",
+                    ];
+                    const setsByQueue = {};
+                    CATEGORY_ORDER.forEach(q => setsByQueue[q] = []);
                     for (const setRef of newSets) {
+                        const route = routeFolderName(setRef.name);
+                        const q = route ? route.queueId : "queueRegNecklace";
+                        if (!setsByQueue[q]) setsByQueue[q] = [];
+                        setsByQueue[q].push(setRef);
+                    }
+
+                    // Rotate starting point so each successful pass moves on to
+                    // the next category, keeping all sections progressing.
+                    window.__autoCategoryCursor = (window.__autoCategoryCursor || 0) % CATEGORY_ORDER.length;
+                    const startIdx = window.__autoCategoryCursor;
+                    const orderedSets = [];
+                    for (let i = 0; i < CATEGORY_ORDER.length; i++) {
+                        const idx = (startIdx + i) % CATEGORY_ORDER.length;
+                        const q = CATEGORY_ORDER[idx];
+                        const bucket = setsByQueue[q] || [];
+                        if (bucket.length === 0) continue; // section ran out — skip
+
+                        // Within a category, also skip silently if the user has
+                        // no Listing IDs for that section right now; we'll let
+                        // the inner loop below confirm and surface that state.
+                        for (const sr of bucket) orderedSets.push(sr);
+                    }
+
+                    // Loop through available new sets to find one that is completely ready
+                    for (const setRef of orderedSets) {
                         const setName = setRef.name.replace(/\/$/, "");
 
                         // Check if we skipped this folder recently
@@ -1264,10 +1413,25 @@ ANTI-REPETITION (TITLE)
                             continue; 
                         }
 
-                        // Ready to go!
+                        // Ready to go! Advance the round-robin cursor past the
+                        // category we just picked so the next scan starts on
+                        // the following section.
                         readySetRef = setRef;
                         readySetName = setName;
                         delete window.__incompleteSetsTracker[setName];
+
+                        // Move the category cursor forward by one so that
+                        // after this folder finishes, the next scan looks
+                        // at the following category first.
+                        {
+                          const pickedRoute = routeFolderName(setName);
+                          const pickedQueue = pickedRoute ? pickedRoute.queueId : "queueRegNecklace";
+                          const pickedIdx   = CATEGORY_ORDER.indexOf(pickedQueue);
+                          if (pickedIdx !== -1) {
+                            window.__autoCategoryCursor =
+                              (pickedIdx + 1) % CATEGORY_ORDER.length;
+                          }
+                        }
                         break; 
                     }
 
@@ -1650,29 +1814,47 @@ ANTI-REPETITION (TITLE)
             
             await wait(3000);
 
-            // vii. Duplicate Listing
-            updateFirebaseStatus("Duplicating...", "working");
-            document.getElementById("duplicateListingBtn").click();
-            
-            // Wait for Duplicate Checkmark
-            await waitForCondition(() => {
-                 return document.getElementById("duplicateListingCheck").style.display !== "none";
-            });
-            await wait(2000);
+            // --- Folder-count decrement (Requirement 1) -----------------
+            // The Firebase scan rebuilds folderCounts from the live storage
+            // listing, but that re-scan only runs every ~5-15s. To give the
+            // user immediate feedback after a successful publish, locally
+            // decrement the "X Folders" badge for the active category now.
+            // The next scan will reconcile against ground truth.
+            decrementFolderCount(targetQueueId);
+            // -----------------------------------------------------------
 
-            // viii. Create Listing (2nd pass - Variant)
-            updateFirebaseStatus("Uploading Variant...", "working");
-            // The automation logic in duplicateListingBtn has already swapped images and updated text.
-            // We need the NEXT listing ID from the active queue.
-            const qEl2 = document.getElementById(window.__activeAutomationQueueId);
-            if(!qEl2 || !qEl2.value.trim()) {
-                 console.warn("Ran out of Listing IDs for variant.");
+            // vii. Duplicate Listing (only when Duplicate Mode is ON)
+            // Requirement 3: when the user toggles Duplicate Mode OFF the
+            // pipeline publishes a single listing per folder and skips
+            // the duplicate pass + second create. When ON the original
+            // behaviour (publish original + variant) is preserved.
+            if (window.duplicateModeEnabled !== false) {
+                updateFirebaseStatus("Duplicating...", "working");
+                document.getElementById("duplicateListingBtn").click();
+
+                // Wait for Duplicate Checkmark
+                await waitForCondition(() => {
+                     return document.getElementById("duplicateListingCheck").style.display !== "none";
+                });
+                await wait(2000);
+
+                // viii. Create Listing (2nd pass - Variant)
+                updateFirebaseStatus("Uploading Variant...", "working");
+                // The automation logic in duplicateListingBtn has already swapped images and updated text.
+                // We need the NEXT listing ID from the active queue.
+                const qEl2 = document.getElementById(window.__activeAutomationQueueId);
+                if(!qEl2 || !qEl2.value.trim()) {
+                     console.warn("Ran out of Listing IDs for variant.");
+                } else {
+                     document.getElementById("createListingBtn").click();
+                     await waitForCondition(() => {
+                        const q = JSON.parse(localStorage.getItem("etsyUploadJobs") || "[]");
+                        return q.length === 0;
+                    }, 2000, 300000);
+                }
             } else {
-                 document.getElementById("createListingBtn").click();
-                 await waitForCondition(() => {
-                    const q = JSON.parse(localStorage.getItem("etsyUploadJobs") || "[]");
-                    return q.length === 0;
-                }, 2000, 300000);
+                console.log("Duplicate Mode OFF — skipping duplicate pass and variant upload.");
+                updateFirebaseStatus("Single mode: skipping duplicate", "working");
             }
             
             // ix. Finish — Move folder to Approved_Listing_Sets.
@@ -1900,6 +2082,7 @@ ANTI-REPETITION (TITLE)
       "#analyzeMetadataCheck",
       "#createListingCheck",
       "#duplicateListingCheck",
+      "#duplicateModeToggle",
       // --- NEW ELEMENTS ---
       "#globalUploadCount",
       "#expandUploadHistoryBtn"            
@@ -1908,6 +2091,10 @@ ANTI-REPETITION (TITLE)
     function isExcluded(el){
       // Prevent individual 5 queue inputs inside the wrapper from being absolutely positioned
       if (el.closest('#shopListingsWrapper') && el.id !== 'shopListingsWrapper') return true;
+      // Prevent the inner checkbox/slider of the Duplicate Mode toggle
+      // from being picked up as a separate movable element — only the
+      // wrapper #duplicateModeToggle should be positioned.
+      if (el.closest('#duplicateModeToggle') && el.id !== 'duplicateModeToggle') return true;
       // do NOT move overlays or any modal internals (including the config modal itself)
       return el.closest("#configModal") || el.closest(".modal") || el.classList.contains("modal") || el.classList.contains("modal-overlay");
     }
@@ -1980,6 +2167,7 @@ ANTI-REPETITION (TITLE)
       searchSpinner:             { left: 177,  top: 292, width: 20,  height: 20 },
       descriptionSpinner:        { left: 250,  top: 622, width: 20,  height: 20 },
       duplicateListingBtn:       { left: 1040, top: 10, width: 160, height: 35 },
+      duplicateModeToggle:       { left: 1040, top: 50, width: 75, height: 32 },
       clearBtn:                  { left: 1290, top: 10, width: 110, height: 35 },
       analyzeMetadataProgress:   { left: 720,  top: 105, width: 160, height: 27 },
       analyzeMetadataCheck:      { left: 720,  top: 105, width: 22, height: 22 },
@@ -3438,6 +3626,54 @@ https://www.etsy.com/your/shops/me/listing-editor/edit/1822973998
         if (typeof toggleSpinner === "function") toggleSpinner("searchSpinner", false);
       }
     };
+
+    // ---------------------------------------------------------------
+    // Duplicate Mode toggle
+    // ---------------------------------------------------------------
+    // When ON  -> auto pipeline runs Create Listing, then Duplicate
+    //             Listing, then Create Listing again (publishes 2 per
+    //             folder — original + variant).
+    // When OFF -> auto pipeline runs Create Listing once per folder
+    //             and skips the duplicate pass entirely.
+    //
+    // State is exposed at window.duplicateModeEnabled for the
+    // automation sequence to read, and persisted to localStorage so
+    // it survives reloads.
+    //
+    // Implementation note: we deliberately avoid <input type="checkbox">
+    // here because Materialize CSS hides unstyled checkboxes off-screen
+    // (left: -9999px) and overlays its own pseudo-element checkbox UI,
+    // which would visually leak through our custom track/knob.
+    (function initDuplicateModeToggle(){
+      const KEY = "duplicateModeEnabled";
+      const wrap  = document.getElementById("duplicateModeToggle");
+      const state = document.getElementById("duplicateModeState");
+      if (!wrap || !state) return;
+
+      // Restore: default ON unless the user previously turned it off
+      let saved = null;
+      try { saved = localStorage.getItem(KEY); } catch (e) {}
+      const initialOn = saved === null ? true : saved === "1";
+
+      function set(on) {
+        on = !!on;
+        wrap.setAttribute("aria-checked", on ? "true" : "false");
+        state.textContent = on ? "ON" : "OFF";
+        window.duplicateModeEnabled = on;
+        try { localStorage.setItem(KEY, on ? "1" : "0"); } catch (e) {}
+      }
+      set(initialOn);
+
+      wrap.addEventListener("click", () => {
+        set(wrap.getAttribute("aria-checked") !== "true");
+      });
+      wrap.addEventListener("keydown", (e) => {
+        if (e.key === " " || e.key === "Enter") {
+          e.preventDefault();
+          set(wrap.getAttribute("aria-checked") !== "true");
+        }
+      });
+    })();
 
     // NEW: Duplicate Listing sequential orchestrator
     document.getElementById("duplicateListingBtn").addEventListener("click", async () => {
