@@ -1854,49 +1854,103 @@ ANTI-REPETITION (TITLE)
             // the folder the Listing Generator's read-only "Approved Sets"
             // tab displays. This closes the loop: a green chip in that tab
             // means "this set has been listed on Etsy".
+            //
+            // CRITICAL: this step MUST run after every successful upload,
+            // even partially, otherwise the next Firebase scan will see
+            // the source folder still in Completed_Listing_Sets and re-pick
+            // it — causing the same set to be uploaded to Etsy again, and
+            // again, and again (the loop reported in the field).
             updateFirebaseStatus("Moving to Approved...", "working");
+            let moveAllSucceeded = false;
             try {
                 const destPath = `listing-generator-1/Generated_Listing_Sets/Approved_Listing_Sets/${setName}`;
                 const itemsToMove = await setRef.listAll();
-                
-                // Fetch, Upload, and Delete each image with Retry Logic
+
+                let movedCount = 0;
+                let failedCount = 0;
+
+                // Per-image move with retries. Critically, a failure on ONE
+                // image must NOT abort the whole move — that would leave the
+                // source folder partially populated, which on the next scan
+                // still appears under Completed_Listing_Sets and gets picked
+                // up again. Failures are logged and counted; we keep going.
                 for (const itemRef of itemsToMove.items) {
-                    let moveRetries = 4; // Try up to 4 times per image
+                    let moveRetries = 4;
                     let moveSuccess = false;
-                    
+
                     while (moveRetries > 0 && !moveSuccess) {
                         try {
+                            // CORS-safe fetch: Firebase Storage URLs do not
+                            // send CORS headers for this origin, so a direct
+                            // fetch() throws on read. Route through the
+                            // chunked corsProxy (same helper the initial
+                            // image-download step uses) so the move works
+                            // regardless of CORS state. Returns a blob: URL
+                            // pointing to the assembled bytes.
                             const url = await itemRef.getDownloadURL();
-                            // Fetch with cache-busting to ensure a fresh network request
-                            const response = await fetch(url + "&cb=" + Date.now()); 
-                            
+                            const blobUrl = await fetchImageViaChunkedProxy(url);
+                            const response = await fetch(blobUrl);
                             if (!response.ok) {
                                 throw new Error(`HTTP error! status: ${response.status}`);
                             }
-                            
                             const blob = await response.blob();
+                            try { URL.revokeObjectURL(blobUrl); } catch (_) {}
+
                             const newRef = storage.ref(`${destPath}/${itemRef.name}`);
-                            
                             await newRef.put(blob);
-                            await itemRef.delete(); // Delete original ONLY after secure upload
-                            
-                            moveSuccess = true; // Mark as successful to break the retry loop
+                            await itemRef.delete(); // delete original ONLY after secure upload
+
+                            moveSuccess = true;
+                            movedCount++;
                         } catch (attemptErr) {
-                            console.warn(`Fetch/Move attempt failed for ${itemRef.name}. Retries remaining: ${moveRetries - 1}`, attemptErr);
+                            console.warn(
+                                `Fetch/Move attempt failed for ${itemRef.name}. ` +
+                                `Retries remaining: ${moveRetries - 1}`,
+                                attemptErr
+                            );
                             moveRetries--;
-                            
                             if (moveRetries === 0) {
-                                throw new Error(`Failed to move ${itemRef.name} after multiple attempts.`); 
+                                // Don't throw — log and move on to the next image.
+                                console.error(
+                                    `Giving up on ${itemRef.name} after 4 attempts. ` +
+                                    `The rest of ${setName} will still be moved.`
+                                );
+                                failedCount++;
+                                break;
                             }
-                            // Wait 2.5 seconds before trying again to let the network stabilize
-                            await wait(2500); 
+                            await wait(2500);
                         }
                     }
                 }
-                console.log(`Successfully moved ${setName} to Approved_Listing_Sets`);
+
+                moveAllSucceeded = (failedCount === 0 && movedCount > 0);
+                if (moveAllSucceeded) {
+                    console.log(`Successfully moved ${setName} to Approved_Listing_Sets (${movedCount} files).`);
+                } else {
+                    console.warn(
+                        `Partial move for ${setName}: ${movedCount} moved, ${failedCount} failed. ` +
+                        `Marking as recently-processed so the scan doesn't immediately re-pick it.`
+                    );
+                }
             } catch (moveErr) {
                 console.error(`Error moving ${setName} to Approved_Listing_Sets:`, moveErr);
             }
+
+            // Belt-and-suspenders: regardless of whether the move fully
+            // succeeded, mark this set as "just processed" in the scan-
+            // level skip tracker so the same Firebase folder cannot be
+            // re-picked on the very next scan cycle. The existing
+            // __incompleteSetsTracker is reused (10-minute cooldown).
+            // - If the move succeeded, the folder no longer exists in
+            //   Completed_Listing_Sets and this is a no-op safety net.
+            // - If the move failed or was partial, this prevents the
+            //   bug the user reported: the same set being uploaded to
+            //   Etsy over and over because the source folder still
+            //   exists.
+            try {
+                window.__incompleteSetsTracker = window.__incompleteSetsTracker || {};
+                window.__incompleteSetsTracker[setName] = Date.now();
+            } catch (_) {}
             
             updateFirebaseStatus(`Done: ${setName}`, "active");
             await wait(3000);
