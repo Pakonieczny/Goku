@@ -3057,8 +3057,8 @@ https://www.etsy.com/your/shops/me/listing-editor/edit/1822973998
       if (!rawInput) return [];
       // \b\d{10}\b finds any distinct sequence of exactly 10 digits
       const matches = rawInput.match(/\b\d{10}\b/g) || [];
-      // Convert to Set to remove duplicates, then back to Array, capping at 250
-      return Array.from(new Set(matches)).slice(0, 250);
+      // Convert to Set to remove duplicates, then back to Array, capping at 1000
+      return Array.from(new Set(matches)).slice(0, 1000);
     }
 
     window.addEventListener("load", () => {
@@ -4907,8 +4907,8 @@ https://www.etsy.com/your/shops/me/listing-editor/edit/1822973998
             const existingIds = parseListingNumbers(el.value); // current valid IDs
             const newIds = parseListingNumbers(pastedText);    // freshly pasted valid IDs
             
-            // Combine while removing exact duplicates, capping at 250
-            const combined = Array.from(new Set([...existingIds, ...newIds])).slice(0, 250);
+            // Combine while removing exact duplicates, capping at 1000
+            const combined = Array.from(new Set([...existingIds, ...newIds])).slice(0, 1000);
             
             el.value = combined.join(", ");
             saveQueue(id);
