@@ -1316,18 +1316,20 @@ ANTI-REPETITION (TITLE)
                     let skippedForMissingId = false;
 
                     // -----------------------------------------------------------
-                    // Requirement 2: round-robin across categories.
+                    // Requirement: STRICT SEQUENTIAL CATEGORY DRAINING.
                     //
-                    // Group available folders by their target queue and then
-                    // cycle through categories one at a time. This way, when a
-                    // section like Stud Earrings runs out of folders, the
-                    // auto-pilot naturally rolls over to the next section that
-                    // still has work — and when multiple sections have folders
-                    // ready, we don't drain one category completely before
-                    // touching the others.
+                    // Order folders so the auto-pilot completely exhausts one
+                    // category before touching the next. We progress down the
+                    // CATEGORY_ORDER list in fixed order: Reg Necklace first,
+                    // then Beady Necklace, then Stud Earrings, then Hoop
+                    // Earrings, then Charms. A category is "exhausted" when
+                    // EITHER its folders run out OR its Listing-ID queue runs
+                    // out.
                     //
-                    // The rotation index is persisted on window so it advances
-                    // every successful processing cycle.
+                    // The previous round-robin behavior caused the pipeline to
+                    // jump between sections (e.g. Reg Necklace → Beady →
+                    // Stud), which is not what we want. We now stick with the
+                    // current category until it is fully drained.
                     // -----------------------------------------------------------
                     const CATEGORY_ORDER = [
                       "queueRegNecklace",
@@ -1345,21 +1347,21 @@ ANTI-REPETITION (TITLE)
                         setsByQueue[q].push(setRef);
                     }
 
-                    // Rotate starting point so each successful pass moves on to
-                    // the next category, keeping all sections progressing.
-                    window.__autoCategoryCursor = (window.__autoCategoryCursor || 0) % CATEGORY_ORDER.length;
-                    const startIdx = window.__autoCategoryCursor;
+                    // Build the ordered candidate list strictly by category,
+                    // skipping any category that either has no folders OR no
+                    // Listing IDs left. The first category with BOTH wins; we
+                    // only fall through to the next category when the current
+                    // one is fully drained on either axis.
                     const orderedSets = [];
-                    for (let i = 0; i < CATEGORY_ORDER.length; i++) {
-                        const idx = (startIdx + i) % CATEGORY_ORDER.length;
-                        const q = CATEGORY_ORDER[idx];
+                    for (const q of CATEGORY_ORDER) {
                         const bucket = setsByQueue[q] || [];
-                        if (bucket.length === 0) continue; // section ran out — skip
-
-                        // Within a category, also skip silently if the user has
-                        // no Listing IDs for that section right now; we'll let
-                        // the inner loop below confirm and surface that state.
+                        if (bucket.length === 0) continue;            // no folders in this section
+                        const qEl = document.getElementById(q);
+                        if (!qEl || !qEl.value.trim()) continue;      // no Listing IDs in this section
                         for (const sr of bucket) orderedSets.push(sr);
+                        // Stop after the first non-empty, ID-bearing category
+                        // so we drain it before considering any other section.
+                        break;
                     }
 
                     // Loop through available new sets to find one that is completely ready
@@ -1413,25 +1415,10 @@ ANTI-REPETITION (TITLE)
                             continue; 
                         }
 
-                        // Ready to go! Advance the round-robin cursor past the
-                        // category we just picked so the next scan starts on
-                        // the following section.
+                        // Ready to go!
                         readySetRef = setRef;
                         readySetName = setName;
                         delete window.__incompleteSetsTracker[setName];
-
-                        // Move the category cursor forward by one so that
-                        // after this folder finishes, the next scan looks
-                        // at the following category first.
-                        {
-                          const pickedRoute = routeFolderName(setName);
-                          const pickedQueue = pickedRoute ? pickedRoute.queueId : "queueRegNecklace";
-                          const pickedIdx   = CATEGORY_ORDER.indexOf(pickedQueue);
-                          if (pickedIdx !== -1) {
-                            window.__autoCategoryCursor =
-                              (pickedIdx + 1) % CATEGORY_ORDER.length;
-                          }
-                        }
                         break; 
                     }
 
@@ -2790,20 +2777,63 @@ https://www.etsy.com/your/shops/me/listing-editor/edit/1822973998
       const sku = buildSkuFromTitle(title);
 
       // Photos (0–7) from previewImages / names / meta
-      const photos = Array.from(window.previewImages || []);
-      const photoNames = Array.from(window.photoNames || []).map((n, i) => n || `uploaded_photo_${i}.jpg`);
-      const photoMeta = Array.from(window.photoMeta || []).map(s => (s || "").slice(0, 250));
+      // -----------------------------------------------------------------
+      // Per-job dedup: if window.previewImages somehow contains the same
+      // dataURL twice (which has been observed when state from a prior
+      // listing leaks in alongside the current one), uploading them as-is
+      // produces duplicate images on the Etsy draft. Strip exact-dataURL
+      // duplicates here so the job only carries one entry per unique image.
+      // The accompanying names and meta arrays are filtered in lockstep so
+      // rank/alt-text stay aligned with the correct image.
+      // -----------------------------------------------------------------
+      const rawPhotos = Array.from(window.previewImages || []);
+      const rawPhotoNames = Array.from(window.photoNames || []);
+      const rawPhotoMeta = Array.from(window.photoMeta || []);
+      const seenPhotos = new Set();
+      const photos = [];
+      const photoNames = [];
+      const photoMeta = [];
+      for (let i = 0; i < rawPhotos.length; i++) {
+        const du = rawPhotos[i];
+        if (!du) continue;
+        if (seenPhotos.has(du)) {
+          console.warn(`Per-job dedup: dropping duplicate photo at slot ${i}.`);
+          continue;
+        }
+        seenPhotos.add(du);
+        photos.push(du);
+        photoNames.push(rawPhotoNames[i] || `uploaded_photo_${i}.jpg`);
+        photoMeta.push((rawPhotoMeta[i] || "").slice(0, 250));
+      }
+
       const photoKeyBases = await Promise.all(photos.map(async (dataURL, i) => {
         const key = `${jobId}_p${i}`;
         try { await idbPut(key, dataURL); } catch (e) { console.warn("Photo IDB save failed", i, e); }
         return key;
       }));
 
-      // Reserved (8–9) from reservedPhotos [{src,name,meta}]
-      const reserved = Array.from(window.reservedPhotos || []);
-      const reservedSrc = reserved.map(x => x?.src).filter(Boolean);
-      const reservedNames = reserved.map((x, i) => x?.name || `reserved_photo_${i}.jpg`);
-      const reservedMeta = reserved.map(x => (x?.meta || "").slice(0, 250));
+      // Reserved (8–9) from reservedPhotos [{src,name,meta}], also deduped.
+      const rawReserved = Array.from(window.reservedPhotos || []);
+      const seenReserved = new Set();
+      const reservedSrc = [];
+      const reservedNames = [];
+      const reservedMeta = [];
+      for (let i = 0; i < rawReserved.length; i++) {
+        const r = rawReserved[i] || {};
+        const du = r.src;
+        if (!du) continue;
+        // Also reject if this dataURL is already in the main photos set —
+        // that would be the same image appearing in two pipelines, which
+        // is always a bug.
+        if (seenReserved.has(du) || seenPhotos.has(du)) {
+          console.warn(`Per-job dedup: dropping duplicate reserved photo at slot ${i}.`);
+          continue;
+        }
+        seenReserved.add(du);
+        reservedSrc.push(du);
+        reservedNames.push(r.name || `reserved_photo_${i}.jpg`);
+        reservedMeta.push((r.meta || "").slice(0, 250));
+      }
       const reservedKeyBases = await Promise.all(reservedSrc.map(async (dataURL, i) => {
         const key = `${jobId}_rp${i}`;
         try { await idbPut(key, dataURL); } catch (e) { console.warn("Reserved IDB save failed", i, e); }
@@ -2856,6 +2886,73 @@ https://www.etsy.com/your/shops/me/listing-editor/edit/1822973998
       save({ status: "RUNNING" });
 
       try {
+        // --- Stage 0: Purge existing images on the draft listing -------
+        //
+        // Why: Etsy's uploadListingImage endpoint APPENDS images to the
+        // listing's existing image set. If a draft listing already has
+        // images attached (e.g. because Etsy auto-populated placeholders,
+        // because this listing ID was previously partially-processed, or
+        // because the seller manually attached images), our uploads
+        // would stack on top of them — producing duplicates and the
+        // cross-contamination seen in QA where one listing showed
+        // images that belonged to a different set.
+        //
+        // The fix: enumerate the draft's current images and delete
+        // every one of them BEFORE uploading the new slot images, so
+        // each listing starts from a clean slate and ends up holding
+        // ONLY the seven main images and (optionally) the two reserved
+        // images this job carries.
+        //
+        // Etsy v3 endpoints used (both server-side via Netlify):
+        //   GET    /v3/application/listings/{listing_id}/images
+        //   DELETE /v3/application/listings/{listing_id}/images/{listing_image_id}
+        // Both require Bearer token + x-api-key; the deletion route
+        // requires the listings_d OAuth scope. CORS prevents calling
+        // these directly from the browser, so we go through a Netlify
+        // function (listingImagesPurge) that wraps both calls.
+        //
+        // If the purge endpoint isn't deployed yet, we log a warning
+        // and continue — better to upload (and accept potential
+        // duplicates this run) than to abort the entire job.
+        try {
+          const purgeResp = await fetch(
+            `/.netlify/functions/listingImagesPurge?listingId=${encodeURIComponent(listingId)}&token=${encodeURIComponent(token)}`,
+            { method: "POST" }
+          );
+          if (purgeResp.ok) {
+            const purgeJson = await purgeResp.json().catch(() => ({}));
+            const removed = (purgeJson && typeof purgeJson.removed === "number") ? purgeJson.removed : "?";
+            console.log(`Purge: removed ${removed} existing image(s) from listing ${listingId}.`);
+          } else if (purgeResp.status === 401) {
+            // Token expired right at the start — treat the same as any
+            // other 401 below: pause the job and trigger reconnect.
+            const t = await purgeResp.text();
+            if (/invalid_token|expired/i.test(t)) {
+              save({ status: "AUTH_NEEDED", error: "token_expired" });
+              window.M?.toast?.({ html: "Etsy session expired — reconnecting…" });
+              if (typeof beginEtsyReconnect === "function") { beginEtsyReconnect(); return; }
+              try { document.getElementById("connectEtsyBtn")?.click(); } catch {}
+              return;
+            }
+            console.warn("Purge auth check failed:", t);
+          } else if (purgeResp.status === 404) {
+            // Function not deployed yet — soft warn and continue.
+            console.warn(
+              "listingImagesPurge function not found (404). " +
+              "Existing draft images will NOT be cleared before upload. " +
+              "Deploy the Netlify function that wraps Etsy v3 " +
+              "GET/DELETE /v3/application/listings/{listingId}/images " +
+              "to enable purge."
+            );
+          } else {
+            const t = await purgeResp.text().catch(() => "");
+            console.warn(`Purge failed (HTTP ${purgeResp.status}):`, t);
+          }
+        } catch (purgeErr) {
+          // Network error — log and continue with upload.
+          console.warn("Purge request errored, continuing with upload:", purgeErr);
+        }
+
         // --- Stage 1: Upload Photos (main 0–7)
         for (let i = 0; i < job.photoCount; i++) {
         const blob = job.storage?.photos === "idb"
