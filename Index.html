@@ -664,6 +664,7 @@
 
   <button id="openConfigBtn" class="btn waves-effect waves-light configurable" style="margin-left:10px;">Open Config</button>
   <button id="toggleAuto" class="btn waves-effect waves-light configurable red darken-1 stopped" style="margin-left:10px;">Start Auto</button>
+  <button id="skipListingBtn" class="btn waves-effect waves-light configurable orange darken-2" style="margin-left:10px;" title="Abandon the listing currently being processed and move on to the next one">Skip Listing</button>
   
   <div id="descriptionAndFileUploadContainer">
     <div class="listing-desc-container" id="listingDescContainer">
@@ -1173,6 +1174,26 @@ ANTI-REPETITION (TITLE)
     window.autoProcessingEnabled = false; // default off
     window.isProcessingSet = false;
     window.__isScanningFB = false; // Prevents overlapping poll ticks
+
+    // --- Manual "Skip Listing" override ---------------------------------
+    // Cooperative-cancellation flag. When the user clicks "Skip Listing",
+    // this is flipped true; the long waits (waitForCondition) and the Etsy
+    // job runner observe it and bail immediately so the pipeline can move on
+    // to the next set instead of staying wedged on a stuck listing.
+    window.__skipListingRequested = false;
+    // Name of the set currently being processed by runFullAutomationSequence
+    // (so Skip knows which folder to set aside).
+    window.__currentProcessingSetName = null;
+    // Sets the user has explicitly skipped this session. The scanner ignores
+    // these entirely so a "stuck" set cannot be re-picked over and over.
+    // (Cleared on page reload, giving the set another chance next session.)
+    window.__manuallySkippedSets = window.__manuallySkippedSets || new Set();
+
+    // --- Background archive bookkeeping ---------------------------------
+    // Names of sets whose Firebase archive (move to Approved_Listing_Sets) is
+    // currently running in the background. The scanner skips these so a set
+    // being archived cannot be re-picked while its images are still mid-move.
+    window.__archivingSets = window.__archivingSets || new Set();
     
     function updateFirebaseStatus(status, type) {
         const dot = document.getElementById('fbDot');
@@ -1221,6 +1242,64 @@ ANTI-REPETITION (TITLE)
                   }
               }
           });
+
+    // ─────────────────────────────────────────────────────────────────────
+    // Skip Listing — manual override for a wedged listing.
+    //
+    // Lets the operator abandon whatever listing is currently being worked on
+    // (an auto-pilot set mid-sequence, and/or one or more in-flight Etsy upload
+    // jobs) and let the pipeline advance to the next set. This is the manual
+    // escape hatch that replaces the old auto-resume behaviour: instead of the
+    // app silently looping forever on a stuck listing, a human clicks this to
+    // move on.
+    //
+    // What it does:
+    //   1. Raises the one-shot window.__skipListingRequested flag. Every
+    //      skip-aware checkpoint watches this — the steps inside
+    //      runFullAutomationSequence, waitForCondition (returns false), the
+    //      Etsy daemon's FIFO loop, and the per-stage photo loops in
+    //      runEtsyJob — so they all bail out at the next opportunity.
+    //   2. If the auto-pilot is mid-set, records the set name in
+    //      window.__manuallySkippedSets so the Firebase scanner won't re-pick
+    //      that same set again this session (a genuinely wedged set would
+    //      otherwise just be reselected on the next scan).
+    //   3. Empties the Etsy upload queue so the background daemon stops
+    //      retrying any queued/in-flight job.
+    //
+    // The flag is intentionally NOT reset here (that would race the daemon /
+    // auto loop still observing it). It is cleared at the start of the next
+    // operation — runFullAutomationSequence resets it on entry, and the manual
+    // "Create Listing" handler resets it before each upload.
+    function skipCurrentListing() {
+        const hadAutoSet = !!window.isProcessingSet;
+        let queuedCount = 0;
+        try { queuedCount = (JSON.parse(localStorage.getItem("etsyUploadJobs") || "[]") || []).length; } catch (_) {}
+
+        // Nothing is actually running — no auto set and no queued Etsy jobs.
+        if (!hadAutoSet && queuedCount === 0) {
+            M.toast({ html: "No listing is currently processing." });
+            return;
+        }
+
+        // 1. Signal all skip-aware checkpoints to bail out.
+        window.__skipListingRequested = true;
+
+        // 2. Permanently (for this session) blacklist the auto set being worked
+        //    on, so the scanner doesn't immediately pick it again.
+        if (window.__currentProcessingSetName) {
+            window.__manuallySkippedSets = window.__manuallySkippedSets || new Set();
+            window.__manuallySkippedSets.add(window.__currentProcessingSetName);
+        }
+
+        // 3. Abandon any in-flight / queued Etsy upload jobs. Clearing the queue
+        //    makes the daemon's loop terminate; leftover job snapshots/images
+        //    are cleaned up lazily on the next daemon pass or enqueue.
+        try { localStorage.setItem("etsyUploadJobs", JSON.stringify([])); } catch (_) {}
+
+        updateFirebaseStatus("Skipping current listing...", "working");
+        M.toast({ html: "Skipping current listing — moving to the next one." });
+    }
+    document.getElementById("skipListingBtn").addEventListener("click", skipCurrentListing);
 
     async function checkFirebaseForSets() {
         // Prevent concurrent polling or polling while processing
@@ -1367,6 +1446,17 @@ ANTI-REPETITION (TITLE)
                     // Loop through available new sets to find one that is completely ready
                     for (const setRef of orderedSets) {
                         const setName = setRef.name.replace(/\/$/, "");
+
+                        // Manually skipped this session — never re-pick. This is
+                        // what lets the "Skip Listing" button permanently move
+                        // past a set that is stuck in a perpetual loop.
+                        if (window.__manuallySkippedSets && window.__manuallySkippedSets.has(setName)) continue;
+
+                        // Currently being archived in the background (its images
+                        // are still being moved to Approved_Listing_Sets). Skip it
+                        // so it cannot be re-picked / re-listed while the move is
+                        // in flight.
+                        if (window.__archivingSets && window.__archivingSets.has(setName)) continue;
 
                         // Check if we skipped this folder recently
                         if (window.__incompleteSetsTracker[setName]) {
@@ -1558,6 +1648,10 @@ ANTI-REPETITION (TITLE)
     async function waitForCondition(predicate, interval = 1000, maxWait = 120000) {
         const start = Date.now();
         while (true) {
+            // Skip wins over the predicate: if the user pressed "Skip Listing",
+            // stop waiting right away (returns false so callers fall through to
+            // their skip checkpoint instead of treating the wait as satisfied).
+            if (window.__skipListingRequested) return false;
             if (await predicate()) return true;
             if (Date.now() - start > maxWait) return false; // Timeout
             await wait(interval);
@@ -1641,6 +1735,9 @@ ANTI-REPETITION (TITLE)
 
     async function runFullAutomationSequence(setRef, setName) {
         window.isProcessingSet = true;
+        // Fresh start for this set: clear any stale skip request from a prior run.
+        window.__skipListingRequested = false;
+        window.__currentProcessingSetName = setName;
         updateFirebaseStatus(`Processing: ${setName}`, "working");
         
         try {
@@ -1767,6 +1864,9 @@ ANTI-REPETITION (TITLE)
             }
             await wait(1000);
 
+            // Skip checkpoint: bail out cleanly if the user pressed "Skip Listing".
+            if (window.__skipListingRequested) return;
+
             // vi. Create Listing (1st pass)
             updateFirebaseStatus("Uploading Original...", "working");
             
@@ -1800,6 +1900,10 @@ ANTI-REPETITION (TITLE)
             }, 2000, 300000); // 5 min timeout for upload
             
             await wait(3000);
+
+            // Skip checkpoint: if the user pressed "Skip Listing" during the
+            // (possibly stuck) upload, stop here and let the pipeline move on.
+            if (window.__skipListingRequested) return;
 
             // --- Folder-count decrement (Requirement 1) -----------------
             // The Firebase scan rebuilds folderCounts from the live storage
@@ -1844,122 +1948,153 @@ ANTI-REPETITION (TITLE)
                 updateFirebaseStatus("Single mode: skipping duplicate", "working");
             }
             
-            // ix. Finish — Move folder to Approved_Listing_Sets.
+            // ix. Finish — Archive the set into Approved_Listing_Sets.
             //
             // ARCHITECTURE NOTE: This is the second half of the hand-off
             // with Listing-Generator-1.html. The set originally arrived in
             // Completed_Listing_Sets/{Category}_{SetName} when the user
-            // clicked "Approve set" in Listing Generator. We now move it
-            // into Approved_Listing_Sets/{Category}_{SetName}, which is
-            // the folder the Listing Generator's read-only "Approved Sets"
-            // tab displays. This closes the loop: a green chip in that tab
-            // means "this set has been listed on Etsy".
+            // clicked "Approve set" in Listing Generator. We move it into
+            // Approved_Listing_Sets/{Category}_{SetName}, the folder the
+            // Listing Generator's read-only "Approved Sets" tab displays.
+            // This closes the loop: a green chip there means "listed on Etsy".
             //
-            // CRITICAL: this step MUST run after every successful upload,
-            // even partially, otherwise the next Firebase scan will see
-            // the source folder still in Completed_Listing_Sets and re-pick
-            // it — causing the same set to be uploaded to Etsy again, and
-            // again, and again (the loop reported in the field).
-            updateFirebaseStatus("Moving to Approved...", "working");
-            let moveAllSucceeded = false;
+            // PERFORMANCE: the actual per-image move on Firebase is SLOW
+            // (download each image via the CORS proxy, re-upload to the new
+            // path, delete the original). This used to be awaited here, so
+            // every listing paid the full archive cost before the next set
+            // could even start. We now fire the move in the BACKGROUND
+            // (archiveSetInBackground) and return immediately, so the next
+            // set begins processing right away while the archive finishes on
+            // its own.
+            //
+            // SAFETY (no re-use while archiving): before returning we register
+            // this set in BOTH window.__archivingSets and
+            // window.__incompleteSetsTracker. The scanner skips any set in
+            // either collection, so the set being archived can NOT be
+            // re-picked / re-listed while its images are still mid-move — even
+            // though the source folder briefly still exists in
+            // Completed_Listing_Sets. archiveSetInBackground clears the
+            // __archivingSets entry once the move finishes (by which point the
+            // set lives in Approved_Listing_Sets and is excluded as
+            // already-processed anyway).
             try {
-                const destPath = `listing-generator-1/Generated_Listing_Sets/Approved_Listing_Sets/${setName}`;
-                const itemsToMove = await setRef.listAll();
-
-                let movedCount = 0;
-                let failedCount = 0;
-
-                // Per-image move with retries. Critically, a failure on ONE
-                // image must NOT abort the whole move — that would leave the
-                // source folder partially populated, which on the next scan
-                // still appears under Completed_Listing_Sets and gets picked
-                // up again. Failures are logged and counted; we keep going.
-                for (const itemRef of itemsToMove.items) {
-                    let moveRetries = 4;
-                    let moveSuccess = false;
-
-                    while (moveRetries > 0 && !moveSuccess) {
-                        try {
-                            // CORS-safe fetch: Firebase Storage URLs do not
-                            // send CORS headers for this origin, so a direct
-                            // fetch() throws on read. Route through the
-                            // chunked corsProxy (same helper the initial
-                            // image-download step uses) so the move works
-                            // regardless of CORS state. Returns a blob: URL
-                            // pointing to the assembled bytes.
-                            const url = await itemRef.getDownloadURL();
-                            const blobUrl = await fetchImageViaChunkedProxy(url);
-                            const response = await fetch(blobUrl);
-                            if (!response.ok) {
-                                throw new Error(`HTTP error! status: ${response.status}`);
-                            }
-                            const blob = await response.blob();
-                            try { URL.revokeObjectURL(blobUrl); } catch (_) {}
-
-                            const newRef = storage.ref(`${destPath}/${itemRef.name}`);
-                            await newRef.put(blob);
-                            await itemRef.delete(); // delete original ONLY after secure upload
-
-                            moveSuccess = true;
-                            movedCount++;
-                        } catch (attemptErr) {
-                            console.warn(
-                                `Fetch/Move attempt failed for ${itemRef.name}. ` +
-                                `Retries remaining: ${moveRetries - 1}`,
-                                attemptErr
-                            );
-                            moveRetries--;
-                            if (moveRetries === 0) {
-                                // Don't throw — log and move on to the next image.
-                                console.error(
-                                    `Giving up on ${itemRef.name} after 4 attempts. ` +
-                                    `The rest of ${setName} will still be moved.`
-                                );
-                                failedCount++;
-                                break;
-                            }
-                            await wait(2500);
-                        }
-                    }
-                }
-
-                moveAllSucceeded = (failedCount === 0 && movedCount > 0);
-                if (moveAllSucceeded) {
-                    console.log(`Successfully moved ${setName} to Approved_Listing_Sets (${movedCount} files).`);
-                } else {
-                    console.warn(
-                        `Partial move for ${setName}: ${movedCount} moved, ${failedCount} failed. ` +
-                        `Marking as recently-processed so the scan doesn't immediately re-pick it.`
-                    );
-                }
-            } catch (moveErr) {
-                console.error(`Error moving ${setName} to Approved_Listing_Sets:`, moveErr);
-            }
-
-            // Belt-and-suspenders: regardless of whether the move fully
-            // succeeded, mark this set as "just processed" in the scan-
-            // level skip tracker so the same Firebase folder cannot be
-            // re-picked on the very next scan cycle. The existing
-            // __incompleteSetsTracker is reused (10-minute cooldown).
-            // - If the move succeeded, the folder no longer exists in
-            //   Completed_Listing_Sets and this is a no-op safety net.
-            // - If the move failed or was partial, this prevents the
-            //   bug the user reported: the same set being uploaded to
-            //   Etsy over and over because the source folder still
-            //   exists.
-            try {
+                window.__archivingSets = window.__archivingSets || new Set();
+                window.__archivingSets.add(setName);
                 window.__incompleteSetsTracker = window.__incompleteSetsTracker || {};
                 window.__incompleteSetsTracker[setName] = Date.now();
             } catch (_) {}
-            
-            updateFirebaseStatus(`Done: ${setName}`, "active");
-            await wait(3000);
+
+            // Fire-and-forget: intentionally NOT awaited. The pipeline returns
+            // and the next set starts while this archive runs in parallel.
+            archiveSetInBackground(setRef, setName);
+
+            updateFirebaseStatus(`Done: ${setName} (archiving in background)`, "active");
+            await wait(1500);
 
         } catch (e) {
             console.error("Automation sequence failed:", e);
             updateFirebaseStatus("Auto Error", "");
         } finally {
             window.isProcessingSet = false;
+            window.__currentProcessingSetName = null;
+            // If we reached here because the user pressed "Skip Listing",
+            // finish the skip: clear the UI, hide progress, and reset the flag
+            // so the next set starts clean. The set was already added to
+            // window.__manuallySkippedSets by the Skip handler, so the scanner
+            // will not re-pick it.
+            if (window.__skipListingRequested) {
+                window.__skipListingRequested = false;
+                try { document.getElementById("clearBtn")?.click(); } catch (_) {}
+                if (typeof showCreateProgress === "function") { try { showCreateProgress(false); } catch (_) {} }
+                updateFirebaseStatus("Listing skipped — moving on", "active");
+            }
+        }
+    }
+
+    // ---- Background archiver -------------------------------------------
+    // Moves every file in Completed_Listing_Sets/{setName} into
+    // Approved_Listing_Sets/{setName}, then removes the set from
+    // window.__archivingSets. This is the SAME move logic that used to run
+    // inline inside runFullAutomationSequence — identical per-image download
+    // via the CORS proxy, re-upload, delete-original, and 4x retry — only now
+    // it runs detached so it never blocks the listing pipeline. A failure on
+    // one image never aborts the rest of the move.
+    async function archiveSetInBackground(setRef, setName) {
+        try {
+            const destPath = `listing-generator-1/Generated_Listing_Sets/Approved_Listing_Sets/${setName}`;
+            const itemsToMove = await setRef.listAll();
+
+            let movedCount = 0;
+            let failedCount = 0;
+
+            for (const itemRef of itemsToMove.items) {
+                let moveRetries = 4;
+                let moveSuccess = false;
+
+                while (moveRetries > 0 && !moveSuccess) {
+                    try {
+                        // CORS-safe fetch via the chunked corsProxy (the same
+                        // helper the initial image-download step uses). Returns
+                        // a blob: URL pointing to the assembled bytes.
+                        const url = await itemRef.getDownloadURL();
+                        const blobUrl = await fetchImageViaChunkedProxy(url);
+                        const response = await fetch(blobUrl);
+                        if (!response.ok) {
+                            throw new Error(`HTTP error! status: ${response.status}`);
+                        }
+                        const blob = await response.blob();
+                        try { URL.revokeObjectURL(blobUrl); } catch (_) {}
+
+                        const newRef = storage.ref(`${destPath}/${itemRef.name}`);
+                        await newRef.put(blob);
+                        await itemRef.delete(); // delete original ONLY after secure upload
+
+                        moveSuccess = true;
+                        movedCount++;
+                    } catch (attemptErr) {
+                        console.warn(
+                            `[bg-archive] Fetch/Move attempt failed for ${itemRef.name}. ` +
+                            `Retries remaining: ${moveRetries - 1}`,
+                            attemptErr
+                        );
+                        moveRetries--;
+                        if (moveRetries === 0) {
+                            console.error(
+                                `[bg-archive] Giving up on ${itemRef.name} after 4 attempts. ` +
+                                `The rest of ${setName} will still be moved.`
+                            );
+                            failedCount++;
+                            break;
+                        }
+                        await wait(2500);
+                    }
+                }
+            }
+
+            if (failedCount === 0 && movedCount > 0) {
+                console.log(`[bg-archive] Successfully moved ${setName} to Approved_Listing_Sets (${movedCount} files).`);
+                window.M?.toast?.({ html: `Archived ${setName} in background.` });
+            } else {
+                console.warn(
+                    `[bg-archive] Partial move for ${setName}: ${movedCount} moved, ${failedCount} failed. ` +
+                    `Keeping it set-aside so the scan doesn't immediately re-pick it.`
+                );
+            }
+        } catch (moveErr) {
+            console.error(`[bg-archive] Error moving ${setName} to Approved_Listing_Sets:`, moveErr);
+        } finally {
+            // Refresh the recently-processed cooldown so that, in the brief
+            // moment after we stop tracking it as "archiving", the scan still
+            // won't re-pick it before the next reconciliation confirms it's
+            // gone from Completed_Listing_Sets.
+            try {
+                window.__incompleteSetsTracker = window.__incompleteSetsTracker || {};
+                window.__incompleteSetsTracker[setName] = Date.now();
+            } catch (_) {}
+            // Done archiving — release the set so the scanner is free to treat
+            // it normally again (by now it lives in Approved_Listing_Sets and
+            // is excluded as already-processed anyway).
+            try { window.__archivingSets && window.__archivingSets.delete(setName); } catch (_) {}
         }
     }
 
@@ -2160,6 +2295,7 @@ ANTI-REPETITION (TITLE)
       // Top controls
       openConfigBtn:           { left: 190,  top: 10,  width: 140, height: 35 },
       toggleAuto:              { left: 350,  top: 10,  width: 140, height: 35 },
+      skipListingBtn:          { left: 350,  top: 55,  width: 140, height: 35 },
       connectEtsyBtn:          { left: 10,   top: 10,  width: 160, height: 35 },
       createListingBtn:        { left: 550,  top: 10,  width: 160, height: 35 },
       analyzeMetadataBtn:      { left: 550,  top: 100, width: 160, height: 35 },
@@ -2982,10 +3118,12 @@ https://www.etsy.com/your/shops/me/listing-editor/edit/1822973998
             // other 401 below: pause the job and trigger reconnect.
             const t = await purgeResp.text();
             if (/invalid_token|expired/i.test(t)) {
+              // AUTH error. Auto-resume / auto-reconnect REMOVED: fail the job
+              // cleanly so the user can reconnect manually, instead of
+              // redirecting away to "resume" it (the behaviour that caused the
+              // stuck-in-a-loop reports). The daemon drops this job afterward.
               save({ status: "AUTH_NEEDED", error: "token_expired" });
-              window.M?.toast?.({ html: "Etsy session expired — reconnecting…" });
-              if (typeof beginEtsyReconnect === "function") { beginEtsyReconnect(); return; }
-              try { document.getElementById("connectEtsyBtn")?.click(); } catch {}
+              window.M?.toast?.({ html: 'Etsy session expired — click "Connect to Etsy", then re-run this listing.' });
               return;
             }
             console.warn("Purge auth check failed:", t);
@@ -3009,6 +3147,8 @@ https://www.etsy.com/your/shops/me/listing-editor/edit/1822973998
 
         // --- Stage 1: Upload Photos (main 0–7)
         for (let i = 0; i < job.photoCount; i++) {
+        // Skip override: stop uploading this listing immediately if requested.
+        if (window.__skipListingRequested) return;
         const blob = job.storage?.photos === "idb"
           ? (await idbGetBlob(job.photoKeyBases[i]))
           : await (async () => { const du = lsLoadLarge(job.photoKeyBases[i]); return du ? (await fetch(du)).blob() : null; })();
@@ -3023,12 +3163,10 @@ https://www.etsy.com/your/shops/me/listing-editor/edit/1822973998
           const r = await fetch("/.netlify/functions/imageUpload", { method: "POST", body: fd });
           if (!r.ok) {
             const t = await r.text();
-            // NEW: auto-reconnect if token expired during photo uploads
+            // AUTH error. Auto-resume / auto-reconnect REMOVED — fail cleanly.
             if (r.status === 401 && /invalid_token|expired/i.test(t)) {
               save({ status: "AUTH_NEEDED", error: "token_expired" });
-              window.M?.toast?.({ html: "Etsy session expired — reconnecting…" });
-              if (typeof beginEtsyReconnect === "function") { beginEtsyReconnect(); return; }
-              try { document.getElementById("connectEtsyBtn")?.click(); } catch {}
+              window.M?.toast?.({ html: 'Etsy session expired — click "Connect to Etsy", then re-run this listing.' });
               return;
             }
             console.warn("Photo upload failed", i + 1, t);
@@ -3038,6 +3176,8 @@ https://www.etsy.com/your/shops/me/listing-editor/edit/1822973998
         }
         // --- Stage 1b: Reserved (8–9)
         for (let i = 0; i < job.reservedCount; i++) {
+          // Skip override: stop uploading this listing immediately if requested.
+          if (window.__skipListingRequested) return;
           const blob = job.storage?.reserved === "idb"
             ? (await idbGetBlob(job.reservedKeyBases[i]))
             : await (async () => { const du = lsLoadLarge(job.reservedKeyBases[i]); return du ? (await fetch(du)).blob() : null; })();
@@ -3052,11 +3192,10 @@ https://www.etsy.com/your/shops/me/listing-editor/edit/1822973998
           const r = await fetch("/.netlify/functions/imageUpload", { method: "POST", body: fd });
           if (!r.ok) {
             const t = await r.text();
+            // AUTH error. Auto-resume / auto-reconnect REMOVED — fail cleanly.
             if (r.status === 401 && /invalid_token|expired/i.test(t)) {
               save({ status: "AUTH_NEEDED", error: "token_expired" });
-              window.M?.toast?.({ html: "Etsy session expired — reconnecting…" });
-              if (typeof beginEtsyReconnect === "function") { beginEtsyReconnect(); return; }
-              try { document.getElementById("connectEtsyBtn")?.click(); } catch {}
+              window.M?.toast?.({ html: 'Etsy session expired — click "Connect to Etsy", then re-run this listing.' });
               return;
             }
             console.warn("Reserved upload failed", 9 + i, t);
@@ -3081,14 +3220,11 @@ https://www.etsy.com/your/shops/me/listing-editor/edit/1822973998
         });
         const infoJson = await infoResp.json().catch(() => ({}));
         if (!infoResp.ok) {
-          // NEW: auto-reconnect on expired/invalid token
           const msg = JSON.stringify(infoJson || {});
+          // AUTH error. Auto-resume / auto-reconnect REMOVED — fail cleanly.
           if (infoResp.status === 401 && /invalid_token|expired/i.test(msg)) {
             save({ status: "AUTH_NEEDED", error: "token_expired" });
-            window.M?.toast?.({ html: "Etsy session expired — reconnecting to continue your queued upload…" });
-            if (typeof beginEtsyReconnect === "function") { beginEtsyReconnect(); return; }
-            // Fallback: click the existing Connect button
-            try { document.getElementById("connectEtsyBtn")?.click(); } catch {}
+            window.M?.toast?.({ html: 'Etsy session expired — click "Connect to Etsy", then re-run this listing.' });
             return;
           }
           throw new Error(`Info update failed ${infoResp.status} — ${JSON.stringify(infoJson)}`);
@@ -3124,16 +3260,56 @@ https://www.etsy.com/your/shops/me/listing-editor/edit/1822973998
       }
     }
 
+    // Remove a job from the queue and free its stored image bytes. Used after
+    // every run so a job is never retried — see processEtsyJobs below.
+    function dequeueAndCleanupJob(jobId) {
+      try {
+        const q = JSON.parse(localStorage.getItem("etsyUploadJobs") || "[]");
+        const idx = q.indexOf(jobId);
+        if (idx > -1) { q.splice(idx, 1); localStorage.setItem("etsyUploadJobs", JSON.stringify(q)); }
+      } catch {}
+      // Best-effort: free any IndexedDB / chunked-LS image bytes this job held
+      // (the DONE path already frees them; this also covers FAILED/AUTH cases
+      // so storage doesn't leak).
+      try {
+        const job = JSON.parse(localStorage.getItem(`etsyJob:${jobId}`) || "null");
+        if (job) {
+          const keys = [...(job.photoKeyBases || []), ...(job.reservedKeyBases || [])];
+          if (job.storage?.photos === "idb" || job.storage?.reserved === "idb") {
+            keys.forEach(k => { try { idbDel(k).catch(() => {}); } catch {} });
+          } else {
+            keys.forEach(k => { try { lsClearLarge(k); } catch {} });
+          }
+        }
+      } catch {}
+    }
+
     async function processEtsyJobs() {
       if (window.__etsyUploadDaemon) return;
       window.__etsyUploadDaemon = true;
       try {
         while (true) {
+          // Manual "Skip Listing": stop draining the queue immediately so the
+          // pipeline can move on (the Skip handler also clears the queue).
+          if (window.__skipListingRequested) break;
+
           const q = JSON.parse(localStorage.getItem("etsyUploadJobs") || "[]");
           if (!q.length) break;
           const nextId = q[0]; // FIFO
-          await runEtsyJob(nextId);
-          // loop will re-read queue after each run
+
+          try {
+            await runEtsyJob(nextId);
+          } catch (e) {
+            console.error("runEtsyJob threw:", e);
+          }
+
+          // AUTO-RESUME REMOVED. Each job is attempted EXACTLY ONCE. Whatever
+          // the outcome (done, failed, or auth-needed), drop it from the queue
+          // so the daemon always advances to the next job instead of retrying
+          // the same one forever — this is the fix for the endless loop where
+          // a listing with all its image slots already full could never
+          // succeed yet was retried indefinitely.
+          dequeueAndCleanupJob(nextId);
         }
       } finally {
         window.__etsyUploadDaemon = false;
@@ -3586,6 +3762,16 @@ https://www.etsy.com/your/shops/me/listing-editor/edit/1822973998
     // --- Create Listing (LS snapshot + background queue; decoupled from UI)
     document.getElementById("createListingBtn").addEventListener("click", async () => {
       try {
+        // Clear the one-shot Skip flag for genuine MANUAL uploads so a leftover
+        // skip request from a previous action can't immediately abort this one.
+        // During an auto-pilot set (isProcessingSet === true) the flag belongs
+        // to runFullAutomationSequence — which already reset it on entry and
+        // watches it at its own checkpoints — so we must NOT clear it here, or a
+        // skip clicked mid-sequence would be swallowed.
+        if (!window.isProcessingSet) {
+            window.__skipListingRequested = false;
+        }
+
         // 1) Resolve a single listingId dynamically from 5 separate queues
         let listingId = null;
         let targetInputId = window.__activeAutomationQueueId; 
@@ -5102,13 +5288,12 @@ https://www.etsy.com/your/shops/me/listing-editor/edit/1822973998
               }
             }
           } catch {}
-        try {
-            const q = JSON.parse(localStorage.getItem("etsyUploadJobs") || "[]");
-            if (q.length) {
-              M.toast({ html: "Resuming pending Etsy jobs…" });
-              processEtsyJobs && processEtsyJobs();
-            }
-          } catch {}
+          // AUTO-RESUME REMOVED. Previously, returning from the Etsy OAuth
+          // redirect automatically re-launched processEtsyJobs() to "resume
+          // pending uploads". That resume-on-interruption behaviour is what
+          // could wedge the app in an endless loop (e.g. retrying a listing
+          // whose image slots were already full). We no longer auto-resume;
+          // the user re-runs any unfinished listing manually.
         } else {
           M.toast({ html: "Error obtaining token: " + JSON.stringify(tokenData) });
         }
