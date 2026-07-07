@@ -662,7 +662,7 @@
        Config engine remains available via window.USE_RESPONSIVE_LAYOUT=false.
        ===================================================================== */
     html.responsive, html.responsive body { width: 100%; max-width: 100%; overflow-x: hidden; }
-    html.responsive body { padding: 10px 14px 80px; }
+    html.responsive body { padding: 10px 14px 80px; box-sizing: border-box; }
     html.responsive #layoutRoot { display: none; }
     html.responsive #openConfigBtn { display: none; } /* config only applies to the abs engine */
 
@@ -670,14 +670,16 @@
     #rgToolbar { display: flex; flex-wrap: wrap; gap: 10px; align-items: center; padding: 6px 0 12px; border-bottom: 1px solid #e0e0e0; margin-bottom: 14px; }
     #rgToolbar .rg-group { display: inline-flex; align-items: center; gap: 8px; flex-wrap: wrap; }
     #rgToolbar .rg-spacer { flex: 1 1 auto; }
-    #rgMain { display: grid; grid-template-columns: minmax(360px, 5fr) minmax(420px, 7fr); gap: 24px; align-items: start; }
-    @media (max-width: 1100px) { #rgMain { grid-template-columns: 1fr; } }
+    #rgMain { display: grid; grid-template-columns: minmax(520px, 1fr) 860px; gap: 24px; align-items: start; }
+    @media (max-width: 1300px) { #rgMain { grid-template-columns: 1fr; } }
     #rgLeft, #rgRight { min-width: 0; display: flex; flex-direction: column; gap: 16px; }
+    #rgBottom { grid-column: 1 / -1; min-width: 0; display: flex; flex-direction: column; gap: 14px; margin-top: 4px; }
 
     /* LEFT column pieces */
     html.responsive #etsyShopListingsContainer { width: 100%; }
-    html.responsive #shopListingsWrapper { width: 100%; flex-wrap: wrap; gap: 10px; }
-    html.responsive .queue-col { min-width: 130px; flex: 1 1 130px; }
+    html.responsive #shopListingsWrapper { display: grid !important; grid-template-columns: repeat(5, minmax(0, 1fr)); gap: 10px; width: 100% !important; }
+    html.responsive .queue-col { min-width: 0; }
+    html.responsive .queue-input { width: 100%; box-sizing: border-box; }
     html.responsive #descriptionAndFileUploadContainer { margin: 0; }
     html.responsive .listing-desc-container { width: 100%; }
     html.responsive .listing-desc-container input { width: 100%; }
@@ -686,7 +688,13 @@
     html.responsive #container13 .textbox-container { width: 100%; }
     html.responsive #searchKeyPhrases { width: 100%; }
     html.responsive #generateBtn { align-self: flex-start; }
-    html.responsive .title-container, html.responsive .description-container { width: 100%; margin: 0; }
+    html.responsive .title-container, html.responsive .description-container,
+    html.responsive #etsyListingTitleContainer, html.responsive #etsyListingDescriptionContainer,
+    html.responsive .title-container .flex-container, html.responsive .description-container .flex-container,
+    html.responsive .title-container .textbox-container, html.responsive .description-container .textbox-container,
+    html.responsive #listingTitle, html.responsive #listingDescription {
+      width: 100% !important; max-width: 100% !important; margin: 0; box-sizing: border-box;
+    }
     html.responsive .flex-container { display: flex; flex-wrap: wrap; gap: 10px; align-items: flex-start; }
     html.responsive .textbox-container { flex: 1 1 320px; min-width: 240px; }
     html.responsive .textbox-container textarea { width: 100%; }
@@ -694,7 +702,7 @@
 
     /* RIGHT column pieces */
     #rgRightTop { display: flex; flex-wrap: wrap; gap: 12px; align-items: center; }
-    #rgGridWrap { display: grid; grid-template-columns: 1fr minmax(150px, 190px); gap: 18px; align-items: start; }
+    #rgGridWrap { display: grid; grid-template-columns: max-content 170px; gap: 18px; align-items: start; }
     @media (max-width: 760px) { #rgGridWrap { grid-template-columns: 1fr; } }
     html.responsive #previewGridContainer { margin: 0; width: 100%; }
     html.responsive #previewGridStatic { grid-template-columns: repeat(5, minmax(96px, 1fr)); grid-column-gap: 14px; grid-row-gap: 14px; width: 100%; margin: 0; }
@@ -702,6 +710,38 @@
     html.responsive .preview-cell { width: 100%; }
     html.responsive #dropZone { width: 100%; max-width: 100%; min-height: 320px; margin: 0; box-sizing: border-box; }
     html.responsive #globalUploadCount { display: inline-flex; padding: 4px 10px; width: auto; }
+
+    /* CRITICAL: the abs engine flattens wrappers with display:contents so it
+       can position every child individually. In responsive mode those
+       wrappers ARE the layout, so restore their real display types. */
+    html.responsive #descriptionAndFileUploadContainer,
+    html.responsive #etsyShopListingsContainer,
+    html.responsive #previewGridContainer,
+    html.responsive .title-container,
+    html.responsive .description-container { display: block !important; position: static !important; }
+    html.responsive #previewGridStatic { display: grid !important; }
+    html.responsive .flex-container { display: flex !important; flex-wrap: nowrap; gap: 10px; align-items: stretch; }
+    html.responsive .textbox-container { flex: 1 1 auto; min-width: 0; }
+    html.responsive .button-container { flex: 0 0 auto; display: flex; flex-direction: column; gap: 6px; }
+
+    /* original preview geometry: 5 columns of fixed 120x158 cells */
+    html.responsive #previewGridStatic { grid-template-columns: repeat(5, 120px) !important; grid-column-gap: 16px; grid-row-gap: 14px; width: max-content; }
+    html.responsive .preview-cell { width: 120px; height: 158px; }
+
+    /* SKP highlight overlay: absolutely anchored inside its (relative)
+       container so it never adds flow height (was creating a 300px gap). */
+    html.responsive #container13 .textbox-container { position: relative; }
+    html.responsive #skpOverlay { position: absolute !important; left: 0; top: 0; margin: 0; }
+
+    /* compact one-page heights */
+    html.responsive #searchKeyPhrases { height: 200px !important; }
+    html.responsive #listingTitle { min-height: 56px; height: 56px; }
+    html.responsive #listingDescription { height: 170px; min-height: 170px; }
+    html.responsive #rgLeft { gap: 10px; }
+    html.responsive #rgRight { gap: 12px; }
+    html.responsive .section-heading, html.responsive h5 { margin: 2px 0 6px; }
+    html.responsive #titleCount { margin: 2px 0; }
+    html.responsive #dropZone { min-height: 0; height: 330px; display: flex; align-items: center; justify-content: center; }
 
     /* empty legacy wrappers left behind after reparenting */
     html.responsive .rg-drained { display: none !important; }
@@ -716,6 +756,31 @@
     #shopifyModeToggle[aria-checked="false"] .smt-state { color: #9e9e9e; }
     #shopifyQueueStatus { display: inline-flex; align-items: center; padding: 4px 10px; border: 1px solid #2e7d32; border-radius: 4px; background: #e8f5e9; color: #2e7d32; font-size: 12px; font-weight: bold; }
     #shopifyQueueStatus.warn { border-color: #e65100; background: #fff3e0; color: #e65100; }
+
+    /* ---- Shopify uploads panel (right column, under the preview grid) ---- */
+    #shopifyPanel { border: 1px solid #c8e6c9; border-radius: 6px; background: #fbfffb; padding: 10px 12px; font-size: 12.5px; max-width: 860px; }
+    #shopifyPanel h6 { margin: 0 0 8px; font-size: 14px; font-weight: 700; color: #1b5e20; display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
+    #shopifyPanel .sp-counts { display: inline-flex; gap: 6px; flex-wrap: wrap; font-weight: 600; }
+    #shopifyPanel .sp-counts span { padding: 1px 8px; border-radius: 10px; background: #e8f5e9; color: #2e7d32; }
+    #shopifyPanel .sp-counts span.sp-fail { background: #ffebee; color: #c62828; }
+    #shopifyPanel .sp-counts span.sp-q { background: #fff8e1; color: #b26a00; }
+    #shopifyPanel .sp-actions { margin-left: auto; display: inline-flex; gap: 6px; }
+    #shopifyPanel .sp-actions button { font-size: 11px; padding: 2px 8px; border: 1px solid #2e7d32; background: #fff; color: #2e7d32; border-radius: 3px; cursor: pointer; }
+    #shopifyProgressWrap { display: none; margin: 6px 0 10px; }
+    #shopifyProgressWrap .spb-label { font-weight: 600; color: #1b5e20; margin-bottom: 3px; }
+    #shopifyProgressWrap .spb-track { height: 8px; border-radius: 4px; background: #e0e0e0; overflow: hidden; }
+    #shopifyProgressWrap .spb-bar { height: 100%; width: 0%; background: #2e7d32; transition: width .3s; }
+    #shopifyProgressWrap.err .spb-bar { background: #c62828; }
+    #shopifyList { list-style: none; margin: 0; padding: 0; max-height: 300px; overflow-y: auto; }
+    #shopifyList li { padding: 7px 4px; border-top: 1px solid #e0f2e1; line-height: 1.45; }
+    #shopifyList .sp-dot { display: inline-block; width: 9px; height: 9px; border-radius: 50%; margin-right: 7px; vertical-align: baseline; }
+    #shopifyList .sp-dot.DONE { background: #2e7d32; } #shopifyList .sp-dot.FAILED { background: #c62828; }
+    #shopifyList .sp-dot.QUEUED { background: #f9a825; } #shopifyList .sp-dot.UPLOADING { background: #1976d2; }
+    #shopifyList .sp-title { font-weight: 700; color: #212121; }
+    #shopifyList .sp-meta { color: #555; }
+    #shopifyList .sp-cols { color: #1b5e20; }
+    #shopifyList .sp-err { color: #c62828; }
+    #shopifyList a { color: #1565c0; font-weight: 600; }
 
   </style>
 </head>
@@ -1816,6 +1881,31 @@ ANTI-REPETITION (TITLE)
         }
     }
 
+    // Put a listing ID back at the FRONT of its queue (upload job failed, the
+    // ID was never actually used on Etsy).
+    function restoreListingId(queueId, id) {
+      const el = document.getElementById(queueId);
+      if (!el || !id) return;
+      const arr = parseListingNumbers(el.value);
+      arr.unshift(String(id));
+      el.value = Array.from(new Set(arr)).join(", ");
+      try { localStorage.setItem(queueId, el.value); } catch (_) {}
+      if (typeof updateListingQueueCount === "function") updateListingQueueCount();
+    }
+
+    // Wait for a queued job's final status. Returns "DONE", a failure status,
+    // or "TIMEOUT". Grace-polls beyond the queue-empty signal because a job
+    // can still be mid-flight when the daemon drops it from the queue array.
+    async function awaitJobOutcome(jobId, graceMs) {
+      const t0 = Date.now();
+      while (Date.now() - t0 < (graceMs || 120000)) {
+        const st = (window.__etsyJobOutcomes || {})[jobId];
+        if (st === "DONE" || st === "FAILED" || st === "AUTH_NEEDED") return st;
+        await wait(2000);
+      }
+      return "TIMEOUT";
+    }
+
     async function runFullAutomationSequence(setRef, setName) {
         window.isProcessingSet = true;
         // Fresh start for this set: clear any stale skip request from a prior run.
@@ -1988,6 +2078,34 @@ ANTI-REPETITION (TITLE)
             // (possibly stuck) upload, stop here and let the pipeline move on.
             if (window.__skipListingRequested) return;
 
+            // --- VERIFY the original upload actually succeeded -----------
+            // The queue going empty is NOT success: the daemon attempts each
+            // job exactly once and drops failures. Without this check a
+            // failed job silently consumed one folder + one Etsy ID with no
+            // listing created (the 2x folder-drain bug). On failure: restore
+            // the ID, keep the folder (retry later; 2 strikes = skip), stop.
+            {
+                const consumed = window.__lastConsumedListing || {};
+                const outcome = await awaitJobOutcome(consumed.jobId, 120000);
+                if (outcome !== "DONE") {
+                    console.warn(`Original upload for ${setName} ended ${outcome}; restoring ID ${consumed.listingId} and keeping the folder.`);
+                    if (consumed.queueId && consumed.listingId) restoreListingId(consumed.queueId, consumed.listingId);
+                    window.__setFailureCounts = window.__setFailureCounts || {};
+                    const fails = (window.__setFailureCounts[setName] = (window.__setFailureCounts[setName] || 0) + 1);
+                    if (fails >= 2) {
+                        window.__manuallySkippedSets = window.__manuallySkippedSets || new Set();
+                        window.__manuallySkippedSets.add(setName);
+                        updateFirebaseStatus(`Upload failed twice: ${setName} skipped`, "");
+                    } else {
+                        // brief cooldown so the scanner retries this set later
+                        window.__incompleteSetsTracker = window.__incompleteSetsTracker || {};
+                        window.__incompleteSetsTracker[setName] = Date.now();
+                        updateFirebaseStatus(`Upload ${outcome}: ${setName} kept for retry`, "");
+                    }
+                    return; // no archive, no folder decrement, no Shopify push
+                }
+            }
+
             // --- Shopify mirror upload (first pass only) ------------------
             // Push the freshly generated listing to the Shopify website as a
             // LIVE product. The server queues it in Firestore and uploads
@@ -1999,6 +2117,7 @@ ANTI-REPETITION (TITLE)
                 try {
                     await queueShopifyUpload(route ? route.category : "Regular_Necklace");
                 } catch (shopErr) {
+                    if (typeof setShopifyStage === "function") setShopifyStage(100, "Shopify upload failed: " + ((shopErr && shopErr.message) || shopErr), true);
                     console.error("Shopify upload failed (Etsy pipeline continues):", shopErr);
                     window.M?.toast?.({ html: "Shopify upload failed: " + ((shopErr && shopErr.message) || shopErr) });
                 }
@@ -2041,6 +2160,15 @@ ANTI-REPETITION (TITLE)
                         const q = JSON.parse(localStorage.getItem("etsyUploadJobs") || "[]");
                         return q.length === 0;
                     }, 2000, 300000);
+                    // Variant verify: original already succeeded so the set is
+                    // still archived, but a failed variant must give its ID back.
+                    const consumed2 = window.__lastConsumedListing || {};
+                    const outcome2 = await awaitJobOutcome(consumed2.jobId, 120000);
+                    if (outcome2 !== "DONE" && consumed2.queueId && consumed2.listingId) {
+                        console.warn(`Variant upload ended ${outcome2}; restoring ID ${consumed2.listingId}.`);
+                        restoreListingId(consumed2.queueId, consumed2.listingId);
+                        window.M?.toast?.({ html: `Variant upload ${outcome2} — listing ID returned to queue.` });
+                    }
                 }
             } else {
                 console.log("Duplicate Mode OFF — skipping duplicate pass and variant upload.");
@@ -2127,6 +2255,22 @@ ANTI-REPETITION (TITLE)
             let failedCount = 0;
 
             for (const itemRef of itemsToMove.items) {
+                // YIELD to live listing uploads. The background archive moves
+                // every image through the SAME chunked corsProxy the upload
+                // pipeline uses; running them concurrently starved uploads
+                // into 5-minute timeouts (the root cause of sets being
+                // consumed without their listings ever created). Pause this
+                // move whenever an upload job is in flight; cap the wait at
+                // 10 minutes so the archive can never stall forever.
+                let yielded = 0;
+                while (yielded < 600000) {
+                    let pending = [];
+                    try { pending = JSON.parse(localStorage.getItem("etsyUploadJobs") || "[]"); } catch (_) {}
+                    if (!pending.length) break;
+                    await wait(1500);
+                    yielded += 1500;
+                }
+
                 let moveRetries = 4;
                 let moveSuccess = false;
 
@@ -2732,14 +2876,19 @@ ANTI-REPETITION (TITLE)
 
       // --- left column: queues -> listing description -> key phrases -> title -> description ---
       move(left, ["etsyShopListingsContainer", "descriptionAndFileUploadContainer",
-                  "searchKeyPhrasesHeading", "container13", "generateBtn",
-                  "etsyListingTitleContainer", "etsyListingDescriptionContainer"]);
+                  "searchKeyPhrasesHeading", "container13", "generateBtn"]);
+
+      // TITLE + DESCRIPTION get a full-width band under both columns so the
+      // generated text has the entire page width instead of a cramped box.
+      const bottom = mk("div", "rgBottom");
+      move(bottom, ["etsyListingTitleContainer", "etsyListingDescriptionContainer"]);
 
       // --- right column: analyze row, then preview grid + image drop side by side ---
       move(rightTop, ["analyzeMetadataBtn", "analyzeMetadataProgress", "analyzeMetadataCheck"]);
       right.appendChild(rightTop);
       move(gridWrap, ["previewGridContainer", "dropZone"]);
       right.appendChild(gridWrap);
+      main.appendChild(bottom);
 
       // insert the grid after the fixed status pill, then hide drained wrappers
       const ref = $("firebaseStatus");
@@ -3227,6 +3376,12 @@ https://www.etsy.com/your/shops/me/listing-editor/edit/1822973998
       const save = (patch) => {
         job = { ...job, ...patch };
         localStorage.setItem(`etsyJob:${jobId}`, JSON.stringify(job));
+        // Outcome mirror: the automation verifies DONE/FAILED here before it
+        // consumes a folder or an Etsy ID (jobs are attempted exactly once,
+        // so a dropped failure must not silently eat the set + ID).
+        if (patch && patch.status) {
+          (window.__etsyJobOutcomes = window.__etsyJobOutcomes || {})[jobId] = patch.status;
+        }
       };
       // Always prefer the freshest token (after OAuth reconnect)
       let token = (window.accessToken && String(window.accessToken).trim())
@@ -3550,6 +3705,10 @@ https://www.etsy.com/your/shops/me/listing-editor/edit/1822973998
     }
 
     window.addEventListener("load", () => {
+      // Legacy abs-layout hack: the SKP box needed manual extra room. In
+      // responsive mode the grid sizes itself — inflating it just tears a
+      // 300px hole in the left column, so skip it there.
+      if (window.USE_RESPONSIVE_LAYOUT) return;
       let container13 = document.getElementById("container13");
       container13.style.height = (container13.offsetHeight * 2.5) + "px";
     });
@@ -3961,6 +4120,10 @@ https://www.etsy.com/your/shops/me/listing-editor/edit/1822973998
         qEl.value = queueArr.join(", ");
         localStorage.setItem(targetInputId, qEl.value);
         if (typeof updateListingQueueCount === "function") updateListingQueueCount();
+
+        // Remember exactly which ID left which queue so the automation can
+        // RESTORE it if the upload job fails (failed job = ID must go back).
+        window.__lastConsumedListing = { queueId: targetInputId, listingId: String(listingId) };
         
         if (!listingId) { M.toast({ html: "Invalid listing URL or ID." }); return; }
         if (!window.accessToken) { M.toast({ html: "Please Connect to Etsy first." }); return; }
@@ -3968,6 +4131,9 @@ https://www.etsy.com/your/shops/me/listing-editor/edit/1822973998
         // 2) Snapshot EVERYTHING immediately to localStorage (so Clear won’t affect it)
         //    (Requires PATCH 1 functions: queueListingUploadFromUI, processEtsyJobs)
         const jobId = await queueListingUploadFromUI(listingId);
+        if (window.__lastConsumedListing && window.__lastConsumedListing.listingId === String(listingId)) {
+          window.__lastConsumedListing.jobId = jobId;
+        }
          const short = String(jobId).slice(-6);
          window.M?.toast?.({ html: `Queued Etsy push (${short}). You can start your next listing.` });
         // 3) Kick the background processor; show progress but DO NOT block UI
@@ -5985,20 +6151,92 @@ async function callOpenAI(payload, opts = {}) {
         });
       }
 
-      // ---- status chip + periodic drain ----
+      // ---- Shopify uploads panel (injected under the preview grid) ----
+      function ensurePanel() {
+        if (document.getElementById("shopifyPanel")) return;
+        const host = document.getElementById("rgRight") || document.body;
+        const p = document.createElement("div");
+        p.id = "shopifyPanel";
+        p.innerHTML = `
+          <h6>Shopify Uploads
+            <span class="sp-counts" id="spCounts"></span>
+            <span class="sp-actions">
+              <button id="spDrainBtn" title="Upload queued jobs now (within today's variant budget)">Drain now</button>
+              <button id="spRetryBtn" title="Requeue all failed jobs">Retry failed</button>
+            </span>
+          </h6>
+          <div id="shopifyProgressWrap"><div class="spb-label" id="spbLabel"></div>
+            <div class="spb-track"><div class="spb-bar" id="spbBar"></div></div></div>
+          <ul id="shopifyList"><li style="border:none;color:#777;">No Shopify uploads yet this session.</li></ul>`;
+        host.appendChild(p);
+        p.querySelector("#spDrainBtn").addEventListener("click", async () => {
+          try { await fetch(FN + "?op=drain"); } catch (e) {}
+          refreshShopifyStatus();
+        });
+        p.querySelector("#spRetryBtn").addEventListener("click", async () => {
+          try {
+            const r = await fetch(FN, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ op: "retryFailed" }) });
+            const j = await r.json();
+            window.M?.toast?.({ html: `Requeued ${j.requeued || 0} failed job(s).` });
+          } catch (e) {}
+          refreshShopifyStatus();
+        });
+      }
+
+      // Live stage bar for the client-side phases of a Shopify push.
+      function setShopifyStage(pct, label, isErr) {
+        ensurePanel();
+        const wrap = document.getElementById("shopifyProgressWrap");
+        wrap.style.display = "block";
+        wrap.classList.toggle("err", !!isErr);
+        document.getElementById("spbLabel").textContent = label || "";
+        document.getElementById("spbBar").style.width = Math.max(0, Math.min(100, pct)) + "%";
+        if (pct >= 100 && !isErr) setTimeout(() => { wrap.style.display = "none"; }, 6000);
+      }
+      window.setShopifyStage = setShopifyStage;
+
+      function esc(t) { const d = document.createElement("div"); d.textContent = String(t == null ? "" : t); return d.innerHTML; }
+      function renderRecent(list) {
+        const ul = document.getElementById("shopifyList");
+        if (!ul) return;
+        if (!list || !list.length) return;
+        ul.innerHTML = list.map(j => {
+          const price = (j.priceMin != null) ? (j.priceMin === j.priceMax ? `$${j.priceMin}` : `$${j.priceMin}–$${j.priceMax}`) : "";
+          const cols = (j.addedCollections || []).concat((j.aiPickedCollections || []).filter(c => (j.addedCollections || []).indexOf(c) < 0));
+          const when = j.completedAtMs || j.createdAtMs;
+          const time = when ? new Date(when).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" }) : "";
+          return `<li>
+            <span class="sp-dot ${esc(j.status)}"></span>
+            <span class="sp-title">${esc(j.title)}</span>
+            ${j.handle ? ` — <a href="https://britesjewelry.com/products/${esc(j.handle)}" target="_blank" rel="noopener">view live</a>` : ""}
+            <br><span class="sp-meta">${esc(j.status)} · ${esc((j.category || "").replace(/_/g, " "))} · tier ${esc(j.tier)} · ${esc(j.variantCount)} variants · ${price} · ${time}</span>
+            ${cols.length ? `<br><span class="sp-cols">Collections: ${esc(cols.join(", "))}</span>` : ""}
+            ${(j.expandedMeanings || []).length ? `<br><span class="sp-meta">Themes: ${esc(j.expandedMeanings.join(", "))}</span>` : ""}
+            ${j.error ? `<br><span class="sp-err">${esc(String(j.error).slice(0, 160))}</span>` : ""}
+          </li>`;
+        }).join("");
+      }
+
+      window.__renderRecentTest = renderRecent; // exposed for diagnostics
+
+      // ---- status chip + panel refresh + periodic drain ----
       async function refreshShopifyStatus() {
         const el = document.getElementById("shopifyQueueStatus");
-        if (!el) return;
+        ensurePanel();
         try {
-          const r = await fetch(FN + "?op=status");
+          const r = await fetch(FN + "?op=status&recent=12");
           const j = await r.json();
           const b = j.budget || {};
-          el.textContent = `Shopify Q:${j.queued ?? "?"}` +
-            (j.failed ? ` ✗${j.failed}` : "") +
-            ` · ${b.used ?? "?"}/${b.ceiling ?? 950} today`;
-          el.classList.toggle("warn", !!j.failed || (b.remaining !== undefined && b.remaining < 50));
-          el.title = `Queued: ${j.queued} | Uploading: ${j.uploading} | Failed: ${j.failed} | Done: ${j.done}\nVariant budget today: ${b.used}/${b.ceiling} (resets midnight Toronto)` + (j.failed ? "\nClick to retry failed jobs." : "");
-        } catch (e) { el.textContent = "Shopify: offline"; }
+          if (el) {
+            el.textContent = `Shopify Q:${j.queued ?? "?"}` + (j.failed ? ` ✗${j.failed}` : "") + ` · ${b.used ?? "?"}/${b.ceiling ?? 950} today`;
+            el.classList.toggle("warn", !!j.failed || (b.remaining !== undefined && b.remaining < 50));
+            el.title = `Queued: ${j.queued} | Uploading: ${j.uploading} | Failed: ${j.failed} | Done: ${j.done}\nVariant budget today: ${b.used}/${b.ceiling} (resets midnight Toronto)` + (j.failed ? "\nClick to retry failed jobs." : "");
+          }
+          const c = document.getElementById("spCounts");
+          if (c) c.innerHTML = `<span>Done ${j.done ?? 0}</span><span class="sp-q">Queued ${j.queued ?? 0}</span>` +
+            `<span class="sp-fail">Failed ${j.failed ?? 0}</span><span>Budget ${b.used ?? 0}/${b.ceiling ?? 950}</span>`;
+          renderRecent(j.recent);
+        } catch (e) { if (el) el.textContent = "Shopify: offline"; }
       }
       window.refreshShopifyStatus = refreshShopifyStatus;
       document.getElementById("shopifyQueueStatus")?.addEventListener("click", async () => {
@@ -6117,9 +6355,12 @@ RULES:
         busy = true;
         try {
           category = category || inferCategory();
+          setShopifyStage(10, "Generating Shopify title, description, tags (AI)…");
           const fields = await generateShopifyFields(category);
+          setShopifyStage(40, `Staging images for “${fields.title}”…`);
           const images = await collectShopifyImages();
           if (!images.length) throw new Error("No usable https image URLs (need at least one photo).");
+          setShopifyStage(70, `Creating “${fields.title}” — pricing variants & collections…`);
           const sku = (typeof buildSkuFromTitle === "function" ? buildSkuFromTitle(fields.title) : "").toUpperCase();
           const payload = {
             category,
@@ -6139,6 +6380,9 @@ RULES:
           const j = await r.json();
           if (!r.ok || j.ok === false) throw new Error((j.errors && j.errors.join("; ")) || j.error || ("HTTP " + r.status));
           const uploadedNow = (j.drained && j.drained.uploaded || []).some(u => u.jobId === j.jobId);
+          setShopifyStage(100, uploadedNow
+            ? `LIVE: “${fields.title}” — ${j.variantCount} variants, tier ${j.tier}.`
+            : `Queued: “${fields.title}” (${j.variantCount} variants) — waits for today's variant budget.`);
           window.M?.toast?.({
             html: uploadedNow
               ? `Shopify: LIVE now — ${j.variantCount} variants (tier ${j.tier}).`
@@ -6155,7 +6399,7 @@ RULES:
       if (btn) btn.addEventListener("click", async () => {
         btn.disabled = true;
         try { await queueShopifyUpload(inferCategory()); }
-        catch (e) { window.M?.toast?.({ html: "Shopify upload failed: " + ((e && e.message) || e) }); }
+        catch (e) { setShopifyStage(100, "Shopify upload failed: " + ((e && e.message) || e), true); window.M?.toast?.({ html: "Shopify upload failed: " + ((e && e.message) || e) }); }
         finally { btn.disabled = false; }
       });
     })();
