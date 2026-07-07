@@ -652,6 +652,56 @@
       margin-top: 3px;
       font-weight: bold;
     }
+
+    /* =====================================================================
+       RESPONSIVE LAYOUT (html.responsive)
+       Replaces the manually-forced absolute-position engine with natural
+       document flow + fluid widths. The old engine stays in the code behind
+       window.USE_RESPONSIVE_LAYOUT (set it to false to restore Config mode).
+       ===================================================================== */
+    html.responsive, html.responsive body { width: 100%; max-width: 100%; overflow-x: hidden; }
+    html.responsive body { padding: 12px 16px 80px; }
+    html.responsive #layoutRoot { display: none; }
+    html.responsive #openConfigBtn { display: none; } /* config only applies to the abs engine */
+    html.responsive #toggleAuto, html.responsive #skipListingBtn { margin: 4px 8px 4px 0 !important; }
+    html.responsive #descriptionAndFileUploadContainer { margin: 14px 0; }
+    html.responsive .listing-desc-container { width: min(560px, 100%); }
+    html.responsive .listing-desc-container input { width: 100%; }
+    html.responsive #topButtons { display: flex; flex-wrap: wrap; gap: 10px; align-items: center; margin: 10px 0 16px; }
+    html.responsive #topButtons > * { margin-left: 0 !important; }
+    html.responsive #etsyShopListingsContainer { flex-basis: 100%; }
+    html.responsive #shopListingsWrapper { width: 100%; max-width: 940px; flex-wrap: wrap; gap: 10px; }
+    html.responsive .queue-col { min-width: 150px; flex: 1 1 150px; }
+    html.responsive .phrases-header { display: flex; flex-wrap: wrap; gap: 12px; align-items: center; margin: 14px 0 6px; }
+    html.responsive #container13 { width: 100%; }
+    html.responsive #container13 .textbox-container { width: min(900px, 100%); }
+    html.responsive #searchKeyPhrases { width: 100%; }
+    html.responsive .flex-container { display: flex; flex-wrap: wrap; gap: 10px; align-items: flex-start; }
+    html.responsive .textbox-container { flex: 1 1 420px; min-width: 260px; }
+    html.responsive .textbox-container textarea { width: 100%; }
+    html.responsive #belowSearch { display: flex; flex-wrap: wrap; gap: 20px; margin-top: 14px; }
+    html.responsive #belowSearch #generateBtn { flex-basis: 100%; max-width: 180px; }
+    html.responsive .title-container, html.responsive .description-container { flex: 1 1 480px; min-width: 300px; }
+    html.responsive #previewGridContainer { margin-top: 18px; }
+    html.responsive #previewGridStatic { grid-template-columns: repeat(auto-fill, minmax(120px, 1fr)); width: 100%; max-width: 960px; margin: 0; }
+    html.responsive #globalUploadCount { display: inline-flex; padding: 4px 10px; margin: 8px 8px 8px 0; width: auto; }
+    html.responsive #dropZone { max-width: 100%; }
+    @media (max-width: 720px) {
+      html.responsive body { padding: 8px 10px 90px; }
+      html.responsive .btn { padding: 0 10px; font-size: 12px; }
+    }
+
+    /* ---- Shopify upload toggle + status chip ---- */
+    #shopifyModeToggle { display: inline-flex; align-items: center; gap: 8px; cursor: pointer; user-select: none; }
+    #shopifyModeToggle .smt-track { width: 40px; height: 20px; border-radius: 10px; background: #b0bec5; position: relative; transition: background .15s; display: inline-block; }
+    #shopifyModeToggle .smt-knob { position: absolute; top: 2px; left: 2px; width: 16px; height: 16px; border-radius: 50%; background: #fff; transition: left .15s; box-shadow: 0 1px 2px rgba(0,0,0,.3); }
+    #shopifyModeToggle[aria-checked="true"] .smt-track { background: #2e7d32; }
+    #shopifyModeToggle[aria-checked="true"] .smt-knob { left: 22px; }
+    #shopifyModeToggle .smt-state { font-size: 12px; font-weight: bold; color: #2e7d32; }
+    #shopifyModeToggle[aria-checked="false"] .smt-state { color: #9e9e9e; }
+    #shopifyQueueStatus { display: inline-flex; align-items: center; padding: 4px 10px; border: 1px solid #2e7d32; border-radius: 4px; background: #e8f5e9; color: #2e7d32; font-size: 12px; font-weight: bold; }
+    #shopifyQueueStatus.warn { border-color: #e65100; background: #fff3e0; color: #e65100; }
+
   </style>
 </head>
 <body>
@@ -700,6 +750,16 @@
        </span>
        <span id="duplicateModeState" class="dmt-state">ON</span>
      </div>
+
+     <!-- Shopify mirror-upload controls: toggle (auto pipeline), manual push
+          button, and live queue/budget chip. Uploads are queued server-side in
+          Firestore and drained within Shopify's 1,000 new-variants/day limit. -->
+     <div id="shopifyModeToggle" class="configurable" role="switch" aria-checked="true" tabindex="0" title="When ON, every listing published by the pipeline is also created LIVE on the Shopify website (queued within the 1,000 variants/day plan limit).">
+       <span class="smt-track"><span class="smt-knob"></span></span>
+       <span id="shopifyModeState" class="smt-state">SHOPIFY ON</span>
+     </div>
+     <button id="uploadShopifyBtn" class="btn waves-effect waves-light configurable green darken-1" style="margin-left:10px;" title="Push the listing currently in the editor to Shopify now">To Shopify</button>
+     <div id="shopifyQueueStatus" class="configurable" title="Shopify upload queue and today's variant budget">Shopify: …</div>
 
      <button id="clearBtn" class="btn waves-effect waves-light red darken-1 configurable" style="margin-left:10px;">
        Clear
@@ -1082,6 +1142,14 @@ ANTI-REPETITION (TITLE)
     // Bracelets sets still arrive from the Listing Generator. They are
     // routed to queueRegNecklace below (see ROUTES) so they continue
     // to be auto-processed using the Reg Necklace listing-ID pool.
+    // ------------------------------------------------------------------
+    // RESPONSIVE LAYOUT FLAG. true = natural document flow + fluid CSS (the
+    // html.responsive stylesheet above); the absolute-position Config engine
+    // is fully bypassed. Set to false to restore the old Config-modal layout.
+    // ------------------------------------------------------------------
+    window.USE_RESPONSIVE_LAYOUT = true;
+    if (window.USE_RESPONSIVE_LAYOUT) document.documentElement.classList.add("responsive");
+
     const QUEUE_IDS = [
       "queueRegNecklace",
       "queueBeadyNecklace",
@@ -1682,7 +1750,7 @@ ANTI-REPETITION (TITLE)
                   4. Output plain text, exactly two words, no punctuation.`;
                           
                 const payload = {
-                    model: window.modelName || "gpt-5",
+                    model: window.modelName || "gpt-5.5",
                     input: [
                         // Reinforce the negative constraints in the system prompt
                         { role: "system", content: `Return ONLY two descriptive words. No punctuation. You are strictly forbidden from using any of these words: ${forbiddenWords}.` },
@@ -1695,7 +1763,7 @@ ANTI-REPETITION (TITLE)
                         }
                     ],
                     max_output_tokens: 100, 
-                    reasoning: { effort: "minimal" },
+                    reasoning: { effort: "low" },
                     text: { verbosity: "low" }
                 };
 
@@ -1904,6 +1972,22 @@ ANTI-REPETITION (TITLE)
             // Skip checkpoint: if the user pressed "Skip Listing" during the
             // (possibly stuck) upload, stop here and let the pipeline move on.
             if (window.__skipListingRequested) return;
+
+            // --- Shopify mirror upload (first pass only) ------------------
+            // Push the freshly generated listing to the Shopify website as a
+            // LIVE product. The server queues it in Firestore and uploads
+            // within the 1,000 new-variants/day Shopify plan limit; anything
+            // over budget drains automatically on following days. A Shopify
+            // failure never blocks the Etsy pipeline.
+            if (window.shopifyUploadEnabled !== false) {
+                updateFirebaseStatus("Uploading to Shopify...", "working");
+                try {
+                    await queueShopifyUpload(route ? route.category : "Regular_Necklace");
+                } catch (shopErr) {
+                    console.error("Shopify upload failed (Etsy pipeline continues):", shopErr);
+                    window.M?.toast?.({ html: "Shopify upload failed: " + ((shopErr && shopErr.message) || shopErr) });
+                }
+            }
 
             // --- Folder-count decrement (Requirement 1) -----------------
             // The Firebase scan rebuilds folderCounts from the live storage
@@ -2161,7 +2245,7 @@ ANTI-REPETITION (TITLE)
   `.trim();
 
           const payload = {
-            model: window.modelName || "gpt-5",
+            model: window.modelName || "gpt-5.5",
             input: [
               { role: "system", content: "Return ONLY one plain-text line, <=200 characters." },
               {
@@ -2173,7 +2257,7 @@ ANTI-REPETITION (TITLE)
               }
             ],
             max_output_tokens: 300,
-            reasoning: { effort: "minimal" },
+            reasoning: { effort: "low" },
             text: { verbosity: "medium" }
           };
 
@@ -2216,7 +2300,7 @@ ANTI-REPETITION (TITLE)
     window.ETSY_SHOP_URL = "https://www.etsy.com/shop/custombrites";
     window.CLIENT_ID = "k75zdspz4r99txpqdji7i2em";
     window.REDIRECT_URI = "https://delicate-tanuki-616ac0.netlify.app/";
-    window.modelName = "gpt-5";
+    window.modelName = "gpt-5.5";
     window.accessToken;
     window.photoNames = [];
     window.previewImages = [];
@@ -2457,6 +2541,7 @@ ANTI-REPETITION (TITLE)
 
     // 3.3 Apply saved (or default) positions — same storage keys as shipping-1
     function loadPositions(){
+      if (window.USE_RESPONSIVE_LAYOUT) return; // responsive mode: natural flow
       const ids = window.configComponentIDs || [];
       for (var i=0; i<ids.length; i++){
         var id = ids[i];
@@ -2587,6 +2672,7 @@ ANTI-REPETITION (TITLE)
     }
 
     function forceApplyPositions() {
+      if (window.USE_RESPONSIVE_LAYOUT) return; // responsive mode: natural flow
       // Apply now, after modal close animation, and once more after paint
       requestAnimationFrame(() => {
         if (typeof loadPositions === "function") loadPositions();
@@ -2598,10 +2684,12 @@ ANTI-REPETITION (TITLE)
     document.addEventListener("DOMContentLoaded", function(){
       localStorage.removeItem("buttonPositions"); // purge legacy store once
       // Cleanup old wrapper keys, adopt EVERY control into the absolute stage, then apply layout
-      cleanupNestedConflicts();
-      initAbsoluteLayout();      // discover, assign IDs, reparent to #layoutRoot
-      migrateLocalStoragePositions(); // move saved positions from old random IDs to new stable IDs
-      loadPositions();           // apply saved/default positions to all
+      if (!window.USE_RESPONSIVE_LAYOUT) {
+        cleanupNestedConflicts();
+        initAbsoluteLayout();      // discover, assign IDs, reparent to #layoutRoot
+        migrateLocalStoragePositions(); // move saved positions from old random IDs to new stable IDs
+        loadPositions();           // apply saved/default positions to all
+      }
 
     var configModal = M.Modal.init(document.getElementById("configModal"), {
       onOpenStart() {
@@ -3826,13 +3914,13 @@ https://www.etsy.com/your/shops/me/listing-editor/edit/1822973998
     function _normLine(s){ return String(s||"").toLowerCase().replace(/[^a-z0-9]+/g," ").trim(); }
     async function _rephraseAltDifferent(prev){
       const payload = {
-        model: window.modelName || "gpt-5",
+        model: window.modelName || "gpt-5.5",
         input: [
           { role: "system", content: "Return ONLY one plain text line (<=200 chars). Must not be identical to the input. Avoid trivial punctuation-only changes." },
           { role: "user", content: `Rephrase this Etsy photo alt text so it says the same thing in different words (<=200 chars):\n${prev}` }
         ],
         max_output_tokens: 180,
-        reasoning: { effort: "minimal" },
+        reasoning: { effort: "low" },
         text: { verbosity: "low" }
       };
       const data = await callOpenAI(payload);
@@ -4565,13 +4653,13 @@ https://www.etsy.com/your/shops/me/listing-editor/edit/1822973998
       `.trim();
 
       const payload = {
-        model: window.modelName,            // "gpt-5"
+        model: window.modelName,            // "gpt-5.5"
         input: [
           { role: "system", content: "Generate concise, varied Etsy tags. No duplicates. Each tag ≤ 20 chars." },
           { role: "user", content: prompt }
         ],
         max_output_tokens: 120,
-        reasoning: { effort: "minimal" },   // light reasoning = faster/cheaper on GPT-5
+        reasoning: { effort: "low" },   // low reasoning on GPT-5.5
         text: { verbosity: "medium" }
       };
 
@@ -4604,7 +4692,7 @@ https://www.etsy.com/your/shops/me/listing-editor/edit/1822973998
             { role: "user", content: prompt }
           ],
           max_output_tokens: 220,
-          reasoning: { effort: "minimal" },
+          reasoning: { effort: "low" },
           text: { verbosity: "medium" }
         };
 
@@ -5380,7 +5468,7 @@ https://www.etsy.com/your/shops/me/listing-editor/edit/1822973998
           { role: "user", content: promptText }
         ],
         max_output_tokens: 120,
-        reasoning: { effort: "minimal" },
+        reasoning: { effort: "low" },
         text: { verbosity: "medium" }
       };
 
@@ -5469,13 +5557,13 @@ https://www.etsy.com/your/shops/me/listing-editor/edit/1822973998
       try {
         // Responses API payload for GPT-5
         const payload = {
-          model: window.modelName, // e.g., "gpt-5"
+          model: window.modelName, // e.g., "gpt-5.5"
           input: [
             { role: "system", content: "Return ONLY the description as plain text." },
             { role: "user", content: promptText }
           ],
           max_output_tokens: 350,
-          reasoning: { effort: "minimal" },
+          reasoning: { effort: "low" },
           text: { verbosity: "medium" }
         };
 
@@ -5766,6 +5854,228 @@ async function callOpenAI(payload, opts = {}) {
         }
     });
 
+  </script>
+
+  <script>
+    // =====================================================================
+    // SHOPIFY MIRROR-UPLOAD MODULE
+    // Turns the generated listing into a LIVE Shopify product via the
+    // shopifyListingUpload Netlify function:
+    //   - AI generates Shopify-specific fields (clean 4-7 word title, rich
+    //     HTML description, tags, theme keywords for collection placement)
+    //     -- Etsy's 140-char keyword title is never reused as-is.
+    //   - Photos are passed as https URLs (Firebase originals when the
+    //     automation supplied them; anything else is uploaded to Firebase
+    //     Storage first so Shopify can fetch it).
+    //   - The server prices every variant from the canonical Brites pricing
+    //     scheme, publishes to the Online Store, and places the product into
+    //     matching collections. Jobs beyond today's 1,000-variant Shopify
+    //     limit wait in Firestore and upload automatically on later days.
+    // =====================================================================
+    (function initShopifyModule() {
+      const FN = "/.netlify/functions/shopifyListingUpload";
+      const QUEUE_TO_CATEGORY = {
+        queueRegNecklace: "Regular_Necklace",
+        queueBeadyNecklace: "Beady_Necklace",
+        queueStudEarrings: "Stud_Earrings",
+        queueHoopEarrings: "Hoop_Earrings",
+        queueCharms: "Charms"
+      };
+
+      // ---- toggle (default ON) ----
+      const KEY = "shopifyUploadEnabled";
+      const wrap = document.getElementById("shopifyModeToggle");
+      const state = document.getElementById("shopifyModeState");
+      function setToggle(on) {
+        on = !!on;
+        if (wrap) wrap.setAttribute("aria-checked", on ? "true" : "false");
+        if (state) state.textContent = on ? "SHOPIFY ON" : "SHOPIFY OFF";
+        window.shopifyUploadEnabled = on;
+        try { localStorage.setItem(KEY, on ? "1" : "0"); } catch (e) {}
+      }
+      let saved = null; try { saved = localStorage.getItem(KEY); } catch (e) {}
+      setToggle(saved === null ? true : saved === "1");
+      if (wrap) {
+        wrap.addEventListener("click", () => setToggle(wrap.getAttribute("aria-checked") !== "true"));
+        wrap.addEventListener("keydown", (e) => {
+          if (e.key === " " || e.key === "Enter") { e.preventDefault(); setToggle(wrap.getAttribute("aria-checked") !== "true"); }
+        });
+      }
+
+      // ---- status chip + periodic drain ----
+      async function refreshShopifyStatus() {
+        const el = document.getElementById("shopifyQueueStatus");
+        if (!el) return;
+        try {
+          const r = await fetch(FN + "?op=status");
+          const j = await r.json();
+          const b = j.budget || {};
+          el.textContent = `Shopify Q:${j.queued ?? "?"}` +
+            (j.failed ? ` ✗${j.failed}` : "") +
+            ` · ${b.used ?? "?"}/${b.ceiling ?? 950} today`;
+          el.classList.toggle("warn", !!j.failed || (b.remaining !== undefined && b.remaining < 50));
+          el.title = `Queued: ${j.queued} | Uploading: ${j.uploading} | Failed: ${j.failed} | Done: ${j.done}\nVariant budget today: ${b.used}/${b.ceiling} (resets midnight Toronto)` + (j.failed ? "\nClick to retry failed jobs." : "");
+        } catch (e) { el.textContent = "Shopify: offline"; }
+      }
+      window.refreshShopifyStatus = refreshShopifyStatus;
+      document.getElementById("shopifyQueueStatus")?.addEventListener("click", async () => {
+        try {
+          const r = await fetch(FN, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ op: "retryFailed" }) });
+          const j = await r.json();
+          window.M?.toast?.({ html: `Requeued ${j.requeued || 0} failed job(s).` });
+        } catch (e) {}
+        refreshShopifyStatus();
+      });
+      setTimeout(refreshShopifyStatus, 2500);
+      setInterval(refreshShopifyStatus, 60 * 1000);
+      // Self-drain while the app is open: picks up queued jobs after the
+      // Toronto-midnight budget reset without any external cron.
+      setInterval(() => { fetch(FN + "?op=drain").then(refreshShopifyStatus).catch(() => {}); }, 30 * 60 * 1000);
+
+      // ---- category inference ----
+      function inferCategory() {
+        const q = window.__activeAutomationQueueId;
+        if (q && QUEUE_TO_CATEGORY[q]) return QUEUE_TO_CATEGORY[q];
+        const t = ((document.getElementById("listingTitle")?.value || "") + " " +
+                   (document.getElementById("listingDescInput")?.value || "")).toLowerCase();
+        if (t.includes("beady")) return "Beady_Necklace";
+        if (t.includes("stud")) return "Stud_Earrings";
+        if (t.includes("huggie") || t.includes("hoop")) return "Hoop_Earrings";
+        if (t.includes("bracelet")) return "Bracelets";
+        if (t.includes("charm") && !t.includes("necklace")) return "Charms";
+        return "Regular_Necklace";
+      }
+      window.inferShopifyCategory = inferCategory;
+
+      // ---- image URL collection ----
+      // Prefer the original Firebase https URL (automation flow). Anything
+      // else (dataURL / blob:) is uploaded to Firebase Storage so Shopify's
+      // media fetcher can reach it. Alt text comes from photoMeta.
+      async function ensureHttpsUrl(src, uploadPathBase, i) {
+        if (!src) return null;
+        if (/^https:\/\//i.test(src)) return src;
+        try {
+          const blob = await (await fetch(src)).blob();
+          const path = `${uploadPathBase}/img_${i}_${Date.now()}.jpg`;
+          const ref = firebase.storage().ref().child(path);
+          await ref.put(blob, { contentType: blob.type || "image/jpeg" });
+          return await ref.getDownloadURL();
+        } catch (e) {
+          console.warn("Shopify image staging failed for slot", i, e);
+          return null;
+        }
+      }
+      async function collectShopifyImages() {
+        const out = [];
+        const base = "shopify-upload-temp/" + new Date().toISOString().slice(0, 10);
+        const imgs = window.previewImages || [];
+        const metas = window.photoMeta || [];
+        const ids = window.photoIds || [];
+        for (let i = 0; i < 8; i++) {
+          if (!imgs[i]) continue;
+          const original = ids[i] ? (window.previewOriginalByPhotoId || {})[ids[i]] : null;
+          const src = await ensureHttpsUrl(original || imgs[i], base, i);
+          if (src) out.push({ src, alt: (metas[i] || "").slice(0, 250) });
+        }
+        return out;
+      }
+
+      // ---- AI: Shopify-specific fields ----
+      function stripFences(t) { return String(t || "").replace(/```json|```/g, "").trim(); }
+      async function generateShopifyFields(category) {
+        const etsyTitle = (document.getElementById("listingTitle")?.value || "").trim();
+        const focal = (document.getElementById("listingDescInput")?.value || "").trim();
+        const skp = (document.getElementById("searchKeyPhrases")?.value || "").trim().slice(0, 1200);
+        const catHuman = category.replace(/_/g, " ");
+        const prompt = `You are generating fields for a LIVE Shopify product at Brites Jewelry (handmade personalized charm jewelry, britesjewelry.com).
+INPUT CONTEXT:
+- Jewelry category: ${catHuman}
+- Focal item: ${focal}
+- Etsy long title (keyword-stuffed, for context only, do NOT copy its style): ${etsyTitle}
+- Key phrases: ${skp}
+
+Return STRICT JSON only — no markdown fences, no commentary:
+{"title":"...","description_html":"...","tags":["..."],"theme_keywords":["..."]}
+
+RULES:
+- title: 4-7 words, natural Title Case product name that names the SUBJECT and the jewelry type (e.g. "Dainty Hummingbird Charm Necklace"). No metal names, no lengths, no commas or pipes, no keyword stuffing.
+- description_html: exactly two short <p> paragraphs, then one <ul> with 4 <li> bullets (available metals: Sterling Silver / 14k Gold Filled / 14k Solid Gold; handmade in small batches; personalization or engraving when applicable to a ${catHuman}; arrives gift-ready). Warm and concise. No emojis. Never promise features not listed.
+- tags: 10-14 lowercase tags covering subject, style, occasion, recipient. No metal names.
+- theme_keywords: 3-6 single lowercase words naming the subject/theme (e.g. "dog","animal","pet") used to file the product into store collections.`;
+        const payload = {
+          model: window.modelName,
+          input: [
+            { role: "system", content: "Return STRICT JSON only." },
+            { role: "user", content: prompt }
+          ],
+          max_output_tokens: 900,
+          reasoning: { effort: "low" },
+          text: { verbosity: "medium" }
+        };
+        try {
+          const data = await callOpenAI(payload);
+          const parsed = JSON.parse(stripFences(extractResponseText(data)));
+          if (parsed && parsed.title) return parsed;
+        } catch (e) { console.warn("Shopify field generation failed; using fallbacks.", e); }
+        // Fallbacks: derive from what the Etsy pipeline already produced.
+        const fallbackTitle = etsyTitle.split(/[,|]/)[0].trim().split(/\s+/).slice(0, 7).join(" ") || focal || "Handmade Charm Jewelry";
+        return {
+          title: fallbackTitle,
+          description_html: "<p>" + ((document.getElementById("listingDescription")?.value || focal).split("\n")[0] || fallbackTitle) + "</p>",
+          tags: (typeof buildEtsyTagsFromOverlay === "function" ? buildEtsyTagsFromOverlay(skp) : []).slice(0, 14),
+          theme_keywords: focal.toLowerCase().split(/\s+/).filter(w => w.length > 3).slice(0, 5)
+        };
+      }
+
+      // ---- main entry: build payload + enqueue ----
+      let busy = false;
+      async function queueShopifyUpload(category) {
+        if (busy) { window.M?.toast?.({ html: "Shopify upload already in progress…" }); return; }
+        busy = true;
+        try {
+          category = category || inferCategory();
+          const fields = await generateShopifyFields(category);
+          const images = await collectShopifyImages();
+          if (!images.length) throw new Error("No usable https image URLs (need at least one photo).");
+          const sku = (typeof buildSkuFromTitle === "function" ? buildSkuFromTitle(fields.title) : "").toUpperCase();
+          const payload = {
+            category,
+            title: fields.title,
+            descriptionHtml: fields.description_html,
+            tags: fields.tags || [],
+            themeKeywords: fields.theme_keywords || [],
+            sku,
+            images,
+            source: "index-app"
+          };
+          const r = await fetch(FN, {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ op: "enqueue", payload })
+          });
+          const j = await r.json();
+          if (!r.ok || j.ok === false) throw new Error((j.errors && j.errors.join("; ")) || j.error || ("HTTP " + r.status));
+          const uploadedNow = (j.drained && j.drained.uploaded || []).some(u => u.jobId === j.jobId);
+          window.M?.toast?.({
+            html: uploadedNow
+              ? `Shopify: LIVE now — ${j.variantCount} variants (tier ${j.tier}).`
+              : `Shopify: queued (${j.variantCount} variants) — uploads when today's variant budget allows.`
+          });
+          if (typeof refreshShopifyStatus === "function") refreshShopifyStatus();
+          return j;
+        } finally { busy = false; }
+      }
+      window.queueShopifyUpload = queueShopifyUpload;
+
+      // ---- manual button ----
+      const btn = document.getElementById("uploadShopifyBtn");
+      if (btn) btn.addEventListener("click", async () => {
+        btn.disabled = true;
+        try { await queueShopifyUpload(inferCategory()); }
+        catch (e) { window.M?.toast?.({ html: "Shopify upload failed: " + ((e && e.message) || e) }); }
+        finally { btn.disabled = false; }
+      });
+    })();
   </script>
 </body>
 </html>
