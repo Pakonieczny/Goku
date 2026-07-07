@@ -474,7 +474,10 @@ async function enqueue(payload) {
   if (errors.length) return { ok: false, errors };
   const tier = 1 + Math.floor(Math.random() * 3); // random tier per scheme
   const matrix = buildMatrix(payload.category, tier, (payload.sku || "").trim().toUpperCase() || null);
+  const prices = matrix.variants.map(v => v.price);
   const doc = {
+    priceMin: Math.min.apply(null, prices),
+    priceMax: Math.max.apply(null, prices),
     status: "QUEUED",
     createdAt: admin.firestore.FieldValue.serverTimestamp(),
     createdAtMs: Date.now(),
@@ -531,6 +534,28 @@ async function drain() {
   return out;
 }
 
+// Last N jobs, newest first — everything the UI panel shows per listing:
+// title, tier, variant count, price range, collections, live handle, error.
+async function recentJobs(n) {
+  const snap = await db.collection(QCOL).orderBy("createdAtMs", "desc").limit(n || 12).get();
+  return snap.docs.map(d => {
+    const j = d.data();
+    return {
+      id: d.id, status: j.status,
+      title: (j.payload || {}).title || "",
+      category: (j.payload || {}).category || "",
+      tier: j.tier, variantCount: j.variantCount,
+      priceMin: j.priceMin || null, priceMax: j.priceMax || null,
+      handle: j.handle || null,
+      addedCollections: j.addedCollections || [],
+      aiPickedCollections: j.aiPickedCollections || [],
+      expandedMeanings: (j.expandedMeanings || []).slice(0, 8),
+      error: j.error || null,
+      createdAtMs: j.createdAtMs || null, completedAtMs: j.completedAtMs || null
+    };
+  });
+}
+
 async function status() {
   const [q, u, f, d, budget] = await Promise.all([
     db.collection(QCOL).where("status", "==", "QUEUED").count().get(),
@@ -577,7 +602,11 @@ exports.handler = async (event) => {
       return out(200, { ...res, drained, budget: await budgetSnapshot() });
     }
     if (op === "drain") return out(200, { drained: await drain(), budget: await budgetSnapshot() });
-    if (op === "status") return out(200, await status());
+    if (op === "status") {
+      const res = await status();
+      if (q.recent) res.recent = await recentJobs(Number(q.recent) || 12);
+      return out(200, res);
+    }
     if (op === "retryFailed") { const r = await retryFailed(); const drained = await drain(); return out(200, { ...r, drained }); }
     return out(400, { error: "Unknown op: " + op });
   } catch (e) {
