@@ -655,41 +655,56 @@
 
     /* =====================================================================
        RESPONSIVE LAYOUT (html.responsive)
-       Replaces the manually-forced absolute-position engine with natural
-       document flow + fluid widths. The old engine stays in the code behind
-       window.USE_RESPONSIVE_LAYOUT (set it to false to restore Config mode).
+       Reproduces the original two-column workspace (toolbar on top; LEFT:
+       queues -> listing description -> key phrases -> title -> description;
+       RIGHT: analyze row -> 5x2 preview grid + image drop) using CSS grid
+       with fluid tracks instead of hard-coded absolute coordinates. The old
+       Config engine remains available via window.USE_RESPONSIVE_LAYOUT=false.
        ===================================================================== */
     html.responsive, html.responsive body { width: 100%; max-width: 100%; overflow-x: hidden; }
-    html.responsive body { padding: 12px 16px 80px; }
+    html.responsive body { padding: 10px 14px 80px; }
     html.responsive #layoutRoot { display: none; }
     html.responsive #openConfigBtn { display: none; } /* config only applies to the abs engine */
-    html.responsive #toggleAuto, html.responsive #skipListingBtn { margin: 4px 8px 4px 0 !important; }
-    html.responsive #descriptionAndFileUploadContainer { margin: 14px 0; }
-    html.responsive .listing-desc-container { width: min(560px, 100%); }
+
+    /* structural grid built at runtime by initResponsiveLayout() */
+    #rgToolbar { display: flex; flex-wrap: wrap; gap: 10px; align-items: center; padding: 6px 0 12px; border-bottom: 1px solid #e0e0e0; margin-bottom: 14px; }
+    #rgToolbar .rg-group { display: inline-flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+    #rgToolbar .rg-spacer { flex: 1 1 auto; }
+    #rgMain { display: grid; grid-template-columns: minmax(360px, 5fr) minmax(420px, 7fr); gap: 24px; align-items: start; }
+    @media (max-width: 1100px) { #rgMain { grid-template-columns: 1fr; } }
+    #rgLeft, #rgRight { min-width: 0; display: flex; flex-direction: column; gap: 16px; }
+
+    /* LEFT column pieces */
+    html.responsive #etsyShopListingsContainer { width: 100%; }
+    html.responsive #shopListingsWrapper { width: 100%; flex-wrap: wrap; gap: 10px; }
+    html.responsive .queue-col { min-width: 130px; flex: 1 1 130px; }
+    html.responsive #descriptionAndFileUploadContainer { margin: 0; }
+    html.responsive .listing-desc-container { width: 100%; }
     html.responsive .listing-desc-container input { width: 100%; }
-    html.responsive #topButtons { display: flex; flex-wrap: wrap; gap: 10px; align-items: center; margin: 10px 0 16px; }
-    html.responsive #topButtons > * { margin-left: 0 !important; }
-    html.responsive #etsyShopListingsContainer { flex-basis: 100%; }
-    html.responsive #shopListingsWrapper { width: 100%; max-width: 940px; flex-wrap: wrap; gap: 10px; }
-    html.responsive .queue-col { min-width: 150px; flex: 1 1 150px; }
-    html.responsive .phrases-header { display: flex; flex-wrap: wrap; gap: 12px; align-items: center; margin: 14px 0 6px; }
+    html.responsive #searchKeyPhrasesHeading { display: inline-flex; align-items: center; gap: 8px; }
     html.responsive #container13 { width: 100%; }
-    html.responsive #container13 .textbox-container { width: min(900px, 100%); }
+    html.responsive #container13 .textbox-container { width: 100%; }
     html.responsive #searchKeyPhrases { width: 100%; }
+    html.responsive #generateBtn { align-self: flex-start; }
+    html.responsive .title-container, html.responsive .description-container { width: 100%; margin: 0; }
     html.responsive .flex-container { display: flex; flex-wrap: wrap; gap: 10px; align-items: flex-start; }
-    html.responsive .textbox-container { flex: 1 1 420px; min-width: 260px; }
+    html.responsive .textbox-container { flex: 1 1 320px; min-width: 240px; }
     html.responsive .textbox-container textarea { width: 100%; }
-    html.responsive #belowSearch { display: flex; flex-wrap: wrap; gap: 20px; margin-top: 14px; }
-    html.responsive #belowSearch #generateBtn { flex-basis: 100%; max-width: 180px; }
-    html.responsive .title-container, html.responsive .description-container { flex: 1 1 480px; min-width: 300px; }
-    html.responsive #previewGridContainer { margin-top: 18px; }
-    html.responsive #previewGridStatic { grid-template-columns: repeat(auto-fill, minmax(120px, 1fr)); width: 100%; max-width: 960px; margin: 0; }
-    html.responsive #globalUploadCount { display: inline-flex; padding: 4px 10px; margin: 8px 8px 8px 0; width: auto; }
-    html.responsive #dropZone { max-width: 100%; }
-    @media (max-width: 720px) {
-      html.responsive body { padding: 8px 10px 90px; }
-      html.responsive .btn { padding: 0 10px; font-size: 12px; }
-    }
+    html.responsive .button-container { display: flex; flex-direction: column; gap: 8px; }
+
+    /* RIGHT column pieces */
+    #rgRightTop { display: flex; flex-wrap: wrap; gap: 12px; align-items: center; }
+    #rgGridWrap { display: grid; grid-template-columns: 1fr minmax(150px, 190px); gap: 18px; align-items: start; }
+    @media (max-width: 760px) { #rgGridWrap { grid-template-columns: 1fr; } }
+    html.responsive #previewGridContainer { margin: 0; width: 100%; }
+    html.responsive #previewGridStatic { grid-template-columns: repeat(5, minmax(96px, 1fr)); grid-column-gap: 14px; grid-row-gap: 14px; width: 100%; margin: 0; }
+    @media (max-width: 900px) { html.responsive #previewGridStatic { grid-template-columns: repeat(auto-fill, minmax(110px, 1fr)); } }
+    html.responsive .preview-cell { width: 100%; }
+    html.responsive #dropZone { width: 100%; max-width: 100%; min-height: 320px; margin: 0; box-sizing: border-box; }
+    html.responsive #globalUploadCount { display: inline-flex; padding: 4px 10px; width: auto; }
+
+    /* empty legacy wrappers left behind after reparenting */
+    html.responsive .rg-drained { display: none !important; }
 
     /* ---- Shopify upload toggle + status chip ---- */
     #shopifyModeToggle { display: inline-flex; align-items: center; gap: 8px; cursor: pointer; user-select: none; }
@@ -2680,6 +2695,62 @@ ANTI-REPETITION (TITLE)
       });
     }
 
+    // ------------------------------------------------------------------
+    // initResponsiveLayout(): rebuilds the ORIGINAL two-column workspace as
+    // a semantic CSS grid. Same positional relationships as the old absolute
+    // layout — toolbar on top; LEFT: queues, listing description, key
+    // phrases + Generate, Etsy title, Etsy description; RIGHT: analyze row,
+    // 5x2 preview grid with the Image Drop beside it — but every track is
+    // fluid, so nothing overlaps and it reflows on any screen width.
+    // Elements are MOVED (not cloned): every id, listener, and behaviour is
+    // untouched. Runs once on DOMContentLoaded when USE_RESPONSIVE_LAYOUT.
+    // ------------------------------------------------------------------
+    function initResponsiveLayout() {
+      const $ = (id) => document.getElementById(id);
+      const mk = (tag, id, cls) => { const e = document.createElement(tag); if (id) e.id = id; if (cls) e.className = cls; return e; };
+      const move = (parent, ids) => ids.forEach((id) => { const e = typeof id === "string" ? $(id) : id; if (e) parent.appendChild(e); });
+      const group = (parent, ids) => { const g = mk("div", null, "rg-group"); move(g, ids); parent.appendChild(g); return g; };
+
+      const root = mk("div", "rgRoot");
+      const toolbar = mk("div", "rgToolbar");
+      const main = mk("div", "rgMain");
+      const left = mk("div", "rgLeft");
+      const right = mk("div", "rgRight");
+      const rightTop = mk("div", "rgRightTop");
+      const gridWrap = mk("div", "rgGridWrap");
+      root.appendChild(toolbar); root.appendChild(main);
+      main.appendChild(left); main.appendChild(right);
+
+      // --- toolbar: connect | auto controls | create | duplicate | shopify | clear ---
+      group(toolbar, ["connectEtsyBtn"]);
+      group(toolbar, ["toggleAuto", "skipListingBtn"]);
+      group(toolbar, ["createListingBtn", "createListingProgress", "createListingCheck", "globalUploadCount", "expandUploadHistoryBtn"]);
+      group(toolbar, ["duplicateListingBtn", "duplicateListingProgress", "duplicateListingCheck", "duplicateModeToggle"]);
+      group(toolbar, ["shopifyModeToggle", "uploadShopifyBtn", "shopifyQueueStatus"]);
+      const spacer = mk("div", null, "rg-spacer"); toolbar.appendChild(spacer);
+      group(toolbar, ["clearBtn"]);
+
+      // --- left column: queues -> listing description -> key phrases -> title -> description ---
+      move(left, ["etsyShopListingsContainer", "descriptionAndFileUploadContainer",
+                  "searchKeyPhrasesHeading", "container13", "generateBtn",
+                  "etsyListingTitleContainer", "etsyListingDescriptionContainer"]);
+
+      // --- right column: analyze row, then preview grid + image drop side by side ---
+      move(rightTop, ["analyzeMetadataBtn", "analyzeMetadataProgress", "analyzeMetadataCheck"]);
+      right.appendChild(rightTop);
+      move(gridWrap, ["previewGridContainer", "dropZone"]);
+      right.appendChild(gridWrap);
+
+      // insert the grid after the fixed status pill, then hide drained wrappers
+      const ref = $("firebaseStatus");
+      document.body.insertBefore(root, ref ? ref.nextSibling : document.body.firstChild);
+      ["topButtons", "belowSearch", "userProvidedKeyPhrasesContainer"].forEach((id) => {
+        const e = $(id);
+        if (e && e.querySelectorAll("button, input, textarea, select").length === 0) e.classList.add("rg-drained");
+      });
+      // openConfigBtn stays in place (display:none via CSS in responsive mode)
+    }
+
     // 3.5 Wire up modal + save handler (same ids as shipping-1)
     document.addEventListener("DOMContentLoaded", function(){
       localStorage.removeItem("buttonPositions"); // purge legacy store once
@@ -2689,6 +2760,8 @@ ANTI-REPETITION (TITLE)
         initAbsoluteLayout();      // discover, assign IDs, reparent to #layoutRoot
         migrateLocalStoragePositions(); // move saved positions from old random IDs to new stable IDs
         loadPositions();           // apply saved/default positions to all
+      } else {
+        initResponsiveLayout();    // structured grid preserving the original workspace layout
       }
 
     var configModal = M.Modal.init(document.getElementById("configModal"), {
@@ -4397,8 +4470,18 @@ https://www.etsy.com/your/shops/me/listing-editor/edit/1822973998
       ov.style.pointerEvents = "none";
       ov.style.zIndex = String((parseInt(cs.zIndex)||3000) - 1); // sit just under textarea’s z-index
       ov.style.color  = "transparent";      // hide overlay text; we only want background marks
-      ov.style.left   = cs.left;
-      ov.style.top    = cs.top;
+      if (window.USE_RESPONSIVE_LAYOUT) {
+        // Grid mode: the textarea has no inline left/top (those were the abs
+        // engine's). Anchor the overlay to the textarea's offset within its
+        // (positioned) container instead.
+        const host = ta.parentElement;
+        if (host && getComputedStyle(host).position === "static") host.style.position = "relative";
+        ov.style.left = ta.offsetLeft + "px";
+        ov.style.top  = ta.offsetTop + "px";
+      } else {
+        ov.style.left   = cs.left;
+        ov.style.top    = cs.top;
+      }
       ov.style.width  = cs.width;
       ov.style.height = cs.height;
       ov.style.padding = cs.padding;
