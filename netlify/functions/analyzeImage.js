@@ -82,12 +82,14 @@ exports.handler = async function(event, context) {
       throw new Error("Missing OPENAI_API_KEY in environment.");
     }
 
-    // Must be a GPT-4 model with vision
+    // Vision-capable GPT-5.5 with low reasoning effort. Model overridable via
+    // OPENAI_MODEL env. Note GPT-5-family chat calls use reasoning_effort +
+    // max_completion_tokens and only support default temperature.
     const openAiPayload = {
-      model: "gpt-4o-mini", // replace with the correct model you have access to
+      model: process.env.OPENAI_MODEL || "gpt-5.5",
       messages: messages,
-      temperature: 0.6,
-      max_tokens: 200
+      reasoning_effort: "low",
+      max_completion_tokens: 400
     };
 
     const openAiResp = await fetch("https://api.openai.com/v1/chat/completions", {
