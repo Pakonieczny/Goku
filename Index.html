@@ -1880,6 +1880,57 @@ ANTI-REPETITION (TITLE)
         return cur || null;
     }
 
+    // ── AI ZOOM TEMPLATE (Smart-Match style) ────────────────────────────
+    // Product photos follow fixed templates where the charm occupies a
+    // small central region — natively too zoomed-out for the vision model
+    // to identify the charm motif reliably. Like the Smart Match process on
+    // britesjewelry.com, we crop-and-zoom into the charm region BEFORE the
+    // image reaches the AI. Semantics mirror the brites-editor's card.frame
+    // ("scale|offsetX|offsetY"): zoom = magnification (2 = central 50%),
+    // offsets are fractions of image dimensions (+Y moves the window down —
+    // charms hang slightly below center on model shots). Tune here to match
+    // the Smart Match template exactly:
+    window.AI_ZOOM_TEMPLATE = window.AI_ZOOM_TEMPLATE || { zoom: 2, offsetX: 0, offsetY: 0.08 };
+
+    async function cropImageForAI(srcUrl, tpl) {
+        tpl = tpl || window.AI_ZOOM_TEMPLATE || {};
+        const zoom = Math.max(1, Number(tpl.zoom) || 2);
+        const img = await new Promise((res, rej) => {
+            const im = new Image();
+            im.crossOrigin = "anonymous";
+            im.onload = () => res(im);
+            im.onerror = () => rej(new Error("image load failed"));
+            im.src = srcUrl;
+        });
+        const W = img.naturalWidth, H = img.naturalHeight;
+        if (!W || !H) throw new Error("image has no dimensions");
+        const cw = W / zoom, ch = H / zoom;
+        let sx = (W - cw) / 2 + (Number(tpl.offsetX) || 0) * W;
+        let sy = (H - ch) / 2 + (Number(tpl.offsetY) || 0) * H;
+        sx = Math.max(0, Math.min(W - cw, sx));
+        sy = Math.max(0, Math.min(H - ch, sy));
+        const MAX = 1024; // plenty for vision; keeps the base64 payload small
+        const scale = Math.min(1, MAX / Math.max(cw, ch));
+        const canvas = document.createElement("canvas");
+        canvas.width = Math.max(1, Math.round(cw * scale));
+        canvas.height = Math.max(1, Math.round(ch * scale));
+        canvas.getContext("2d").drawImage(img, sx, sy, cw, ch, 0, 0, canvas.width, canvas.height);
+        return canvas.toDataURL("image/jpeg", 0.85);
+    }
+
+    // Zoom-aware vision input: crop from the same-origin blob (canvas-safe —
+    // the chunked proxy exists precisely so these don't taint), returning a
+    // compact JPEG data URL. Any failure falls back to the unzoomed URL so
+    // the pipeline can never break on a crop hiccup.
+    async function imageDataForVisionZoomed(i) {
+        const blobUrl = window.previewImages && window.previewImages[i];
+        if (typeof blobUrl === "string" && blobUrl) {
+            try { return await cropImageForAI(blobUrl); }
+            catch (e) { console.warn("AI zoom crop failed for slot " + i + " — using unzoomed image:", e && e.message); }
+        }
+        return imageDataForVision(i);
+    }
+
     // Helper: Wait for a condition function to return true
     async function waitForCondition(predicate, interval = 1000, maxWait = 120000) {
         const start = Date.now();
@@ -1895,10 +1946,12 @@ ANTI-REPETITION (TITLE)
     }
 
     async function getTwoWordCharmDescription() {
-        // Grab the image from previewCell0 (index 0). Prefer the original
-        // Firebase URL when available (lightweight server-side fetch) over
-        // sending a 5+ MB base64 data URL through openaiProxy.
-        const imgData = imageDataForVision(0);
+        // Grab the image from previewCell0 (index 0), ZOOMED into the charm
+        // region via the Smart-Match-style template — the native framing is
+        // too wide for the model to identify the charm motif reliably, and
+        // this one call seeds the Listing Description that the ENTIRE
+        // pipeline (title, keywords, themes, collections) derives from.
+        const imgData = await imageDataForVisionZoomed(0);
         if (!imgData) return "";
 
         let retries = 3; 
