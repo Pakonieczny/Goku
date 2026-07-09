@@ -769,11 +769,243 @@ async function createShopifyProduct(job) {
     collectionsActual = (await verifyProductCollections(product.id)).filter(isAllowedCollection);
   } catch (_) {}
 
+  // "Complete the set" cross-links: register the new product with existing
+  // same-charm listings (both directions). Never fatal — the product is live
+  // either way, and the linkage can be re-run.
+  let setLinks = null;
+  try {
+    setLinks = await ensureSetLinks(product, job);
+    console.log(`Set links for ${product.handle}:`, JSON.stringify(setLinks));
+  } catch (e) {
+    job.setLinkWarnings = [String((e && e.message) || e)];
+    console.warn("ensureSetLinks failed (non-fatal):", e && e.message);
+  }
+
   return {
     productId: product.id, handle: product.handle,
     variantsCreated: (product.variantsCount || {}).count || setVariants.length,
-    addedCollections, collectionsActual,
+    addedCollections, collectionsActual, setLinks,
     expectedSmartCollections: job.expectedSmartCollections || []
+  };
+}
+
+/* ---------------------------- charm set linking ---------------------------- */
+// The PDP "Complete the set" module reads product metafield brites.set:
+// a JSON array of partners [{h: handle, f: form, t: short title}]. The
+// verified master (charmSetsData.js on goldenspike) is an offline snapshot —
+// live truth is the metafields. New products must register themselves there:
+// forward (new -> partners) and backward (each partner -> new).
+
+const SET_FORM_BY_CATEGORY = {
+  Beady_Necklace: "Necklace", Necklace: "Necklace", Necklaces: "Necklace",
+  Stud_Earrings: "Stud Earrings", Hoop_Earrings: "Huggies", Huggies: "Huggies",
+  Bracelet: "Bracelet", Bracelets: "Bracelet", Ring: "Ring", Rings: "Ring",
+  Charm_Only: "Charm Only", Charms: "Charm Only"
+};
+
+// Order matters: "earring" contains "ring", huggie/hoop beat stud.
+function setFormFromTitle(title) {
+  const t = String(title || "").toLowerCase();
+  if (/\bhuggies?\b|\bhoops?\b/.test(t)) return "Huggies";
+  if (/\bearrings?\b|\bstuds?\b/.test(t)) return "Stud Earrings";
+  if (/\bbracelets?\b/.test(t)) return "Bracelet";
+  if (/\bnecklaces?\b|\bpendants?\b/.test(t)) return "Necklace";
+  if (/\brings?\b/.test(t)) return "Ring";
+  if (/\bcharms?\b/.test(t)) return "Charm Only";
+  return "";
+}
+
+// Words that describe the FORM or are filler — everything left is the charm
+// subject ("Pinecone", "Flying Swallow", "Map of Palestine").
+const SET_STOP_WORDS = new Set([
+  "charm", "charms", "necklace", "necklaces", "pendant", "pendants", "beady",
+  "chain", "stud", "studs", "earring", "earrings", "huggie", "huggies",
+  "hoop", "hoops", "bracelet", "bracelets", "ring", "rings", "disc", "bar",
+  "on", "a", "an", "the", "for", "in", "of", "with", "and", "or", "to",
+  "dainty", "cute", "tiny", "mini", "small", "little", "whimsical", "kawaii",
+  "handcrafted", "adorable", "elegant", "delicate", "gold", "silver", "14k",
+  "lovers", "lover", "everyday", "layering", "gift", "giving", "birthdays",
+  "moms", "mothers", "day", "collectors", "friends", "jewelry"
+]);
+
+function setSubjectTokens(title) {
+  return String(title || "").toLowerCase().replace(/[^a-z0-9\s-]/g, " ")
+    .split(/[\s-]+/).filter(w => w && !SET_STOP_WORDS.has(w));
+}
+
+// The map's t values are short ("Elephant Charm Necklace"): cut the raw
+// title at the first filler joint, cap at 6 words.
+function setShortTitle(title) {
+  let t = String(title || "").split(/\s+(?:on|for|in|with)\s+/i)[0];
+  return t.split(/\s+/).slice(0, 6).join(" ").trim();
+}
+
+// Visual verification — IDENTICAL criteria, prompt, model and gating to
+// verifyCharmSets-background.js (the Set Matcher pipeline). Title matching
+// above only proposes CANDIDATES; nothing reaches brites.set without the
+// same charm-first visual confirmation the verified master was built with.
+async function judgeCharms(imgs) {
+  const model = process.env.OPENAI_VISION_MODEL || "gpt-5.4-mini";
+  const content = [{ type: "text", text:
+    "You are an expert jeweler matching CHARMS across product photos from ONE fine-jewelry store. The ONLY thing being matched is the charm itself. Report ONLY what is actually visible.\n\n" +
+    "STEP 1 — FIND THE CHARM AND ZOOM IN. Photos may be zoomed out, lifestyle shots, or show the charm small on a model, on a chain, or beside other jewelry. LOCATE the charm in each photo and examine it as if magnified to full frame. IGNORE everything else: the chain and its style, the mounting (hoop/stud/necklace/ring/bracelet), the model, hands, props, background, lighting. A charm on a necklace, the same charm on a hoop earring, and the same charm photographed alone are ALL the same charm — format differences must NEVER cause a FALSE.\n\n" +
+    "STEP 2 — MATCH THE CHARM WITH EXTREME PRECISION on these criteria, in order of importance:\n" +
+    "1. TYPE/SUBJECT: what the charm depicts (which animal, symbol, letter, object). A penguin is not a sheep; a music note is not a treble clef; an alien head is not a UFO.\n" +
+    "2. OUTLINE/SILHOUETTE: the exact outer shape and pose/orientation. Full-body vs head-only, upright vs side profile, wings folded vs spread = DIFFERENT charms even when the subject matches.\n" +
+    "3. ENGRAVING, CUTOUTS & SURFACE DETAIL: cut-out holes, pierced patterns, engraved lines, stones, textures, added elements (leaves, stars, rays, banners). An open-outline star and a solid star are DIFFERENT. A plain crescent and a crescent with rays are DIFFERENT.\n" +
+    "4. PROPORTIONS: relative dimensions of the charm's features.\n" +
+    "5. SYMBOLIC MEANING where one clearly applies (zodiac sign/constellation, birth flower, Norse Mjolnir/Valknut/Vegvisir/Yggdrasil/runes): the meaning must match exactly — Leo is not Scorpio.\n\n" +
+    "ACCEPTABLE differences (never cause FALSE): metal color/finish, charm size/scale, jewelry format and mounting, chain style, photo angle or lighting, shown singly vs as a pair.\n\n" +
+    "TASK: Photo 1 is the REFERENCE charm. " + (imgs[0].form ? "Expected formats in order: " + imgs.map(i => i.form || "?").join(", ") + ". " : "") +
+    "For EACH subsequent photo: zoom in on its charm and decide same_charm: TRUE only if it is the SAME charm design by ALL criteria above — same subject, same silhouette/pose, same cutouts/engraving/details, same meaning — merely worn or mounted differently. When the charm is too small, blurry, or hidden to verify the details, use confidence low and judge from what is genuinely visible.\n" +
+    'Reply with ONLY a JSON array, one entry per photo starting from photo 2: [{"photo":2,"same_charm":true,"charm":"<meaning, e.g. Leo (zodiac)>","charm_detail":"<literal depiction incl. silhouette + cutouts>","confidence":"high|medium|low","reason":"short"}]' }];
+  for (const im of imgs) content.push({ type: "image_url", image_url: { url: im.url, detail: "high" } });
+
+  const payload = { model, messages: [{ role: "user", content }] };
+  if (/^(gpt-5|o\d)/.test(model)) {
+    payload.max_completion_tokens = 1500;
+    payload.reasoning_effort = "low";
+  } else {
+    payload.max_tokens = 700;
+  }
+  const controller = new AbortController();
+  const timer = setTimeout(() => controller.abort(), 60000);
+  let upstream;
+  try {
+    upstream = await fetch("https://api.openai.com/v1/chat/completions", {
+      method: "POST",
+      headers: { "Content-Type": "application/json", Authorization: `Bearer ${process.env.OPENAI_API_KEY}` },
+      body: JSON.stringify(payload), signal: controller.signal
+    });
+  } catch (err) {
+    throw new Error(err && err.name === "AbortError" ? "OpenAI timeout after 60s" : (err && err.message) || String(err));
+  } finally { clearTimeout(timer); }
+  const text = await upstream.text().catch(() => "");
+  let json = null; try { json = JSON.parse(text); } catch (_) {}
+  if (!upstream.ok) throw new Error((json && json.error && json.error.message) || text || ("OpenAI HTTP " + upstream.status));
+  const raw = ((json.choices || [])[0] || {}).message;
+  const out = (raw && raw.content ? raw.content : "").replace(/```json|```/g, "").trim();
+  try { return JSON.parse(out); } catch { return null; }
+}
+
+async function ensureSetLinks(product, job) {
+  const myForm = SET_FORM_BY_CATEGORY[job.category] || setFormFromTitle(job.title);
+  const subject = setSubjectTokens(job.title);
+  if (!myForm || !subject.length) return { partners: [], reason: "no form/subject" };
+
+  // Candidate pool: title search on the subject phrase.
+  const d = await gql(`query($q: String!) {
+    products(first: 100, query: $q) {
+      nodes { id handle title featuredImage { url } metafield(namespace: "brites", key: "set") { value } }
+    }
+  }`, { q: subject.map(w => `title:${w}`).join(" ") });
+  const nodes = ((d.products || {}).nodes) || [];
+
+  // Same charm = every subject token appears as a whole word in the
+  // candidate title. Different form = it completes a set, not a duplicate.
+  const isMatch = (n) => {
+    if (n.handle === product.handle) return false;
+    const t = String(n.title || "").toLowerCase();
+    return subject.every(w => new RegExp(`\\b${w.replace(/[.*+?^$()|[\]\\]/g, "\\$&")}\\b`).test(t));
+  };
+  const candidates = nodes.filter(isMatch)
+    .map(n => ({ ...n, form: setFormFromTitle(n.title) }))
+    .filter(n => n.form && n.form !== myForm);
+
+  // Judge up to 8 candidates (diverse forms first) — visual confirmation
+  // decides what a "partner" is, exactly as in the Set Matcher pipeline.
+  const byForm = {};
+  for (const c of candidates) { (byForm[c.form] = byForm[c.form] || []).push(c); }
+  const toJudge = [];
+  for (const form of Object.keys(byForm)) toJudge.push(byForm[form][0]);
+  for (const c of candidates) {
+    if (toJudge.length >= 8) break;
+    if (!toJudge.includes(c)) toJudge.push(c);
+  }
+  const judgeable = toJudge.filter(c => c.featuredImage && c.featuredImage.url);
+  const refUrl = (((job.images || [])[0]) || {}).src;
+  if (!judgeable.length || !refUrl) return { partners: [], reason: "no judgeable candidates" };
+
+  const imgs = [{ handle: product.handle, url: refUrl, form: myForm }]
+    .concat(judgeable.map(c => ({ handle: c.handle, url: c.featuredImage.url, form: c.form })));
+  const verdicts = await judgeCharms(imgs);
+  if (!Array.isArray(verdicts)) throw new Error("charm judge returned no parseable verdict");
+  // Mirror the verifier's gating: only an explicit same_charm true admits a
+  // link (the background pruner removes on explicit false; for NEW links we
+  // require positive confirmation — absence of a verdict is not a match).
+  const confirmedHandles = new Set();
+  const audit = [];
+  verdicts.forEach((v, i) => {
+    const cand = judgeable[(Number(v && v.photo) || (i + 2)) - 2];
+    if (!cand) return;
+    audit.push(`${cand.handle}: ${v.same_charm ? "MATCH" : "no"} (${v.confidence || "?"}) ${v.reason || ""}`.slice(0, 160));
+    if (v.same_charm === true) confirmedHandles.add(cand.handle);
+  });
+  const partners = judgeable.filter(c => confirmedHandles.has(c.handle)).slice(0, 4);
+  if (!partners.length) return { partners: [], reason: "no visual matches", audit };
+
+  const myEntry = { h: product.handle, f: myForm, t: setShortTitle(job.title) };
+  const metafields = [{
+    ownerId: product.id, namespace: "brites", key: "set", type: "json",
+    value: JSON.stringify(partners.map(p => ({ h: p.handle, f: p.form, t: setShortTitle(p.title) })))
+  }];
+  // Backward links: append the new product to each partner's set (dedup, cap 4).
+  for (const p of partners) {
+    let cur = [];
+    try { cur = JSON.parse((p.metafield && p.metafield.value) || "[]"); } catch (_) {}
+    if (!Array.isArray(cur)) cur = [];
+    if (cur.some(e => e && e.h === myEntry.h) || cur.length >= 4) continue;
+    metafields.push({
+      ownerId: p.id, namespace: "brites", key: "set", type: "json",
+      value: JSON.stringify(cur.concat([myEntry]))
+    });
+  }
+  const r = await gql(`mutation($m: [MetafieldsSetInput!]!) {
+    metafieldsSet(metafields: $m) { userErrors { field message } }
+  }`, { m: metafields });
+  const ue = ((r.metafieldsSet || {}).userErrors) || [];
+  if (ue.length) throw new Error("set metafieldsSet: " + ue[0].message);
+
+  // ---- Firebase: the storefront's live set source + the pipeline ledger ----
+  // 1) Brites_Set_Links/{handle}: one doc per product holding its confirmed
+  //    partners [{h,f,t}] — written for the new product AND every backlinked
+  //    partner, so the site's Set section loads the fresh links immediately.
+  // 2) Brites_Editor_Meta/charmVerifyState.pairs: the same pair-verdict
+  //    ledger the verifier writes, so the console/CSV counts these links as
+  //    CONFIRMED (visually verified here, same criteria) instead of pending.
+  const partnerEntries = partners.map(p => ({ h: p.handle, f: p.form, t: setShortTitle(p.title) }));
+  const fbWrites = [];
+  const batch = db.batch();
+  batch.set(db.collection("Brites_Set_Links").doc(product.handle), {
+    partners: partnerEntries, source: "upload-verified",
+    updatedAt: admin.firestore.FieldValue.serverTimestamp()
+  }, { merge: true });
+  fbWrites.push(product.handle);
+  for (const m of metafields.slice(1)) {
+    const p = partners.find(x => x.id === m.ownerId);
+    if (!p) continue;
+    batch.set(db.collection("Brites_Set_Links").doc(p.handle), {
+      partners: JSON.parse(m.value), source: "upload-verified",
+      updatedAt: admin.firestore.FieldValue.serverTimestamp()
+    }, { merge: true });
+    fbWrites.push(p.handle);
+  }
+  const pairVerdicts = {};
+  for (const p of partners) {
+    const key = [product.handle, p.handle].sort().join("|").replace(/[.\/]/g, "_");
+    const a = audit.find(l => l.startsWith(p.handle + ":")) || "";
+    pairVerdicts["pairs." + key] = { ok: true, charm: "", reason: ("upload-verified: " + a).slice(0, 200) };
+  }
+  batch.set(db.collection("Brites_Editor_Meta").doc("charmVerifyState"), {}, { merge: true });
+  await batch.commit();
+  if (Object.keys(pairVerdicts).length) {
+    await db.collection("Brites_Editor_Meta").doc("charmVerifyState").update(pairVerdicts)
+      .catch(e => console.warn("charmVerifyState pair merge skipped:", e && e.message));
+  }
+
+  return {
+    partners: partners.map(p => ({ h: p.handle, f: p.form })),
+    backLinked: metafields.length - 1, firebase: fbWrites, audit
   };
 }
 
