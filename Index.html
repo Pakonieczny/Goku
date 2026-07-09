@@ -786,7 +786,10 @@
     #shopifyPanel .sp-counts span.sp-fail { background: #ffebee; color: #c62828; }
     #shopifyPanel .sp-counts span.sp-q { background: #fff8e1; color: #b26a00; }
     #shopifyPanel .sp-actions { margin-left: auto; display: inline-flex; gap: 6px; }
-    #shopifyPanel .sp-actions button { font-size: 11px; padding: 2px 8px; border: 1px solid #2e7d32; background: #fff; color: #2e7d32; border-radius: 3px; cursor: pointer; }
+    #shopifyPanel .sp-actions button { font-size: 11px; padding: 2px 8px; border: 1px solid #2e7d32; background: #fff; color: #2e7d32; border-radius: 3px; cursor: pointer; transition: background .12s ease, color .12s ease, transform .05s ease; }
+    #shopifyPanel .sp-actions button:hover { background: #2e7d32; color: #fff; }
+    #shopifyPanel .sp-actions button:active { transform: translateY(1px); }
+    #shopifyPanel .sp-actions button:disabled { opacity: .55; cursor: default; background: #eef5ee; color: #2e7d32; transform: none; }
     #shopifyProgressWrap { display: none; margin: 6px 0 10px; }
     #shopifyProgressWrap .spb-label { font-weight: 600; color: #1b5e20; margin-bottom: 3px; }
     #shopifyProgressWrap .spb-track { height: 8px; border-radius: 4px; background: #e0e0e0; overflow: hidden; }
@@ -3652,27 +3655,74 @@ https://www.etsy.com/your/shops/me/listing-editor/edit/1822973998
           console.warn("Purge request errored, continuing with upload:", purgeErr);
         }
 
-        // Shared image-upload helper: one retry per image, bounded time per
-        // attempt, explicit auth detection, and per-image heartbeats so the
-        // sequence's queue-drain wait can tell "slow but working" from
-        // "stalled". Browsers allow re-sending the same FormData.
+        // Image-upload helper — VERIFY-BEFORE-RETRY.
+        //
+        // DUPLICATE-IMAGE FIX: the previous version blind-retried any failed
+        // attempt. But a browser-side timeout or a Netlify 502 can occur
+        // AFTER Etsy already accepted the image (the function dies waiting,
+        // the upload still lands) — so the retry uploaded the SAME image a
+        // second time, producing the duplicated photos seen on live
+        // listings. Now every ambiguous outcome (timeout / network / 5xx) is
+        // verified against the listing's LIVE image count first: if the
+        // count grew, the image landed and we record success WITHOUT
+        // retrying; only a verified miss is re-sent. Definitive 4xx
+        // rejections are never retried (identical payload would fail
+        // identically), and if the count can't be read we accept a missing
+        // slot over a possible duplicate — the quality floor below catches
+        // real shortfalls.
         let mainUploaded = 0, mainAttempted = 0;
+        let expectedImageCount = null; // lazily read once; 0 right after purge
+        const getListingImageCount = async () => {
+          try {
+            const r = await etsyFetchWithTimeout(
+              `/.netlify/functions/etsyProxy?listingId=${encodeURIComponent(listingId)}&includes=Images`,
+              { headers: { "access-token": token } }, 30000, "Image count check");
+            if (!r.ok) return null;
+            const j = await r.json().catch(() => null);
+            if (!j) return null;
+            if (Array.isArray(j.images)) return j.images.length;
+            if (Array.isArray(j.Images)) return j.Images.length;
+            return null;
+          } catch (_) { return null; }
+        };
         const uploadImageWithRetry = async (fd, label) => {
+          if (expectedImageCount == null) {
+            const c = await getListingImageCount();
+            expectedImageCount = (c == null ? 0 : c);
+          }
           for (let attempt = 1; attempt <= 2; attempt++) {
             save({ lastActivityAt: Date.now() });
-            let r;
+            let r = null, transportErr = null;
             try {
               r = await etsyFetchWithTimeout("/.netlify/functions/imageUpload", { method: "POST", body: fd }, 120000, label);
-            } catch (e) {
-              console.warn(`${label} attempt ${attempt} failed:`, e.message);
-              if (attempt === 2) return { ok: false, authExpired: false, detail: e.message };
-              continue;
+            } catch (e) { transportErr = e; }
+
+            if (r && r.ok) { expectedImageCount++; return { ok: true }; }
+
+            let bodyText = "";
+            if (r) bodyText = await r.text().catch(() => "");
+            if (r && r.status === 401 && /invalid_token|expired/i.test(bodyText)) {
+              return { ok: false, authExpired: true, detail: bodyText };
             }
-            if (r.ok) return { ok: true };
-            const t = await r.text().catch(() => "");
-            if (r.status === 401 && /invalid_token|expired/i.test(t)) return { ok: false, authExpired: true, detail: t };
-            console.warn(`${label} attempt ${attempt} HTTP ${r.status}:`, t.slice(0, 200));
-            if (attempt === 2) return { ok: false, authExpired: false, detail: `HTTP ${r.status}` };
+            if (r && r.status >= 400 && r.status < 500) {
+              console.warn(`${label} rejected HTTP ${r.status}:`, bodyText.slice(0, 200));
+              return { ok: false, authExpired: false, detail: `HTTP ${r.status}` };
+            }
+
+            // Ambiguous — did it land anyway?
+            const failDetail = transportErr ? transportErr.message : `HTTP ${r && r.status}`;
+            const live = await getListingImageCount();
+            if (live != null && live > expectedImageCount) {
+              console.warn(`${label}: ${failDetail}, but the image DID land (count ${expectedImageCount} → ${live}) — success, no retry.`);
+              expectedImageCount = live;
+              return { ok: true };
+            }
+            if (live == null) {
+              console.warn(`${label}: ${failDetail} and the count check is unavailable — NOT retrying (a duplicate is worse than a missing slot).`);
+              return { ok: false, authExpired: false, detail: failDetail };
+            }
+            console.warn(`${label} attempt ${attempt} verified as not landed (${failDetail}).`);
+            if (attempt === 2) return { ok: false, authExpired: false, detail: failDetail };
           }
           return { ok: false, authExpired: false, detail: "unreachable" };
         };
@@ -6472,18 +6522,54 @@ async function callOpenAI(payload, opts = {}) {
             <div class="spb-track"><div class="spb-bar" id="spbBar"></div></div></div>
           <ul id="shopifyList"><li style="border:none;color:#777;">No Shopify uploads yet this session.</li></ul>`;
         host.appendChild(p);
-        p.querySelector("#spDrainBtn").addEventListener("click", async () => {
-          try { await fetch(FN + "?op=drain"); } catch (e) {}
-          refreshShopifyStatus();
-        });
-        p.querySelector("#spRetryBtn").addEventListener("click", async () => {
-          try {
-            const r = await fetch(FN, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ op: "retryFailed" }) });
-            const j = await r.json();
-            window.M?.toast?.({ html: `Requeued ${j.requeued || 0} failed job(s).` });
-          } catch (e) {}
-          refreshShopifyStatus();
-        });
+        // BUTTON UX FIX: both handlers used to swallow errors and give zero
+        // feedback — with jobs that instantly re-fail, a working click was
+        // indistinguishable from a dead button. Each button now shows a
+        // busy state while in flight and toasts the concrete outcome
+        // (uploaded / requeued / budget-stopped / the first failure reason).
+        const withBusy = async (btn, busyLabel, fn) => {
+          const prev = btn.textContent;
+          btn.disabled = true; btn.textContent = busyLabel;
+          try { await fn(); }
+          finally { btn.disabled = false; btn.textContent = prev; }
+        };
+        const describeDrain = (drained) => {
+          const up = (drained && drained.uploaded || []).length;
+          const failed = (drained && drained.failed || []).length;
+          const parts = [];
+          if (up) parts.push(`${up} uploaded`);
+          if (failed) {
+            const first = (drained.failed[0] && (drained.failed[0].error || drained.failed[0].reason)) || "";
+            parts.push(`${failed} failed${first ? " — " + String(first).slice(0, 140) : ""}`);
+          }
+          if (drained && drained.stoppedFor === "budget") parts.push("stopped: daily variant budget reached");
+          if (drained && drained.stoppedFor === "time") parts.push("stopped: time budget — click again to continue");
+          return parts.length ? parts.join(" · ") : "nothing queued to upload";
+        };
+        p.querySelector("#spDrainBtn").addEventListener("click", () => withBusy(
+          p.querySelector("#spDrainBtn"), "Draining…", async () => {
+            try {
+              const r = await fetch(FN + "?op=drain");
+              const j = await r.json().catch(() => ({}));
+              if (!r.ok) throw new Error(j.error || ("HTTP " + r.status));
+              window.M?.toast?.({ html: "Drain: " + describeDrain(j.drained) });
+            } catch (e) {
+              window.M?.toast?.({ html: "Drain failed: " + ((e && e.message) || e) });
+            }
+            refreshShopifyStatus();
+          }));
+        p.querySelector("#spRetryBtn").addEventListener("click", () => withBusy(
+          p.querySelector("#spRetryBtn"), "Retrying…", async () => {
+            try {
+              const r = await fetch(FN, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ op: "retryFailed" }) });
+              const j = await r.json().catch(() => ({}));
+              if (!r.ok) throw new Error(j.error || ("HTTP " + r.status));
+              window.M?.toast?.({ html: `Requeued ${j.requeued || 0} failed job(s) · ` + describeDrain(j.drained) });
+            } catch (e) {
+              window.M?.toast?.({ html: "Retry failed: " + ((e && e.message) || e) });
+            }
+            refreshShopifyStatus();
+          }));
       }
 
       // Live stage bar for the client-side phases of a Shopify push.
