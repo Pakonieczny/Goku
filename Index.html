@@ -795,8 +795,20 @@
     #shopifyProgressWrap .spb-track { height: 8px; border-radius: 4px; background: #e0e0e0; overflow: hidden; }
     #shopifyProgressWrap .spb-bar { height: 100%; width: 0%; background: #2e7d32; transition: width .3s; }
     #shopifyProgressWrap.err .spb-bar { background: #c62828; }
-    #shopifyList { list-style: none; margin: 0; padding: 0; max-height: 300px; overflow-y: auto; }
+    #shopifyPanel .sp-filters { display: flex; gap: 8px; margin: 4px 0 8px; }
+    #shopifyPanel .sp-filters select { font-size: 11.5px; padding: 3px 6px; border: 1px solid #c8e6c9; border-radius: 4px; background: #fff; color: #2e7d32; cursor: pointer; }
+    #shopifyList { list-style: none; margin: 0; padding: 0; max-height: 320px; overflow-y: auto; }
     #shopifyList li { padding: 7px 4px; border-top: 1px solid #e0f2e1; line-height: 1.45; }
+    #shopifyList li.sp-date { padding: 8px 4px 3px; border-top: none; font-size: 10.5px; font-weight: 700; letter-spacing: .06em; text-transform: uppercase; color: #7c8b7d; position: sticky; top: 0; background: #fbfffb; z-index: 1; }
+    #shopifyList li.sp-row { cursor: pointer; }
+    #shopifyList .sp-line { display: flex; align-items: center; gap: 7px; min-width: 0; }
+    #shopifyList .sp-line .sp-title { flex: 0 1 auto; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+    #shopifyList .sp-mini { color: #777; font-size: 11.5px; white-space: nowrap; }
+    #shopifyList .sp-line a { margin-left: auto; white-space: nowrap; }
+    #shopifyList .sp-chev { color: #9e9e9e; font-size: 11px; transition: transform .15s ease; flex: 0 0 auto; }
+    #shopifyList li.sp-row.open .sp-chev { transform: rotate(90deg); }
+    #shopifyList .sp-details { display: none; padding: 5px 0 2px 16px; }
+    #shopifyList li.sp-row.open .sp-details { display: block; }
     #shopifyList .sp-dot { display: inline-block; width: 9px; height: 9px; border-radius: 50%; margin-right: 7px; vertical-align: baseline; }
     #shopifyList .sp-dot.DONE { background: #2e7d32; } #shopifyList .sp-dot.FAILED { background: #c62828; }
     #shopifyList .sp-dot.QUEUED { background: #f9a825; } #shopifyList .sp-dot.UPLOADING { background: #1976d2; }
@@ -3473,7 +3485,11 @@ https://www.etsy.com/your/shops/me/listing-editor/edit/1822973998
         seenPhotos.add(du);
         photos.push(du);
         photoNames.push(rawPhotoNames[i] || `uploaded_photo_${i}.jpg`);
-        photoMeta.push((rawPhotoMeta[i] || "").slice(0, 250));
+        // Alt text doubles as the DEDUP KEY for the post-upload
+        // reconciliation pass, so it must be non-empty and distinct per
+        // slot. Real AI metadata wins; the fallback still reads as
+        // sensible alt text.
+        photoMeta.push((rawPhotoMeta[i] || "").slice(0, 250) || `${title || "Brites Jewelry"} — photo ${photos.length}`);
       }
 
       const photoKeyBases = await Promise.all(photos.map(async (dataURL, i) => {
@@ -3502,7 +3518,13 @@ https://www.etsy.com/your/shops/me/listing-editor/edit/1822973998
         seenReserved.add(du);
         reservedSrc.push(du);
         reservedNames.push(r.name || `reserved_photo_${i}.jpg`);
-        reservedMeta.push((r.meta || "").slice(0, 250));
+        // Reserved slots are brand images and usually carry no AI metadata —
+        // give them distinct, genuinely useful alt text (also the dedup key).
+        const RESERVED_ALTS = [
+          "Brites Jewelry gift-ready packaging",
+          "Custom handcrafted jewelry by Brites Jewelry"
+        ];
+        reservedMeta.push((r.meta || "").slice(0, 250) || RESERVED_ALTS[reservedSrc.length - 1] || `Brites Jewelry — photo ${8 + reservedSrc.length}`);
       }
       const reservedKeyBases = await Promise.all(reservedSrc.map(async (dataURL, i) => {
         const key = `${jobId}_rp${i}`;
@@ -3709,8 +3731,15 @@ https://www.etsy.com/your/shops/me/listing-editor/edit/1822973998
               return { ok: false, authExpired: false, detail: `HTTP ${r.status}` };
             }
 
-            // Ambiguous — did it land anyway?
+            // Ambiguous — did it land anyway? SETTLE FIRST: the request a
+            // dying Netlify function already sent can complete on Etsy's
+            // side SECONDS after we see the failure, so an immediate count
+            // check reads stale and a retry creates a duplicate twin. Wait
+            // out the landing window before deciding. (The reconciliation
+            // pass after Stage 1b removes any twin that still slips through.)
             const failDetail = transportErr ? transportErr.message : `HTTP ${r && r.status}`;
+            save({ lastActivityAt: Date.now() });
+            await new Promise(res => setTimeout(res, 20000));
             const live = await getListingImageCount();
             if (live != null && live > expectedImageCount) {
               console.warn(`${label}: ${failDetail}, but the image DID land (count ${expectedImageCount} → ${live}) — success, no retry.`);
@@ -3794,6 +3823,49 @@ https://www.etsy.com/your/shops/me/listing-editor/edit/1822973998
             console.warn("Reserved upload failed", 9 + i, up.detail);
           }
         }
+
+        // --- Stage 1c: RECONCILE — remove duplicate retry-twins ---------
+        // Ambiguous upload outcomes (timeout/5xx where the image landed
+        // anyway) can leave the SAME image on the listing twice, which also
+        // corrupts display order (Etsy has no reorder endpoint; a rank
+        // collision shifts every later image). Twins are identified by
+        // alt_text — guaranteed non-empty and distinct per slot at queue
+        // time — keeping the EARLIEST listing_image_id (the one whose rank
+        // matches its intended slot) and deleting later copies, which
+        // collapses ranks back to the intended order.
+        const reconcileListingImages = async () => {
+          try {
+            save({ lastActivityAt: Date.now() });
+            const lr = await etsyFetchWithTimeout(
+              `/.netlify/functions/etsyProxy?listingId=${encodeURIComponent(listingId)}&includes=Images`,
+              { headers: { "access-token": token } }, 30000, "Image reconciliation");
+            if (!lr.ok) { console.warn("reconcile: image list failed HTTP " + lr.status + " — skipping."); return; }
+            const lj = await lr.json().catch(() => null);
+            const imgs = (lj && (lj.images || lj.Images)) || [];
+            if (imgs.length <= 1) return;
+            const byAlt = new Map();
+            for (const im of imgs) {
+              const key = String(im.alt_text || "").trim();
+              if (!key) continue; // never delete an image we can't attribute
+              if (!byAlt.has(key)) byAlt.set(key, []);
+              byAlt.get(key).push(im);
+            }
+            const toDelete = [];
+            for (const [, group] of byAlt) {
+              if (group.length < 2) continue;
+              group.sort((a, b) => Number(a.listing_image_id) - Number(b.listing_image_id));
+              for (let k = 1; k < group.length; k++) toDelete.push(group[k].listing_image_id);
+            }
+            if (!toDelete.length) return;
+            console.warn(`reconcile: removing ${toDelete.length} duplicate image(s): ${toDelete.join(",")}`);
+            const del = await etsyFetchWithTimeout(
+              `/.netlify/functions/listingImagesPurge?listingId=${encodeURIComponent(listingId)}&token=${encodeURIComponent(token)}&imageIds=${encodeURIComponent(toDelete.join(","))}`,
+              { method: "POST" }, 60000, "Duplicate image removal");
+            const dj = await del.json().catch(() => ({}));
+            save({ dedupedImages: (dj && dj.removed) || 0 });
+          } catch (e) { console.warn("reconcile: skipped —", e && e.message); }
+        };
+        await reconcileListingImages();
 
         // --- Stage 2: Info (title/desc/tags + SKU)
         const payload = {
@@ -6518,10 +6590,36 @@ async function callOpenAI(payload, opts = {}) {
               <button id="spRetryBtn" title="Requeue all failed jobs">Retry failed</button>
             </span>
           </h6>
+          <div class="sp-filters">
+            <select id="spFilterStatus" title="Filter by status">
+              <option value="">All statuses</option>
+              <option value="DONE">Done</option>
+              <option value="FAILED">Failed</option>
+              <option value="QUEUED">Queued</option>
+              <option value="UPLOADING">Uploading</option>
+            </select>
+            <select id="spFilterDate" title="Filter by date"><option value="">All dates</option></select>
+          </div>
           <div id="shopifyProgressWrap"><div class="spb-label" id="spbLabel"></div>
             <div class="spb-track"><div class="spb-bar" id="spbBar"></div></div></div>
           <ul id="shopifyList"><li style="border:none;color:#777;">No Shopify uploads yet this session.</li></ul>`;
         host.appendChild(p);
+        // Filter wiring — re-render from the cached job list, no refetch.
+        p.querySelector("#spFilterStatus").addEventListener("change", (e) => {
+          window.__spFilters.status = e.target.value; renderRecent();
+        });
+        p.querySelector("#spFilterDate").addEventListener("change", (e) => {
+          window.__spFilters.date = e.target.value; renderRecent();
+        });
+        // Row expand/collapse (delegated; links keep working normally).
+        p.querySelector("#shopifyList").addEventListener("click", (e) => {
+          if (e.target.closest("a")) return;
+          const row = e.target.closest("li.sp-row");
+          if (!row) return;
+          const id = row.getAttribute("data-id");
+          if (window.__spOpen.has(id)) window.__spOpen.delete(id); else window.__spOpen.add(id);
+          row.classList.toggle("open");
+        });
         // BUTTON UX FIX: both handlers used to swallow errors and give zero
         // feedback — with jobs that instantly re-fail, a working click was
         // indistinguishable from a dead button. Each button now shows a
@@ -6585,25 +6683,94 @@ async function callOpenAI(payload, opts = {}) {
       window.setShopifyStage = setShopifyStage;
 
       function esc(t) { const d = document.createElement("div"); d.textContent = String(t == null ? "" : t); return d.innerHTML; }
+      // ---- Recent-jobs list: date-grouped, collapsed rows, filterable ----
+      // Each job renders as ONE compact line (dot · title · variants · price
+      // · time · view live · chevron); collections/themes/errors live in an
+      // expandable details block. Jobs group under date headers (Today /
+      // Yesterday / date), and two filters (status, date) narrow the view.
+      // Expansion state survives the 60-second refresh.
+      window.__spJobs = window.__spJobs || [];
+      window.__spOpen = window.__spOpen || new Set();
+      window.__spFilters = window.__spFilters || { status: "", date: "" };
+
+      function spDateParts(when) {
+        const d = when ? new Date(when) : null;
+        if (!d || isNaN(d)) return { key: "unknown", label: "Unknown date" };
+        const key = d.toDateString();
+        const today = new Date().toDateString();
+        const yest = new Date(Date.now() - 864e5).toDateString();
+        const label = key === today ? "Today" : key === yest ? "Yesterday"
+          : d.toLocaleDateString([], { month: "short", day: "numeric", year: "numeric" });
+        return { key, label };
+      }
+
       function renderRecent(list) {
         const ul = document.getElementById("shopifyList");
         if (!ul) return;
-        if (!list || !list.length) return;
-        ul.innerHTML = list.map(j => {
-          const price = (j.priceMin != null) ? (j.priceMin === j.priceMax ? `$${j.priceMin}` : `$${j.priceMin}–$${j.priceMax}`) : "";
-          const cols = (j.addedCollections || []).concat((j.aiPickedCollections || []).filter(c => (j.addedCollections || []).indexOf(c) < 0));
-          const when = j.completedAtMs || j.createdAtMs;
-          const time = when ? new Date(when).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" }) : "";
-          return `<li>
-            <span class="sp-dot ${esc(j.status)}"></span>
-            <span class="sp-title">${esc(j.title)}</span>
-            ${j.handle ? ` — <a href="https://britesjewelry.com/products/${esc(j.handle)}" target="_blank" rel="noopener">view live</a>` : ""}
-            <br><span class="sp-meta">${esc(j.status)} · ${esc((j.category || "").replace(/_/g, " "))} · tier ${esc(j.tier)} · ${esc(j.variantCount)} variants · ${price} · ${time}</span>
-            ${cols.length ? `<br><span class="sp-cols">Collections: ${esc(cols.join(", "))}</span>` : ""}
-            ${(j.expandedMeanings || []).length ? `<br><span class="sp-meta">Themes: ${esc(j.expandedMeanings.join(", "))}</span>` : ""}
-            ${j.error ? `<br><span class="sp-err">${esc(String(j.error).slice(0, 160))}</span>` : ""}
-          </li>`;
-        }).join("");
+        if (Array.isArray(list) && list.length) window.__spJobs = list;
+        const jobs = window.__spJobs;
+        if (!jobs.length) return;
+
+        // Rebuild the date filter's options from the FULL job set, keeping
+        // the current selection alive across refreshes.
+        const dateSel = document.getElementById("spFilterDate");
+        if (dateSel) {
+          const seen = new Map();
+          jobs.forEach(j => { const p = spDateParts(j.completedAtMs || j.createdAtMs); if (!seen.has(p.key)) seen.set(p.key, p.label); });
+          const current = window.__spFilters.date;
+          dateSel.innerHTML = `<option value="">All dates</option>` +
+            [...seen.entries()].map(([k, l]) => `<option value="${esc(k)}"${k === current ? " selected" : ""}>${esc(l)}</option>`).join("");
+        }
+
+        const f = window.__spFilters;
+        const filtered = jobs.filter(j => {
+          if (f.status && j.status !== f.status) return false;
+          if (f.date && spDateParts(j.completedAtMs || j.createdAtMs).key !== f.date) return false;
+          return true;
+        });
+        if (!filtered.length) {
+          ul.innerHTML = `<li style="border:none;color:#777;">No uploads match the current filters.</li>`;
+          return;
+        }
+
+        // Group by date, newest group first; newest job first within a group.
+        const groups = new Map();
+        filtered
+          .slice()
+          .sort((a, b) => (b.completedAtMs || b.createdAtMs || 0) - (a.completedAtMs || a.createdAtMs || 0))
+          .forEach(j => {
+            const p = spDateParts(j.completedAtMs || j.createdAtMs);
+            if (!groups.has(p.key)) groups.set(p.key, { label: p.label, jobs: [] });
+            groups.get(p.key).jobs.push(j);
+          });
+
+        let html = "";
+        for (const [, g] of groups) {
+          html += `<li class="sp-date">${esc(g.label)}</li>`;
+          html += g.jobs.map(j => {
+            const price = (j.priceMin != null) ? (j.priceMin === j.priceMax ? `$${j.priceMin}` : `$${j.priceMin}–$${j.priceMax}`) : "";
+            const cols = (j.addedCollections || []).concat((j.aiPickedCollections || []).filter(c => (j.addedCollections || []).indexOf(c) < 0));
+            const when = j.completedAtMs || j.createdAtMs;
+            const time = when ? new Date(when).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" }) : "";
+            const open = window.__spOpen.has(j.id);
+            return `<li class="sp-row${open ? " open" : ""}" data-id="${esc(j.id)}">
+              <div class="sp-line">
+                <span class="sp-dot ${esc(j.status)}"></span>
+                <span class="sp-title">${esc(j.title)}</span>
+                <span class="sp-mini">${esc(j.variantCount)} var${price ? " · " + price : ""}${time ? " · " + time : ""}</span>
+                ${j.handle ? `<a href="https://britesjewelry.com/products/${esc(j.handle)}" target="_blank" rel="noopener">view live</a>` : ""}
+                <span class="sp-chev" aria-hidden="true">▸</span>
+              </div>
+              <div class="sp-details">
+                <span class="sp-meta">${esc(j.status)} · ${esc((j.category || "").replace(/_/g, " "))} · tier ${esc(j.tier)} · ${esc(j.variantCount)} variants${price ? " · " + price : ""}</span>
+                ${cols.length ? `<br><span class="sp-cols">Collections: ${esc(cols.join(", "))}</span>` : ""}
+                ${(j.expandedMeanings || []).length ? `<br><span class="sp-meta">Themes: ${esc(j.expandedMeanings.join(", "))}</span>` : ""}
+                ${j.error ? `<br><span class="sp-err">${esc(String(j.error).slice(0, 300))}</span>` : ""}
+              </div>
+            </li>`;
+          }).join("");
+        }
+        ul.innerHTML = html;
       }
 
       window.__renderRecentTest = renderRecent; // exposed for diagnostics
@@ -6613,7 +6780,7 @@ async function callOpenAI(payload, opts = {}) {
         const el = document.getElementById("shopifyQueueStatus");
         ensurePanel();
         try {
-          const r = await fetch(FN + "?op=status&recent=12");
+          const r = await fetch(FN + "?op=status&recent=60");
           const j = await r.json();
           const b = j.budget || {};
           if (el) {
@@ -6695,6 +6862,7 @@ async function callOpenAI(payload, opts = {}) {
             if (r.ok) {
               const j = await r.json().catch(() => null);
               const imgs = (j && (j.images || j.Images)) || [];
+              const seenAlts = new Set();
               const mapped = imgs
                 .slice()
                 .sort((a, b) => (a.rank || 0) - (b.rank || 0))
@@ -6702,7 +6870,16 @@ async function callOpenAI(payload, opts = {}) {
                   src: im.url_fullxfull || im.url_570xN || im.url,
                   alt: (im.alt_text || "").slice(0, 250)
                 }))
-                .filter(im => im.src && /^https:\/\//i.test(im.src));
+                .filter(im => {
+                  if (!im.src || !/^https:\/\//i.test(im.src)) return false;
+                  // Insurance against any duplicate that survived Etsy-side
+                  // reconciliation: same alt = same slot, keep the first
+                  // (lowest-rank) copy only.
+                  const k = im.alt.trim().toLowerCase();
+                  if (k && seenAlts.has(k)) return false;
+                  if (k) seenAlts.add(k);
+                  return true;
+                });
               if (mapped.length) return mapped;
               console.warn("collectShopifyImages: Etsy listing returned no usable images; falling back to legacy sources.");
             } else {
