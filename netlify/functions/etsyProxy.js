@@ -64,9 +64,16 @@ exports.handler = async function(event) {
 
     const xApiKey = `${String(clientId).trim()}:${String(clientSecret).trim()}`;
 
+    // Optional ?includes=Images — whitelisted so the image-upload retry
+    // logic can verify the listing's live image count (idempotency check)
+    // without a new function. Backward compatible: absent = old behavior.
+    const includesRaw =
+      (event.queryStringParameters && event.queryStringParameters.includes) || "";
+    const includes = includesRaw === "Images" ? "?includes=Images" : "";
+
     const etsyUrl = `https://api.etsy.com/v3/application/listings/${encodeURIComponent(
       listingId
-    )}`;
+    )}${includes}`;
 
     const response = await fetch(etsyUrl, {
       method: "GET",

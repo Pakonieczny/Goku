@@ -56,18 +56,41 @@ const VENDOR = "Brites Jewelry";
 /* ------------------------------ Shopify auth ------------------------------ */
 
 let _token = null, _tokenExp = 0;
+// DIAGNOSTIC FIX: with SHOPIFY_STORE unset, the token fetch targeted
+// "https://undefined/..." and every job failed with undici's generic
+// "fetch failed" — useless in the panel. Validate the env up front and
+// name exactly what's missing, and wrap both fetches so network errors
+// say WHICH request to WHICH host failed.
+function requireShopifyEnv() {
+  const missing = [];
+  if (!process.env.SHOPIFY_STORE) missing.push("SHOPIFY_STORE");
+  if (!process.env.SHOPIFY_CLIENT_ID) missing.push("SHOPIFY_CLIENT_ID");
+  if (!process.env.SHOPIFY_CLIENT_SECRET) missing.push("SHOPIFY_CLIENT_SECRET");
+  if (missing.length) {
+    throw new Error(
+      "Missing Netlify env var(s) on THIS site: " + missing.join(", ") +
+      ". Add them in Site settings → Environment variables (SHOPIFY_STORE looks like brites-jewelry.myshopify.com), then redeploy."
+    );
+  }
+}
 async function getToken() {
   if (_token && Date.now() < _tokenExp - 60000) return _token;
+  requireShopifyEnv();
   const store = process.env.SHOPIFY_STORE;
-  const res = await fetch(`https://${store}/admin/oauth/access_token`, {
-    method: "POST",
-    headers: { "Content-Type": "application/x-www-form-urlencoded" },
-    body: new URLSearchParams({
-      grant_type: "client_credentials",
-      client_id: process.env.SHOPIFY_CLIENT_ID,
-      client_secret: process.env.SHOPIFY_CLIENT_SECRET
-    })
-  });
+  let res;
+  try {
+    res = await fetch(`https://${store}/admin/oauth/access_token`, {
+      method: "POST",
+      headers: { "Content-Type": "application/x-www-form-urlencoded" },
+      body: new URLSearchParams({
+        grant_type: "client_credentials",
+        client_id: process.env.SHOPIFY_CLIENT_ID,
+        client_secret: process.env.SHOPIFY_CLIENT_SECRET
+      })
+    });
+  } catch (e) {
+    throw new Error(`Shopify token request to https://${store}/ failed at the network level: ${e && e.message}. Check SHOPIFY_STORE spelling and site connectivity.`);
+  }
   const text = await res.text();
   if (!res.ok) throw new Error("Token request failed (" + res.status + "): " + text);
   const data = JSON.parse(text);
@@ -79,11 +102,16 @@ async function getToken() {
 async function gql(query, variables, _attempt) {
   const store = process.env.SHOPIFY_STORE;
   const token = await getToken();
-  const res = await fetch(`https://${store}/admin/api/${API_VERSION}/graphql.json`, {
-    method: "POST",
-    headers: { "Content-Type": "application/json", "X-Shopify-Access-Token": token },
-    body: JSON.stringify({ query, variables: variables || {} })
-  });
+  let res;
+  try {
+    res = await fetch(`https://${store}/admin/api/${API_VERSION}/graphql.json`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json", "X-Shopify-Access-Token": token },
+      body: JSON.stringify({ query, variables: variables || {} })
+    });
+  } catch (e) {
+    throw new Error(`Shopify GraphQL request to https://${store}/ failed at the network level: ${e && e.message}.`);
+  }
   const body = await res.json().catch(() => ({}));
   if (res.status === 429 || (body.errors || []).some(e => (e.extensions || {}).code === "THROTTLED")) {
     if ((_attempt || 0) < 4) { await new Promise(r => setTimeout(r, 1500 * ((_attempt || 0) + 1))); return gql(query, variables, (_attempt || 0) + 1); }
