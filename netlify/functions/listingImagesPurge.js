@@ -160,18 +160,27 @@ exports.handler = async function (event) {
         `${API_BASE}/shops/${encodeURIComponent(shopId)}` +
         `/listings/${encodeURIComponent(listingId)}` +
         `/images/${encodeURIComponent(imgId)}`;
-      try {
-        const delResp = await fetch(delUrl, { method: "DELETE", headers: baseHeaders });
-        // Etsy returns 204 No Content on success.
-        if (delResp.ok || delResp.status === 204) {
-          removed++;
-        } else {
-          const t = await safeText(delResp);
-          failures.push({ imgId, status: delResp.status, detail: t });
+      // DELETE is idempotent: a 404 means the record is already gone, which
+      // IS the goal — count it as removed. Transient Etsy errors (5xx/409)
+      // get exactly one retry after a short pause; a repeat 404 on retry is
+      // likewise success.
+      let done = false, lastStatus = 0, lastDetail = "";
+      for (let attempt = 0; attempt < 2 && !done; attempt++) {
+        if (attempt > 0) await new Promise(r => setTimeout(r, 1200));
+        try {
+          const delResp = await fetch(delUrl, { method: "DELETE", headers: baseHeaders });
+          if (delResp.ok || delResp.status === 204 || delResp.status === 404) {
+            removed++; done = true;
+          } else {
+            lastStatus = delResp.status;
+            lastDetail = await safeText(delResp);
+            if (delResp.status === 401 || delResp.status === 403) break; // auth/scope: retry won't help
+          }
+        } catch (e) {
+          lastStatus = 0; lastDetail = String((e && e.message) || e);
         }
-      } catch (e) {
-        failures.push({ imgId, error: String((e && e.message) || e) });
       }
+      if (!done) failures.push({ imgId, status: lastStatus, detail: String(lastDetail).slice(0, 200) });
     }
 
     return resp(200, {
