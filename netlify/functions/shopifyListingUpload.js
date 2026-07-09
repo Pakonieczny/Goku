@@ -56,6 +56,51 @@ const VENDOR = "Brites Jewelry";
 /* ------------------------------ Shopify auth ------------------------------ */
 
 let _token = null, _tokenExp = 0;
+// CREDENTIAL PIGGYBACK SUPPORT ------------------------------------------
+// The Shopify Admin credentials live on the goldenspike Netlify site (used
+// by shopifyEditor.js). Rather than duplicating secrets onto this site,
+// gql() transparently proxies through that site's "gqlProxy" action when
+// no local SHOPIFY_* env vars exist. Override the endpoint with
+// SHOPIFY_PROXY_BASE if the credential site ever moves; if that site has
+// EDIT_PASSCODE enabled, mirror it here as SHOPIFY_PROXY_PASSCODE.
+const SHOPIFY_PROXY_BASE =
+  process.env.SHOPIFY_PROXY_BASE ||
+  "https://goldenspike.app/.netlify/functions/shopifyEditor";
+const hasLocalShopifyCreds = () =>
+  !!(process.env.SHOPIFY_STORE && process.env.SHOPIFY_CLIENT_ID && process.env.SHOPIFY_CLIENT_SECRET);
+
+async function gqlViaProxy(query, variables, _attempt) {
+  const headers = { "Content-Type": "application/json" };
+  const pass = process.env.SHOPIFY_PROXY_PASSCODE || process.env.EDIT_PASSCODE;
+  if (pass) headers["X-Edit-Passcode"] = pass;
+  let res;
+  try {
+    res = await fetch(SHOPIFY_PROXY_BASE, {
+      method: "POST",
+      headers,
+      body: JSON.stringify({ action: "gqlProxy", query, variables: variables || {} })
+    });
+  } catch (e) {
+    throw new Error(`Shopify credential-proxy request to ${SHOPIFY_PROXY_BASE} failed at the network level: ${e && e.message}.`);
+  }
+  const j = await res.json().catch(() => ({}));
+  if (res.status === 429 && (_attempt || 0) < 4) {
+    await new Promise(r => setTimeout(r, 1500 * ((_attempt || 0) + 1)));
+    return gqlViaProxy(query, variables, (_attempt || 0) + 1);
+  }
+  if (res.status === 401) {
+    throw new Error("Shopify credential-proxy rejected the call (401): the credential site has EDIT_PASSCODE enabled — set SHOPIFY_PROXY_PASSCODE on this site to the same value.");
+  }
+  if (res.status === 400 && /Unknown op|Unknown action|Missing 'query'/i.test((j && j.error) || "")) {
+    throw new Error("Shopify credential-proxy error: the credential site is running an older shopifyEditor.js without the gqlProxy action — deploy the updated shopifyEditor.js there.");
+  }
+  if (!res.ok || j.ok === false) {
+    throw new Error(`Shopify credential-proxy error (${res.status}): ${(j && j.error) || "unknown"}`);
+  }
+  return j.data;
+}
+// ------------------------------------------------------------------------
+
 // DIAGNOSTIC FIX: with SHOPIFY_STORE unset, the token fetch targeted
 // "https://undefined/..." and every job failed with undici's generic
 // "fetch failed" — useless in the panel. Validate the env up front and
@@ -100,6 +145,12 @@ async function getToken() {
 }
 
 async function gql(query, variables, _attempt) {
+  // CREDENTIAL PIGGYBACK: when this site has no SHOPIFY_* env vars, route
+  // every GraphQL call through the sibling Netlify site that already holds
+  // the credentials (shopifyEditor.js's "gqlProxy" action). Direct mode is
+  // used automatically whenever local creds exist, so adding the env vars
+  // here later switches back with zero code changes.
+  if (!hasLocalShopifyCreds()) return gqlViaProxy(query, variables, _attempt);
   const store = process.env.SHOPIFY_STORE;
   const token = await getToken();
   let res;
