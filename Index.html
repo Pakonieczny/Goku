@@ -1893,7 +1893,7 @@ ANTI-REPETITION (TITLE)
                             ]
                         }
                     ],
-                    max_output_tokens: 100, 
+                    max_output_tokens: 500,   // was 100 — reasoning tokens count against this cap
                     reasoning: { effort: "low" },
                     text: { verbosity: "low" }
                 };
@@ -1947,10 +1947,43 @@ ANTI-REPETITION (TITLE)
     // Wait for a queued job's final status. Returns "DONE", a failure status,
     // or "TIMEOUT". Grace-polls beyond the queue-empty signal because a job
     // can still be mid-flight when the daemon drops it from the queue array.
+    // REGRESSION FIX: the queue-drain wait was a fixed 5-minute wall clock.
+    // A slow-but-progressing upload (9 full-quality images through Netlify)
+    // legitimately exceeds that, producing a false "Upload TIMEOUT" while
+    // the job was still working. This wait extends itself while the job
+    // shows recent per-image heartbeats and only gives up after a true
+    // stall (no activity for idleMs) or the hard cap.
+    async function waitForQueueDrain(jobId, { idleMs = 180000, hardCapMs = 1200000 } = {}) {
+      const t0 = Date.now();
+      while (Date.now() - t0 < hardCapMs) {
+        let q = [];
+        try { q = JSON.parse(localStorage.getItem("etsyUploadJobs") || "[]"); } catch (_) {}
+        if (!q.length) return true;
+        let last = 0;
+        try {
+          const job = JSON.parse(localStorage.getItem(`etsyJob:${jobId}`) || "null");
+          last = Number(job && (job.lastActivityAt || 0)) || 0;
+        } catch (_) {}
+        const sinceActivity = Date.now() - (last || t0);
+        if (sinceActivity > idleMs) {
+          console.warn(`waitForQueueDrain: no upload activity for ${Math.round(sinceActivity / 1000)}s — giving up.`);
+          return false;
+        }
+        await wait(2000);
+      }
+      console.warn("waitForQueueDrain: hard cap reached — giving up.");
+      return false;
+    }
+
     async function awaitJobOutcome(jobId, graceMs) {
       const t0 = Date.now();
       while (Date.now() - t0 < (graceMs || 120000)) {
-        const st = (window.__etsyJobOutcomes || {})[jobId];
+        let st = (window.__etsyJobOutcomes || {})[jobId];
+        if (!st) {
+          // Fallback: the job record in localStorage carries the same status
+          // (covers a missed in-memory mirror, e.g. after a reload).
+          try { st = (JSON.parse(localStorage.getItem(`etsyJob:${jobId}`) || "null") || {}).status; } catch (_) {}
+        }
         if (st === "DONE" || st === "FAILED" || st === "AUTH_NEEDED") return st;
         await wait(2000);
       }
@@ -2062,16 +2095,66 @@ ANTI-REPETITION (TITLE)
             // Apply and show inside the "listingDescInput" text box
             document.getElementById("listingDescInput").value = combinedDescription;
             
-            // 3. Generate Content (Sequentially)
+            // 3. Generate Content (Sequentially) — VERIFIED.
+            //
+            // REGRESSION FIX: this used to fire-and-forget the three
+            // generators. When the model returned empty output the sequence
+            // marched on with a blank title / empty key phrases, reached the
+            // Create Listing gate, got blocked, and the set was "just
+            // skipped" with no explanation. Each stage is now verified;
+            // a failed stage gets ONE retry; if it still fails, the set is
+            // put on the normal 10-minute cooldown with a status message
+            // that says exactly what failed, and the pipeline moves on to
+            // the next set instead of stalling.
             updateFirebaseStatus("Generating Info...", "working");
-            
-            // i. Key Phrases
-            await generateTagPhrases(); 
+
+            const _skpHasTags = () => {
+                try {
+                    return typeof buildEtsyTagsFromOverlay === "function" &&
+                           buildEtsyTagsFromOverlay(document.getElementById("searchKeyPhrases")?.value || "").length > 0;
+                } catch (_) { return false; }
+            };
+            const _titleReal = () => {
+                const t = (document.getElementById("listingTitle")?.value || "").trim();
+                return !!t && !/^no title generated\.?$/i.test(t) && !/^generating title/i.test(t) && !/^error:/i.test(t);
+            };
+            const _descReal = () => {
+                const d = (document.getElementById("listingDescription")?.value || "").trim();
+                return !!d && !/^generating description/i.test(d) && !/^error:/i.test(d);
+            };
+            const _genFail = (what) => {
+                console.warn(`Generation failed for ${setName}: ${what} (after one retry). Cooling down 10 minutes.`);
+                window.__incompleteSetsTracker = window.__incompleteSetsTracker || {};
+                window.__incompleteSetsTracker[setName] = Date.now();
+                updateFirebaseStatus(`Generation failed (${what}): ${setName} — will retry later`, "");
+            };
+
+            // i. Key Phrases (title & description both consume these, so
+            //    they must be verified FIRST).
+            await generateTagPhrases();
             await wait(2000);
-            
+            if (!_skpHasTags()) {
+                updateFirebaseStatus("Key phrases empty — retrying...", "working");
+                await generateTagPhrases();
+                await wait(2000);
+            }
+            if (!_skpHasTags()) { _genFail("key phrases"); return; }
+
             // ii, iii, iv. Title & Description
             await Promise.all([generateTitleOnly(), generateDescriptionOnly()]);
             await wait(2000);
+            if (!_titleReal() || !_descReal()) {
+                updateFirebaseStatus("Title/description incomplete — retrying...", "working");
+                const retries = [];
+                if (!_titleReal()) retries.push(generateTitleOnly());
+                if (!_descReal()) retries.push(generateDescriptionOnly());
+                await Promise.all(retries);
+                await wait(2000);
+            }
+            if (!_titleReal() || !_descReal()) {
+                const what = [!_titleReal() && "title", !_descReal() && "description"].filter(Boolean).join(" + ");
+                _genFail(what); return;
+            }
             
             // v. Analyze Metadata
             updateFirebaseStatus("Analyzing Metadata...", "working");
@@ -2118,10 +2201,7 @@ ANTI-REPETITION (TITLE)
             document.getElementById("createListingBtn").click();
             
             // Wait for queue to process. The daemon removes jobs from localStorage "etsyUploadJobs".
-            await waitForCondition(() => {
-                const q = JSON.parse(localStorage.getItem("etsyUploadJobs") || "[]");
-                return q.length === 0;
-            }, 2000, 300000); // 5 min timeout for upload
+            await waitForQueueDrain((window.__lastConsumedListing || {}).jobId);
             
             await wait(3000);
 
@@ -2207,10 +2287,7 @@ ANTI-REPETITION (TITLE)
                      console.warn("Ran out of Listing IDs for variant.");
                 } else {
                      document.getElementById("createListingBtn").click();
-                     await waitForCondition(() => {
-                        const q = JSON.parse(localStorage.getItem("etsyUploadJobs") || "[]");
-                        return q.length === 0;
-                    }, 2000, 300000);
+                     await waitForQueueDrain((window.__lastConsumedListing || {}).jobId);
                     // Variant verify: original already succeeded so the set is
                     // still archived, but a failed variant must give its ID back.
                     const consumed2 = window.__lastConsumedListing || {};
@@ -2466,7 +2543,7 @@ ANTI-REPETITION (TITLE)
                 ]
               }
             ],
-            max_output_tokens: 300,
+            max_output_tokens: 700,   // was 300 — reasoning tokens count against this cap
             reasoning: { effort: "low" },
             text: { verbosity: "medium" }
           };
@@ -3421,6 +3498,25 @@ https://www.etsy.com/your/shops/me/listing-editor/edit/1822973998
     }
 
     // ---- Job runner (daemon) ----
+
+    // REGRESSION FIX: none of the runner's network calls had a timeout. One
+    // stalled request (purge, an image POST, info, inventory) hung
+    // runEtsyJob forever, which left the __etsyUploadDaemon flag stuck true
+    // — so every LATER job sat in the queue untouched and every set ended
+    // "Upload TIMEOUT ... kept for retry" with a progress bar frozen at 0%.
+    // Every call now goes through this bounded fetch; a stall fails the
+    // stage instead of bricking the daemon.
+    async function etsyFetchWithTimeout(url, opts = {}, timeoutMs = 90000, label = "request") {
+      const controller = new AbortController();
+      const t = setTimeout(() => controller.abort(), timeoutMs);
+      try {
+        return await fetch(url, { ...opts, signal: controller.signal });
+      } catch (e) {
+        if (e && e.name === "AbortError") throw new Error(`${label} timed out after ${Math.round(timeoutMs / 1000)}s`);
+        throw e;
+      } finally { clearTimeout(t); }
+    }
+
     async function runEtsyJob(jobId) {
       let job = JSON.parse(localStorage.getItem(`etsyJob:${jobId}`) || "null");
       if (!job) return;
@@ -3440,7 +3536,12 @@ https://www.etsy.com/your/shops/me/listing-editor/edit/1822973998
         || job.accessToken;
       if (token && token !== job.accessToken) save({ accessToken: token });
       const listingId = job.listingId;
-      save({ status: "RUNNING" });
+      save({ status: "RUNNING", lastActivityAt: Date.now() });
+      // Show the progress bar from the RUNNER itself (idempotent) so it is
+      // visible no matter who started the job — the button handler, the
+      // automation, or the daemon draining a queued job after reload.
+      if (typeof showCreateProgress === "function") showCreateProgress(true);
+      if (typeof resetCreateProgress === "function") resetCreateProgress();
 
       try {
         // --- Stage 0: Purge existing images on the draft listing -------
@@ -3472,9 +3573,9 @@ https://www.etsy.com/your/shops/me/listing-editor/edit/1822973998
         // and continue — better to upload (and accept potential
         // duplicates this run) than to abort the entire job.
         try {
-          const purgeResp = await fetch(
+          const purgeResp = await etsyFetchWithTimeout(
             `/.netlify/functions/listingImagesPurge?listingId=${encodeURIComponent(listingId)}&token=${encodeURIComponent(token)}`,
-            { method: "POST" }
+            { method: "POST" }, 60000, "Image purge"
           );
           if (purgeResp.ok) {
             const purgeJson = await purgeResp.json().catch(() => ({}));
@@ -3512,6 +3613,31 @@ https://www.etsy.com/your/shops/me/listing-editor/edit/1822973998
           console.warn("Purge request errored, continuing with upload:", purgeErr);
         }
 
+        // Shared image-upload helper: one retry per image, bounded time per
+        // attempt, explicit auth detection, and per-image heartbeats so the
+        // sequence's queue-drain wait can tell "slow but working" from
+        // "stalled". Browsers allow re-sending the same FormData.
+        let mainUploaded = 0, mainAttempted = 0;
+        const uploadImageWithRetry = async (fd, label) => {
+          for (let attempt = 1; attempt <= 2; attempt++) {
+            save({ lastActivityAt: Date.now() });
+            let r;
+            try {
+              r = await etsyFetchWithTimeout("/.netlify/functions/imageUpload", { method: "POST", body: fd }, 120000, label);
+            } catch (e) {
+              console.warn(`${label} attempt ${attempt} failed:`, e.message);
+              if (attempt === 2) return { ok: false, authExpired: false, detail: e.message };
+              continue;
+            }
+            if (r.ok) return { ok: true };
+            const t = await r.text().catch(() => "");
+            if (r.status === 401 && /invalid_token|expired/i.test(t)) return { ok: false, authExpired: true, detail: t };
+            console.warn(`${label} attempt ${attempt} HTTP ${r.status}:`, t.slice(0, 200));
+            if (attempt === 2) return { ok: false, authExpired: false, detail: `HTTP ${r.status}` };
+          }
+          return { ok: false, authExpired: false, detail: "unreachable" };
+        };
+
         // --- Stage 1: Upload Photos (main 0–7)
         for (let i = 0; i < job.photoCount; i++) {
         // Skip override: stop uploading this listing immediately if requested.
@@ -3527,19 +3653,28 @@ https://www.etsy.com/your/shops/me/listing-editor/edit/1822973998
           fd.append("rank", i + 1);
           fd.append("alt_text", job.photoMeta[i] || "");
           fd.append("file", blob, job.photoNames[i] || `uploaded_photo_${i}.jpg`);
-          const r = await fetch("/.netlify/functions/imageUpload", { method: "POST", body: fd });
-          if (!r.ok) {
-            const t = await r.text();
+          mainAttempted++;
+          const up = await uploadImageWithRetry(fd, `Photo ${i + 1}`);
+          if (up.authExpired) {
             // AUTH error. Auto-resume / auto-reconnect REMOVED — fail cleanly.
-            if (r.status === 401 && /invalid_token|expired/i.test(t)) {
-              save({ status: "AUTH_NEEDED", error: "token_expired" });
-              window.M?.toast?.({ html: 'Etsy session expired — click "Connect to Etsy", then re-run this listing.' });
-              return;
-            }
-            console.warn("Photo upload failed", i + 1, t);
-          } else {
-            if (typeof bumpCreateProgressPerImage === "function") bumpCreateProgressPerImage();
+            save({ status: "AUTH_NEEDED", error: "token_expired" });
+            window.M?.toast?.({ html: 'Etsy session expired — click "Connect to Etsy", then re-run this listing.' });
+            return;
           }
+          if (up.ok) {
+            mainUploaded++;
+            if (typeof bumpCreateProgressPerImage === "function") bumpCreateProgressPerImage();
+          } else {
+            console.warn("Photo upload failed", i + 1, up.detail);
+          }
+        }
+
+        // Quality floor: a listing published with most of its photos missing
+        // is worse than a failed job (a FAILED job restores the listing ID
+        // and keeps the set for retry; a half-empty listing goes live
+        // silently). Zero uploads = nothing usable happened at all.
+        if (mainAttempted > 0 && (mainUploaded === 0 || mainUploaded < Math.ceil(mainAttempted / 2))) {
+          throw new Error(`Only ${mainUploaded}/${mainAttempted} main photos uploaded — failing the job instead of publishing a broken listing.`);
         }
         // --- Stage 1b: Reserved (8–9)
         for (let i = 0; i < job.reservedCount; i++) {
@@ -3556,18 +3691,18 @@ https://www.etsy.com/your/shops/me/listing-editor/edit/1822973998
           fd.append("rank", 9 + i);
           fd.append("alt_text", job.reservedMeta[i] || "");
           fd.append("file", blob, job.reservedNames[i] || `reserved_photo_${i}.jpg`);
-          const r = await fetch("/.netlify/functions/imageUpload", { method: "POST", body: fd });
-          if (!r.ok) {
-            const t = await r.text();
+          const up = await uploadImageWithRetry(fd, `Reserved ${9 + i}`);
+          if (up.authExpired) {
             // AUTH error. Auto-resume / auto-reconnect REMOVED — fail cleanly.
-            if (r.status === 401 && /invalid_token|expired/i.test(t)) {
-              save({ status: "AUTH_NEEDED", error: "token_expired" });
-              window.M?.toast?.({ html: 'Etsy session expired — click "Connect to Etsy", then re-run this listing.' });
-              return;
-            }
-            console.warn("Reserved upload failed", 9 + i, t);
-          } else {
+            save({ status: "AUTH_NEEDED", error: "token_expired" });
+            window.M?.toast?.({ html: 'Etsy session expired — click "Connect to Etsy", then re-run this listing.' });
+            return;
+          }
+          if (up.ok) {
             if (typeof bumpCreateProgressPerImage === "function") bumpCreateProgressPerImage();
+          } else {
+            // Reserved slots are optional — a failure here never fails the job.
+            console.warn("Reserved upload failed", 9 + i, up.detail);
           }
         }
 
@@ -3580,11 +3715,12 @@ https://www.etsy.com/your/shops/me/listing-editor/edit/1822973998
           skus: [job.sku],
           sku: job.sku
         };
-        const infoResp = await fetch(`/.netlify/functions/updateListing?listingId=${encodeURIComponent(listingId)}`, {
+        save({ lastActivityAt: Date.now() });
+        const infoResp = await etsyFetchWithTimeout(`/.netlify/functions/updateListing?listingId=${encodeURIComponent(listingId)}`, {
           method: "PUT",
           headers: { "Content-Type": "application/json", Authorization: "Bearer " + token },
           body: JSON.stringify(payload)
-        });
+        }, 60000, "Info update");
         const infoJson = await infoResp.json().catch(() => ({}));
         if (!infoResp.ok) {
           const msg = JSON.stringify(infoJson || {});
@@ -3598,9 +3734,11 @@ https://www.etsy.com/your/shops/me/listing-editor/edit/1822973998
         }
 
         // Inventory SKU (same as your current flow)
-        await fetch(
+        save({ lastActivityAt: Date.now() });
+        await etsyFetchWithTimeout(
           `/.netlify/functions/updateListingInventory?listingId=${encodeURIComponent(listingId)}&token=${encodeURIComponent(token)}`,
-          { method: "PUT", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ sku: job.sku }) }
+          { method: "PUT", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ sku: job.sku }) },
+          60000, "Inventory SKU update"
         ).catch(e => console.warn("Inventory SKU update error:", e));
 
         if (typeof setCreateProgress === "function") setCreateProgress(100);
@@ -3669,6 +3807,13 @@ https://www.etsy.com/your/shops/me/listing-editor/edit/1822973998
           } catch (e) {
             console.error("runEtsyJob threw:", e);
           }
+
+          // A job that didn't finish DONE leaves the progress bar frozen at
+          // a partial percentage — hide it so the UI reflects reality.
+          try {
+            const st = (JSON.parse(localStorage.getItem(`etsyJob:${nextId}`) || "null") || {}).status;
+            if (st !== "DONE" && typeof showCreateProgress === "function") showCreateProgress(false);
+          } catch (_) {}
 
           // AUTO-RESUME REMOVED. Each job is attempted EXACTLY ONCE. Whatever
           // the outcome (done, failed, or auth-needed), drop it from the queue
@@ -4153,8 +4298,13 @@ https://www.etsy.com/your/shops/me/listing-editor/edit/1822973998
         //    automation's outcome verify can't match a STALE jobId from the
         //    previous pass and wrongly archive this set.
         {
-          const _title = (document.getElementById("listingTitle")?.value || "").trim();
-          const _desc  = ((document.getElementById("listingDescription")?.value || "") + (window.appendedDescriptionText || "")).trim();
+          const _rawTitle = (document.getElementById("listingTitle")?.value || "").trim();
+          const _rawDesc  = ((document.getElementById("listingDescription")?.value || "") + (window.appendedDescriptionText || "")).trim();
+          // Placeholder/error text is NOT content — "No title generated." or
+          // "Error: ..." must never be published as a live Etsy title.
+          const _isPlaceholder = (s) => /^no title generated\.?$/i.test(s) || /^generating /i.test(s) || /^error:/i.test(s);
+          const _title = _isPlaceholder(_rawTitle) ? "" : _rawTitle;
+          const _desc  = _isPlaceholder(_rawDesc)  ? "" : _rawDesc;
           const _tags  = buildEtsyTagsFromOverlay(document.getElementById("searchKeyPhrases")?.value || "");
           if (!_title || !_desc || !_tags.length) {
             window.__lastConsumedListing = null;
@@ -4232,7 +4382,7 @@ https://www.etsy.com/your/shops/me/listing-editor/edit/1822973998
           { role: "system", content: "Return ONLY one plain text line (<=200 chars). Must not be identical to the input. Avoid trivial punctuation-only changes." },
           { role: "user", content: `Rephrase this Etsy photo alt text so it says the same thing in different words (<=200 chars):\n${prev}` }
         ],
-        max_output_tokens: 180,
+        max_output_tokens: 500,   // was 180 — reasoning tokens count against this cap
         reasoning: { effort: "low" },
         text: { verbosity: "low" }
       };
@@ -4317,6 +4467,17 @@ https://www.etsy.com/your/shops/me/listing-editor/edit/1822973998
           }
         }
         const phrasesArray = out.slice(0, 13);
+
+        // REGRESSION FIX (same class as generateTagPhrases): if the model
+        // returned nothing AND no protected/current phrases existed, `out`
+        // is 13 empty strings and the code below would write the bare
+        // numbered template while reporting success. Too few usable
+        // phrases is a FAILURE — throw so the Duplicate flow's error
+        // handling reacts instead of silently proceeding tagless.
+        const usable = phrasesArray.filter(p => (p || "").trim()).length;
+        if (usable < 7) {
+          throw new Error(`Only ${usable} usable phrases after merge (need 13) — not writing a partial list.`);
+        }
 
         // 5) Render in your fixed two-column, numbered layout (1–7 / 8–14)
         const left  = phrasesArray.slice(0, 7);
@@ -4508,6 +4669,17 @@ https://www.etsy.com/your/shops/me/listing-editor/edit/1822973998
           question,
           document.getElementById("keywordRulesTextarea").value
         );
+
+        // REGRESSION FIX: when the model returned nothing, phrasesArray was
+        // an EMPTY array — the code below then happily rendered the bare
+        // "1. \n2. \n..." template into the field and toasted "generated
+        // successfully!". Downstream, buildEtsyTagsFromOverlay() extracted
+        // zero tags and the listing was blocked/skipped. Too few phrases is
+        // a FAILURE and must throw so the caller (and the automation's
+        // retry logic) can react.
+        if (!Array.isArray(phrasesArray) || phrasesArray.length < 7) {
+          throw new Error(`Model returned only ${(phrasesArray || []).length} phrases (need 13) — not writing a partial list.`);
+        }
 
         // enforce ≤ 20 chars per phrase by regenerating offenders
         for (let i = 0; i < phrasesArray.length; i++) {
@@ -4950,6 +5122,36 @@ https://www.etsy.com/your/shops/me/listing-editor/edit/1822973998
       return "";
     }
 
+    // ── callOpenAIForText(payload, label) ─────────────────────────────
+    // REGRESSION FIX: on the Responses API, reasoning models count their
+    // hidden reasoning tokens against max_output_tokens. A small budget
+    // (the old 120 for key phrases / titles) is routinely exhausted by
+    // reasoning ALONE, returning HTTP 200 with status:"incomplete" and
+    // ZERO visible text — which extractResponseText() silently turns
+    // into "". That's why descriptions (350 budget) kept working while
+    // phrases and titles came back empty. This wrapper detects the empty
+    // result, retries once with a 4× budget, and THROWS if it's still
+    // empty so callers can never mistake a blank response for success.
+    async function callOpenAIForText(payload, label = "generation") {
+      let data = await callOpenAI(payload);
+      let text = extractResponseText(data);
+      if (!text) {
+        const reason = data?.incomplete_details?.reason || data?.status || "empty output";
+        console.warn(`${label}: empty model output (${reason}); retrying with a larger token budget.`);
+        const retryPayload = {
+          ...payload,
+          max_output_tokens: Math.max(1600, Number(payload.max_output_tokens || 0) * 4)
+        };
+        data = await callOpenAI(retryPayload);
+        text = extractResponseText(data);
+        if (!text) {
+          const reason2 = data?.incomplete_details?.reason || data?.status || "empty output";
+          throw new Error(`${label} returned no text (${reason2}).`);
+        }
+      }
+      return text;
+    }
+
     // Fallback description builder (≤ 400 chars; never starts with "gift for her")
     function buildFallbackDescription({ keyPhrases, rawDescription }) {
       const phrases = String(keyPhrases || "")
@@ -4981,13 +5183,12 @@ https://www.etsy.com/your/shops/me/listing-editor/edit/1822973998
           { role: "system", content: "Generate concise, varied Etsy tags. No duplicates. Each tag ≤ 20 chars." },
           { role: "user", content: prompt }
         ],
-        max_output_tokens: 120,
+        max_output_tokens: 800,   // was 120 — reasoning tokens count against this cap
         reasoning: { effort: "low" },   // low reasoning on GPT-5.5
         text: { verbosity: "medium" }
       };
 
-      const data = await callOpenAI(payload);
-      const answer = extractResponseText(data);
+      const answer = await callOpenAIForText(payload, "Key phrases");
       return answer
         .split(/[\n,]+/)
         .map(s => s.replace(/^\d+\.\s*/, "").trim())
@@ -5014,13 +5215,15 @@ https://www.etsy.com/your/shops/me/listing-editor/edit/1822973998
             { role: "system", content: "Return ONE short tag only, no numbering, ≤ 20 chars." },
             { role: "user", content: prompt }
           ],
-          max_output_tokens: 220,
+          max_output_tokens: 600,   // was 220 — reasoning tokens count against this cap
           reasoning: { effort: "low" },
           text: { verbosity: "medium" }
         };
 
-        const data = await callOpenAI(payload);
-        const tag = extractResponseText(data).split(/[\n,]+/)[0].trim();
+        let tagText = "";
+        try { tagText = await callOpenAIForText(payload, "Replacement tag"); }
+        catch (e) { console.warn("Replacement tag attempt", attempt, "failed:", e.message); continue; }
+        const tag = tagText.split(/[\n,]+/)[0].trim();
         if (tag && tag.length <= 20 && !currentValid.includes(tag)) return tag;
       }
       throw new Error("Could not generate a new short tag.");
@@ -5790,16 +5993,15 @@ https://www.etsy.com/your/shops/me/listing-editor/edit/1822973998
           { role: "system", content: "Return ONLY the title as plain text." },
           { role: "user", content: promptText }
         ],
-        max_output_tokens: 120,
+        max_output_tokens: 600,   // was 120 — reasoning tokens count against this cap
         reasoning: { effort: "low" },
         text: { verbosity: "medium" }
       };
 
       try {
-        const data = await callOpenAI(payload);
-        const output = extractResponseText(data);
-        document.getElementById("listingTitle").value = output || "No title generated.";
-        updateTitleCount(output || "");
+        const output = await callOpenAIForText(payload, "Title");
+        document.getElementById("listingTitle").value = output;
+        updateTitleCount(output);
       } catch (error) {
         const msg = (error && error.message) ? error.message : String(error);
         document.getElementById("listingTitle").value = "Error: " + msg;
@@ -5885,28 +6087,16 @@ https://www.etsy.com/your/shops/me/listing-editor/edit/1822973998
             { role: "system", content: "Return ONLY the description as plain text." },
             { role: "user", content: promptText }
           ],
-          max_output_tokens: 350,
+          max_output_tokens: 800,   // was 350 — reasoning tokens count against this cap
           reasoning: { effort: "low" },
           text: { verbosity: "medium" }
         };
 
-        const data = await callOpenAI(payload);
-
-        // Use global helper if present; otherwise unwrap Responses API locally
-        let text =
-          (typeof extractResponseText === "function")
-            ? extractResponseText(data)
-            : (
-                typeof data?.output_text === "string" ? data.output_text :
-                (Array.isArray(data?.output)
-                  ? data.output
-                      .flatMap(b => Array.isArray(b?.content) ? b.content : [])
-                      .map(p => (typeof p?.text === "string" ? p.text : ""))
-                      .join("")
-                      .trim()
-                  : (data?.choices?.[0]?.message?.content || "")
-                ).trim()
-              );
+        // Retry-on-empty wrapper; a hard failure falls through to the
+        // local fallback builder below instead of leaving the field blank.
+        let text = "";
+        try { text = await callOpenAIForText(payload, "Description"); }
+        catch (e) { console.warn("Description generation failed after retry:", e.message); }
 
         text = (text || "").trim();
 
