@@ -477,32 +477,52 @@ async function createShopifyProduct(job) {
     variants: setVariants
   };
 
-  const setRes = await gql(`mutation($input: ProductSetInput!) {
-    productSet(synchronous: true, input: $input) {
-      product { id handle title variantsCount { count } }
-      userErrors { field message }
-    }
-  }`, { input });
-  const errs = (setRes.productSet && setRes.productSet.userErrors) || [];
-  if (errs.length) throw new Error("productSet: " + errs.map(e => e.message).join("; "));
-  const product = setRes.productSet.product;
-
-  // Media — always mediaUserErrors, never userErrors, on product media mutations.
-  const images = (p.images || []).filter(im => im && im.src && /^https:\/\//i.test(im.src)).slice(0, 10);
-  if (images.length) {
-    const media = images.map(im => ({
-      originalSource: im.src,
-      alt: (im.alt || p.title || "").slice(0, 500),
-      mediaContentType: "IMAGE"
-    }));
-    const mRes = await gql(`mutation($productId: ID!, $media: [CreateMediaInput!]!) {
-      productCreateMedia(productId: $productId, media: $media) {
-        media { ... on MediaImage { id } }
-        mediaUserErrors { field message }
+  // IDEMPOTENT RESUME: persist the productId the moment creation succeeds.
+  // Previously it was only saved on FULL success, so a failure in any later
+  // stage (e.g. publish dying on a missing read_publications scope) left an
+  // orphaned product on Shopify — and every "Retry failed" created another
+  // copy. A retried job that already carries a productId now SKIPS creation
+  // and media (both would duplicate) and resumes at publish + collections
+  // (both safe to repeat).
+  let product;
+  if (job.productId) {
+    product = { id: job.productId, handle: job.handle || null, variantsCount: null };
+    console.log(`Resuming job ${job.id}: product ${job.productId} already created — skipping productSet/media.`);
+  } else {
+    const setRes = await gql(`mutation($input: ProductSetInput!) {
+      productSet(synchronous: true, input: $input) {
+        product { id handle title variantsCount { count } }
+        userErrors { field message }
       }
-    }`, { productId: product.id, media });
-    const mErrs = (mRes.productCreateMedia && mRes.productCreateMedia.mediaUserErrors) || [];
-    if (mErrs.length) job.mediaWarnings = mErrs.map(e => e.message);
+    }`, { input });
+    const errs = (setRes.productSet && setRes.productSet.userErrors) || [];
+    if (errs.length) throw new Error("productSet: " + errs.map(e => e.message).join("; "));
+    product = setRes.productSet.product;
+    job.productId = product.id;
+    job.handle = product.handle;
+    try {
+      await db.collection(QCOL).doc(job.id).set({ productId: product.id, handle: product.handle }, { merge: true });
+    } catch (e) { console.warn("Couldn't persist productId for resume:", e.message); }
+
+    // Media — always mediaUserErrors, never userErrors, on product media mutations.
+    // Fresh-create only: productCreateMedia APPENDS, so re-running it on a
+    // resumed job would duplicate the product's images.
+    const images = (p.images || []).filter(im => im && im.src && /^https:\/\//i.test(im.src)).slice(0, 10);
+    if (images.length) {
+      const media = images.map(im => ({
+        originalSource: im.src,
+        alt: (im.alt || p.title || "").slice(0, 500),
+        mediaContentType: "IMAGE"
+      }));
+      const mRes = await gql(`mutation($productId: ID!, $media: [CreateMediaInput!]!) {
+        productCreateMedia(productId: $productId, media: $media) {
+          media { ... on MediaImage { id } }
+          mediaUserErrors { field message }
+        }
+      }`, { productId: product.id, media });
+      const mErrs = (mRes.productCreateMedia && mRes.productCreateMedia.mediaUserErrors) || [];
+      if (mErrs.length) job.mediaWarnings = mErrs.map(e => e.message);
+    }
   }
 
   // Publish to Online Store — instantly live.
