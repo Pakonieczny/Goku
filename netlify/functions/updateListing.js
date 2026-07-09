@@ -92,6 +92,53 @@ const corsHeaders = {
       payload = {};
     }
 
+    // ── Etsy v3 constraint: updating `tags` (or `materials`) REQUIRES
+    // `title` and `description` in the SAME request — even if the listing
+    // already has both. A payload that carries tags but an empty/missing
+    // title or description is guaranteed to 400 with:
+    //   "'title' and 'description' are both required to update 'tags'"
+    // Rescue: GET the live listing and backfill its current title/
+    // description into the PATCH. Costs one extra GET only on requests
+    // that would otherwise fail. If the GET itself fails we proceed
+    // unchanged and let Etsy's own error surface (no worse than before).
+    const isBlank = (v) => v == null || String(v).trim() === "";
+    const touchesTagLike = ("tags" in payload) || ("materials" in payload);
+    if (touchesTagLike && (isBlank(payload.title) || isBlank(payload.description))) {
+      try {
+        const getResp = await fetch(
+          `https://api.etsy.com/v3/application/listings/${encodeURIComponent(listingId)}`,
+          {
+            headers: {
+              "Accept"       : "application/json",
+              "Authorization": `Bearer ${token}`,   // drafts are owner-visible only
+              "x-api-key"    : xApiKey
+            }
+          }
+        );
+        const current = await getResp.json().catch(() => ({}));
+        if (getResp.ok) {
+          if (isBlank(payload.title) && !isBlank(current.title)) {
+            payload.title = current.title;
+            console.warn(`updateListing: backfilled title from live listing ${listingId} (caller sent none).`);
+          }
+          if (isBlank(payload.description) && !isBlank(current.description)) {
+            payload.description = current.description;
+            console.warn(`updateListing: backfilled description from live listing ${listingId} (caller sent none).`);
+          }
+        } else {
+          console.warn(`updateListing: backfill GET failed ${getResp.status}; forwarding payload as-is.`);
+        }
+      } catch (e) {
+        console.warn("updateListing: backfill GET errored; forwarding payload as-is:", e.message);
+      }
+    }
+
+    // Never forward an EMPTY title/description — Etsy treats an empty
+    // string as "not provided" for the tags constraint, and an empty
+    // value could only ever blank a required field.
+    if (isBlank(payload.title)) delete payload.title;
+    if (isBlank(payload.description)) delete payload.description;
+
     // Build x-www-form-urlencoded body.
     // IMPORTANT: Etsy v3 expects arrays (e.g., tags) as a SINGLE comma-separated string.
     const form = new URLSearchParams();
@@ -135,10 +182,16 @@ const corsHeaders = {
     }
 
     if (!response.ok) {
+      const details = JSON.stringify(data);
+      const hint = /required to update 'tags'|required to update 'materials'/i.test(details)
+        ? "The listing on Etsy is missing a usable title or description, so the automatic backfill could not satisfy Etsy's tags constraint. Set a title and description on the listing (or include them in this request) and retry."
+        : undefined;
       return {
         statusCode: response.status,
         headers: corsHeaders,
-        body: JSON.stringify({ error: "Error updating listing", details: data })
+        body: JSON.stringify(hint
+          ? { error: "Error updating listing", details: data, hint }
+          : { error: "Error updating listing", details: data })
       };
     }
 
