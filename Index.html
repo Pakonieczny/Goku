@@ -3733,8 +3733,20 @@ https://www.etsy.com/your/shops/me/listing-editor/edit/1822973998
           );
           if (purgeResp.ok) {
             const purgeJson = await purgeResp.json().catch(() => ({}));
-            const removed = (purgeJson && typeof purgeJson.removed === "number") ? purgeJson.removed : "?";
-            console.log(`Purge: removed ${removed} existing image(s) from listing ${listingId}.`);
+            const totalSeen = Number(purgeJson && purgeJson.totalSeen) || 0;
+            const removed = Number(purgeJson && purgeJson.removed) || 0;
+            if (totalSeen > 0 && removed < totalSeen) {
+              // The listing has leftover images that COULD NOT be deleted.
+              // Uploading on top of them is exactly what produced stacked,
+              // duplicated, out-of-order galleries — so this is a hard stop,
+              // not a warning. Name the cause when it's the missing scope.
+              const firstFail = ((purgeJson && purgeJson.failures) || [])[0] || {};
+              const scopeHint = String(firstFail.status) === "403"
+                ? ' Etsy rejected the deletions (403): the connected token lacks the listings_d scope — click "Connect to Etsy" to re-authorize (the scope is now requested), then retry this set.'
+                : "";
+              throw new Error(`Listing ${listingId} still has ${totalSeen - removed} undeletable image(s) from a previous run — refusing to upload on top of them.${scopeHint}`);
+            }
+            console.log(`Purge: removed ${removed}/${totalSeen} existing image(s) from listing ${listingId}.`);
           } else if (purgeResp.status === 401) {
             // Token expired right at the start — treat the same as any
             // other 401 below: pause the job and trigger reconnect.
@@ -5966,7 +5978,7 @@ https://www.etsy.com/your/shops/me/listing-editor/edit/1822973998
     document.getElementById("connectEtsyBtn").addEventListener("click", async () => {
       persistDataBeforeRedirect();
       let state = "randomState123";
-      let scope = "listings_w listings_r";
+      let scope = "listings_w listings_r listings_d"; // listings_d: REQUIRED — without it every image DELETE is 403-rejected and purge/cleanup silently does nothing
       let codeVerifier = generateRandomString(64);
       localStorage.setItem("etsy_code_verifier", codeVerifier);
       let codeChallenge = await generateCodeChallenge(codeVerifier);
@@ -6067,7 +6079,7 @@ https://www.etsy.com/your/shops/me/listing-editor/edit/1822973998
     async function beginEtsyReconnect() {
       try { typeof persistDataBeforeRedirect === "function" && persistDataBeforeRedirect(); } catch {}
       const state = "randomState123";
-      const scope = "listings_w listings_r";
+      const scope = "listings_w listings_r listings_d"; // listings_d: REQUIRED — see note at the other connect flow
       const codeVerifier = generateRandomString(64);
       localStorage.setItem("etsy_code_verifier", codeVerifier);
       const codeChallenge = await generateCodeChallenge(codeVerifier);
