@@ -2156,6 +2156,13 @@ ANTI-REPETITION (TITLE)
                 }
             });
             updateStaticPreviewGrid();
+            window.__DIAG.reset();
+            window.__DIAG.log("populate", {
+              set: setName,
+              slots: hydrated.filter(f => f.idx >= 0 && f.idx < 8)
+                             .sort((a, b) => a.idx - b.idx)
+                             .map(f => ({ slot: f.idx + 1, name: f.name }))
+            });
             await wait(1000);
 
             // 2. Generate Description/Context
@@ -2696,6 +2703,28 @@ ANTI-REPETITION (TITLE)
     window.CLIENT_ID = "k75zdspz4r99txpqdji7i2em";
     window.REDIRECT_URI = "https://delicate-tanuki-616ac0.netlify.app/";
     window.modelName = "gpt-5.5";
+
+    // ── DIAGNOSTIC TRACE ────────────────────────────────────────────────
+    // Logs ground truth at every stage of an upload so image-order issues
+    // can be diagnosed from console output instead of inference.
+    // After a run: copy everything between [DIAG-REPORT-START] and
+    // [DIAG-REPORT-END] in the browser console (or all [DIAG] lines).
+    window.__DIAG = window.__DIAG || {
+      run: [],
+      log(stage, data) {
+        const entry = { t: new Date().toISOString().slice(11, 23), stage, data };
+        this.run.push(entry);
+        try { console.log("[DIAG]", stage, JSON.stringify(data)); } catch (_) {}
+      },
+      report() {
+        try {
+          console.log("[DIAG-REPORT-START]");
+          console.log(JSON.stringify(this.run));
+          console.log("[DIAG-REPORT-END]");
+        } catch (_) {}
+      },
+      reset() { this.run = []; }
+    };
     window.accessToken;
     window.photoNames = [];
     window.previewImages = [];
@@ -3644,6 +3673,11 @@ https://www.etsy.com/your/shops/me/listing-editor/edit/1822973998
         reservedMeta,
         storage: { photos: "idb", reserved: "idb" } // NEW: where the bytes live
       };
+      window.__DIAG.log("queue-snapshot", {
+        jobId, listingId,
+        mains: photoNames.map((n, i) => ({ i: i + 1, name: n, alt: (photoMeta[i] || "").slice(0, 40) })),
+        reserved: reservedNames.map((n, i) => ({ i: 9 + i, name: n, alt: (reservedMeta[i] || "").slice(0, 40) }))
+      });
       localStorage.setItem(`etsyJob:${jobId}`, JSON.stringify(job));
       const queue = JSON.parse(localStorage.getItem("etsyUploadJobs") || "[]");
       queue.push(jobId);
@@ -3690,6 +3724,7 @@ https://www.etsy.com/your/shops/me/listing-editor/edit/1822973998
         || job.accessToken;
       if (token && token !== job.accessToken) save({ accessToken: token });
       const listingId = job.listingId;
+      window.__DIAG.log("job-start", { jobId, listingId, photoCount: job.photoCount, reservedCount: job.reservedCount });
       save({ status: "RUNNING", lastActivityAt: Date.now() });
       // Show the progress bar from the RUNNER itself (idempotent) so it is
       // visible no matter who started the job — the button handler, the
@@ -3746,6 +3781,7 @@ https://www.etsy.com/your/shops/me/listing-editor/edit/1822973998
                 : "";
               throw new Error(`Listing ${listingId} still has ${totalSeen - removed} undeletable image(s) from a previous run — refusing to upload on top of them.${scopeHint}`);
             }
+            window.__DIAG.log("purge", { listingId, totalSeen, removed, failures: ((purgeJson && purgeJson.failures) || []).slice(0, 3) });
             console.log(`Purge: removed ${removed}/${totalSeen} existing image(s) from listing ${listingId}.`);
           } else if (purgeResp.status === 401) {
             // Token expired right at the start — treat the same as any
@@ -3782,15 +3818,28 @@ https://www.etsy.com/your/shops/me/listing-editor/edit/1822973998
         let mainUploaded = 0, mainAttempted = 0;
         const uploadImage = async (fd, label) => {
           save({ lastActivityAt: Date.now() });
+          window.__DIAG.log("upload-request", { label, listingId, rank: fd.get ? String(fd.get("rank")) : "?", name: fd.get ? String(fd.get("fileName")) : "?" });
           let r;
           try {
             r = await etsyFetchWithTimeout("/.netlify/functions/imageUpload", { method: "POST", body: fd }, 120000, label);
           } catch (e) {
+            window.__DIAG.log("upload-response", { label, error: e.message });
             console.warn(`${label} failed:`, e.message);
             return { ok: false, authExpired: false, detail: e.message };
           }
-          if (r.ok) return { ok: true };
+          if (r.ok) {
+            // Etsy echoes the created image back — capture its id and the
+            // rank ETSY assigned (vs what we requested).
+            const body = await r.json().catch(() => null);
+            window.__DIAG.log("upload-response", {
+              label, status: r.status,
+              etsy_image_id: body && body.listing_image_id,
+              etsy_rank: body && body.rank
+            });
+            return { ok: true };
+          }
           const t = await r.text().catch(() => "");
+          window.__DIAG.log("upload-response", { label, status: r.status, body: t.slice(0, 150) });
           if (r.status === 401 && /invalid_token|expired/i.test(t)) return { ok: false, authExpired: true, detail: t };
           console.warn(`${label} HTTP ${r.status}:`, t.slice(0, 200));
           return { ok: false, authExpired: false, detail: `HTTP ${r.status}` };
@@ -3864,6 +3913,22 @@ https://www.etsy.com/your/shops/me/listing-editor/edit/1822973998
           }
         }
 
+        // Read-only diagnostic: what does the LISTING actually hold now?
+        try {
+          const lr = await etsyFetchWithTimeout(
+            `/.netlify/functions/etsyProxy?listingId=${encodeURIComponent(listingId)}&includes=Images`,
+            { headers: { "access-token": token } }, 30000, "Final-state read");
+          if (lr.ok) {
+            const lj = await lr.json().catch(() => null);
+            const arr = ((lj && (lj.images || lj.Images)) || [])
+              .slice().sort((a, b) => (a.rank || 0) - (b.rank || 0))
+              .map(im => ({ id: im.listing_image_id, rank: im.rank, alt: String(im.alt_text || "").slice(0, 40) }));
+            window.__DIAG.log("etsy-final-state", { listingId, count: arr.length, images: arr });
+          } else {
+            window.__DIAG.log("etsy-final-state", { listingId, error: "HTTP " + lr.status });
+          }
+        } catch (e) { window.__DIAG.log("etsy-final-state", { listingId, error: e && e.message }); }
+
         // --- Stage 2: Info (title/desc/tags + SKU)
         const payload = {
           listing_id: listingId,
@@ -3901,6 +3966,8 @@ https://www.etsy.com/your/shops/me/listing-editor/edit/1822973998
 
         if (typeof setCreateProgress === "function") setCreateProgress(100);
         save({ status: "DONE", progress: 100, completedAt: nowIso() });
+        window.__DIAG.log("job-done", { jobId, listingId });
+        window.__DIAG.report();
         // --- NEW: Increment tracker ---
         if (typeof incrementUploadCount === "function") incrementUploadCount();
         // Clean up persisted image bytes
@@ -3919,6 +3986,8 @@ https://www.etsy.com/your/shops/me/listing-editor/edit/1822973998
       } catch (err) {
         console.error("Etsy job failed:", err);
         save({ status: "FAILED", error: String(err && err.message || err) });
+        window.__DIAG.log("job-failed", { jobId, listingId, error: String(err && err.message || err) });
+        window.__DIAG.report();
         window.M?.toast?.({ html: "Create Listing error (queued): " + (err?.message || err) });
       }
     }
@@ -6874,6 +6943,14 @@ async function callOpenAI(payload, opts = {}) {
                   alt: (im.alt_text || "").slice(0, 250)
                 }))
                 .filter(im => im.src && /^https:\/\//i.test(im.src));
+              window.__DIAG.log("shopify-source", {
+                listingId: consumed.listingId,
+                images: imgs.slice().sort((a, b) => (a.rank || 0) - (b.rank || 0))
+                  .map(im => ({ id: im.listing_image_id, rank: im.rank, alt: String(im.alt_text || "").slice(0, 40) }))
+              });
+              window.__DIAG.log("shopify-submit", {
+                order: mapped.map((m, i) => ({ pos: i, alt: m.alt.slice(0, 40), srcTail: String(m.src).slice(-28) }))
+              });
               if (mapped.length) return mapped;
               console.warn("collectShopifyImages: Etsy listing returned no usable images; falling back to legacy sources.");
             } else {
