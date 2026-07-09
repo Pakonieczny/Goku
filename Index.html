@@ -6676,6 +6676,46 @@ async function callOpenAI(payload, opts = {}) {
         }
       }
       async function collectShopifyImages() {
+        // MEDIA-SOURCE FIX: the old sources were Firebase URLs inside
+        // Completed_Listing_Sets — which archiveSetInBackground MOVES right
+        // after the pass. Shopify's media processing is asynchronous, so by
+        // the time its workers fetched the URLs the files were gone →
+        // "Media processing failed" on every image. And any job parked by
+        // the daily variant budget would drain hours later against 100%
+        // dead URLs. During an automation pass the Etsy listing is already
+        // verified LIVE, so use its permanent i.etsystatic.com CDN images
+        // instead — durable forever, correct order, alt text included.
+        try {
+          const consumed = window.__lastConsumedListing || {};
+          if (window.isProcessingSet && consumed.listingId && window.accessToken) {
+            const r = await fetch(
+              `/.netlify/functions/etsyProxy?listingId=${encodeURIComponent(consumed.listingId)}&includes=Images`,
+              { headers: { "access-token": String(window.accessToken) } }
+            );
+            if (r.ok) {
+              const j = await r.json().catch(() => null);
+              const imgs = (j && (j.images || j.Images)) || [];
+              const mapped = imgs
+                .slice()
+                .sort((a, b) => (a.rank || 0) - (b.rank || 0))
+                .map(im => ({
+                  src: im.url_fullxfull || im.url_570xN || im.url,
+                  alt: (im.alt_text || "").slice(0, 250)
+                }))
+                .filter(im => im.src && /^https:\/\//i.test(im.src));
+              if (mapped.length) return mapped;
+              console.warn("collectShopifyImages: Etsy listing returned no usable images; falling back to legacy sources.");
+            } else {
+              console.warn("collectShopifyImages: Etsy image fetch failed HTTP " + r.status + "; falling back to legacy sources.");
+            }
+          }
+        } catch (e) {
+          console.warn("collectShopifyImages: Etsy image path errored; falling back:", e && e.message);
+        }
+
+        // Legacy fallback (manual "TO SHOPIFY" pushes outside an automation
+        // pass): original Firebase URLs / staged uploads. Note these can go
+        // stale if the set archives before Shopify processes the media.
         const out = [];
         const base = "shopify-upload-temp/" + new Date().toISOString().slice(0, 10);
         const imgs = window.previewImages || [];
