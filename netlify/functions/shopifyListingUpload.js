@@ -329,6 +329,27 @@ async function onlineStorePublicationId() {
   return hit.id;
 }
 
+/* ---------------- COLLECTION ALLOWLIST (canonical, user-defined) ----------------
+ * ONLY these collections may ever be targeted, AI-picked, manually added, or
+ * displayed. The Shopify store contains other collections (legacy, internal,
+ * menu parents like "Profession & Passion") — the pipeline must ignore them
+ * completely. Edit this list when the storefront's collection set changes. */
+const ALLOWED_COLLECTIONS = [
+  // Animals & Nature
+  "Animal Lovers", "Bird Lovers", "Floral & Flower Lovers", "Insects & Butterflies", "Beach & Ocean",
+  // Symbols & Style
+  "Celestial", "Heart Jewelry", "Cross & Religious", "Western & Cowboy", "Food & Fruits", "Mythical Dragon",
+  // Profession
+  "Sports & Athletics", "Gifts for Teachers", "Gifts for Graduates", "Music & Musicians", "Dancers",
+  "Nurses & Doctors", "Firefighters", "Police Officers", "Pilots & Aviation", "Military & Veterans",
+  // Jewelry
+  "Necklaces", "Charms Only", "Earrings", "Bracelets", "Rings",
+  // Chains & Charms
+  "Beady Chain Necklaces", "Bar & Engraved", "Disc & Coin Charms"
+];
+const ALLOWED_SET = new Set(ALLOWED_COLLECTIONS.map(t => t.toLowerCase().trim()));
+const isAllowedCollection = (title) => ALLOWED_SET.has(String(title || "").toLowerCase().trim());
+
 // All collections (id, title, smart?) cached 6h — used for manual-collection placement.
 async function collectionsCatalog() {
   const ref = db.collection(META).doc("collections");
@@ -411,9 +432,26 @@ function planSmartCollections(all, ctx) {
     return "false"; // price/weight/inventory etc. — never force, never assume
   };
 
+  // SIBLING DISCRIMINATION: categories that share a productType (both
+  // necklace categories are "Necklace"; both earring categories are
+  // "Earrings") are only distinguishable by category. A collection whose
+  // title carries a sibling qualifier ("Beady …", "Stud …", "Hoop …") must
+  // be HARD-VETOED for any product from a different sibling category —
+  // fuzzy word overlap ("necklace" ⊂ "Beady Chain Necklaces") and even an
+  // AI pick must never put a Regular necklace into a Beady collection.
+  const SIBLING_QUALIFIERS = [
+    { word: "beady", category: "Beady_Necklace" },
+    { word: "stud",  category: "Stud_Earrings"  },
+    { word: "hoop",  category: "Hoop_Earrings"  }
+  ];
+  const productCategory = String(ctx.category || "");
+  const vetoed = (collectionTitleLc) => SIBLING_QUALIFIERS.some(q =>
+    new RegExp("\\b" + q.word + "\\b", "i").test(collectionTitleLc) && productCategory !== q.category);
+
   for (const c of all) {
     if (!c.smart || !Array.isArray(c.rules) || !c.rules.length) continue;
     const ct = c.title.toLowerCase();
+    if (vetoed(ct)) continue;
 
     // Is this collection a TARGET for the product?
     const themed = aiTitles.has(c.title) ||
@@ -540,10 +578,15 @@ async function createShopifyProduct(job) {
   // with Tag/Title rules then match on their own) and AI-picked collections
   // feed the manual placement below.
   let allCollections = [];
-  try { allCollections = await collectionsCatalog(); } catch (e) {}
+  try {
+    // ALLOWLIST GATE: everything downstream — the AI's pickable titles, the
+    // smart-rule planner, the manual-collection matcher — sees ONLY the
+    // canonical collections. Anything else in the store is invisible here.
+    allCollections = (await collectionsCatalog()).filter(c => isAllowedCollection(c.title));
+  } catch (e) {}
   const expansion = await expandThemes(p, allCollections.map(c => c.title));
   const expandedMeanings = (expansion && expansion.meanings) || [];
-  const aiPickedTitles = new Set((expansion && expansion.collections) || []);
+  const aiPickedTitles = new Set(((expansion && expansion.collections) || []).filter(isAllowedCollection));
   job.expandedMeanings = expandedMeanings;
   job.aiPickedCollections = Array.from(aiPickedTitles);
 
@@ -574,20 +617,33 @@ async function createShopifyProduct(job) {
   // the 60-tag cap can never trim them away.
   let smartPlan = { extraTags: [], expectedSmart: [] };
   try {
+    // The CATEGORY is user-driven (chosen when files were uploaded to
+    // Firebase via the folder prefix) — the least ambiguous signal we
+    // have. Feed it into targeting directly so structural collections
+    // ("Beady Chain Necklaces") are guaranteed by the classification
+    // alone, independent of what the AI title/keywords happen to say.
+    const catPhrase = String(p.category || "").replace(/_/g, " ").toLowerCase().trim();
+    const catKeywords = catPhrase ? [catPhrase, ...catPhrase.split(/\s+/).filter(w => w.length > 3)] : [];
     smartPlan = planSmartCollections(allCollections, {
       title: p.title, category: p.category,
       productType: p.productType || matrix.productType,
       typeTag: matrix.typeTag, vendor: VENDOR,
       tags: [...(p.tags || []), ...expandedMeanings, matrix.typeTag],
-      keywords: [...(p.themeKeywords || []), ...expandedMeanings],
+      keywords: [...(p.themeKeywords || []), ...expandedMeanings, ...catKeywords],
       aiPickedTitles: Array.from(aiPickedTitles)
     });
     if (smartPlan.extraTags.length) console.log("Smart-match tags added:", smartPlan.extraTags.join(", "));
     job.expectedSmartCollections = smartPlan.expectedSmart;
   } catch (e) { console.warn("planSmartCollections failed (continuing):", e.message); }
 
+  // The category itself becomes a tag ("beady necklace" / "regular
+  // necklace") — deterministic, user-driven, and lets store rules key on
+  // the exact category phrase without depending on AI output.
+  const categoryTag = String(p.category || "").replace(/_/g, " ").toLowerCase().trim();
+
   const tags = Array.from(new Set([
     ...smartPlan.extraTags,       // rule-satisfying tags — never trimmed
+    categoryTag,
     ...(p.tags || []),
     ...expandedMeanings,          // secondary meanings -> smart Tag rules match
     matrix.typeTag,
@@ -650,6 +706,26 @@ async function createShopifyProduct(job) {
       }`, { productId: product.id, media });
       const mErrs = (mRes.productCreateMedia && mRes.productCreateMedia.mediaUserErrors) || [];
       if (mErrs.length) job.mediaWarnings = mErrs.map(e => e.message);
+
+      // PIN GALLERY ORDER. productCreateMedia processes images
+      // asynchronously — final positions follow processing completion, not
+      // the input array, so a slow image lands later regardless of where it
+      // was submitted. The created-media list in the response mirrors input
+      // order, so declare that order explicitly — the Shopify equivalent of
+      // Etsy's per-image rank, part of the upload itself.
+      const mediaIds = ((mRes.productCreateMedia && mRes.productCreateMedia.media) || [])
+        .map(m => m && m.id).filter(Boolean);
+      if (mediaIds.length > 1) {
+        const moves = mediaIds.map((id, idx) => ({ id, newPosition: String(idx) }));
+        const oRes = await gql(`mutation($id: ID!, $moves: [MoveInput!]!) {
+          productReorderMedia(id: $id, moves: $moves) {
+            job { id }
+            mediaUserErrors { field message }
+          }
+        }`, { id: product.id, moves });
+        const oErrs = (oRes.productReorderMedia && oRes.productReorderMedia.mediaUserErrors) || [];
+        if (oErrs.length) job.mediaWarnings = [...(job.mediaWarnings || []), ...oErrs.map(e => e.message)];
+      }
     }
   }
 
@@ -664,7 +740,9 @@ async function createShopifyProduct(job) {
   // Manual collections (smart ones self-populate from productType/tags/title).
   let addedCollections = [];
   try {
-    const all = allCollections.length ? allCollections : await collectionsCatalog();
+    const all = allCollections.length
+      ? allCollections
+      : (await collectionsCatalog()).filter(c => isAllowedCollection(c.title));
     // Union: AI-picked exact titles + keyword matcher (original themes PLUS
     // expanded meanings), manual collections only — smart ones self-populate.
     const kwHits = matchManualCollections(all, [...(p.themeKeywords || []), ...expandedMeanings], p.title);
@@ -684,7 +762,12 @@ async function createShopifyProduct(job) {
   // Ground-truth verification: what does Shopify ACTUALLY show? The panel
   // displays this instead of what we merely attempted.
   let collectionsActual = [];
-  try { collectionsActual = await verifyProductCollections(product.id); } catch (_) {}
+  try {
+    // Ground truth, filtered to the allowlist: a legacy smart collection's
+    // own rules may still capture the product inside Shopify, but per store
+    // policy those are ignored — never displayed, never counted.
+    collectionsActual = (await verifyProductCollections(product.id)).filter(isAllowedCollection);
+  } catch (_) {}
 
   return {
     productId: product.id, handle: product.handle,
