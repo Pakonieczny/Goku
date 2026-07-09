@@ -49,15 +49,25 @@ exports.handler = async function (event, context) {
     console.log("Parsed files:", files);
 
     // Basic presence checks for the uploaded file
+    // RE-ASSOCIATE MODE: Etsy keeps deleted image records; POSTing
+    // listing_image_id (no file) re-attaches an existing record to the
+    // listing, preserving its CDN URL and alt text. Used for recovery.
+    const reassociateId = (fields && (fields.listing_image_id || "")).toString().trim();
     if (!files || !files.file) {
-      return { statusCode: 400, body: JSON.stringify({ error: "No file provided in the upload" }) };
+      if (!reassociateId) {
+        return { statusCode: 400, body: JSON.stringify({ error: "No file provided in the upload" }) };
+      }
     }
-    const file = files.file;
-    console.log("File details:", {
-      originalFilename: file.originalFilename,
-      mimetype: file.mimetype,
-      size: file.size,
-    });
+    const file = files && files.file;
+    if (file) {
+      console.log("File details:", {
+        originalFilename: file.originalFilename,
+        mimetype: file.mimetype,
+        size: file.size,
+      });
+    } else {
+      console.log("Re-associate mode: listing_image_id", reassociateId);
+    }
 
     // Env sanity
     const clientId = process.env.CLIENT_ID;
@@ -107,13 +117,15 @@ exports.handler = async function (event, context) {
     // Prepare FormData with only Etsy-supported fields
     const formData = new FormData();
 
-    // Binary image body
-    if (file.filepath) {
+    // Binary image body OR re-association of an existing record
+    if (reassociateId) {
+      formData.append("listing_image_id", reassociateId);
+    } else if (file && file.filepath) {
       formData.append("image", fs.createReadStream(file.filepath), {
         filename: file.originalFilename,
         contentType: file.mimetype,
       });
-    } else if (file.data) {
+    } else if (file && file.data) {
       formData.append("image", file.data, {
         filename: file.originalFilename,
         contentType: file.mimetype,
