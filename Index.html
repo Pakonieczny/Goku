@@ -688,6 +688,27 @@
     html.responsive #container13 .textbox-container { width: 100%; }
     html.responsive #searchKeyPhrases { width: 100%; }
     html.responsive #generateBtn { align-self: flex-start; }
+    /* REGRESSION FIX: the progress bars and checkmarks keep their legacy
+       position:absolute from the old coordinate-based layout engine. In
+       responsive mode nothing positions them, so they defaulted to the
+       top-left of the toolbar and rendered ON TOP of the buttons (the
+       Etsy progress bar overlapping CREATE LISTING). Make them normal
+       flex children in responsive mode; the inner .pct overlay still
+       works because the wrapper becomes position:relative. */
+    html.responsive #createListingProgress,
+    html.responsive #duplicateListingProgress,
+    html.responsive #analyzeMetadataProgress {
+      position: relative;
+      width: 160px;
+      height: 27px;
+      flex: 0 0 auto;
+      margin: 0;
+    }
+    html.responsive .progress-check {
+      position: relative;
+      flex: 0 0 auto;
+      margin: 0 0 0 4px;
+    }
     html.responsive .title-container, html.responsive .description-container,
     html.responsive #etsyListingTitleContainer, html.responsive #etsyListingDescriptionContainer,
     html.responsive .title-container .flex-container, html.responsive .description-container .flex-container,
