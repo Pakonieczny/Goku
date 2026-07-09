@@ -2359,7 +2359,7 @@ ANTI-REPETITION (TITLE)
             // over budget drains automatically on following days. A Shopify
             // failure never blocks the Etsy pipeline.
             if (window.shopifyUploadEnabled !== false) {
-                updateFirebaseStatus("Uploading to Shopify...", "working");
+                updateFirebaseStatus("Capturing for Shopify (upload continues in background)...", "working");
                 try {
                     await queueShopifyUpload(route ? route.category : "Regular_Necklace");
                 } catch (shopErr) {
@@ -7093,8 +7093,17 @@ RULES:
 
       // ---- main entry: build payload + enqueue ----
       let busy = false;
+      // PIPELINED: the CAPTURE phase (AI fields + image collection) reads the
+      // page for the CURRENT set and must finish before the auto pilot moves
+      // on. The SEND phase (enqueue + server-side create: product, variants,
+      // media, collections, vision set-matching) is pure network — it runs
+      // detached on a serialized chain, so the next set's Etsy work overlaps
+      // the previous set's Shopify server work. Guardrails: capture is
+      // awaited (no cross-set DOM reads), sends are chained one-at-a-time
+      // (no interleaved drains), and set archiving/retry semantics are
+      // unchanged (a Shopify failure never re-queued the set before either).
       async function queueShopifyUpload(category) {
-        if (busy) { window.M?.toast?.({ html: "Shopify upload already in progress…" }); return; }
+        if (busy) { window.M?.toast?.({ html: "Shopify capture already in progress…" }); return; }
         busy = true;
         try {
           category = category || inferCategory();
@@ -7103,7 +7112,6 @@ RULES:
           setShopifyStage(40, `Staging images for “${fields.title}”…`);
           const images = await collectShopifyImages();
           if (!images.length) throw new Error("No usable https image URLs (need at least one photo).");
-          setShopifyStage(70, `Creating “${fields.title}” — pricing variants & collections…`);
           const sku = (typeof buildSkuFromTitle === "function" ? buildSkuFromTitle(fields.title) : "").toUpperCase();
           const payload = {
             category,
@@ -7115,24 +7123,40 @@ RULES:
             images,
             source: "index-app"
           };
-          const r = await fetch(FN, {
-            method: "POST",
-            headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({ op: "enqueue", payload })
-          });
-          const j = await r.json();
-          if (!r.ok || j.ok === false) throw new Error((j.errors && j.errors.join("; ")) || j.error || ("HTTP " + r.status));
-          const uploadedNow = (j.drained && j.drained.uploaded || []).some(u => u.jobId === j.jobId);
-          setShopifyStage(100, uploadedNow
-            ? `LIVE: “${fields.title}” — ${j.variantCount} variants, tier ${j.tier}.`
-            : `Queued: “${fields.title}” (${j.variantCount} variants) — waits for today's variant budget.`);
-          window.M?.toast?.({
-            html: uploadedNow
-              ? `Shopify: LIVE now — ${j.variantCount} variants (tier ${j.tier}).`
-              : `Shopify: queued (${j.variantCount} variants) — uploads when today's variant budget allows.`
-          });
-          if (typeof refreshShopifyStatus === "function") refreshShopifyStatus();
-          return j;
+          // Detached, serialized send — the caller (auto pilot) is free as
+          // soon as capture is done.
+          const send = async () => {
+            try {
+              setShopifyStage(70, `Uploading “${fields.title}” — product, variants, collections, set matching (vision)…`);
+              const r = await fetch(FN, {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({ op: "enqueue", payload })
+              });
+              const j = await r.json();
+              if (!r.ok || j.ok === false) throw new Error((j.errors && j.errors.join("; ")) || j.error || ("HTTP " + r.status));
+              const mine = ((j.drained && j.drained.uploaded) || []).find(u => u.jobId === j.jobId);
+              const setTxt = mine && mine.setLinks && mine.setLinks.partners && mine.setLinks.partners.length
+                ? ` · set: ${mine.setLinks.partners.length} partner${mine.setLinks.partners.length > 1 ? "s" : ""} linked`
+                : "";
+              setShopifyStage(100, mine
+                ? `LIVE: “${fields.title}” — ${j.variantCount} variants, tier ${j.tier}${setTxt}.`
+                : `Queued: “${fields.title}” (${j.variantCount} variants) — waits for today's variant budget.`);
+              window.M?.toast?.({
+                html: mine
+                  ? `Shopify: LIVE — ${j.variantCount} variants${setTxt}.`
+                  : `Shopify: queued (${j.variantCount} variants) — uploads when today's variant budget allows.`
+              });
+              if (typeof refreshShopifyStatus === "function") refreshShopifyStatus();
+              return j;
+            } catch (e) {
+              setShopifyStage(100, `Shopify upload failed: “${fields.title}” — ${(e && e.message) || e}`, true);
+              window.M?.toast?.({ html: "Shopify upload failed: " + ((e && e.message) || e) });
+              console.error("Shopify send failed (Etsy pipeline unaffected):", e);
+            }
+          };
+          window.__spSendChain = (window.__spSendChain || Promise.resolve()).then(send);
+          return { queued: true, title: fields.title };
         } finally { busy = false; }
       }
       window.queueShopifyUpload = queueShopifyUpload;
