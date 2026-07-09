@@ -795,9 +795,16 @@
     #shopifyProgressWrap .spb-track { height: 8px; border-radius: 4px; background: #e0e0e0; overflow: hidden; }
     #shopifyProgressWrap .spb-bar { height: 100%; width: 0%; background: #2e7d32; transition: width .3s; }
     #shopifyProgressWrap.err .spb-bar { background: #c62828; }
-    #shopifyPanel .sp-filters { display: flex; gap: 8px; margin: 4px 0 8px; }
+    #shopifyPanel #spHeader { cursor: pointer; user-select: none; }
+    #shopifyPanel .sp-chev-panel { display: inline-block; color: #7c8b7d; font-size: 12px; margin-right: 5px; transition: transform .15s ease; transform: rotate(90deg); }
+    #shopifyPanel.collapsed .sp-chev-panel { transform: rotate(0deg); }
+    #shopifyPanel.collapsed #spBody { display: none; }
+    #shopifyPanel .sp-filters { display: flex; gap: 8px; margin: 4px 0 8px; flex-wrap: wrap; }
+    #shopifyPanel .sp-filters #spSearch { flex: 1 1 160px; min-width: 140px; font-size: 12px; padding: 3px 8px; border: 1px solid #c8e6c9; border-radius: 4px; color: #2e5030; outline: none; }
+    #shopifyPanel .sp-filters #spSearch:focus { border-color: #2e7d32; }
     #shopifyPanel .sp-filters select { font-size: 11.5px; padding: 3px 6px; border: 1px solid #c8e6c9; border-radius: 4px; background: #fff; color: #2e7d32; cursor: pointer; }
-    #shopifyList { list-style: none; margin: 0; padding: 0; max-height: 320px; overflow-y: auto; }
+    /* Viewport shows ~7 collapsed rows at a time; the rest scroll. */
+    #shopifyList { list-style: none; margin: 0; padding: 0; max-height: 265px; overflow-y: auto; overscroll-behavior: contain; }
     #shopifyList li { padding: 7px 4px; border-top: 1px solid #e0f2e1; line-height: 1.45; }
     #shopifyList li.sp-date { padding: 8px 4px 3px; border-top: none; font-size: 10.5px; font-weight: 700; letter-spacing: .06em; text-transform: uppercase; color: #7c8b7d; position: sticky; top: 0; background: #fbfffb; z-index: 1; }
     #shopifyList li.sp-row { cursor: pointer; }
@@ -3770,18 +3777,21 @@ https://www.etsy.com/your/shops/me/listing-editor/edit/1822973998
             const purgeJson = await purgeResp.json().catch(() => ({}));
             const totalSeen = Number(purgeJson && purgeJson.totalSeen) || 0;
             const removed = Number(purgeJson && purgeJson.removed) || 0;
+            window.__DIAG.log("purge", { listingId, totalSeen, removed, failures: ((purgeJson && purgeJson.failures) || []).slice(0, 3) });
             if (totalSeen > 0 && removed < totalSeen) {
               // The listing has leftover images that COULD NOT be deleted.
               // Uploading on top of them is exactly what produced stacked,
               // duplicated, out-of-order galleries — so this is a hard stop,
-              // not a warning. Name the cause when it's the missing scope.
+              // not a warning. Include Etsy's own failure detail so the
+              // console names the real cause.
               const firstFail = ((purgeJson && purgeJson.failures) || [])[0] || {};
               const scopeHint = String(firstFail.status) === "403"
-                ? ' Etsy rejected the deletions (403): the connected token lacks the listings_d scope — click "Connect to Etsy" to re-authorize (the scope is now requested), then retry this set.'
-                : "";
-              throw new Error(`Listing ${listingId} still has ${totalSeen - removed} undeletable image(s) from a previous run — refusing to upload on top of them.${scopeHint}`);
+                ? ' Etsy rejected the deletions (403): the connected token lacks the listings_d scope — click "Connect to Etsy" to re-authorize, then retry this set.'
+                : (firstFail.status ? ` First failure: HTTP ${firstFail.status} ${String(firstFail.detail || "").slice(0, 140)}` : "");
+              const gateErr = new Error(`Listing ${listingId} still has ${totalSeen - removed} undeletable image(s) — refusing to upload on top of them.${scopeHint}`);
+              gateErr.purgeGate = true; // must NOT be swallowed by the legacy purge catch
+              throw gateErr;
             }
-            window.__DIAG.log("purge", { listingId, totalSeen, removed, failures: ((purgeJson && purgeJson.failures) || []).slice(0, 3) });
             console.log(`Purge: removed ${removed}/${totalSeen} existing image(s) from listing ${listingId}.`);
           } else if (purgeResp.status === 401) {
             // Token expired right at the start — treat the same as any
@@ -3811,7 +3821,12 @@ https://www.etsy.com/your/shops/me/listing-editor/edit/1822973998
             console.warn(`Purge failed (HTTP ${purgeResp.status}):`, t);
           }
         } catch (purgeErr) {
-          // Network error — log and continue with upload.
+          // A GATE error means the listing is verifiably dirty and MUST NOT
+          // be uploaded onto — rethrow so the job fails with the reason.
+          // (This catch previously swallowed the gate, which let one
+          // undeletable leftover produce another corrupted gallery.)
+          if (purgeErr && purgeErr.purgeGate) throw purgeErr;
+          // Anything else (network blip) — log and continue with upload.
           console.warn("Purge request errored, continuing with upload:", purgeErr);
         }
 
@@ -6648,29 +6663,47 @@ async function callOpenAI(payload, opts = {}) {
         const host = document.getElementById("rgRight") || document.body;
         const p = document.createElement("div");
         p.id = "shopifyPanel";
+        // Collapsed by default (persisted): the header row stays as a
+        // one-line summary; the list lives behind the dropdown.
+        const startOpen = localStorage.getItem("spPanelOpen") === "1";
+        p.className = startOpen ? "" : "collapsed";
         p.innerHTML = `
-          <h6>Shopify Uploads
+          <h6 id="spHeader" title="Click to expand / collapse">
+            <span class="sp-chev-panel" aria-hidden="true">▸</span>
+            Shopify Uploads
             <span class="sp-counts" id="spCounts"></span>
             <span class="sp-actions">
               <button id="spDrainBtn" title="Upload queued jobs now (within today's variant budget)">Drain now</button>
               <button id="spRetryBtn" title="Requeue all failed jobs">Retry failed</button>
             </span>
           </h6>
-          <div class="sp-filters">
-            <select id="spFilterStatus" title="Filter by status">
-              <option value="">All statuses</option>
-              <option value="DONE">Done</option>
-              <option value="FAILED">Failed</option>
-              <option value="QUEUED">Queued</option>
-              <option value="UPLOADING">Uploading</option>
-            </select>
-            <select id="spFilterDate" title="Filter by date"><option value="">All dates</option></select>
-          </div>
-          <div id="shopifyProgressWrap"><div class="spb-label" id="spbLabel"></div>
-            <div class="spb-track"><div class="spb-bar" id="spbBar"></div></div></div>
-          <ul id="shopifyList"><li style="border:none;color:#777;">No Shopify uploads yet this session.</li></ul>`;
+          <div id="spBody">
+            <div class="sp-filters">
+              <input type="search" id="spSearch" placeholder="Search title, collection, theme…" title="Filter by text">
+              <select id="spFilterStatus" title="Filter by status">
+                <option value="">All statuses</option>
+                <option value="DONE">Done</option>
+                <option value="FAILED">Failed</option>
+                <option value="QUEUED">Queued</option>
+                <option value="UPLOADING">Uploading</option>
+              </select>
+              <select id="spFilterDate" title="Filter by date"><option value="">All dates</option></select>
+            </div>
+            <div id="shopifyProgressWrap"><div class="spb-label" id="spbLabel"></div>
+              <div class="spb-track"><div class="spb-bar" id="spbBar"></div></div></div>
+            <ul id="shopifyList"><li style="border:none;color:#777;">No Shopify uploads yet this session.</li></ul>
+          </div>`;
         host.appendChild(p);
+        // Header toggles the dropdown; the action buttons must not toggle.
+        p.querySelector("#spHeader").addEventListener("click", (e) => {
+          if (e.target.closest("button")) return;
+          const open = p.classList.toggle("collapsed") === false;
+          localStorage.setItem("spPanelOpen", open ? "1" : "0");
+        });
         // Filter wiring — re-render from the cached job list, no refetch.
+        p.querySelector("#spSearch").addEventListener("input", (e) => {
+          window.__spFilters.q = e.target.value; renderRecent();
+        });
         p.querySelector("#spFilterStatus").addEventListener("change", (e) => {
           window.__spFilters.status = e.target.value; renderRecent();
         });
@@ -6757,7 +6790,7 @@ async function callOpenAI(payload, opts = {}) {
       // Expansion state survives the 60-second refresh.
       window.__spJobs = window.__spJobs || [];
       window.__spOpen = window.__spOpen || new Set();
-      window.__spFilters = window.__spFilters || { status: "", date: "" };
+      window.__spFilters = window.__spFilters || { status: "", date: "", q: "" };
 
       function spDateParts(when) {
         const d = when ? new Date(when) : null;
@@ -6789,9 +6822,19 @@ async function callOpenAI(payload, opts = {}) {
         }
 
         const f = window.__spFilters;
+        const q = String(f.q || "").trim().toLowerCase();
         const filtered = jobs.filter(j => {
           if (f.status && j.status !== f.status) return false;
           if (f.date && spDateParts(j.completedAtMs || j.createdAtMs).key !== f.date) return false;
+          if (q) {
+            // Searchable surface: title + collections + themes + status.
+            const hay = [
+              j.title, j.status,
+              ...(j.collectionsActual || []), ...(j.addedCollections || []),
+              ...(j.aiPickedCollections || []), ...(j.expandedMeanings || [])
+            ].join(" ").toLowerCase();
+            if (!hay.includes(q)) return false;
+          }
           return true;
         });
         if (!filtered.length) {
