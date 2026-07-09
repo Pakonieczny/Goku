@@ -2219,8 +2219,19 @@ ANTI-REPETITION (TITLE)
                 const consumed = window.__lastConsumedListing || {};
                 const outcome = await awaitJobOutcome(consumed.jobId, 120000);
                 if (outcome !== "DONE") {
-                    console.warn(`Original upload for ${setName} ended ${outcome}; restoring ID ${consumed.listingId} and keeping the folder.`);
-                    if (consumed.queueId && consumed.listingId) restoreListingId(consumed.queueId, consumed.listingId);
+                    // CROSS-CONTAMINATION GUARD: if the job's stored status is
+                    // still RUNNING, the daemon may yet write images/info to
+                    // that listing ID in the background. Restoring the ID now
+                    // would let a LATER set claim the same listing while this
+                    // one is still uploading into it. Only restore terminal
+                    // (FAILED / AUTH_NEEDED / missing) jobs; a still-running
+                    // job forfeits the ID — losing one ID is cheaper than two
+                    // sets sharing one listing.
+                    let liveStatus = null;
+                    try { liveStatus = (JSON.parse(localStorage.getItem(`etsyJob:${consumed.jobId}`) || "null") || {}).status; } catch (_) {}
+                    const stillRunning = liveStatus === "RUNNING";
+                    console.warn(`Original upload for ${setName} ended ${outcome}${stillRunning ? " (job still RUNNING — listing ID NOT restored)" : ""}; keeping the folder.`);
+                    if (!stillRunning && consumed.queueId && consumed.listingId) restoreListingId(consumed.queueId, consumed.listingId);
                     window.__setFailureCounts = window.__setFailureCounts || {};
                     const fails = (window.__setFailureCounts[setName] = (window.__setFailureCounts[setName] || 0) + 1);
                     if (fails >= 2) {
@@ -2293,9 +2304,16 @@ ANTI-REPETITION (TITLE)
                     const consumed2 = window.__lastConsumedListing || {};
                     const outcome2 = await awaitJobOutcome(consumed2.jobId, 120000);
                     if (outcome2 !== "DONE" && consumed2.queueId && consumed2.listingId) {
-                        console.warn(`Variant upload ended ${outcome2}; restoring ID ${consumed2.listingId}.`);
-                        restoreListingId(consumed2.queueId, consumed2.listingId);
-                        window.M?.toast?.({ html: `Variant upload ${outcome2} — listing ID returned to queue.` });
+                        // Same cross-contamination guard as the original pass.
+                        let liveStatus2 = null;
+                        try { liveStatus2 = (JSON.parse(localStorage.getItem(`etsyJob:${consumed2.jobId}`) || "null") || {}).status; } catch (_) {}
+                        if (liveStatus2 === "RUNNING") {
+                            console.warn(`Variant upload ended ${outcome2} but the job is still RUNNING — listing ID NOT restored.`);
+                        } else {
+                            console.warn(`Variant upload ended ${outcome2}; restoring ID ${consumed2.listingId}.`);
+                            restoreListingId(consumed2.queueId, consumed2.listingId);
+                            window.M?.toast?.({ html: `Variant upload ${outcome2} — listing ID returned to queue.` });
+                        }
                     }
                 }
             } else {
