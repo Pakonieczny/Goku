@@ -1262,6 +1262,14 @@ ANTI-REPETITION (TITLE)
         // in QUEUE_IDS, and change the queueId below back to queueBracelets.
         { prefix: "Bracelets",        queueId: "queueRegNecklace",    category: "Bracelets"        },
         { prefix: "Charms",           queueId: "queueCharms",         category: "Charms"           },
+        // Singular alias — the Listing Generator has produced both
+        // "Charms_Set_N" and "Charm_Set_N" folder names (the context
+        // parser's own example is "Charm_Set_1"). Without this alias the
+        // singular form fails every prefix match and silently defaults to
+        // the Reg Necklace queue, polluting its count and pairing charm
+        // sets with necklace listing IDs. Listed after "Charms" so the
+        // plural form always wins when both could apply.
+        { prefix: "Charm",            queueId: "queueCharms",         category: "Charms"           },
       ];
       for (const r of ROUTES) {
         if (cleanName.startsWith(r.prefix + "_") || cleanName === r.prefix) {
@@ -1574,22 +1582,39 @@ ANTI-REPETITION (TITLE)
                         setsByQueue[q].push(setRef);
                     }
 
-                    // Build the ordered candidate list strictly by category,
-                    // skipping any category that either has no folders OR no
-                    // Listing IDs left. The first category with BOTH wins; we
-                    // only fall through to the next category when the current
-                    // one is fully drained on either axis.
+                    // Build the ordered candidate list strictly by category
+                    // priority, skipping any category that either has no
+                    // folders OR no Listing IDs left.
+                    //
+                    // REGRESSION FIX: this used to `break` after the FIRST
+                    // category with folders+IDs, so that category's folders
+                    // were the ONLY candidates. If every one of them was
+                    // incomplete (<7 images — half-generated or junk), the
+                    // scan ended "Waiting for ready sets..." forever while
+                    // hundreds of ready sets in later categories were never
+                    // examined (observed live: 4 stuck Reg Necklace folders
+                    // starving 291 ready Beady Necklace sets). We now append
+                    // ALL eligible categories in priority order; the
+                    // readiness loop below still picks the FIRST ready
+                    // folder in this order, so a higher-priority category
+                    // always wins whenever it has a genuinely ready set —
+                    // strict draining is preserved, starvation is not.
                     const orderedSets = [];
                     for (const q of CATEGORY_ORDER) {
                         const bucket = setsByQueue[q] || [];
                         if (bucket.length === 0) continue;            // no folders in this section
                         const qEl = document.getElementById(q);
-                        if (!qEl || !qEl.value.trim()) continue;      // no Listing IDs in this section
+                        if (!qEl || !qEl.value.trim()) {              // no Listing IDs in this section
+                            skippedForMissingId = true;
+                            continue;
+                        }
                         for (const sr of bucket) orderedSets.push(sr);
-                        // Stop after the first non-empty, ID-bearing category
-                        // so we drain it before considering any other section.
-                        break;
                     }
+
+                    // Folders passed over as incomplete this pass — surfaced
+                    // in the status bar so the operator can see exactly what
+                    // is stuck instead of a generic "waiting" message.
+                    const skippedIncomplete = [];
 
                     // Loop through available new sets to find one that is completely ready
                     for (const setRef of orderedSets) {
@@ -1649,7 +1674,26 @@ ANTI-REPETITION (TITLE)
 
                         if (imageCount < 7) {
                             console.warn(`Skipping ${setName}: Only found ${imageCount} images. Retrying in 10 minutes.`);
+                            skippedIncomplete.push(`${setName} (${imageCount})`);
                             window.__incompleteSetsTracker[setName] = now;
+
+                            // A folder with ZERO images can never become
+                            // ready on its own — it's almost always a
+                            // half-archived remnant or junk. Two strikes
+                            // (i.e. still empty on a second look ≥10 min
+                            // later, thanks to the tracker above) parks it
+                            // for the session so it stops consuming scan
+                            // time. Delete the folder in Firebase to clear
+                            // it permanently.
+                            if (imageCount === 0) {
+                                window.__zeroImageStrikes = window.__zeroImageStrikes || {};
+                                const strikes = (window.__zeroImageStrikes[setName] = (window.__zeroImageStrikes[setName] || 0) + 1);
+                                if (strikes >= 2) {
+                                    window.__manuallySkippedSets = window.__manuallySkippedSets || new Set();
+                                    window.__manuallySkippedSets.add(setName);
+                                    console.warn(`Auto: ${setName} was empty on ${strikes} scans ≥10 min apart — parked for this session (likely a half-archived remnant; delete it in Firebase to clear permanently).`);
+                                }
+                            }
                             continue; 
                         }
 
@@ -1665,6 +1709,13 @@ ANTI-REPETITION (TITLE)
                         foundReadySet = true;
                         window.__isScanningFB = false; // release lock to allow processing to run cleanly
                         await runFullAutomationSequence(readySetRef, readySetName);
+                    } else if (skippedIncomplete.length > 0) {
+                        // Name the blockers (first three) so the operator can
+                        // see exactly WHICH folders are holding a category up
+                        // and delete/fix them, instead of a generic message.
+                        const shown = skippedIncomplete.slice(0, 3).join(", ");
+                        const more = skippedIncomplete.length > 3 ? ` +${skippedIncomplete.length - 3} more` : "";
+                        updateFirebaseStatus(`Waiting — incomplete (<7 imgs): ${shown}${more}`, "active");
                     } else if (skippedForMissingId) {
                         // Distinct status so the user knows it's an ID
                         // shortage, not a "no folders yet" situation.
