@@ -3525,13 +3525,50 @@ https://www.etsy.com/your/shops/me/listing-editor/edit/1822973998
       const rawPhotos = Array.from(window.previewImages || []);
       const rawPhotoNames = Array.from(window.photoNames || []);
       const rawPhotoMeta = Array.from(window.photoMeta || []);
+      // ── ROOT-CAUSE FIX for duplicated / disordered Etsy images ────────
+      // The source PNGs are 4–6 MB. Pushed as multipart through a
+      // synchronous Netlify function (≈10 s execution cap, ≈6 MB payload
+      // cap after base64 inflation), the function was killed mid-flight
+      // while its already-sent request still landed on Etsy — the browser
+      // saw a failure for an upload that succeeded, and any recovery
+      // attempt duplicated the image; each duplicate is a rank collision
+      // that shifts every later image, which is the order corruption.
+      // Etsy displays at most 3000 px and re-encodes to JPEG regardless,
+      // so normalize BEFORE queueing: ≤3000 px longest edge, JPEG q0.90 —
+      // ~10× smaller. Every upload now completes in seconds, outcomes are
+      // deterministic, and there is nothing left to retry or reconcile.
+      async function normalizeImageForEtsy(srcUrl) {
+        try {
+          const img = await new Promise((res, rej) => {
+            const im = new Image();
+            im.crossOrigin = "anonymous";
+            im.onload = () => res(im);
+            im.onerror = () => rej(new Error("load failed"));
+            im.src = srcUrl;
+          });
+          const W = img.naturalWidth, H = img.naturalHeight;
+          if (!W || !H) throw new Error("no dimensions");
+          const MAX_EDGE = 3000;
+          const scale = Math.min(1, MAX_EDGE / Math.max(W, H));
+          const canvas = document.createElement("canvas");
+          canvas.width = Math.max(1, Math.round(W * scale));
+          canvas.height = Math.max(1, Math.round(H * scale));
+          canvas.getContext("2d").drawImage(img, 0, 0, canvas.width, canvas.height);
+          return canvas.toDataURL("image/jpeg", 0.90);
+        } catch (e) {
+          console.warn("normalizeImageForEtsy failed — queueing original:", e && e.message);
+          return srcUrl;
+        }
+      }
+
       const seenPhotos = new Set();
       const photos = [];
       const photoNames = [];
       const photoMeta = [];
       for (let i = 0; i < rawPhotos.length; i++) {
-        const du = rawPhotos[i];
+        let du = rawPhotos[i];
         if (!du) continue;
+        du = await normalizeImageForEtsy(du);
         if (seenPhotos.has(du)) {
           console.warn(`Per-job dedup: dropping duplicate photo at slot ${i}.`);
           continue;
@@ -3539,10 +3576,8 @@ https://www.etsy.com/your/shops/me/listing-editor/edit/1822973998
         seenPhotos.add(du);
         photos.push(du);
         photoNames.push(rawPhotoNames[i] || `uploaded_photo_${i}.jpg`);
-        // Alt text doubles as the DEDUP KEY for the post-upload
-        // reconciliation pass, so it must be non-empty and distinct per
-        // slot. Real AI metadata wins; the fallback still reads as
-        // sensible alt text.
+        // Alt text: real AI metadata wins; the fallback still reads as
+        // sensible, distinct alt text per slot.
         photoMeta.push((rawPhotoMeta[i] || "").slice(0, 250) || `${title || "Brites Jewelry"} — photo ${photos.length}`);
       }
 
@@ -3560,8 +3595,9 @@ https://www.etsy.com/your/shops/me/listing-editor/edit/1822973998
       const reservedMeta = [];
       for (let i = 0; i < rawReserved.length; i++) {
         const r = rawReserved[i] || {};
-        const du = r.src;
+        let du = r.src;
         if (!du) continue;
+        du = await normalizeImageForEtsy(du);
         // Also reject if this dataURL is already in the main photos set —
         // that would be the same image appearing in two pipelines, which
         // is always a bug.
@@ -3731,83 +3767,21 @@ https://www.etsy.com/your/shops/me/listing-editor/edit/1822973998
           console.warn("Purge request errored, continuing with upload:", purgeErr);
         }
 
-        // Image-upload helper — VERIFY-BEFORE-RETRY.
-        //
-        // DUPLICATE-IMAGE FIX: the previous version blind-retried any failed
-        // attempt. But a browser-side timeout or a Netlify 502 can occur
-        // AFTER Etsy already accepted the image (the function dies waiting,
-        // the upload still lands) — so the retry uploaded the SAME image a
-        // second time, producing the duplicated photos seen on live
-        // listings. Now every ambiguous outcome (timeout / network / 5xx) is
-        // verified against the listing's LIVE image count first: if the
-        // count grew, the image landed and we record success WITHOUT
-        // retrying; only a verified miss is re-sent. Definitive 4xx
-        // rejections are never retried (identical payload would fail
-        // identically), and if the count can't be read we accept a missing
-        // slot over a possible duplicate — the quality floor below catches
-        // real shortfalls.
         let mainUploaded = 0, mainAttempted = 0;
-        let expectedImageCount = null; // lazily read once; 0 right after purge
-        const getListingImageCount = async () => {
+        const uploadImage = async (fd, label) => {
+          save({ lastActivityAt: Date.now() });
+          let r;
           try {
-            const r = await etsyFetchWithTimeout(
-              `/.netlify/functions/etsyProxy?listingId=${encodeURIComponent(listingId)}&includes=Images`,
-              { headers: { "access-token": token } }, 30000, "Image count check");
-            if (!r.ok) return null;
-            const j = await r.json().catch(() => null);
-            if (!j) return null;
-            if (Array.isArray(j.images)) return j.images.length;
-            if (Array.isArray(j.Images)) return j.Images.length;
-            return null;
-          } catch (_) { return null; }
-        };
-        const uploadImageWithRetry = async (fd, label) => {
-          if (expectedImageCount == null) {
-            const c = await getListingImageCount();
-            expectedImageCount = (c == null ? 0 : c);
+            r = await etsyFetchWithTimeout("/.netlify/functions/imageUpload", { method: "POST", body: fd }, 120000, label);
+          } catch (e) {
+            console.warn(`${label} failed:`, e.message);
+            return { ok: false, authExpired: false, detail: e.message };
           }
-          for (let attempt = 1; attempt <= 2; attempt++) {
-            save({ lastActivityAt: Date.now() });
-            let r = null, transportErr = null;
-            try {
-              r = await etsyFetchWithTimeout("/.netlify/functions/imageUpload", { method: "POST", body: fd }, 120000, label);
-            } catch (e) { transportErr = e; }
-
-            if (r && r.ok) { expectedImageCount++; return { ok: true }; }
-
-            let bodyText = "";
-            if (r) bodyText = await r.text().catch(() => "");
-            if (r && r.status === 401 && /invalid_token|expired/i.test(bodyText)) {
-              return { ok: false, authExpired: true, detail: bodyText };
-            }
-            if (r && r.status >= 400 && r.status < 500) {
-              console.warn(`${label} rejected HTTP ${r.status}:`, bodyText.slice(0, 200));
-              return { ok: false, authExpired: false, detail: `HTTP ${r.status}` };
-            }
-
-            // Ambiguous — did it land anyway? SETTLE FIRST: the request a
-            // dying Netlify function already sent can complete on Etsy's
-            // side SECONDS after we see the failure, so an immediate count
-            // check reads stale and a retry creates a duplicate twin. Wait
-            // out the landing window before deciding. (The reconciliation
-            // pass after Stage 1b removes any twin that still slips through.)
-            const failDetail = transportErr ? transportErr.message : `HTTP ${r && r.status}`;
-            save({ lastActivityAt: Date.now() });
-            await new Promise(res => setTimeout(res, 20000));
-            const live = await getListingImageCount();
-            if (live != null && live > expectedImageCount) {
-              console.warn(`${label}: ${failDetail}, but the image DID land (count ${expectedImageCount} → ${live}) — success, no retry.`);
-              expectedImageCount = live;
-              return { ok: true };
-            }
-            if (live == null) {
-              console.warn(`${label}: ${failDetail} and the count check is unavailable — NOT retrying (a duplicate is worse than a missing slot).`);
-              return { ok: false, authExpired: false, detail: failDetail };
-            }
-            console.warn(`${label} attempt ${attempt} verified as not landed (${failDetail}).`);
-            if (attempt === 2) return { ok: false, authExpired: false, detail: failDetail };
-          }
-          return { ok: false, authExpired: false, detail: "unreachable" };
+          if (r.ok) return { ok: true };
+          const t = await r.text().catch(() => "");
+          if (r.status === 401 && /invalid_token|expired/i.test(t)) return { ok: false, authExpired: true, detail: t };
+          console.warn(`${label} HTTP ${r.status}:`, t.slice(0, 200));
+          return { ok: false, authExpired: false, detail: `HTTP ${r.status}` };
         };
 
         // --- Stage 1: Upload Photos (main 0–7)
@@ -3826,7 +3800,7 @@ https://www.etsy.com/your/shops/me/listing-editor/edit/1822973998
           fd.append("alt_text", job.photoMeta[i] || "");
           fd.append("file", blob, job.photoNames[i] || `uploaded_photo_${i}.jpg`);
           mainAttempted++;
-          const up = await uploadImageWithRetry(fd, `Photo ${i + 1}`);
+          const up = await uploadImage(fd, `Photo ${i + 1}`);
           if (up.authExpired) {
             // AUTH error. Auto-resume / auto-reconnect REMOVED — fail cleanly.
             save({ status: "AUTH_NEEDED", error: "token_expired" });
@@ -3863,7 +3837,7 @@ https://www.etsy.com/your/shops/me/listing-editor/edit/1822973998
           fd.append("rank", 9 + i);
           fd.append("alt_text", job.reservedMeta[i] || "");
           fd.append("file", blob, job.reservedNames[i] || `reserved_photo_${i}.jpg`);
-          const up = await uploadImageWithRetry(fd, `Reserved ${9 + i}`);
+          const up = await uploadImage(fd, `Reserved ${9 + i}`);
           if (up.authExpired) {
             // AUTH error. Auto-resume / auto-reconnect REMOVED — fail cleanly.
             save({ status: "AUTH_NEEDED", error: "token_expired" });
@@ -3877,49 +3851,6 @@ https://www.etsy.com/your/shops/me/listing-editor/edit/1822973998
             console.warn("Reserved upload failed", 9 + i, up.detail);
           }
         }
-
-        // --- Stage 1c: RECONCILE — remove duplicate retry-twins ---------
-        // Ambiguous upload outcomes (timeout/5xx where the image landed
-        // anyway) can leave the SAME image on the listing twice, which also
-        // corrupts display order (Etsy has no reorder endpoint; a rank
-        // collision shifts every later image). Twins are identified by
-        // alt_text — guaranteed non-empty and distinct per slot at queue
-        // time — keeping the EARLIEST listing_image_id (the one whose rank
-        // matches its intended slot) and deleting later copies, which
-        // collapses ranks back to the intended order.
-        const reconcileListingImages = async () => {
-          try {
-            save({ lastActivityAt: Date.now() });
-            const lr = await etsyFetchWithTimeout(
-              `/.netlify/functions/etsyProxy?listingId=${encodeURIComponent(listingId)}&includes=Images`,
-              { headers: { "access-token": token } }, 30000, "Image reconciliation");
-            if (!lr.ok) { console.warn("reconcile: image list failed HTTP " + lr.status + " — skipping."); return; }
-            const lj = await lr.json().catch(() => null);
-            const imgs = (lj && (lj.images || lj.Images)) || [];
-            if (imgs.length <= 1) return;
-            const byAlt = new Map();
-            for (const im of imgs) {
-              const key = String(im.alt_text || "").trim();
-              if (!key) continue; // never delete an image we can't attribute
-              if (!byAlt.has(key)) byAlt.set(key, []);
-              byAlt.get(key).push(im);
-            }
-            const toDelete = [];
-            for (const [, group] of byAlt) {
-              if (group.length < 2) continue;
-              group.sort((a, b) => Number(a.listing_image_id) - Number(b.listing_image_id));
-              for (let k = 1; k < group.length; k++) toDelete.push(group[k].listing_image_id);
-            }
-            if (!toDelete.length) return;
-            console.warn(`reconcile: removing ${toDelete.length} duplicate image(s): ${toDelete.join(",")}`);
-            const del = await etsyFetchWithTimeout(
-              `/.netlify/functions/listingImagesPurge?listingId=${encodeURIComponent(listingId)}&token=${encodeURIComponent(token)}&imageIds=${encodeURIComponent(toDelete.join(","))}`,
-              { method: "POST" }, 60000, "Duplicate image removal");
-            const dj = await del.json().catch(() => ({}));
-            save({ dedupedImages: (dj && dj.removed) || 0 });
-          } catch (e) { console.warn("reconcile: skipped —", e && e.message); }
-        };
-        await reconcileListingImages();
 
         // --- Stage 2: Info (title/desc/tags + SKU)
         const payload = {
@@ -6923,7 +6854,6 @@ async function callOpenAI(payload, opts = {}) {
             if (r.ok) {
               const j = await r.json().catch(() => null);
               const imgs = (j && (j.images || j.Images)) || [];
-              const seenAlts = new Set();
               const mapped = imgs
                 .slice()
                 .sort((a, b) => (a.rank || 0) - (b.rank || 0))
@@ -6931,16 +6861,7 @@ async function callOpenAI(payload, opts = {}) {
                   src: im.url_fullxfull || im.url_570xN || im.url,
                   alt: (im.alt_text || "").slice(0, 250)
                 }))
-                .filter(im => {
-                  if (!im.src || !/^https:\/\//i.test(im.src)) return false;
-                  // Insurance against any duplicate that survived Etsy-side
-                  // reconciliation: same alt = same slot, keep the first
-                  // (lowest-rank) copy only.
-                  const k = im.alt.trim().toLowerCase();
-                  if (k && seenAlts.has(k)) return false;
-                  if (k) seenAlts.add(k);
-                  return true;
-                });
+                .filter(im => im.src && /^https:\/\//i.test(im.src));
               if (mapped.length) return mapped;
               console.warn("collectShopifyImages: Etsy listing returned no usable images; falling back to legacy sources.");
             } else {
