@@ -3768,6 +3768,7 @@ https://www.etsy.com/your/shops/me/listing-editor/edit/1822973998
         // If the purge endpoint isn't deployed yet, we log a warning
         // and continue — better to upload (and accept potential
         // duplicates this run) than to abort the entire job.
+        let purgeLeftovers = [];
         try {
           const purgeResp = await etsyFetchWithTimeout(
             `/.netlify/functions/listingImagesPurge?listingId=${encodeURIComponent(listingId)}&token=${encodeURIComponent(token)}`,
@@ -3779,18 +3780,21 @@ https://www.etsy.com/your/shops/me/listing-editor/edit/1822973998
             const removed = Number(purgeJson && purgeJson.removed) || 0;
             window.__DIAG.log("purge", { listingId, totalSeen, removed, failures: ((purgeJson && purgeJson.failures) || []).slice(0, 3) });
             if (totalSeen > 0 && removed < totalSeen) {
-              // The listing has leftover images that COULD NOT be deleted.
-              // Uploading on top of them is exactly what produced stacked,
-              // duplicated, out-of-order galleries — so this is a hard stop,
-              // not a warning. Include Etsy's own failure detail so the
-              // console names the real cause.
-              const firstFail = ((purgeJson && purgeJson.failures) || [])[0] || {};
-              const scopeHint = String(firstFail.status) === "403"
-                ? ' Etsy rejected the deletions (403): the connected token lacks the listings_d scope — click "Connect to Etsy" to re-authorize, then retry this set.'
-                : (firstFail.status ? ` First failure: HTTP ${firstFail.status} ${String(firstFail.detail || "").slice(0, 140)}` : "");
-              const gateErr = new Error(`Listing ${listingId} still has ${totalSeen - removed} undeletable image(s) — refusing to upload on top of them.${scopeHint}`);
-              gateErr.purgeGate = true; // must NOT be swallowed by the legacy purge catch
-              throw gateErr;
+              const fails = (purgeJson && purgeJson.failures) || [];
+              const firstFail = fails[0] || {};
+              if (String(firstFail.status) === "403") {
+                // Scope problem — uploading first cannot help; hard stop.
+                const gateErr = new Error(`Listing ${listingId}: Etsy rejected image deletions (403) — the connected token lacks the listings_d scope. Click "Connect to Etsy" to re-authorize, then retry this set.`);
+                gateErr.purgeGate = true; // must NOT be swallowed by the legacy purge catch
+                throw gateErr;
+              }
+              // Etsy refuses to delete the LAST image of an active listing
+              // (and occasionally refuses transiently). Correct handling is
+              // an ORDER change, not a stop: upload the new images first —
+              // the leftover is then no longer "last" — and delete it right
+              // after the uploads, before anything reads the gallery.
+              purgeLeftovers = fails.map(f => f && f.imgId).filter(Boolean);
+              console.warn(`Purge left ${purgeLeftovers.length} image(s) on ${listingId} — will remove right after uploads:`, purgeLeftovers.join(","));
             }
             console.log(`Purge: removed ${removed}/${totalSeen} existing image(s) from listing ${listingId}.`);
           } else if (purgeResp.status === 401) {
@@ -3831,6 +3835,9 @@ https://www.etsy.com/your/shops/me/listing-editor/edit/1822973998
         }
 
         let mainUploaded = 0, mainAttempted = 0;
+        // Leftover image ids the pre-upload purge could not delete (e.g.
+        // Etsy's last-image-of-active-listing rule); removed post-upload.
+        // (Populated inside the purge block above via outer scope.)
         const uploadImage = async (fd, label) => {
           save({ lastActivityAt: Date.now() });
           window.__DIAG.log("upload-request", { label, listingId, rank: fd.get ? String(fd.get("rank")) : "?", name: fd.get ? String(fd.get("fileName")) : "?" });
@@ -3926,6 +3933,22 @@ https://www.etsy.com/your/shops/me/listing-editor/edit/1822973998
             // Reserved slots are optional — a failure here never fails the job.
             console.warn("Reserved upload failed", 9 + i, up.detail);
           }
+        }
+
+        // Remove any leftovers the pre-upload purge had to defer (they are
+        // no longer the listing's last image now that the uploads landed).
+        // If they STILL cannot be removed, fail the job HERE — before the
+        // Shopify stage can copy a dirty gallery.
+        if (purgeLeftovers.length) {
+          const del = await etsyFetchWithTimeout(
+            `/.netlify/functions/listingImagesPurge?listingId=${encodeURIComponent(listingId)}&token=${encodeURIComponent(token)}&imageIds=${encodeURIComponent(purgeLeftovers.join(","))}`,
+            { method: "POST" }, 60000, "Deferred leftover removal");
+          const dj = await del.json().catch(() => ({}));
+          window.__DIAG.log("purge-leftovers", { listingId, requested: purgeLeftovers, removed: (dj && dj.removed) || 0, failures: ((dj && dj.failures) || []).slice(0, 3) });
+          if (!dj || Number(dj.removed) < purgeLeftovers.length) {
+            throw new Error(`Listing ${listingId}: ${purgeLeftovers.length - (Number(dj && dj.removed) || 0)} leftover image(s) could not be removed even after upload — failing before Shopify copies a dirty gallery.`);
+          }
+          console.log(`Deferred leftovers removed: ${dj.removed}/${purgeLeftovers.length}.`);
         }
 
         // Read-only diagnostic: what does the LISTING actually hold now?
