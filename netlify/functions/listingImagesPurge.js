@@ -119,9 +119,15 @@ exports.handler = async function (event) {
     if (selective.length) {
       imageIds = selective;
     } else {
-      // The shop-scoped route is the newer convention and matches
-      // imageUpload.js exactly.
-      const listUrl = `${API_BASE}/shops/${encodeURIComponent(shopId)}/listings/${encodeURIComponent(listingId)}/images`;
+      // ENDPOINT FIX: the shop-scoped images route
+      // (/shops/{shop}/listings/{id}/images) does NOT return dormant image
+      // associations on DRAFT listings — drafts that inherited images
+      // (e.g. via Etsy's Copy) list as EMPTY here, so list-then-delete
+      // silently removed nothing while getListing?includes=Images (and the
+      // published storefront) showed the very same records. Diagnostics
+      // proved the divergence live: purge saw 0, includes=Images saw 4.
+      // List through the endpoint that actually sees them.
+      const listUrl = `${API_BASE}/listings/${encodeURIComponent(listingId)}?includes=Images`;
       const listResp = await fetch(listUrl, { method: "GET", headers: baseHeaders });
 
       if (listResp.status === 401) {
@@ -134,7 +140,9 @@ exports.handler = async function (event) {
       }
       let json;
       try { json = await listResp.json(); } catch { json = {}; }
-      const results = Array.isArray(json && json.results) ? json.results : [];
+      const results = Array.isArray(json && json.images) ? json.images
+                    : Array.isArray(json && json.Images) ? json.Images
+                    : Array.isArray(json && json.results) ? json.results : [];
       imageIds = results.map(r => r && r.listing_image_id).filter(Boolean);
     }
 
