@@ -107,9 +107,18 @@ exports.handler = async function (event) {
       Accept: "application/json",
     };
 
+    // ---- Selective mode: ?imageIds=1,2,3 deletes ONLY those images ----
+    // Used by the post-upload reconciliation pass to remove duplicate
+    // retry-twins without touching the listing's legitimate images.
+    const onlyRaw =
+      (event.queryStringParameters && event.queryStringParameters.imageIds) || "";
+    const selective = String(onlyRaw).split(",").map(s => s.trim()).filter(Boolean);
+
     // ---- 1) List current images on the listing ----------------------
     let imageIds = [];
-    {
+    if (selective.length) {
+      imageIds = selective;
+    } else {
       // The shop-scoped route is the newer convention and matches
       // imageUpload.js exactly.
       const listUrl = `${API_BASE}/shops/${encodeURIComponent(shopId)}/listings/${encodeURIComponent(listingId)}/images`;
@@ -161,6 +170,7 @@ exports.handler = async function (event) {
       ok: true,
       removed,
       totalSeen: imageIds.length,
+      selective: selective.length > 0,
       failures,
     });
   } catch (err) {
