@@ -804,6 +804,7 @@
     #shopifyList .sp-line { display: flex; align-items: center; gap: 7px; min-width: 0; }
     #shopifyList .sp-line .sp-title { flex: 0 1 auto; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
     #shopifyList .sp-mini { color: #777; font-size: 11.5px; white-space: nowrap; }
+    #shopifyList .sp-colchips { color: #1b5e20; font-size: 11px; background: #e8f5e9; border-radius: 9px; padding: 1px 7px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 220px; flex: 0 1 auto; }
     #shopifyList .sp-line a { margin-left: auto; white-space: nowrap; }
     #shopifyList .sp-chev { color: #9e9e9e; font-size: 11px; transition: transform .15s ease; flex: 0 0 auto; }
     #shopifyList li.sp-row.open .sp-chev { transform: rotate(90deg); }
@@ -6749,7 +6750,13 @@ async function callOpenAI(payload, opts = {}) {
           html += `<li class="sp-date">${esc(g.label)}</li>`;
           html += g.jobs.map(j => {
             const price = (j.priceMin != null) ? (j.priceMin === j.priceMax ? `$${j.priceMin}` : `$${j.priceMin}–$${j.priceMax}`) : "";
-            const cols = (j.addedCollections || []).concat((j.aiPickedCollections || []).filter(c => (j.addedCollections || []).indexOf(c) < 0));
+            // Verified membership from Shopify wins over the attempted list.
+            const attempted = (j.addedCollections || []).concat((j.aiPickedCollections || []).filter(c => (j.addedCollections || []).indexOf(c) < 0));
+            const verified = Array.isArray(j.collectionsActual) && j.collectionsActual.length > 0;
+            const cols = verified ? j.collectionsActual : attempted;
+            const colChips = cols.length
+              ? `<span class="sp-colchips" title="${esc(cols.join(", "))}">→ ${esc(cols.slice(0, 2).join(", "))}${cols.length > 2 ? " +" + (cols.length - 2) : ""}</span>`
+              : "";
             const when = j.completedAtMs || j.createdAtMs;
             const time = when ? new Date(when).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" }) : "";
             const open = window.__spOpen.has(j.id);
@@ -6757,13 +6764,14 @@ async function callOpenAI(payload, opts = {}) {
               <div class="sp-line">
                 <span class="sp-dot ${esc(j.status)}"></span>
                 <span class="sp-title">${esc(j.title)}</span>
+                ${colChips}
                 <span class="sp-mini">${esc(j.variantCount)} var${price ? " · " + price : ""}${time ? " · " + time : ""}</span>
                 ${j.handle ? `<a href="https://britesjewelry.com/products/${esc(j.handle)}" target="_blank" rel="noopener">view live</a>` : ""}
                 <span class="sp-chev" aria-hidden="true">▸</span>
               </div>
               <div class="sp-details">
                 <span class="sp-meta">${esc(j.status)} · ${esc((j.category || "").replace(/_/g, " "))} · tier ${esc(j.tier)} · ${esc(j.variantCount)} variants${price ? " · " + price : ""}</span>
-                ${cols.length ? `<br><span class="sp-cols">Collections: ${esc(cols.join(", "))}</span>` : ""}
+                ${cols.length ? `<br><span class="sp-cols">Collections${verified ? " (verified on Shopify)" : " (attempted)"}: ${esc(cols.join(", "))}</span>` : `<br><span class="sp-err">Not in any collection — check smart-rule tags</span>`}
                 ${(j.expandedMeanings || []).length ? `<br><span class="sp-meta">Themes: ${esc(j.expandedMeanings.join(", "))}</span>` : ""}
                 ${j.error ? `<br><span class="sp-err">${esc(String(j.error).slice(0, 300))}</span>` : ""}
               </div>
