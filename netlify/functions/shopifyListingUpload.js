@@ -504,8 +504,19 @@ async function enqueue(payload) {
 async function drain() {
   const t0 = Date.now();
   const out = { uploaded: [], skipped: 0, failed: [], stoppedFor: null };
-  const snap = await db.collection(QCOL).where("status", "==", "QUEUED").orderBy("createdAtMs", "asc").limit(30).get();
-  for (const docSnap of snap.docs) {
+  // FIX: `where("status","==") + orderBy("createdAtMs")` requires a Firestore
+  // COMPOSITE index (equality filter + order on a different field), which
+  // doesn't exist in this project — every drain died with
+  // "9 FAILED_PRECONDITION: The query requires an index". A single-field
+  // filter needs no composite index, so fetch a generous batch and FIFO-sort
+  // in memory instead. The queue is small (daily budget caps it), so up to
+  // 150 tiny docs per drain is negligible read cost — and zero console setup.
+  const snap = await db.collection(QCOL).where("status", "==", "QUEUED").limit(150).get();
+  const queuedDocs = snap.docs
+    .slice()
+    .sort((a, b) => (a.data().createdAtMs || 0) - (b.data().createdAtMs || 0))
+    .slice(0, 30);
+  for (const docSnap of queuedDocs) {
     if (Date.now() - t0 > DRAIN_TIME_BUDGET_MS) { out.stoppedFor = "time"; break; }
     const job = { id: docSnap.id, ...docSnap.data() };
     const granted = await reserveBudget(job.variantCount);
