@@ -4092,6 +4092,29 @@ https://www.etsy.com/your/shops/me/listing-editor/edit/1822973998
             window.__skipListingRequested = false;
         }
 
+        // 0) Validate content BEFORE consuming a listing ID from any queue.
+        //    A job snapshotted with an empty title/description/tags is
+        //    guaranteed to fail at Stage 2: Etsy requires title+description
+        //    in the same PATCH that updates tags. Failing here (a) consumes
+        //    no listing ID, (b) queues no doomed job, and (c) surfaces the
+        //    real problem — generation didn't finish — instead of a cryptic
+        //    400 mid-upload. __lastConsumedListing is nulled so the
+        //    automation's outcome verify can't match a STALE jobId from the
+        //    previous pass and wrongly archive this set.
+        {
+          const _title = (document.getElementById("listingTitle")?.value || "").trim();
+          const _desc  = ((document.getElementById("listingDescription")?.value || "") + (window.appendedDescriptionText || "")).trim();
+          const _tags  = buildEtsyTagsFromOverlay(document.getElementById("searchKeyPhrases")?.value || "");
+          if (!_title || !_desc || !_tags.length) {
+            window.__lastConsumedListing = null;
+            const missing = [!_title && "title", !_desc && "description", !_tags.length && "tags"]
+              .filter(Boolean).join(", ");
+            window.M?.toast?.({ html: `Create Listing blocked — missing ${missing}. Generate them first (no listing ID was consumed).` });
+            console.warn(`createListingBtn: blocked queue — missing ${missing}.`);
+            return;
+          }
+        }
+
         // 1) Resolve a single listingId dynamically from 5 separate queues
         let listingId = null;
         let targetInputId = window.__activeAutomationQueueId; 
