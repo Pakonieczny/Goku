@@ -1101,9 +1101,11 @@ async function drain() {
         expectedSmartCollections: result.expectedSmartCollections || [],
         expandedMeanings: job.expandedMeanings || null, aiPickedCollections: job.aiPickedCollections || null,
         mediaWarnings: job.mediaWarnings || null, publishWarnings: job.publishWarnings || null,
-        collectionWarnings: job.collectionWarnings || null
+        collectionWarnings: job.collectionWarnings || null,
+        setLinks: result.setLinks || null, setLinkWarnings: job.setLinkWarnings || null
       }, { merge: true });
-      out.uploaded.push({ jobId: job.id, handle: result.handle, variants: result.variantsCreated });
+      out.uploaded.push({ jobId: job.id, handle: result.handle, variants: result.variantsCreated,
+        setLinks: result.setLinks || null });
     } catch (e) {
       await refundBudget(job.variantCount);
       await docSnap.ref.set({
