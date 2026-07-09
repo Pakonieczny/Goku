@@ -333,24 +333,133 @@ async function onlineStorePublicationId() {
 async function collectionsCatalog() {
   const ref = db.collection(META).doc("collections");
   const snap = await ref.get();
-  if (snap.exists && (Date.now() - (snap.data().at || 0)) < 6 * 3600 * 1000) return snap.data().list || [];
+  const cached = snap.exists ? (snap.data().list || []) : [];
+  const cacheHasRules = cached.some(c => c.smart && Array.isArray(c.rules));
+  if (snap.exists && cacheHasRules && (Date.now() - (snap.data().at || 0)) < 6 * 3600 * 1000) return cached;
   const list = [];
   let cursor = null;
   for (let page = 0; page < 4; page++) {
     const d = await gql(`query($cursor: String) {
       collections(first: 100, after: $cursor) {
-        nodes { id title handle ruleSet { rules { column } } }
+        nodes { id title handle ruleSet { appliedDisjunctively rules { column relation condition } } }
         pageInfo { hasNextPage endCursor }
       }
     }`, { cursor });
     for (const n of d.collections.nodes || []) {
-      list.push({ id: n.id, title: n.title, handle: n.handle, smart: !!n.ruleSet });
+      list.push({
+        id: n.id, title: n.title, handle: n.handle, smart: !!n.ruleSet,
+        disjunctive: n.ruleSet ? !!n.ruleSet.appliedDisjunctively : null,
+        rules: n.ruleSet ? (n.ruleSet.rules || []).map(r => ({
+          column: String(r.column || "").toLowerCase(),
+          relation: String(r.relation || "").toLowerCase(),
+          condition: String(r.condition || "")
+        })) : null
+      });
     }
     if (!d.collections.pageInfo.hasNextPage) break;
     cursor = d.collections.pageInfo.endCursor;
   }
   await ref.set({ at: Date.now(), list });
   return list;
+}
+
+/* ---------------- SMART-MATCH: satisfy smart-collection rules ----------------
+ * Smart collections only self-populate when the product LITERALLY satisfies
+ * their rules — and rules like TAG equals "necklace" are exact-match, so a
+ * product tagged "beady necklace" misses the Necklaces collection entirely.
+ * This planner decides which smart collections SHOULD apply (AI picks, theme
+ * keywords, and structural type matches) and returns the exact extra tags
+ * needed to satisfy each target's rules. Rules we cannot force (TITLE, TYPE
+ * mismatches, price) are only counted as satisfied when already true. */
+function planSmartCollections(all, ctx) {
+  const title = String(ctx.title || "").toLowerCase();
+  const productType = String(ctx.productType || "").toLowerCase();
+  const typeTag = String(ctx.typeTag || "").toLowerCase();
+  const vendor = String(ctx.vendor || "").toLowerCase();
+  const baseTags = new Set((ctx.tags || []).map(t => String(t).toLowerCase().trim()));
+  const kws = (ctx.keywords || []).map(k => String(k).toLowerCase().trim()).filter(Boolean);
+  const aiTitles = new Set((ctx.aiPickedTitles || []).map(t => String(t)));
+  const catWords = String(ctx.category || "").toLowerCase().split(/[^a-z]+/).filter(w => w.length > 3);
+
+  const extraTags = new Set();
+  const expected = [];
+
+  const ruleState = (r, pendingTags) => {
+    // → "true" (already satisfied) | "forcible" (satisfiable by adding a tag)
+    //   | "false" (cannot be satisfied)
+    const cond = r.condition.toLowerCase();
+    const has = (t) => baseTags.has(t) || pendingTags.has(t);
+    if (r.column === "tag") {
+      if (has(cond)) return "true";
+      return "forcible"; // equals AND contains are both satisfied by adding the exact tag
+    }
+    if (r.column === "type") {
+      if (r.relation === "equals") return productType === cond ? "true" : "false";
+      if (r.relation === "contains") return productType.includes(cond) ? "true" : "false";
+      return "false";
+    }
+    if (r.column === "title") {
+      if (r.relation === "equals") return title === cond ? "true" : "false";
+      if (r.relation === "contains") return title.includes(cond) ? "true" : "false";
+      return "false";
+    }
+    if (r.column === "vendor") {
+      if (r.relation === "equals") return vendor === cond ? "true" : "false";
+      if (r.relation === "contains") return vendor.includes(cond) ? "true" : "false";
+      return "false";
+    }
+    return "false"; // price/weight/inventory etc. — never force, never assume
+  };
+
+  for (const c of all) {
+    if (!c.smart || !Array.isArray(c.rules) || !c.rules.length) continue;
+    const ct = c.title.toLowerCase();
+
+    // Is this collection a TARGET for the product?
+    const themed = aiTitles.has(c.title) ||
+      kws.some(k => ct.includes(k) || k.includes(ct)) ||
+      ct.split(/[^a-z]+/).some(w => w.length > 3 && title.includes(w));
+    const structural = c.rules.some(r => {
+      const cond = r.condition.toLowerCase();
+      if (r.column === "type") return productType && (cond === productType || productType.includes(cond) || cond.includes(productType));
+      if (r.column === "tag") return cond === typeTag || (catWords.length && catWords.some(w => cond === w));
+      return false;
+    });
+    if (!themed && !structural) continue;
+
+    // Can we satisfy its rules?
+    const pending = new Set();
+    const states = c.rules.map(r => ({ r, s: ruleState(r, pending) }));
+    if (c.disjunctive !== false) {
+      // ANY rule: prefer one that's already true; else force the cheapest tag.
+      if (states.some(x => x.s === "true")) { expected.push(c.title); continue; }
+      const f = states.find(x => x.s === "forcible");
+      if (f) { extraTags.add(f.r.condition); expected.push(c.title); }
+    } else {
+      // ALL rules must hold.
+      if (states.some(x => x.s === "false")) continue;
+      states.forEach(x => { if (x.s === "forcible") extraTags.add(x.r.condition); });
+      expected.push(c.title);
+    }
+  }
+  return { extraTags: Array.from(extraTags), expectedSmart: expected };
+}
+
+// Ground truth: which collections does Shopify say the product is in?
+// Smart membership recomputes shortly after tags land — retry once on empty.
+async function verifyProductCollections(productId) {
+  const q = `query($id: ID!) { product(id: $id) { collections(first: 50) { nodes { title } } } }`;
+  for (let attempt = 0; attempt < 2; attempt++) {
+    try {
+      const d = await gql(q, { id: productId });
+      const titles = (((d || {}).product || {}).collections || {}).nodes ? d.product.collections.nodes.map(n => n.title) : [];
+      if (titles.length || attempt === 1) return titles;
+    } catch (e) {
+      if (attempt === 1) { console.warn("verifyProductCollections failed:", e.message); return []; }
+    }
+    await new Promise(r => setTimeout(r, 4000));
+  }
+  return [];
 }
 
 function matchManualCollections(all, themeKeywords, title) {
@@ -459,7 +568,26 @@ async function createShopifyProduct(job) {
     name: n, position: idx + 1, values: valuesByName[n].map(val => ({ name: val }))
   }));
 
+  // SMART-MATCH: derive the exact tags each targeted smart collection's
+  // rules demand, so membership is deterministic instead of hoping the AI
+  // tags happen to exact-match a rule condition. Planned tags go FIRST so
+  // the 60-tag cap can never trim them away.
+  let smartPlan = { extraTags: [], expectedSmart: [] };
+  try {
+    smartPlan = planSmartCollections(allCollections, {
+      title: p.title, category: p.category,
+      productType: p.productType || matrix.productType,
+      typeTag: matrix.typeTag, vendor: VENDOR,
+      tags: [...(p.tags || []), ...expandedMeanings, matrix.typeTag],
+      keywords: [...(p.themeKeywords || []), ...expandedMeanings],
+      aiPickedTitles: Array.from(aiPickedTitles)
+    });
+    if (smartPlan.extraTags.length) console.log("Smart-match tags added:", smartPlan.extraTags.join(", "));
+    job.expectedSmartCollections = smartPlan.expectedSmart;
+  } catch (e) { console.warn("planSmartCollections failed (continuing):", e.message); }
+
   const tags = Array.from(new Set([
+    ...smartPlan.extraTags,       // rule-satisfying tags — never trimmed
     ...(p.tags || []),
     ...expandedMeanings,          // secondary meanings -> smart Tag rules match
     matrix.typeTag,
@@ -553,7 +681,17 @@ async function createShopifyProduct(job) {
     }
   } catch (e) { job.collectionWarnings = [String(e.message || e)]; }
 
-  return { productId: product.id, handle: product.handle, variantsCreated: (product.variantsCount || {}).count || setVariants.length, addedCollections };
+  // Ground-truth verification: what does Shopify ACTUALLY show? The panel
+  // displays this instead of what we merely attempted.
+  let collectionsActual = [];
+  try { collectionsActual = await verifyProductCollections(product.id); } catch (_) {}
+
+  return {
+    productId: product.id, handle: product.handle,
+    variantsCreated: (product.variantsCount || {}).count || setVariants.length,
+    addedCollections, collectionsActual,
+    expectedSmartCollections: job.expectedSmartCollections || []
+  };
 }
 
 /* ------------------------------ queue + drain ------------------------------ */
@@ -618,15 +756,34 @@ async function drain() {
   for (const docSnap of queuedDocs) {
     if (Date.now() - t0 > DRAIN_TIME_BUDGET_MS) { out.stoppedFor = "time"; break; }
     const job = { id: docSnap.id, ...docSnap.data() };
+
+    // CONCURRENCY GUARD: drains fire from four triggers (enqueue, the
+    // 30-min in-app timer, the Drain button, retryFailed) and possibly
+    // multiple open tabs. Two overlapping drains could both read this doc
+    // as QUEUED and both create the product. Claim it QUEUED→UPLOADING in
+    // a transaction; whoever loses the race skips the job entirely.
+    const claimed = await db.runTransaction(async (tx) => {
+      const fresh = await tx.get(docSnap.ref);
+      if (!fresh.exists || fresh.data().status !== "QUEUED") return false;
+      tx.set(docSnap.ref, { status: "UPLOADING", startedAtMs: Date.now() }, { merge: true });
+      return true;
+    });
+    if (!claimed) { out.skipped++; continue; }
+
     const granted = await reserveBudget(job.variantCount);
-    if (!granted) { out.stoppedFor = "budget"; break; }
-    await docSnap.ref.set({ status: "UPLOADING", startedAtMs: Date.now() }, { merge: true });
+    if (!granted) {
+      // Give the job back to the queue — budget denial isn't a failure.
+      await docSnap.ref.set({ status: "QUEUED", startedAtMs: null }, { merge: true });
+      out.stoppedFor = "budget"; break;
+    }
     try {
       const result = await createShopifyProduct(job);
       await docSnap.ref.set({
         status: "DONE", completedAtMs: Date.now(),
         productId: result.productId, handle: result.handle,
         variantsCreated: result.variantsCreated, addedCollections: result.addedCollections,
+        collectionsActual: result.collectionsActual || [],
+        expectedSmartCollections: result.expectedSmartCollections || [],
         expandedMeanings: job.expandedMeanings || null, aiPickedCollections: job.aiPickedCollections || null,
         mediaWarnings: job.mediaWarnings || null, publishWarnings: job.publishWarnings || null,
         collectionWarnings: job.collectionWarnings || null
@@ -659,6 +816,7 @@ async function recentJobs(n) {
       handle: j.handle || null,
       addedCollections: j.addedCollections || [],
       aiPickedCollections: j.aiPickedCollections || [],
+      collectionsActual: j.collectionsActual || [],
       expandedMeanings: (j.expandedMeanings || []).slice(0, 8),
       error: j.error || null,
       createdAtMs: j.createdAtMs || null, completedAtMs: j.completedAtMs || null
