@@ -1150,9 +1150,14 @@ async function ensureSetLinks(product, job) {
     }`, { q });
     return ((d.products || {}).nodes) || [];
   };
+  // ONE SEARCH PER SUBJECT WORD, leading word first: an OR query is
+  // relevance-ordered and a common word ("heart") floods the cap while the
+  // specific word's family ("puzzle") gets buried past it. Per-word
+  // searches guarantee every word's own results enter the pool.
   const primaryQ = subject.join(" OR ");
   const synQ = synonyms.length ? synonyms.join(" OR ") : "";
-  let primary = await runSearch(primaryQ);
+  let primary = [];
+  for (const w of subject) primary.push(...await runSearch(w));
   if (!primary.length) primary = await runSearch(subject.map(w => `title:${w}*`).join(" "));
   const secondary = synQ ? await runSearch(synQ) : [];
   const seenH = new Set();
