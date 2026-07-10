@@ -553,6 +553,10 @@
 
      /* TEMP: hide the Create Listing completion checkmark */
      #createListingCheck { display: none !important; }
+     /* Removed from the UI (owner request). createListingBtn is kept in the
+        DOM because the auto pilot drives listing creation by clicking it
+        programmatically — hiding it removes the button, not the engine. */
+     #skipListingBtn, #createListingBtn { display: none !important; }
 
     /* Scales with preview-box using --btn-size */
     .crop-btn {
@@ -1499,7 +1503,7 @@ ANTI-REPETITION (TITLE)
         updateFirebaseStatus("Skipping current listing...", "working");
         M.toast({ html: "Skipping current listing — moving to the next one." });
     }
-    document.getElementById("skipListingBtn").addEventListener("click", skipCurrentListing);
+    // skipListingBtn removed from the UI along with its wiring (owner request).
 
     async function checkFirebaseForSets() {
         // Prevent concurrent polling or polling while processing
@@ -6904,6 +6908,11 @@ async function callOpenAI(payload, opts = {}) {
                 <span class="sp-meta">${esc(j.status)} · ${esc((j.category || "").replace(/_/g, " "))} · tier ${esc(j.tier)} · ${esc(j.variantCount)} variants${price ? " · " + price : ""}</span>
                 ${cols.length ? `<br><span class="sp-cols">Collections${verified ? " (verified on Shopify)" : " (attempted)"}: ${esc(cols.join(", "))}</span>` : `<br><span class="sp-err">Not in any collection — check smart-rule tags</span>`}
                 ${(j.expandedMeanings || []).length ? `<br><span class="sp-meta">Themes: ${esc(j.expandedMeanings.join(", "))}</span>` : ""}
+                ${j.setLinks && (j.setLinks.partners || []).length
+                  ? `<br><span class="sp-cols">Set (vision-verified): ${esc(j.setLinks.partners.map(p => `${p.h} [${p.f}]`).join(", "))}${j.setLinks.backLinked ? ` · ${esc(j.setLinks.backLinked)} back-linked` : ""}</span>`
+                  : (j.status === "DONE" ? `<br><span class="sp-meta">Set: ${esc((j.setLinks && j.setLinks.reason) || "no partners linked")}</span>` : "")}
+                ${(j.setLinks && (j.setLinks.audit || []).length) ? `<br><span class="sp-meta" title="${esc(j.setLinks.audit.join(" | "))}">Set audit: ${esc(j.setLinks.audit.slice(0, 2).join(" | "))}${j.setLinks.audit.length > 2 ? " …" : ""}</span>` : ""}
+                ${(j.setLinkWarnings || []).length ? `<br><span class="sp-err">Set linking failed: ${esc(String(j.setLinkWarnings[0]).slice(0, 200))}</span>` : ""}
                 ${j.error ? `<br><span class="sp-err">${esc(String(j.error).slice(0, 300))}</span>` : ""}
               </div>
             </li>`;
