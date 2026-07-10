@@ -1270,6 +1270,33 @@ exports.handler = async (event) => {
       return out(200, res);
     }
     if (op === "retryFailed") { const r = await retryFailed(); const drained = await drain(); return out(200, { ...r, drained }); }
+    if (op === "relinkSet") {
+      // Run set matching + vision verification + writes for an EXISTING
+      // product (backlog tool, and recovery for uploads that predate the
+      // set-linking feature). Body: { op: "relinkSet", handle }.
+      // Accept a bare handle, a /products/... path, or a full product URL.
+      const handle = String(body.handle || "").trim()
+        .replace(/^https?:\/\/[^\/]+/i, "").replace(/^\/?products\//i, "")
+        .replace(/^\//, "").split(/[?#]/)[0].trim();
+      if (!handle) return out(400, { ok: false, error: "Missing handle" });
+      const d = await gql(`query($h: String!) {
+        productByHandle(handle: $h) { id handle title featuredImage { url } }
+      }`, { h: handle });
+      const prod = d.productByHandle;
+      if (!prod) return out(404, { ok: false, error: "No product with handle " + handle });
+      if (!prod.featuredImage || !prod.featuredImage.url) {
+        return out(422, { ok: false, error: "Product has no featured image to use as the reference" });
+      }
+      // Job-shaped input: title drives subject + form, featured image is
+      // the vision reference (same framing convention as the catalog).
+      const jobShaped = { payload: { title: prod.title, images: [{ src: prod.featuredImage.url }] } };
+      try {
+        const setLinks = await ensureSetLinks(prod, jobShaped);
+        return out(200, { ok: true, handle: prod.handle, setLinks });
+      } catch (e) {
+        return out(500, { ok: false, handle: prod.handle, error: String((e && e.message) || e) });
+      }
+    }
     return out(400, { error: "Unknown op: " + op });
   } catch (e) {
     return out(500, { error: String(e && e.message || e) });
