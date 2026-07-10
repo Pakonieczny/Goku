@@ -790,6 +790,34 @@ async function createShopifyProduct(job) {
 }
 
 /* ---------------------------- charm set linking ---------------------------- */
+
+function normalizeHandle(x) {
+  return String(x || "").trim()
+    .replace(/^https?:\/\/[^\/]+/i, "").replace(/^\/?products\//i, "")
+    .replace(/^\//, "").split(/[?#]/)[0].trim();
+}
+
+// Full relink for one existing product — shared by the synchronous op and
+// the background function.
+async function runRelink(handle) {
+  const d = await gql(`query($h: String!) {
+    productByHandle(handle: $h) { id handle title featuredImage { url } images(first: 3) { nodes { url } } metafield(namespace: "brites", key: "set") { value } }
+  }`, { h: handle });
+  const prod = d.productByHandle;
+  if (!prod) return { ok: false, notFound: true, error: "No product with handle " + handle };
+  if (!prod.featuredImage || !prod.featuredImage.url) {
+    return { ok: false, noImage: true, error: "Product has no featured image to use as the reference" };
+  }
+  const gallery = (((prod.images || {}).nodes) || []).map(n => ({ src: n.url }));
+  const jobShaped = { payload: { title: prod.title, images: gallery.length ? gallery : [{ src: prod.featuredImage.url }] } };
+  try {
+    const setLinks = await ensureSetLinks(prod, jobShaped);
+    return { ok: true, handle: prod.handle, setLinks };
+  } catch (e) {
+    return { ok: false, handle: prod.handle, error: String((e && e.message) || e) };
+  }
+}
+exports._relink = { runRelink, normalizeHandle, db, admin };
 // The PDP "Complete the set" module reads product metafield brites.set:
 // a JSON array of partners [{h: handle, f: form, t: short title}]. The
 // verified master (charmSetsData.js on goldenspike) is an offline snapshot —
@@ -939,8 +967,14 @@ async function judgeCharms(imgs, refCount) {
   // in parallel, each falling back to its raw URL if the crop fails. The
   // zoom is MANDATORY for accuracy, so its outcome is reported per image:
   // an un-zoomed judgment must be visible, never silent.
-  const zoomReport = { ok: 0, failed: 0, failures: [] };
+  const zoomReport = { ok: 0, failed: 0, skipped: 0, failures: [] };
   const zoomed = await Promise.all(imgs.map(async (im) => {
+    // The template's domain is SMALL-charm shots (model/lifestyle). The
+    // reference is already a close-up, and Charm Only products' featured
+    // images are close-ups too — cropping those cuts INTO the charm and
+    // the judge sees a fragment (measured: fragment engraving misread as
+    // the reference design, mass-rejecting true matches).
+    if (im.noZoom) { zoomReport.skipped++; return im.url; }
     try { const u = await zoomImageForAI(im.url); zoomReport.ok++; return u; }
     catch (e) {
       zoomReport.failed++;
@@ -1165,7 +1199,7 @@ async function ensureSetLinks(product, job) {
   // used only as a fallback when no third image exists.
   const img0 = (((p.images || [])[0]) || {}).src;
   const img2 = (((p.images || [])[2]) || {}).src;
-  const refShots = [{ handle: product.handle, url: img2 || img0, form: myForm }];
+  const refShots = [{ handle: product.handle, url: img2 || img0, form: myForm, noZoom: !!img2 }];
   debug.referenceImage = img2 ? "closeup (slot 3)" : "featured (slot 1, fallback)";
   // CHUNKED judging: 12 candidates per vision call (budget 4000 + zoomed
   // crops keep this well inside the model's limits).
@@ -1173,9 +1207,10 @@ async function ensureSetLinks(product, job) {
   const zoomTotals = { ok: 0, failed: 0, failures: [] };
   for (let off = 0; off < judgeable.length; off += 12) {
     const chunk = judgeable.slice(off, off + 12);
-    const imgs = refShots.concat(chunk.map(c => ({ handle: c.handle, url: c.featuredImage.url, form: c.form })));
+    const imgs = refShots.concat(chunk.map(c => ({ handle: c.handle, url: c.featuredImage.url, form: c.form, noZoom: c.form === "Charm Only" })));
     const r = await judgeCharms(imgs, refShots.length);
     zoomTotals.ok += r.zoomReport.ok; zoomTotals.failed += r.zoomReport.failed;
+    zoomTotals.skipped = (zoomTotals.skipped || 0) + (r.zoomReport.skipped || 0);
     zoomTotals.failures.push(...r.zoomReport.failures.slice(0, 3));
     if (!Array.isArray(r.verdicts)) throw new Error("charm judge returned no parseable verdict");
     r.verdicts.forEach((v, i) => {
@@ -1559,32 +1594,21 @@ exports.handler = async (event) => {
       return out(200, { ok: true, unlinked: [hA, hB], remaining: { [hA]: aSet.length, [hB]: bSet.length } });
     }
     if (op === "relinkSet") {
-      // Run set matching + vision verification + writes for an EXISTING
-      // product (backlog tool, and recovery for uploads that predate the
-      // set-linking feature). Body: { op: "relinkSet", handle }.
-      // Accept a bare handle, a /products/... path, or a full product URL.
-      const handle = String(body.handle || "").trim()
-        .replace(/^https?:\/\/[^\/]+/i, "").replace(/^\/?products\//i, "")
-        .replace(/^\//, "").split(/[?#]/)[0].trim();
+      // Synchronous variant (small families only — Netlify sync functions
+      // time out ~26s). For anything sizeable use relinkSet-background +
+      // op relinkResult.
+      const handle = normalizeHandle(body.handle);
       if (!handle) return out(400, { ok: false, error: "Missing handle" });
-      const d = await gql(`query($h: String!) {
-        productByHandle(handle: $h) { id handle title featuredImage { url } images(first: 3) { nodes { url } } metafield(namespace: "brites", key: "set") { value } }
-      }`, { h: handle });
-      const prod = d.productByHandle;
-      if (!prod) return out(404, { ok: false, error: "No product with handle " + handle });
-      if (!prod.featuredImage || !prod.featuredImage.url) {
-        return out(422, { ok: false, error: "Product has no featured image to use as the reference" });
-      }
-      // Job-shaped input: title drives subject + form, featured image is
-      // the vision reference (same framing convention as the catalog).
-      const gallery = (((prod.images || {}).nodes) || []).map(n => ({ src: n.url }));
-      const jobShaped = { payload: { title: prod.title, images: gallery.length ? gallery : [{ src: prod.featuredImage.url }] } };
-      try {
-        const setLinks = await ensureSetLinks(prod, jobShaped);
-        return out(200, { ok: true, handle: prod.handle, setLinks });
-      } catch (e) {
-        return out(500, { ok: false, handle: prod.handle, error: String((e && e.message) || e) });
-      }
+      const res = await runRelink(handle);
+      return out(res.ok ? 200 : (res.notFound ? 404 : (res.noImage ? 422 : 500)), res);
+    }
+    if (op === "relinkResult") {
+      // Poll the background relink's result.
+      const handle = normalizeHandle(body.handle);
+      if (!handle) return out(400, { ok: false, error: "Missing handle" });
+      const doc = await db.collection("Brites_Relink_Results").doc(handle).get();
+      if (!doc.exists) return out(200, { status: "none" });
+      return out(200, doc.data());
     }
     return out(400, { error: "Unknown op: " + op });
   } catch (e) {
