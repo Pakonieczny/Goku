@@ -886,7 +886,11 @@ function zoomCropRect(W, H, tpl) {
 }
 
 async function zoomImageForAI(url) {
-  const sharp = require("sharp"); // already a project dependency
+  // Jimp (pure JS) is BUNDLED into this function by esbuild — after two
+  // failed attempts to ship sharp's native binaries through Netlify
+  // packaging (build-time "could not resolve", then runtime "Cannot find
+  // module"), bundling removes the entire failure class.
+  const Jimp = require("jimp");
   const controller = new AbortController();
   const timer = setTimeout(() => controller.abort(), 20000);
   let buf;
@@ -895,16 +899,17 @@ async function zoomImageForAI(url) {
     if (!r.ok) throw new Error("image fetch HTTP " + r.status);
     buf = Buffer.from(await r.arrayBuffer());
   } finally { clearTimeout(timer); }
-  const meta = await sharp(buf).metadata();
-  const W = meta.width, H = meta.height;
+  const img = await Jimp.read(buf);
+  const W = img.getWidth(), H = img.getHeight();
   if (!W || !H) throw new Error("image has no dimensions");
   const { sx, sy, cw, ch } = zoomCropRect(W, H, AI_ZOOM_TEMPLATE);
-  let pipe = sharp(buf).extract({ left: sx, top: sy, width: cw, height: ch });
+  img.crop(sx, sy, cw, ch);
   const MAX = 1024;
   if (Math.max(cw, ch) > MAX) {
-    pipe = pipe.resize({ width: cw >= ch ? MAX : null, height: ch > cw ? MAX : null });
+    const scale = MAX / Math.max(cw, ch);
+    img.resize(Math.max(1, Math.round(cw * scale)), Math.max(1, Math.round(ch * scale)));
   }
-  const out = await pipe.jpeg({ quality: 85 }).toBuffer();
+  const out = await img.quality(85).getBufferAsync(Jimp.MIME_JPEG);
   return "data:image/jpeg;base64," + out.toString("base64");
 }
 
@@ -912,7 +917,8 @@ async function zoomImageForAI(url) {
 // verifyCharmSets-background.js (the Set Matcher pipeline). Title matching
 // above only proposes CANDIDATES; nothing reaches brites.set without the
 // same charm-first visual confirmation the verified master was built with.
-async function judgeCharms(imgs) {
+async function judgeCharms(imgs, refCount) {
+  refCount = refCount === 2 ? 2 : 1;
   const model = process.env.OPENAI_VISION_MODEL || "gpt-5.4-mini";
   const content = [{ type: "text", text:
     "You are an expert jeweler matching CHARMS across product photos from ONE fine-jewelry store. The ONLY thing being matched is the charm itself. Report ONLY what is actually visible.\n\n" +
@@ -924,9 +930,11 @@ async function judgeCharms(imgs) {
     "4. PROPORTIONS: relative dimensions of the charm's features.\n" +
     "5. SYMBOLIC MEANING where one clearly applies (zodiac sign/constellation, birth flower, Norse Mjolnir/Valknut/Vegvisir/Yggdrasil/runes): the meaning must match exactly — Leo is not Scorpio.\n\n" +
     "ACCEPTABLE differences (never cause FALSE): metal color/finish, charm size/scale, jewelry format and mounting, chain style, photo angle or lighting, shown singly vs as a pair.\n\n" +
-    "TASK: Photo 1 is the REFERENCE charm. " + (imgs[0].form ? "Expected formats in order: " + imgs.map(i => i.form || "?").join(", ") + ". " : "") +
-    "For EACH subsequent photo: zoom in on its charm and decide same_charm: TRUE only if it is the SAME charm design by ALL criteria above — same subject, same silhouette/pose, same cutouts/engraving/details, same meaning — merely worn or mounted differently. When the charm is too small, blurry, or hidden to verify the details, use confidence low and judge from what is genuinely visible.\n" +
-    'Reply with ONLY a JSON array, one entry per photo starting from photo 2: [{"photo":2,"same_charm":true,"charm":"<meaning, e.g. Leo (zodiac)>","charm_detail":"<literal depiction incl. silhouette + cutouts>","confidence":"high|medium|low","reason":"short"}]' }];
+    (refCount === 2
+      ? "TASK: Photos 1 and 2 both show the SAME REFERENCE charm (one in a worn/lifestyle context, one as a close-up). Use BOTH to establish the reference design; where they seem to disagree, trust the close-up and ignore background props or decorative staging — only the metal charm itself counts. "
+      : "TASK: Photo 1 is the REFERENCE charm. ") +
+    `For EACH photo starting from photo ${refCount + 1}: zoom in on its charm and decide same_charm: TRUE only if it is the SAME charm design by ALL criteria above — same subject, same silhouette/pose, same cutouts/engraving/details, same meaning — merely worn or mounted differently. When the charm is too small, blurry, or hidden to verify the details, use confidence low and judge from what is genuinely visible.\n` +
+    `Reply with ONLY a JSON array, one entry per candidate photo starting from photo ${refCount + 1}: [{"photo":${refCount + 1},"same_charm":true,"charm":"<meaning>","charm_detail":"<literal depiction incl. silhouette + cutouts>","confidence":"high|medium|low","reason":"short"}]` }];
   // Template-zoom every image (reference AND candidates) before judgment —
   // in parallel, each falling back to its raw URL if the crop fails. The
   // zoom is MANDATORY for accuracy, so its outcome is reported per image:
@@ -945,10 +953,12 @@ async function judgeCharms(imgs) {
 
   const payload = { model, messages: [{ role: "user", content }] };
   if (/^(gpt-5|o\d)/.test(model)) {
-    payload.max_completion_tokens = 1500;
+    // 1500 starved on larger image sets (empty content -> unparseable);
+    // judging is also chunked upstream, belt and suspenders.
+    payload.max_completion_tokens = 4000;
     payload.reasoning_effort = "low";
   } else {
-    payload.max_tokens = 700;
+    payload.max_tokens = 1200;
   }
   const controller = new AbortController();
   const timer = setTimeout(() => controller.abort(), 60000);
@@ -980,7 +990,7 @@ async function expandSubjectSynonyms(subject, title) {
   try {
     const model = process.env.OPENAI_VISION_MODEL || "gpt-5.4-mini";
     const payload = { model, messages: [{ role: "user", content:
-      `A jewelry catalog names the same charm subject with different words across product titles. Subject words: ${JSON.stringify(subject)} (from the title ${JSON.stringify(String(title || ""))}). Reply with ONLY a JSON array of 0-4 additional lowercase single words that other product titles for the SAME subject would likely use — common names and synonyms (e.g. "porcine" -> ["pig","piggy"], "canine" -> ["dog","puppy"]). No adjectives, no style words, no repeats of the given words. [] if none apply.` }] };
+      `A jewelry catalog names the same charm subject with different words across product titles. Subject words: ${JSON.stringify(subject)} (from the title ${JSON.stringify(String(title || ""))}). Reply with ONLY a JSON array of 0-4 additional lowercase single words that other product titles for the SAME subject would likely use — common names and synonyms for the SAME subject ONLY — NEVER broader categories or parent classes (e.g. "porcine" -> ["pig","piggy"] is right; "owl" -> ["bird"] is WRONG because bird is a category, "heart" -> ["love"] is WRONG because love is a theme). No adjectives, no style words, no repeats of the given words. [] if none apply.` }] };
     if (/^(gpt-5|o\d)/.test(model)) { payload.max_completion_tokens = 500; payload.reasoning_effort = "low"; }
     else { payload.max_tokens = 100; }
     const controller = new AbortController();
@@ -1064,23 +1074,30 @@ async function ensureSetLinks(product, job) {
       .catch(e => console.warn("synonym store write skipped:", e && e.message));
   }
   const searchWords = subject.concat(synonyms);
-  const attempts = [
-    searchWords.join(" OR "),                         // unscoped, OR across all vocabulary
-    subject.join(" "),                                // unscoped AND (fallback)
-    subject.map(w => `title:${w}*`).join(" "),        // scoped with wildcard
-    subject.map(w => `title:${w}`).join(" ")          // scoped exact token
-  ].filter((q, i, a) => a.indexOf(q) === i);
-  let nodes = [], queryUsed = "";
-  for (const q of attempts) {
+  // TWO searches, primary first: the subject's own results are guaranteed a
+  // place in the pool BEFORE synonym results fill the remainder. (Measured
+  // failure: "owl OR bird" returned 100 generic birds and the actual owl
+  // family never entered the capped pool.)
+  const runSearch = async (q) => {
+    if (!q) return [];
     const d = await gql(`query($q: String!) {
       products(first: 100, query: $q) {
         nodes { id handle title featuredImage { url } metafield(namespace: "brites", key: "set") { value } }
       }
     }`, { q });
-    nodes = ((d.products || {}).nodes) || [];
-    queryUsed = q;
-    if (nodes.length) break;
-  }
+    return ((d.products || {}).nodes) || [];
+  };
+  const primaryQ = subject.join(" OR ");
+  const synQ = synonyms.length ? synonyms.join(" OR ") : "";
+  let primary = await runSearch(primaryQ);
+  if (!primary.length) primary = await runSearch(subject.map(w => `title:${w}*`).join(" "));
+  const secondary = synQ ? await runSearch(synQ) : [];
+  const seenH = new Set();
+  const nodes = primary.concat(secondary).filter(n => {
+    if (!n || seenH.has(n.handle)) return false;
+    seenH.add(n.handle); return true;
+  }).slice(0, 150);
+  const queryUsed = `${primaryQ}${synQ ? " ∪ " + synQ : ""}`;
   // Funnel counters — every empty result names its stage.
   const debug = { subject, synonyms, myForm, query: queryUsed, nodes: nodes.length,
     titleMatched: 0, otherForm: 0, withImage: 0,
@@ -1140,22 +1157,40 @@ async function ensureSetLinks(product, job) {
   // model must guess its identity (measured: citrus read as "fruit with
   // leaves" one run and "slice disc" the next, admitting a kiwi/avocado).
   // Fall back to the first image when no third exists.
-  const refUrl = (((p.images || [])[2]) || {}).src || (((p.images || [])[0]) || {}).src;
-  debug.referenceImage = (((p.images || [])[2]) || {}).src ? "closeup (slot 3)" : "featured (slot 1)";
+  const refUrl = (((p.images || [])[0]) || {}).src;
   if (!judgeable.length || !refUrl) return { partners: [], reason: refUrl ? "no judgeable candidates" : "no reference image", debug };
 
-  const imgs = [{ handle: product.handle, url: refUrl, form: myForm }]
-    .concat(judgeable.map(c => ({ handle: c.handle, url: c.featuredImage.url, form: c.form })));
-  const { verdicts, zoomReport } = await judgeCharms(imgs);
-  debug.zoom = zoomReport; // ok = images judged at template zoom (2x charm detail)
-  if (!Array.isArray(verdicts)) throw new Error("charm judge returned no parseable verdict");
+  // Reference: the charm CLOSE-UP (slot 3) is authoritative — zoomed, it
+  // shows the design at full detail; the model shot adds nothing and is
+  // used only as a fallback when no third image exists.
+  const img0 = (((p.images || [])[0]) || {}).src;
+  const img2 = (((p.images || [])[2]) || {}).src;
+  const refShots = [{ handle: product.handle, url: img2 || img0, form: myForm }];
+  debug.referenceImage = img2 ? "closeup (slot 3)" : "featured (slot 1, fallback)";
+  // CHUNKED judging: 12 candidates per vision call (budget 4000 + zoomed
+  // crops keep this well inside the model's limits).
+  const verdicts = [];
+  const zoomTotals = { ok: 0, failed: 0, failures: [] };
+  for (let off = 0; off < judgeable.length; off += 12) {
+    const chunk = judgeable.slice(off, off + 12);
+    const imgs = refShots.concat(chunk.map(c => ({ handle: c.handle, url: c.featuredImage.url, form: c.form })));
+    const r = await judgeCharms(imgs, refShots.length);
+    zoomTotals.ok += r.zoomReport.ok; zoomTotals.failed += r.zoomReport.failed;
+    zoomTotals.failures.push(...r.zoomReport.failures.slice(0, 3));
+    if (!Array.isArray(r.verdicts)) throw new Error("charm judge returned no parseable verdict");
+    r.verdicts.forEach((v, i) => {
+      const local = (Number(v && v.photo) || (refShots.length + 1 + i)) - refShots.length - 1;
+      verdicts.push({ ...v, __idx: off + local });
+    });
+  }
+  debug.zoom = zoomTotals; // ok = images judged at template zoom (2x charm detail)
   // Mirror the verifier's gating: only an explicit same_charm true admits a
   // link (the background pruner removes on explicit false; for NEW links we
   // require positive confirmation — absence of a verdict is not a match).
   const confirmedHandles = new Set();
   const audit = [];
   verdicts.forEach((v, i) => {
-    const cand = judgeable[(Number(v && v.photo) || (i + 2)) - 2];
+    const cand = judgeable[Number.isInteger(v.__idx) ? v.__idx : i];
     if (!cand) return;
     audit.push(`${cand.handle}: ${v.same_charm ? "MATCH" : "no"} (${v.confidence || "?"}) ${v.reason || ""}`.slice(0, 160));
     if (v.same_charm === true) confirmedHandles.add(cand.handle);
