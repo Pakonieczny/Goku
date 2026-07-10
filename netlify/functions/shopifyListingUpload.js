@@ -1076,6 +1076,35 @@ async function rankBySemantics(subjectPhrase, titles) {
   return titles.map((t, i) => dot(ref, vecs[i + 1]) / (refN * norm(vecs[i + 1]) || 1));
 }
 
+// LLM title ranking — the model reads the reference title and every
+// candidate title and returns the same-subject handles, best first.
+// Replaces embedding cosine ranking, which is noise on 3-word jewelry
+// titles (measured: "binocular" outranked true owl items for subject owl).
+async function rankByLLM(refTitle, subject, cands) {
+  const model = process.env.OPENAI_VISION_MODEL || "gpt-5.4-mini";
+  const list = cands.map(c => `${c.handle} :: ${c.title}`).join("\n");
+  const payload = { model, messages: [{ role: "user", content:
+    `Reference product title: ${JSON.stringify(refTitle)}\nCharm subject: ${JSON.stringify(subject.join(" "))}\n\nCandidate products (handle :: title), one per line:\n${list}\n\nReturn ONLY a JSON array of the handles whose title denotes the SAME charm subject as the reference — the same creature/object/symbol (plurals, diminutives and true synonyms count; e.g. pig/piggy/piglet are the same subject). EXCLUDE different subjects even when related or same category (owl vs other birds; citrus vs avocado/kiwi; heart vs puzzle unless the reference is both). Order from most to least certain. [] if none.` }] };
+  if (/^(gpt-5|o\d)/.test(model)) { payload.max_completion_tokens = 2000; payload.reasoning_effort = "low"; }
+  else { payload.max_tokens = 800; }
+  const controller = new AbortController();
+  const timer = setTimeout(() => controller.abort(), 30000);
+  let r;
+  try {
+    r = await fetch("https://api.openai.com/v1/chat/completions", {
+      method: "POST",
+      headers: { "Content-Type": "application/json", Authorization: `Bearer ${process.env.OPENAI_API_KEY}` },
+      body: JSON.stringify(payload), signal: controller.signal
+    });
+  } finally { clearTimeout(timer); }
+  const j = await r.json();
+  if (!r.ok) throw new Error((j.error && j.error.message) || ("LLM rank HTTP " + r.status));
+  const out = String((((j.choices || [])[0] || {}).message || {}).content || "").replace(/```json|```/g, "").trim();
+  const arr = JSON.parse(out);
+  if (!Array.isArray(arr)) throw new Error("LLM rank returned non-array");
+  return arr.map(h => String(h).trim()).filter(Boolean);
+}
+
 async function ensureSetLinks(product, job) {
   // Job docs nest the listing data under .payload (see the create function's
   // own `const p = job.payload`). Tolerate both shapes.
@@ -1143,30 +1172,38 @@ async function ensureSetLinks(product, job) {
   // requiring every word starves the judge. Any shared subject word
   // qualifies; candidates matching MORE words rank first so full matches
   // get judge slots ahead of partial ones.
-  // SEMANTIC candidacy: rank every search hit by embedding similarity to
-  // the charm subject. No plural rules, no stopword patches — "Dancers"
-  // scores near "dancer", "Piggy Bank" near "pig", while "Chocolate Bar"
-  // (a tag-recall accident) scores low and drops out. Word matching
-  // survives only as the emergency fallback if the embeddings call fails.
+  // LLM candidacy: the model reads the reference title and every candidate
+  // title, returns the same-subject family ranked. Handles plurals,
+  // synonyms, diminutives, and subject-vs-category distinctions (owl vs
+  // other birds, citrus vs avocado) the way a person would. Fallbacks:
+  // embedding similarity, then plain word match.
   const pool = nodes.filter(n => n.handle !== product.handle);
-  const subjectPhrase = subject.join(" ") + " charm jewelry";
   let titleMatched;
   try {
-    const scores = await rankBySemantics(subjectPhrase, pool.map(n => String(n.title || "")));
-    titleMatched = pool.map((n, i) => ({ ...n, sim: scores[i] }))
-      .filter(n => n.sim >= 0.35)
-      .sort((a, b) => b.sim - a.sim);
-    debug.semantic = { threshold: 0.35,
-      top: titleMatched.slice(0, 6).map(n => `${n.handle} ${n.sim.toFixed(2)}`),
-      cut: pool.length - titleMatched.length };
+    const ranked = await rankByLLM(p.title, subject, pool.map(n => ({ handle: n.handle, title: String(n.title || "") })));
+    const order = new Map(ranked.map((h, i) => [h, i]));
+    titleMatched = pool.filter(n => order.has(n.handle))
+      .sort((a, b) => order.get(a.handle) - order.get(b.handle));
+    debug.rank = { by: "llm", kept: titleMatched.length, cut: pool.length - titleMatched.length,
+      top: titleMatched.slice(0, 6).map(n => n.handle) };
   } catch (e) {
-    console.warn("semantic ranking fallback to word match:", e && e.message);
-    debug.semantic = { error: String((e && e.message) || e).slice(0, 120) };
-    const wordRe = (w) => new RegExp(`\\b${w.replace(/[.*+?^$()|[\]\\]/g, "\\$&")}s?\\b`);
-    titleMatched = pool
-      .map(n => ({ ...n, matches: searchWords.reduce((k, w) => k + (wordRe(w).test(String(n.title || "").toLowerCase()) ? 1 : 0), 0) }))
-      .filter(n => n.matches > 0)
-      .sort((a, b) => b.matches - a.matches);
+    console.warn("LLM rank fallback to embeddings:", e && e.message);
+    try {
+      const subjectPhrase = subject.join(" ") + " charm jewelry";
+      const scores = await rankBySemantics(subjectPhrase, pool.map(n => String(n.title || "")));
+      titleMatched = pool.map((n, i) => ({ ...n, sim: scores[i] }))
+        .filter(n => n.sim >= 0.35)
+        .sort((a, b) => b.sim - a.sim);
+      debug.rank = { by: "embeddings-fallback", error: String((e && e.message) || e).slice(0, 100),
+        kept: titleMatched.length, top: titleMatched.slice(0, 6).map(n => `${n.handle} ${n.sim.toFixed(2)}`) };
+    } catch (e2) {
+      const wordRe = (w) => new RegExp(`\\b${w.replace(/[.*+?^$()|[\]\\]/g, "\\$&")}s?\\b`);
+      titleMatched = pool
+        .map(n => ({ ...n, matches: searchWords.reduce((k, w) => k + (wordRe(w).test(String(n.title || "").toLowerCase()) ? 1 : 0), 0) }))
+        .filter(n => n.matches > 0)
+        .sort((a, b) => b.matches - a.matches);
+      debug.rank = { by: "word-fallback", kept: titleMatched.length };
+    }
   }
   debug.titleMatched = titleMatched.length;
   const candidates = titleMatched
