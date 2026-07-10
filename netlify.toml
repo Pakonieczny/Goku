@@ -10,16 +10,7 @@
     "node-fetch",
     "formidable",
     "firebase-admin",
-    "@google-cloud/storage",
-    "sharp"
-  ]
-  # sharp is a native module: esbuild must not bundle it (external above),
-  # but the package AND its platform binaries must still ship inside the
-  # function bundle for runtime require() to find them. Verified failure
-  # without this: 'Cannot find module sharp' in production (zoom telemetry).
-  included_files = [
-    "node_modules/sharp/**",
-    "node_modules/@img/**"
+    "@google-cloud/storage"
   ]
 
 [functions.imageUpload]
