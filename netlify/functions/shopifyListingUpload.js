@@ -975,11 +975,17 @@ async function ensureSetLinks(product, job) {
   // it) — so use the broadest query first, and a fallback ladder in case a
   // syntax is rejected by this API path (measured live: "title:owl"
   // returned 0 nodes while the catalog holds many owls).
+  // Multi-word subjects MUST search with OR: Shopify ANDs space-separated
+  // terms, and families name the same charm inconsistently ("Horned Goat"
+  // vs "Capricorn Goat" vs "Goat Head") — measured live: "horned goat"
+  // returned 2 of a 24-product goat family. Recall is the search's job;
+  // ranking (match count) and the vision check keep precision.
   const attempts = [
-    subject.join(" "),                                // unscoped: title+tags+type
+    subject.join(" OR "),                             // unscoped, OR across words
+    subject.join(" "),                                // unscoped AND (fallback)
     subject.map(w => `title:${w}*`).join(" "),        // scoped with wildcard
     subject.map(w => `title:${w}`).join(" ")          // scoped exact token
-  ];
+  ].filter((q, i, a) => a.indexOf(q) === i);
   let nodes = [], queryUsed = "";
   for (const q of attempts) {
     const d = await gql(`query($q: String!) {
@@ -1026,7 +1032,7 @@ async function ensureSetLinks(product, job) {
   const toJudge = [];
   for (const form of Object.keys(byForm)) toJudge.push(byForm[form][0]);
   for (const c of candidates) {
-    if (toJudge.length >= 8) break;
+    if (toJudge.length >= 12) break;
     if (!toJudge.includes(c)) toJudge.push(c);
   }
   const judgeable = toJudge.filter(c => c.featuredImage && c.featuredImage.url);
