@@ -799,6 +799,15 @@ function normalizeHandle(x) {
 
 // Full relink for one existing product — shared by the synchronous op and
 // the background function.
+async function triggerBackgroundDrain() {
+  const base = process.env.URL || process.env.DEPLOY_PRIME_URL || "";
+  if (!base) { console.warn("no site URL for background drain"); return; }
+  try {
+    // -background functions return 202 immediately; this await is instant.
+    await fetch(base + "/.netlify/functions/shopifyDrain-background", { method: "POST" });
+  } catch (e) { console.warn("background drain trigger failed:", e && e.message); }
+}
+
 async function runRelink(handle) {
   const d = await gql(`query($h: String!) {
     productByHandle(handle: $h) { id handle title featuredImage { url } images(first: 3) { nodes { url } } metafield(namespace: "brites", key: "set") { value } }
@@ -818,6 +827,7 @@ async function runRelink(handle) {
   }
 }
 exports._relink = { runRelink, normalizeHandle, db, admin };
+exports._drain = { drain, budgetSnapshot };
 // The PDP "Complete the set" module reads product metafield brites.set:
 // a JSON array of partners [{h: handle, f: form, t: short title}]. The
 // verified master (charmSetsData.js on goldenspike) is an offline snapshot —
@@ -1553,10 +1563,16 @@ exports.handler = async (event) => {
     if (op === "enqueue") {
       const res = await enqueue(body.payload);
       if (!res.ok) return out(400, res);
-      const drained = await drain(); // immediate attempt within today's budget
-      return out(200, { ...res, drained, budget: await budgetSnapshot() });
+      // Draining (product create + media + collections + vision set-match)
+      // exceeds the sync limit — hand it to the background drain (15-min
+      // budget) and return immediately. The client polls job status.
+      await triggerBackgroundDrain();
+      return out(200, { ...res, background: true, budget: await budgetSnapshot() });
     }
-    if (op === "drain") return out(200, { drained: await drain(), budget: await budgetSnapshot() });
+    if (op === "drain") {
+      await triggerBackgroundDrain();
+      return out(200, { ok: true, background: true, budget: await budgetSnapshot() });
+    }
     if (op === "status") {
       const res = await status();
       if (q.recent) res.recent = await recentJobs(Number(q.recent) || 12);
@@ -1608,6 +1624,18 @@ exports.handler = async (event) => {
       if (ue0.length) return out(500, { ok: false, error: "metafieldsSet: " + ue0[0].message });
       await batch.commit();
       return out(200, { ok: true, handle: h0, cleared: partnerHandles.length, backlinksRemoved: cleaned });
+    }
+    if (op === "markJobDone") {
+      // Recovery: a gateway-killed run can leave a job stuck UPLOADING even
+      // though its product exists. Marks it DONE without touching Shopify.
+      // Body: { op: "markJobDone", jobId }
+      const jobId = String(body.jobId || "").trim();
+      if (!jobId) return out(400, { ok: false, error: "Missing jobId" });
+      await db.collection(QCOL).doc(jobId).set({
+        status: "DONE", completedAtMs: Date.now(),
+        note: "marked done manually (sync invocation was gateway-killed after create)"
+      }, { merge: true });
+      return out(200, { ok: true, jobId });
     }
     if (op === "linkSet") {
       // MANUAL curation: declare two products a set pair. Writes both
