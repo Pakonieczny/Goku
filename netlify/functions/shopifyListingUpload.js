@@ -968,7 +968,7 @@ async function ensureSetLinks(product, job) {
   const p = (job && job.payload) || job || {};
   const myForm = SET_FORM_BY_CATEGORY[p.category] || setFormFromTitle(p.title);
   const subject = setSubjectTokens(p.title);
-  if (!myForm || !subject.length) return { partners: [], reason: "no form/subject" };
+  if (!myForm || !subject.length) return { partners: [], reason: "no form/subject", debug: { myForm, subject, title: p.title } };
 
   // Candidate pool: title search on the subject phrase.
   const d = await gql(`query($q: String!) {
@@ -977,6 +977,10 @@ async function ensureSetLinks(product, job) {
     }
   }`, { q: subject.map(w => `title:${w}`).join(" ") });
   const nodes = ((d.products || {}).nodes) || [];
+  // Funnel counters — every empty result names its stage.
+  const debug = { subject, myForm, query: subject.map(w => `title:${w}`).join(" "), nodes: nodes.length,
+    titleMatched: 0, otherForm: 0, withImage: 0,
+    sampleNodes: nodes.slice(0, 5).map(n => `${n.handle} [${setFormFromTitle(n.title)}]`) };
 
   // Same charm = every subject token appears as a whole word in the
   // candidate title. Different form = it completes a set, not a duplicate.
@@ -985,9 +989,12 @@ async function ensureSetLinks(product, job) {
     const t = String(n.title || "").toLowerCase();
     return subject.every(w => new RegExp(`\\b${w.replace(/[.*+?^$()|[\]\\]/g, "\\$&")}\\b`).test(t));
   };
-  const candidates = nodes.filter(isMatch)
+  const titleMatched = nodes.filter(isMatch);
+  debug.titleMatched = titleMatched.length;
+  const candidates = titleMatched
     .map(n => ({ ...n, form: setFormFromTitle(n.title) }))
     .filter(n => n.form && n.form !== myForm);
+  debug.otherForm = candidates.length;
 
   // Judge up to 8 candidates (diverse forms first) — visual confirmation
   // decides what a "partner" is, exactly as in the Set Matcher pipeline.
@@ -1000,8 +1007,9 @@ async function ensureSetLinks(product, job) {
     if (!toJudge.includes(c)) toJudge.push(c);
   }
   const judgeable = toJudge.filter(c => c.featuredImage && c.featuredImage.url);
+  debug.withImage = judgeable.length;
   const refUrl = (((p.images || [])[0]) || {}).src;
-  if (!judgeable.length || !refUrl) return { partners: [], reason: "no judgeable candidates" };
+  if (!judgeable.length || !refUrl) return { partners: [], reason: refUrl ? "no judgeable candidates" : "no reference image", debug };
 
   const imgs = [{ handle: product.handle, url: refUrl, form: myForm }]
     .concat(judgeable.map(c => ({ handle: c.handle, url: c.featuredImage.url, form: c.form })));
@@ -1019,7 +1027,7 @@ async function ensureSetLinks(product, job) {
     if (v.same_charm === true) confirmedHandles.add(cand.handle);
   });
   const partners = judgeable.filter(c => confirmedHandles.has(c.handle)).slice(0, 4);
-  if (!partners.length) return { partners: [], reason: "no visual matches", audit };
+  if (!partners.length) return { partners: [], reason: "no visual matches", audit, debug };
 
   const myEntry = { h: product.handle, f: myForm, t: setShortTitle(p.title) };
   const metafields = [{
