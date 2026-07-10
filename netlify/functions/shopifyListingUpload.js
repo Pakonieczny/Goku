@@ -949,19 +949,17 @@ async function judgeCharms(imgs, refCount) {
   refCount = refCount === 2 ? 2 : 1;
   const model = process.env.OPENAI_VISION_MODEL || "gpt-5.4-mini";
   const content = [{ type: "text", text:
-    "You are an expert jeweler matching CHARMS across product photos from ONE fine-jewelry store. The ONLY thing being matched is the charm itself. Report ONLY what is actually visible.\n\n" +
+    "You are an expert jeweler grouping charms from ONE fine-jewelry store into SUBJECT FAMILIES for a complete-the-set section — the same subject offered as necklace, earrings, charm, etc. The ONLY thing being judged is what each charm depicts. Report ONLY what is actually visible.\n\n" +
     "STEP 1 — FIND THE CHARM AND ZOOM IN. Photos may be zoomed out, lifestyle shots, or show the charm small on a model, on a chain, or beside other jewelry. LOCATE the charm in each photo and examine it as if magnified to full frame. IGNORE everything else: the chain and its style, the mounting (hoop/stud/necklace/ring/bracelet), the model, hands, props, background, lighting. A charm on a necklace, the same charm on a hoop earring, and the same charm photographed alone are ALL the same charm — format differences must NEVER cause a FALSE.\n\n" +
-    "STEP 2 — MATCH THE CHARM WITH EXTREME PRECISION on these criteria, in order of importance:\n" +
-    "1. TYPE/SUBJECT: what the charm depicts (which animal, symbol, letter, object). A penguin is not a sheep; a music note is not a treble clef; an alien head is not a UFO.\n" +
-    "2. OUTLINE/SILHOUETTE: the exact outer shape and pose/orientation. Full-body vs head-only, upright vs side profile, wings folded vs spread = DIFFERENT charms even when the subject matches.\n" +
-    "3. ENGRAVING, CUTOUTS & SURFACE DETAIL: cut-out holes, pierced patterns, engraved lines, stones, textures, added elements (leaves, stars, rays, banners). An open-outline star and a solid star are DIFFERENT. A plain crescent and a crescent with rays are DIFFERENT.\n" +
-    "4. PROPORTIONS: relative dimensions of the charm's features.\n" +
-    "5. SYMBOLIC MEANING where one clearly applies (zodiac sign/constellation, birth flower, Norse Mjolnir/Valknut/Vegvisir/Yggdrasil/runes): the meaning must match exactly — Leo is not Scorpio.\n\n" +
-    "ACCEPTABLE differences (never cause FALSE): metal color/finish, charm size/scale, jewelry format and mounting, chain style, photo angle or lighting, shown singly vs as a pair.\n\n" +
+    "STEP 2 — MATCH BY SUBJECT. Identify what the charm DEPICTS — which creature, object, or symbol — and match on that alone:\n" +
+    "1. same_charm is TRUE when both charms depict the SAME subject: a tooth is a tooth whether it has a sparkle, a line, a heart, or no engraving; an owl is an owl front-facing or side-profile, head-only or full-body; a pig is a pig in any pose. Design variants of one subject BELONG TOGETHER.\n" +
+    "2. same_charm is FALSE only when the subject itself is DIFFERENT: an owl is not a duck or an eagle; a tooth is not a bone; a citrus fruit (orange, lemon — whole or slice) is not an avocado or a kiwi; a pig is not a cow. Be strict about subject identity, generous about everything else.\n" +
+    "3. SYMBOLIC identity counts as subject where one clearly applies: Leo is not Scorpio, Mjolnir is not Yggdrasil.\n\n" +
+    "ACCEPTABLE differences (NEVER cause FALSE): engraving and surface details (sparkles, lines, hearts, cutout patterns), pose and orientation (including mirrored/flipped), full-body vs head-only, outline vs solid style, proportions, metal color/finish, size/scale, jewelry format and mounting, chain style, photo angle or lighting, shown singly vs as a pair.\n\n" +
     (refCount === 2
       ? "TASK: Photos 1 and 2 both show the SAME REFERENCE charm (one in a worn/lifestyle context, one as a close-up). Use BOTH to establish the reference design; where they seem to disagree, trust the close-up and ignore background props or decorative staging — only the metal charm itself counts. "
       : "TASK: Photo 1 is the REFERENCE charm, shown as a product close-up. CRITICAL: product photos contain decorative STAGING — rendered sparkles, glints, light rays, flowers, props, text, backgrounds. NONE of that is part of the charm. The reference design is ONLY the metal charm itself: its silhouette, cutouts, and engraving IN the metal. Never treat a sparkle, glint or backdrop element as a design detail, and never reject a candidate for lacking one. ") +
-    `For EACH photo starting from photo ${refCount + 1}: zoom in on its charm and decide same_charm: TRUE only if it is the SAME charm design by ALL criteria above — same subject, same silhouette/pose, same cutouts/engraving/details, same meaning — merely worn or mounted differently. When the charm is too small, blurry, or hidden to verify the details, use confidence low and judge from what is genuinely visible.\n` +
+    `For EACH photo starting from photo ${refCount + 1}: zoom in on its charm and decide same_charm: TRUE if it depicts the SAME SUBJECT as the reference — the same creature, object, or symbol — regardless of engraving variants, pose, style, or format. When the charm is too small or blurry to identify the subject, use confidence low and judge from what is genuinely visible.\n` +
     `Reply with ONLY a JSON array, one entry per candidate photo starting from photo ${refCount + 1}: [{"photo":${refCount + 1},"same_charm":true,"charm":"<meaning>","charm_detail":"<literal depiction incl. silhouette + cutouts>","confidence":"high|medium|low","reason":"short"}]` }];
   // Template-zoom every image (reference AND candidates) before judgment —
   // in parallel, each falling back to its raw URL if the crop fails. The
@@ -988,9 +986,11 @@ async function judgeCharms(imgs, refCount) {
   const payload = { model, messages: [{ role: "user", content }] };
   if (/^(gpt-5|o\d)/.test(model)) {
     // 1500 starved on larger image sets (empty content -> unparseable);
-    // judging is also chunked upstream, belt and suspenders.
-    payload.max_completion_tokens = 4000;
-    payload.reasoning_effort = "low";
+    // judging is also chunked upstream, belt and suspenders. Effort medium:
+    // low-effort verdicts flip-flopped between runs on identical images
+    // (same pig pair: "matches exactly" then "mirrored, different").
+    payload.max_completion_tokens = 6000;
+    payload.reasoning_effort = "medium";
   } else {
     payload.max_tokens = 1200;
   }
@@ -1181,9 +1181,21 @@ async function ensureSetLinks(product, job) {
   let titleMatched;
   try {
     const ranked = await rankByLLM(p.title, subject, pool.map(n => ({ handle: n.handle, title: String(n.title || "") })));
-    const order = new Map(ranked.map((h, i) => [h, i]));
+    // Format-tolerant intersection: accept exact handles, case drift,
+    // "handle :: title" echoes, or the title itself.
+    const norm = (s) => String(s || "").toLowerCase().trim();
+    const byHandle = new Map(pool.map(n => [norm(n.handle), n]));
+    const byTitle = new Map(pool.map(n => [norm(n.title), n]));
+    const order = new Map();
+    ranked.forEach((entry, i) => {
+      const e = norm(String(entry).split("::")[0]);
+      const n = byHandle.get(e) || byTitle.get(norm(entry)) || byHandle.get(norm(String(entry).split("::").pop()));
+      if (n && !order.has(n.handle)) order.set(n.handle, i);
+    });
     titleMatched = pool.filter(n => order.has(n.handle))
       .sort((a, b) => order.get(a.handle) - order.get(b.handle));
+    // A "successful" rank that intersects NOTHING is a failure — fall back.
+    if (!titleMatched.length && pool.length) throw new Error("LLM rank intersected zero pool handles (" + ranked.length + " returned)");
     debug.rank = { by: "llm", kept: titleMatched.length, cut: pool.length - titleMatched.length,
       top: titleMatched.slice(0, 6).map(n => n.handle) };
   } catch (e) {
