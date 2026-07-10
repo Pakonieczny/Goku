@@ -3601,6 +3601,19 @@ https://www.etsy.com/your/shops/me/listing-editor/edit/1822973998
         }
       }
 
+      // Some archived set folders contain a "customer review" quote-card
+      // slot template. Fake review imagery must never ship on a listing —
+      // detect it from the slot's AI-generated description and drop it.
+      const isFakeReviewImage = (meta) => {
+        const m = String(meta || "").toLowerCase();
+        if (!m) return false;
+        if (m.includes("testimonial") || m.includes("customer review") ||
+            m.includes("verified customer") || m.includes("review card")) return true;
+        // "review" + quote-card context (but never block engraved-quote
+        // jewelry descriptions, which lack "review").
+        return /\breview\b/.test(m) && (m.includes("quote") || m.includes("five star") || m.includes("5-star") || m.includes("dark background"));
+      };
+
       const seenPhotos = new Set();
       const photos = [];
       const photoNames = [];
@@ -3611,6 +3624,11 @@ https://www.etsy.com/your/shops/me/listing-editor/edit/1822973998
         du = await normalizeImageForEtsy(du);
         if (seenPhotos.has(du)) {
           console.warn(`Per-job dedup: dropping duplicate photo at slot ${i}.`);
+          continue;
+        }
+        if (isFakeReviewImage(rawPhotoMeta[i])) {
+          console.warn(`Slot ${i} is a review-quote card — dropped (fake review imagery is never uploaded).`);
+          window.__DIAG.log("slot-filtered", { slot: i, name: rawPhotoNames[i] || "", reason: "fake-review card", meta: String(rawPhotoMeta[i] || "").slice(0, 120) });
           continue;
         }
         seenPhotos.add(du);
@@ -3643,6 +3661,11 @@ https://www.etsy.com/your/shops/me/listing-editor/edit/1822973998
         // is always a bug.
         if (seenReserved.has(du) || seenPhotos.has(du)) {
           console.warn(`Per-job dedup: dropping duplicate reserved photo at slot ${i}.`);
+          continue;
+        }
+        if (isFakeReviewImage(r.meta)) {
+          console.warn(`Reserved slot ${i} is a review-quote card — dropped.`);
+          window.__DIAG.log("slot-filtered", { slot: i, name: r.name || "", reason: "fake-review card (reserved)", meta: String(r.meta || "").slice(0, 120) });
           continue;
         }
         seenReserved.add(du);
@@ -6901,7 +6924,7 @@ async function callOpenAI(payload, opts = {}) {
                 <span class="sp-title">${esc(j.title)}</span>
                 ${colChips}
                 <span class="sp-mini">${esc(j.variantCount)} var${price ? " · " + price : ""}${time ? " · " + time : ""}</span>
-                ${j.handle ? `<a href="https://britesjewelry.com/products/${esc(j.handle)}" target="_blank" rel="noopener">view live</a>` : ""}
+                ${j.handle ? `<a href="https://britesjewelry.com/products/${esc(j.handle)}?brites-edit=1" target="_blank" rel="noopener">view live</a>` : ""}
                 <span class="sp-chev" aria-hidden="true">▸</span>
               </div>
               <div class="sp-details">
@@ -7144,17 +7167,31 @@ RULES:
               });
               const j = await r.json();
               if (!r.ok || j.ok === false) throw new Error((j.errors && j.errors.join("; ")) || j.error || ("HTTP " + r.status));
-              const mine = ((j.drained && j.drained.uploaded) || []).find(u => u.jobId === j.jobId);
+              // The server drains in the BACKGROUND now (product creation +
+              // vision set-matching exceed the sync limit) — poll the job's
+              // status for the real outcome (up to ~6 min).
+              setShopifyStage(85, `Uploading “${fields.title}” in background — product, variants, collections, set matching (vision)…`);
+              let mine = null;
+              for (let t = 0; t < 60; t++) {
+                await new Promise(res => setTimeout(res, 6000));
+                try {
+                  const sr = await fetch(FN + "?op=status&recent=20");
+                  const sj = await sr.json();
+                  const job = (sj.recent || []).find(x => x.id === j.jobId);
+                  if (job && (job.status === "DONE" || job.status === "FAILED")) { mine = job; break; }
+                } catch (_) {}
+              }
+              if (mine && mine.status === "FAILED") throw new Error(mine.error || "upload failed (see panel)");
               const setTxt = mine && mine.setLinks && mine.setLinks.partners && mine.setLinks.partners.length
                 ? ` · set: ${mine.setLinks.partners.length} partner${mine.setLinks.partners.length > 1 ? "s" : ""} linked`
                 : "";
               setShopifyStage(100, mine
                 ? `LIVE: “${fields.title}” — ${j.variantCount} variants, tier ${j.tier}${setTxt}.`
-                : `Queued: “${fields.title}” (${j.variantCount} variants) — waits for today's variant budget.`);
+                : `Queued: “${fields.title}” (${j.variantCount} variants) — uploads in background; panel shows LIVE when done.`);
               window.M?.toast?.({
                 html: mine
                   ? `Shopify: LIVE — ${j.variantCount} variants${setTxt}.`
-                  : `Shopify: queued (${j.variantCount} variants) — uploads when today's variant budget allows.`
+                  : `Shopify: queued (${j.variantCount} variants) — background upload in progress.`
               });
               if (typeof refreshShopifyStatus === "function") refreshShopifyStatus();
               return j;
