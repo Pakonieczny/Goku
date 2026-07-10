@@ -1474,6 +1474,52 @@ exports.handler = async (event) => {
       return out(200, res);
     }
     if (op === "retryFailed") { const r = await retryFailed(); const drained = await drain(); return out(200, { ...r, drained }); }
+    if (op === "resetSetLinks") {
+      // Fully clear one product's set AND its backlink on every partner —
+      // clean slate for an accurate re-match. The pair-veto ledger is
+      // deliberately untouched: banned pairs stay banned across resets.
+      // Body: { op: "resetSetLinks", handle }
+      const clean0 = (x) => String(x || "").trim()
+        .replace(/^https?:\/\/[^\/]+/i, "").replace(/^\/?products\//i, "")
+        .replace(/^\//, "").split(/[?#]/)[0].trim();
+      const h0 = clean0(body.handle);
+      if (!h0) return out(400, { ok: false, error: "Missing handle" });
+      const d0 = await gql(`query($h: String!) {
+        productByHandle(handle: $h) { id handle metafield(namespace: "brites", key: "set") { value } }
+      }`, { h: h0 });
+      if (!d0.productByHandle) return out(404, { ok: false, error: "No product with handle " + h0 });
+      let mySet = [];
+      try { mySet = JSON.parse((d0.productByHandle.metafield && d0.productByHandle.metafield.value) || "[]"); } catch (_) {}
+      if (!Array.isArray(mySet)) mySet = [];
+      const partnerHandles = mySet.map(e => e && e.h).filter(Boolean);
+      const metafields = [{ ownerId: d0.productByHandle.id, namespace: "brites", key: "set", type: "json", value: "[]" }];
+      const batch = db.batch();
+      batch.set(db.collection("Brites_Set_Links").doc(h0), { partners: [], updatedAt: admin.firestore.FieldValue.serverTimestamp() }, { merge: true });
+      const cleaned = [];
+      for (const ph of partnerHandles) {
+        const pd = await gql(`query($h: String!) {
+          productByHandle(handle: $h) { id handle metafield(namespace: "brites", key: "set") { value } }
+        }`, { h: ph });
+        const pn = pd.productByHandle;
+        if (!pn) continue;
+        let pSet = [];
+        try { pSet = JSON.parse((pn.metafield && pn.metafield.value) || "[]"); } catch (_) {}
+        if (!Array.isArray(pSet)) pSet = [];
+        const next = pSet.filter(e => e && e.h !== h0);
+        if (next.length !== pSet.length) {
+          metafields.push({ ownerId: pn.id, namespace: "brites", key: "set", type: "json", value: JSON.stringify(next) });
+          batch.set(db.collection("Brites_Set_Links").doc(ph), { partners: next, updatedAt: admin.firestore.FieldValue.serverTimestamp() }, { merge: true });
+          cleaned.push(ph);
+        }
+      }
+      const r0 = await gql(`mutation($m: [MetafieldsSetInput!]!) {
+        metafieldsSet(metafields: $m) { userErrors { field message } }
+      }`, { m: metafields });
+      const ue0 = ((r0.metafieldsSet || {}).userErrors) || [];
+      if (ue0.length) return out(500, { ok: false, error: "metafieldsSet: " + ue0[0].message });
+      await batch.commit();
+      return out(200, { ok: true, handle: h0, cleared: partnerHandles.length, backlinksRemoved: cleaned });
+    }
     if (op === "unlinkSet") {
       // Remove a WRONG set link in both directions and record ok:false in
       // the pair ledger so no future run can re-admit it.
