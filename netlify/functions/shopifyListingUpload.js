@@ -840,6 +840,51 @@ function setShortTitle(title) {
   return t.split(/\s+/).slice(0, 6).join(" ").trim();
 }
 
+// Zoomed vision input — the SAME template crop the client pipeline applies
+// before its vision calls (window.AI_ZOOM_TEMPLATE / cropImageForAI in
+// Index.html): zoom 2, centered horizontally, center shifted +8% of height
+// downward. The catalog's photography places the charm ~1/3 up from the
+// bottom, so this window reliably holds the full charm at double
+// magnification — the judged detail (cutouts, engraving, silhouette) is
+// twice the resolution of the raw frame. Exact port of the client math:
+// crop w/h = dim/zoom; origin centered + offset*dim, clamped; longest side
+// capped at 1024; JPEG q85. Any failure falls back to the original URL so a
+// crop hiccup can never break the judgment (same policy as the client).
+const AI_ZOOM_TEMPLATE = { zoom: 2, offsetX: 0, offsetY: 0.08 };
+
+function zoomCropRect(W, H, tpl) {
+  const zoom = Math.max(1, Number(tpl.zoom) || 2);
+  const cw = W / zoom, ch = H / zoom;
+  let sx = (W - cw) / 2 + (Number(tpl.offsetX) || 0) * W;
+  let sy = (H - ch) / 2 + (Number(tpl.offsetY) || 0) * H;
+  sx = Math.max(0, Math.min(W - cw, sx));
+  sy = Math.max(0, Math.min(H - ch, sy));
+  return { sx: Math.round(sx), sy: Math.round(sy), cw: Math.round(cw), ch: Math.round(ch) };
+}
+
+async function zoomImageForAI(url) {
+  const sharp = require("sharp"); // already a project dependency
+  const controller = new AbortController();
+  const timer = setTimeout(() => controller.abort(), 20000);
+  let buf;
+  try {
+    const r = await fetch(url, { signal: controller.signal });
+    if (!r.ok) throw new Error("image fetch HTTP " + r.status);
+    buf = Buffer.from(await r.arrayBuffer());
+  } finally { clearTimeout(timer); }
+  const meta = await sharp(buf).metadata();
+  const W = meta.width, H = meta.height;
+  if (!W || !H) throw new Error("image has no dimensions");
+  const { sx, sy, cw, ch } = zoomCropRect(W, H, AI_ZOOM_TEMPLATE);
+  let pipe = sharp(buf).extract({ left: sx, top: sy, width: cw, height: ch });
+  const MAX = 1024;
+  if (Math.max(cw, ch) > MAX) {
+    pipe = pipe.resize({ width: cw >= ch ? MAX : null, height: ch > cw ? MAX : null });
+  }
+  const out = await pipe.jpeg({ quality: 85 }).toBuffer();
+  return "data:image/jpeg;base64," + out.toString("base64");
+}
+
 // Visual verification — IDENTICAL criteria, prompt, model and gating to
 // verifyCharmSets-background.js (the Set Matcher pipeline). Title matching
 // above only proposes CANDIDATES; nothing reaches brites.set without the
@@ -859,7 +904,13 @@ async function judgeCharms(imgs) {
     "TASK: Photo 1 is the REFERENCE charm. " + (imgs[0].form ? "Expected formats in order: " + imgs.map(i => i.form || "?").join(", ") + ". " : "") +
     "For EACH subsequent photo: zoom in on its charm and decide same_charm: TRUE only if it is the SAME charm design by ALL criteria above — same subject, same silhouette/pose, same cutouts/engraving/details, same meaning — merely worn or mounted differently. When the charm is too small, blurry, or hidden to verify the details, use confidence low and judge from what is genuinely visible.\n" +
     'Reply with ONLY a JSON array, one entry per photo starting from photo 2: [{"photo":2,"same_charm":true,"charm":"<meaning, e.g. Leo (zodiac)>","charm_detail":"<literal depiction incl. silhouette + cutouts>","confidence":"high|medium|low","reason":"short"}]' }];
-  for (const im of imgs) content.push({ type: "image_url", image_url: { url: im.url, detail: "high" } });
+  // Template-zoom every image (reference AND candidates) before judgment —
+  // in parallel, each falling back to its raw URL if the crop fails.
+  const zoomed = await Promise.all(imgs.map(async (im) => {
+    try { return await zoomImageForAI(im.url); }
+    catch (e) { console.warn("zoom crop fallback for", im.handle, "-", e && e.message); return im.url; }
+  }));
+  zoomed.forEach(u => content.push({ type: "image_url", image_url: { url: u, detail: "high" } }));
 
   const payload = { model, messages: [{ role: "user", content }] };
   if (/^(gpt-5|o\d)/.test(model)) {
