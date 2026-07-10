@@ -1599,6 +1599,45 @@ exports.handler = async (event) => {
       await batch.commit();
       return out(200, { ok: true, handle: h0, cleared: partnerHandles.length, backlinksRemoved: cleaned });
     }
+    if (op === "linkSet") {
+      // MANUAL curation: declare two products a set pair. Writes both
+      // directions and records ok:true in the pair ledger so automated
+      // reruns keep it. Body: { op: "linkSet", handle, partner }
+      const clean1 = (x) => String(x || "").trim()
+        .replace(/^https?:\/\/[^\/]+/i, "").replace(/^\/?products\//i, "")
+        .replace(/^\//, "").split(/[?#]/)[0].trim();
+      const hA = clean1(body.handle), hB = clean1(body.partner);
+      if (!hA || !hB || hA === hB) return out(400, { ok: false, error: "Need two distinct handles" });
+      const q = await gql(`query($a: String!, $b: String!) {
+        a: productByHandle(handle: $a) { id handle title metafield(namespace: "brites", key: "set") { value } }
+        b: productByHandle(handle: $b) { id handle title metafield(namespace: "brites", key: "set") { value } }
+      }`, { a: hA, b: hB });
+      if (!q.a || !q.b) return out(404, { ok: false, error: "Product not found: " + (!q.a ? hA : hB) });
+      const parse1 = (n) => { try { const v = JSON.parse((n.metafield && n.metafield.value) || "[]"); return Array.isArray(v) ? v : []; } catch { return []; } };
+      const entry = (n) => ({ h: n.handle, f: setFormFromTitle(n.title) || "Charm Only", t: setShortTitle(n.title) });
+      const aSet = parse1(q.a).filter(e => e && e.h !== hB).concat([entry(q.b)]);
+      const bSet = parse1(q.b).filter(e => e && e.h !== hA).concat([entry(q.a)]);
+      const r = await gql(`mutation($m: [MetafieldsSetInput!]!) {
+        metafieldsSet(metafields: $m) { userErrors { field message } }
+      }`, { m: [
+        { ownerId: q.a.id, namespace: "brites", key: "set", type: "json", value: JSON.stringify(aSet) },
+        { ownerId: q.b.id, namespace: "brites", key: "set", type: "json", value: JSON.stringify(bSet) }
+      ]});
+      const ue = ((r.metafieldsSet || {}).userErrors) || [];
+      if (ue.length) return out(500, { ok: false, error: "metafieldsSet: " + ue[0].message });
+      const batch = db.batch();
+      batch.set(db.collection("Brites_Set_Links").doc(hA), { partners: aSet, updatedAt: admin.firestore.FieldValue.serverTimestamp() }, { merge: true });
+      batch.set(db.collection("Brites_Set_Links").doc(hB), { partners: bSet, updatedAt: admin.firestore.FieldValue.serverTimestamp() }, { merge: true });
+      await batch.commit();
+      const key = [hA, hB].sort().join("|").replace(/[.\/]/g, "_");
+      await db.collection("Brites_Editor_Meta").doc("charmVerifyState")
+        .update({ ["pairs." + key]: { ok: true, charm: "", reason: "manual link" } })
+        .catch(async () => {
+          await db.collection("Brites_Editor_Meta").doc("charmVerifyState")
+            .set({ pairs: { [key]: { ok: true, charm: "", reason: "manual link" } } }, { merge: true });
+        });
+      return out(200, { ok: true, linked: [hA, hB], sets: { [hA]: aSet.length, [hB]: bSet.length } });
+    }
     if (op === "unlinkSet") {
       // Remove a WRONG set link in both directions and record ok:false in
       // the pair ledger so no future run can re-admit it.
