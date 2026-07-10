@@ -10,7 +10,8 @@
     "node-fetch",
     "formidable",
     "firebase-admin",
-    "@google-cloud/storage"
+    "@google-cloud/storage",
+    "sharp"
   ]
 
 [functions.imageUpload]
