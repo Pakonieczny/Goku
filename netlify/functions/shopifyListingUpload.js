@@ -970,15 +970,29 @@ async function ensureSetLinks(product, job) {
   const subject = setSubjectTokens(p.title);
   if (!myForm || !subject.length) return { partners: [], reason: "no form/subject", debug: { myForm, subject, title: p.title } };
 
-  // Candidate pool: title search on the subject phrase.
-  const d = await gql(`query($q: String!) {
-    products(first: 100, query: $q) {
-      nodes { id handle title featuredImage { url } metafield(namespace: "brites", key: "set") { value } }
-    }
-  }`, { q: subject.map(w => `title:${w}`).join(" ") });
-  const nodes = ((d.products || {}).nodes) || [];
+  // Candidate pool: catalog search on the subject phrase. Precision does
+  // NOT come from the search (the whole-word title filter below enforces
+  // it) — so use the broadest query first, and a fallback ladder in case a
+  // syntax is rejected by this API path (measured live: "title:owl"
+  // returned 0 nodes while the catalog holds many owls).
+  const attempts = [
+    subject.join(" "),                                // unscoped: title+tags+type
+    subject.map(w => `title:${w}*`).join(" "),        // scoped with wildcard
+    subject.map(w => `title:${w}`).join(" ")          // scoped exact token
+  ];
+  let nodes = [], queryUsed = "";
+  for (const q of attempts) {
+    const d = await gql(`query($q: String!) {
+      products(first: 100, query: $q) {
+        nodes { id handle title featuredImage { url } metafield(namespace: "brites", key: "set") { value } }
+      }
+    }`, { q });
+    nodes = ((d.products || {}).nodes) || [];
+    queryUsed = q;
+    if (nodes.length) break;
+  }
   // Funnel counters — every empty result names its stage.
-  const debug = { subject, myForm, query: subject.map(w => `title:${w}`).join(" "), nodes: nodes.length,
+  const debug = { subject, myForm, query: queryUsed, nodes: nodes.length,
     titleMatched: 0, otherForm: 0, withImage: 0,
     sampleNodes: nodes.slice(0, 5).map(n => `${n.handle} [${setFormFromTitle(n.title)}]`) };
 
