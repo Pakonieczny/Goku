@@ -996,15 +996,24 @@ async function ensureSetLinks(product, job) {
     titleMatched: 0, otherForm: 0, withImage: 0,
     sampleNodes: nodes.slice(0, 5).map(n => `${n.handle} [${setFormFromTitle(n.title)}]`) };
 
-  // Same charm = every subject token appears as a whole word in the
-  // candidate title. Different form = it completes a set, not a duplicate.
-  const isMatch = (n) => {
-    if (n.handle === product.handle) return false;
+  // Title matching only PROPOSES candidates — the vision check is what
+  // decides truth. Multi-word subjects name the same charm inconsistently
+  // across formats ("Citrus Fruit Necklace" vs "Citrus Charm Huggie"), so
+  // requiring every word starves the judge. Any shared subject word
+  // qualifies; candidates matching MORE words rank first so full matches
+  // get judge slots ahead of partial ones.
+  const wordRe = (w) => new RegExp(`\\b${w.replace(/[.*+?^$()|[\]\\]/g, "\\$&")}\\b`);
+  const matchCount = (n) => {
+    if (n.handle === product.handle) return 0;
     const t = String(n.title || "").toLowerCase();
-    return subject.every(w => new RegExp(`\\b${w.replace(/[.*+?^$()|[\]\\]/g, "\\$&")}\\b`).test(t));
+    return subject.reduce((k, w) => k + (wordRe(w).test(t) ? 1 : 0), 0);
   };
-  const titleMatched = nodes.filter(isMatch);
+  const titleMatched = nodes
+    .map(n => ({ ...n, matches: matchCount(n) }))
+    .filter(n => n.matches > 0)
+    .sort((a, b) => b.matches - a.matches);
   debug.titleMatched = titleMatched.length;
+  debug.fullMatches = titleMatched.filter(n => n.matches === subject.length).length;
   const candidates = titleMatched
     .map(n => ({ ...n, form: setFormFromTitle(n.title) }))
     .filter(n => n.form && n.form !== myForm);
@@ -1104,7 +1113,7 @@ async function ensureSetLinks(product, job) {
 
   return {
     partners: partners.map(p => ({ h: p.handle, f: p.form })),
-    backLinked: metafields.length - 1, firebase: fbWrites, audit
+    backLinked: metafields.length - 1, firebase: fbWrites, audit, debug
   };
 }
 
