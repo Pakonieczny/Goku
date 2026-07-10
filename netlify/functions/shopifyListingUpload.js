@@ -1005,6 +1005,33 @@ async function expandSubjectSynonyms(subject, title) {
   }
 }
 
+// Semantic similarity between the charm subject and candidate titles —
+// ONE embeddings call per run (subject + up to ~60 titles). Handles
+// plurals, synonyms and phrasing natively; deterministic per model. This
+// is the candidacy RANKER — vision remains the truth gate.
+async function rankBySemantics(subjectPhrase, titles) {
+  const inputs = [subjectPhrase].concat(titles);
+  const controller = new AbortController();
+  const timer = setTimeout(() => controller.abort(), 20000);
+  let r;
+  try {
+    r = await fetch("https://api.openai.com/v1/embeddings", {
+      method: "POST",
+      headers: { "Content-Type": "application/json", Authorization: `Bearer ${process.env.OPENAI_API_KEY}` },
+      body: JSON.stringify({ model: "text-embedding-3-small", input: inputs }),
+      signal: controller.signal
+    });
+  } finally { clearTimeout(timer); }
+  const j = await r.json();
+  if (!r.ok) throw new Error((j.error && j.error.message) || ("embeddings HTTP " + r.status));
+  const vecs = (j.data || []).sort((a, b) => a.index - b.index).map(d => d.embedding);
+  if (vecs.length !== inputs.length) throw new Error("embeddings shape mismatch");
+  const dot = (a, b) => { let s = 0; for (let i = 0; i < a.length; i++) s += a[i] * b[i]; return s; };
+  const norm = (a) => Math.sqrt(dot(a, a));
+  const ref = vecs[0], refN = norm(ref);
+  return titles.map((t, i) => dot(ref, vecs[i + 1]) / (refN * norm(vecs[i + 1]) || 1));
+}
+
 async function ensureSetLinks(product, job) {
   // Job docs nest the listing data under .payload (see the create function's
   // own `const p = job.payload`). Tolerate both shapes.
@@ -1023,7 +1050,19 @@ async function ensureSetLinks(product, job) {
   // vs "Capricorn Goat" vs "Goat Head") — measured live: "horned goat"
   // returned 2 of a 24-product goat family. Recall is the search's job;
   // ranking (match count) and the vision check keep precision.
-  const synonyms = await expandSubjectSynonyms(subject, p.title);
+  const subjectKey = subject.join("_").replace(/[.\/]/g, "-");
+  let storedSyn = [];
+  try {
+    const synDoc = await db.collection("Brites_Editor_Meta").doc("setSubjectSynonyms").get();
+    storedSyn = ((synDoc.exists && synDoc.data()) || {})[subjectKey] || [];
+  } catch (e) { console.warn("synonym store read skipped:", e && e.message); }
+  const fresh = await expandSubjectSynonyms(subject, p.title);
+  const synonyms = Array.from(new Set(storedSyn.concat(fresh)));
+  if (fresh.some(w => !storedSyn.includes(w))) {
+    db.collection("Brites_Editor_Meta").doc("setSubjectSynonyms")
+      .set({ [subjectKey]: synonyms }, { merge: true })
+      .catch(e => console.warn("synonym store write skipped:", e && e.message));
+  }
   const searchWords = subject.concat(synonyms);
   const attempts = [
     searchWords.join(" OR "),                         // unscoped, OR across all vocabulary
@@ -1053,18 +1092,32 @@ async function ensureSetLinks(product, job) {
   // requiring every word starves the judge. Any shared subject word
   // qualifies; candidates matching MORE words rank first so full matches
   // get judge slots ahead of partial ones.
-  const wordRe = (w) => new RegExp(`\\b${w.replace(/[.*+?^$()|[\]\\]/g, "\\$&")}\\b`);
-  const matchCount = (n) => {
-    if (n.handle === product.handle) return 0;
-    const t = String(n.title || "").toLowerCase();
-    return searchWords.reduce((k, w) => k + (wordRe(w).test(t) ? 1 : 0), 0);
-  };
-  const titleMatched = nodes
-    .map(n => ({ ...n, matches: matchCount(n) }))
-    .filter(n => n.matches > 0)
-    .sort((a, b) => b.matches - a.matches);
+  // SEMANTIC candidacy: rank every search hit by embedding similarity to
+  // the charm subject. No plural rules, no stopword patches — "Dancers"
+  // scores near "dancer", "Piggy Bank" near "pig", while "Chocolate Bar"
+  // (a tag-recall accident) scores low and drops out. Word matching
+  // survives only as the emergency fallback if the embeddings call fails.
+  const pool = nodes.filter(n => n.handle !== product.handle);
+  const subjectPhrase = subject.join(" ") + " charm jewelry";
+  let titleMatched;
+  try {
+    const scores = await rankBySemantics(subjectPhrase, pool.map(n => String(n.title || "")));
+    titleMatched = pool.map((n, i) => ({ ...n, sim: scores[i] }))
+      .filter(n => n.sim >= 0.35)
+      .sort((a, b) => b.sim - a.sim);
+    debug.semantic = { threshold: 0.35,
+      top: titleMatched.slice(0, 6).map(n => `${n.handle} ${n.sim.toFixed(2)}`),
+      cut: pool.length - titleMatched.length };
+  } catch (e) {
+    console.warn("semantic ranking fallback to word match:", e && e.message);
+    debug.semantic = { error: String((e && e.message) || e).slice(0, 120) };
+    const wordRe = (w) => new RegExp(`\\b${w.replace(/[.*+?^$()|[\]\\]/g, "\\$&")}s?\\b`);
+    titleMatched = pool
+      .map(n => ({ ...n, matches: searchWords.reduce((k, w) => k + (wordRe(w).test(String(n.title || "").toLowerCase()) ? 1 : 0), 0) }))
+      .filter(n => n.matches > 0)
+      .sort((a, b) => b.matches - a.matches);
+  }
   debug.titleMatched = titleMatched.length;
-  debug.fullMatches = titleMatched.filter(n => n.matches === subject.length).length;
   const candidates = titleMatched
     .map(n => ({ ...n, form: setFormFromTitle(n.title) }))
     .filter(n => n.form && n.form !== myForm);
@@ -1082,7 +1135,13 @@ async function ensureSetLinks(product, job) {
   }
   const judgeable = toJudge.filter(c => c.featuredImage && c.featuredImage.url);
   debug.withImage = judgeable.length;
-  const refUrl = (((p.images || [])[0]) || {}).src;
+  // Reference image: the charm CLOSE-UP (gallery slot 3 by catalog
+  // convention) — on model shots the charm is tiny even at 2x zoom and the
+  // model must guess its identity (measured: citrus read as "fruit with
+  // leaves" one run and "slice disc" the next, admitting a kiwi/avocado).
+  // Fall back to the first image when no third exists.
+  const refUrl = (((p.images || [])[2]) || {}).src || (((p.images || [])[0]) || {}).src;
+  debug.referenceImage = (((p.images || [])[2]) || {}).src ? "closeup (slot 3)" : "featured (slot 1)";
   if (!judgeable.length || !refUrl) return { partners: [], reason: refUrl ? "no judgeable candidates" : "no reference image", debug };
 
   const imgs = [{ handle: product.handle, url: refUrl, form: myForm }]
@@ -1101,20 +1160,47 @@ async function ensureSetLinks(product, job) {
     audit.push(`${cand.handle}: ${v.same_charm ? "MATCH" : "no"} (${v.confidence || "?"}) ${v.reason || ""}`.slice(0, 160));
     if (v.same_charm === true) confirmedHandles.add(cand.handle);
   });
-  const partners = judgeable.filter(c => confirmedHandles.has(c.handle)).slice(0, 4);
+  // The pair ledger is authoritative: a pair marked ok:false (nightly
+  // verifier prune OR manual unlink) can never be re-admitted by a rerun.
+  let vetoPairs = {};
+  try {
+    const ledger = await db.collection("Brites_Editor_Meta").doc("charmVerifyState").get();
+    vetoPairs = ((ledger.exists && ledger.data()) || {}).pairs || {};
+  } catch (e) { console.warn("pair ledger read skipped:", e && e.message); }
+  const pairKeyOf = (a, b) => [a, b].sort().join("|").replace(/[.\/]/g, "_");
+  const vetoed = (h) => { const v = vetoPairs[pairKeyOf(product.handle, h)]; return v && v.ok === false; };
+  const partners = judgeable.filter(c => {
+    if (!confirmedHandles.has(c.handle)) return false;
+    if (vetoed(c.handle)) { audit.push(`${c.handle}: vetoed by pair ledger (previously pruned/unlinked)`); return false; }
+    return true;
+  }).slice(0, 8);
   if (!partners.length) return { partners: [], reason: "no visual matches", audit, debug };
 
   const myEntry = { h: product.handle, f: myForm, t: setShortTitle(p.title) };
+  // MERGE with the product's existing set: previously confirmed partners are
+  // kept (pruning is the nightly verifier's job, never a rerun's side
+  // effect), newly confirmed ones append, deduped by handle, capped at 8.
+  let existingSet = [];
+  try { existingSet = JSON.parse((product.metafield && product.metafield.value) || "[]"); } catch (_) {}
+  if (!Array.isArray(existingSet)) existingSet = [];
+  existingSet = existingSet.filter(e => e && e.h && e.h !== product.handle);
+  const mergedForward = existingSet.slice();
+  for (const c of partners) {
+    if (mergedForward.length >= 8) break;
+    if (!mergedForward.some(e => e.h === c.handle)) {
+      mergedForward.push({ h: c.handle, f: c.form, t: setShortTitle(c.title) });
+    }
+  }
   const metafields = [{
     ownerId: product.id, namespace: "brites", key: "set", type: "json",
-    value: JSON.stringify(partners.map(p => ({ h: p.handle, f: p.form, t: setShortTitle(p.title) })))
+    value: JSON.stringify(mergedForward)
   }];
   // Backward links: append the new product to each partner's set (dedup, cap 4).
   for (const p of partners) {
     let cur = [];
     try { cur = JSON.parse((p.metafield && p.metafield.value) || "[]"); } catch (_) {}
     if (!Array.isArray(cur)) cur = [];
-    if (cur.some(e => e && e.h === myEntry.h) || cur.length >= 4) continue;
+    if (cur.some(e => e && e.h === myEntry.h) || cur.length >= 8) continue;
     metafields.push({
       ownerId: p.id, namespace: "brites", key: "set", type: "json",
       value: JSON.stringify(cur.concat([myEntry]))
@@ -1133,11 +1219,10 @@ async function ensureSetLinks(product, job) {
   // 2) Brites_Editor_Meta/charmVerifyState.pairs: the same pair-verdict
   //    ledger the verifier writes, so the console/CSV counts these links as
   //    CONFIRMED (visually verified here, same criteria) instead of pending.
-  const partnerEntries = partners.map(p => ({ h: p.handle, f: p.form, t: setShortTitle(p.title) }));
   const fbWrites = [];
   const batch = db.batch();
   batch.set(db.collection("Brites_Set_Links").doc(product.handle), {
-    partners: partnerEntries, source: "upload-verified",
+    partners: mergedForward, source: "upload-verified",
     updatedAt: admin.firestore.FieldValue.serverTimestamp()
   }, { merge: true });
   fbWrites.push(product.handle);
@@ -1164,7 +1249,8 @@ async function ensureSetLinks(product, job) {
   }
 
   return {
-    partners: partners.map(p => ({ h: p.handle, f: p.form })),
+    partners: mergedForward.map(e => ({ h: e.h, f: e.f })),
+    newlyConfirmed: partners.map(c => ({ h: c.handle, f: c.form })),
     backLinked: metafields.length - 1, firebase: fbWrites, audit, debug
   };
 }
@@ -1353,6 +1439,44 @@ exports.handler = async (event) => {
       return out(200, res);
     }
     if (op === "retryFailed") { const r = await retryFailed(); const drained = await drain(); return out(200, { ...r, drained }); }
+    if (op === "unlinkSet") {
+      // Remove a WRONG set link in both directions and record ok:false in
+      // the pair ledger so no future run can re-admit it.
+      // Body: { op: "unlinkSet", handle, partner } (bare handles or URLs).
+      const clean = (x) => String(x || "").trim()
+        .replace(/^https?:\/\/[^\/]+/i, "").replace(/^\/?products\//i, "")
+        .replace(/^\//, "").split(/[?#]/)[0].trim();
+      const hA = clean(body.handle), hB = clean(body.partner);
+      if (!hA || !hB) return out(400, { ok: false, error: "Need handle and partner" });
+      const q = await gql(`query($a: String!, $b: String!) {
+        a: productByHandle(handle: $a) { id handle metafield(namespace: "brites", key: "set") { value } }
+        b: productByHandle(handle: $b) { id handle metafield(namespace: "brites", key: "set") { value } }
+      }`, { a: hA, b: hB });
+      if (!q.a || !q.b) return out(404, { ok: false, error: "Product not found: " + (!q.a ? hA : hB) });
+      const parse = (n) => { try { const v = JSON.parse((n.metafield && n.metafield.value) || "[]"); return Array.isArray(v) ? v : []; } catch { return []; } };
+      const aSet = parse(q.a).filter(e => e && e.h !== hB);
+      const bSet = parse(q.b).filter(e => e && e.h !== hA);
+      const r = await gql(`mutation($m: [MetafieldsSetInput!]!) {
+        metafieldsSet(metafields: $m) { userErrors { field message } }
+      }`, { m: [
+        { ownerId: q.a.id, namespace: "brites", key: "set", type: "json", value: JSON.stringify(aSet) },
+        { ownerId: q.b.id, namespace: "brites", key: "set", type: "json", value: JSON.stringify(bSet) }
+      ]});
+      const ue = ((r.metafieldsSet || {}).userErrors) || [];
+      if (ue.length) return out(500, { ok: false, error: "metafieldsSet: " + ue[0].message });
+      const batch = db.batch();
+      batch.set(db.collection("Brites_Set_Links").doc(hA), { partners: aSet, updatedAt: admin.firestore.FieldValue.serverTimestamp() }, { merge: true });
+      batch.set(db.collection("Brites_Set_Links").doc(hB), { partners: bSet, updatedAt: admin.firestore.FieldValue.serverTimestamp() }, { merge: true });
+      await batch.commit();
+      const key = [hA, hB].sort().join("|").replace(/[.\/]/g, "_");
+      await db.collection("Brites_Editor_Meta").doc("charmVerifyState")
+        .update({ ["pairs." + key]: { ok: false, charm: "", reason: "manual unlink" } })
+        .catch(async () => {
+          await db.collection("Brites_Editor_Meta").doc("charmVerifyState")
+            .set({ pairs: { [key]: { ok: false, charm: "", reason: "manual unlink" } } }, { merge: true });
+        });
+      return out(200, { ok: true, unlinked: [hA, hB], remaining: { [hA]: aSet.length, [hB]: bSet.length } });
+    }
     if (op === "relinkSet") {
       // Run set matching + vision verification + writes for an EXISTING
       // product (backlog tool, and recovery for uploads that predate the
@@ -1363,7 +1487,7 @@ exports.handler = async (event) => {
         .replace(/^\//, "").split(/[?#]/)[0].trim();
       if (!handle) return out(400, { ok: false, error: "Missing handle" });
       const d = await gql(`query($h: String!) {
-        productByHandle(handle: $h) { id handle title featuredImage { url } }
+        productByHandle(handle: $h) { id handle title featuredImage { url } images(first: 3) { nodes { url } } metafield(namespace: "brites", key: "set") { value } }
       }`, { h: handle });
       const prod = d.productByHandle;
       if (!prod) return out(404, { ok: false, error: "No product with handle " + handle });
@@ -1372,7 +1496,8 @@ exports.handler = async (event) => {
       }
       // Job-shaped input: title drives subject + form, featured image is
       // the vision reference (same framing convention as the catalog).
-      const jobShaped = { payload: { title: prod.title, images: [{ src: prod.featuredImage.url }] } };
+      const gallery = (((prod.images || {}).nodes) || []).map(n => ({ src: n.url }));
+      const jobShaped = { payload: { title: prod.title, images: gallery.length ? gallery : [{ src: prod.featuredImage.url }] } };
       try {
         const setLinks = await ensureSetLinks(prod, jobShaped);
         return out(200, { ok: true, handle: prod.handle, setLinks });
