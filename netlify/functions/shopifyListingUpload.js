@@ -837,6 +837,9 @@ function setFormFromTitle(title) {
   if (/\bhuggies?\b|\bhoops?\b/.test(t)) return "Huggies";
   if (/\bearrings?\b|\bstuds?\b/.test(t)) return "Stud Earrings";
   if (/\bbracelets?\b/.test(t)) return "Bracelet";
+  // Catalog convention: "X Charm Pendant" (no "Necklace") is a charm-only
+  // product; "pendant" alone otherwise means necklace.
+  if (/\bcharms?\b/.test(t) && /\bpendants?\b/.test(t) && !/\bnecklaces?\b/.test(t)) return "Charm Only";
   if (/\bnecklaces?\b|\bpendants?\b/.test(t)) return "Necklace";
   if (/\brings?\b/.test(t)) return "Ring";
   if (/\bcharms?\b/.test(t)) return "Charm Only";
