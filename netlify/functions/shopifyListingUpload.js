@@ -843,7 +843,7 @@ const SET_FILLERS = new Set([
   "a", "an", "the", "of", "and", "or", "with", "for", "on", "in", "to",
   "dainty", "cute", "tiny", "mini", "small", "little", "whimsical",
   "kawaii", "adorable", "elegant", "delicate", "handcrafted", "gold",
-  "silver", "14k"
+  "silver", "14k", "silhouette", "motif", "shaped", "style", "styled"
 ]);
 
 function setSubjectTokens(title) {
@@ -962,6 +962,39 @@ async function judgeCharms(imgs) {
   try { return JSON.parse(out); } catch { return null; }
 }
 
+// Expand the charm subject with catalog-vocabulary synonyms for SEARCH
+// recall only (measured live: subject "porcine" found 0 of the pig family,
+// which is titled "Pig …"). Failure-safe: on any error the base subject is
+// used alone.
+async function expandSubjectSynonyms(subject, title) {
+  try {
+    const model = process.env.OPENAI_VISION_MODEL || "gpt-5.4-mini";
+    const payload = { model, messages: [{ role: "user", content:
+      `A jewelry catalog names the same charm subject with different words across product titles. Subject words: ${JSON.stringify(subject)} (from the title ${JSON.stringify(String(title || ""))}). Reply with ONLY a JSON array of 0-4 additional lowercase single words that other product titles for the SAME subject would likely use — common names and synonyms (e.g. "porcine" -> ["pig","piggy"], "canine" -> ["dog","puppy"]). No adjectives, no style words, no repeats of the given words. [] if none apply.` }] };
+    if (/^(gpt-5|o\d)/.test(model)) { payload.max_completion_tokens = 500; payload.reasoning_effort = "low"; }
+    else { payload.max_tokens = 100; }
+    const controller = new AbortController();
+    const timer = setTimeout(() => controller.abort(), 15000);
+    let r;
+    try {
+      r = await fetch("https://api.openai.com/v1/chat/completions", {
+        method: "POST",
+        headers: { "Content-Type": "application/json", Authorization: `Bearer ${process.env.OPENAI_API_KEY}` },
+        body: JSON.stringify(payload), signal: controller.signal
+      });
+    } finally { clearTimeout(timer); }
+    const j = await r.json();
+    const out = String((((j.choices || [])[0] || {}).message || {}).content || "").replace(/```json|```/g, "").trim();
+    const arr = JSON.parse(out);
+    if (!Array.isArray(arr)) return [];
+    return arr.map(w => String(w).toLowerCase().trim())
+      .filter(w => /^[a-z0-9]{2,20}$/.test(w) && !subject.includes(w)).slice(0, 4);
+  } catch (e) {
+    console.warn("subject synonym expansion skipped:", (e && e.message) || e);
+    return [];
+  }
+}
+
 async function ensureSetLinks(product, job) {
   // Job docs nest the listing data under .payload (see the create function's
   // own `const p = job.payload`). Tolerate both shapes.
@@ -980,8 +1013,10 @@ async function ensureSetLinks(product, job) {
   // vs "Capricorn Goat" vs "Goat Head") — measured live: "horned goat"
   // returned 2 of a 24-product goat family. Recall is the search's job;
   // ranking (match count) and the vision check keep precision.
+  const synonyms = await expandSubjectSynonyms(subject, p.title);
+  const searchWords = subject.concat(synonyms);
   const attempts = [
-    subject.join(" OR "),                             // unscoped, OR across words
+    searchWords.join(" OR "),                         // unscoped, OR across all vocabulary
     subject.join(" "),                                // unscoped AND (fallback)
     subject.map(w => `title:${w}*`).join(" "),        // scoped with wildcard
     subject.map(w => `title:${w}`).join(" ")          // scoped exact token
@@ -998,7 +1033,7 @@ async function ensureSetLinks(product, job) {
     if (nodes.length) break;
   }
   // Funnel counters — every empty result names its stage.
-  const debug = { subject, myForm, query: queryUsed, nodes: nodes.length,
+  const debug = { subject, synonyms, myForm, query: queryUsed, nodes: nodes.length,
     titleMatched: 0, otherForm: 0, withImage: 0,
     sampleNodes: nodes.slice(0, 5).map(n => `${n.handle} [${setFormFromTitle(n.title)}]`) };
 
@@ -1012,7 +1047,7 @@ async function ensureSetLinks(product, job) {
   const matchCount = (n) => {
     if (n.handle === product.handle) return 0;
     const t = String(n.title || "").toLowerCase();
-    return subject.reduce((k, w) => k + (wordRe(w).test(t) ? 1 : 0), 0);
+    return searchWords.reduce((k, w) => k + (wordRe(w).test(t) ? 1 : 0), 0);
   };
   const titleMatched = nodes
     .map(n => ({ ...n, matches: matchCount(n) }))
