@@ -828,9 +828,32 @@ const SET_STOP_WORDS = new Set([
   "moms", "mothers", "day", "collectors", "friends", "jewelry"
 ]);
 
+// Words that mark the FORM/STRUCTURE part of a title. In this catalog's
+// title grammar the charm subject always LEADS ("Paintbrush Charm Beady
+// Necklace for Teachers", "Flying Swallow Charm Stud Earrings") — so the
+// subject is everything BEFORE the first form word, and everything after
+// (format, chain, audience like "for Teachers") is noise by construction.
+const SET_FORM_MARKERS = new Set([
+  "charm", "charms", "necklace", "necklaces", "pendant", "pendants",
+  "earring", "earrings", "stud", "studs", "huggie", "huggies", "hoop",
+  "hoops", "bracelet", "bracelets", "ring", "rings", "beady", "chain",
+  "disc", "bar", "jewelry"
+]);
+const SET_FILLERS = new Set([
+  "a", "an", "the", "of", "and", "or", "with", "for", "on", "in", "to",
+  "dainty", "cute", "tiny", "mini", "small", "little", "whimsical",
+  "kawaii", "adorable", "elegant", "delicate", "handcrafted", "gold",
+  "silver", "14k"
+]);
+
 function setSubjectTokens(title) {
-  return String(title || "").toLowerCase().replace(/[^a-z0-9\s-]/g, " ")
-    .split(/[\s-]+/).filter(w => w && !SET_STOP_WORDS.has(w));
+  const raw = String(title || "").toLowerCase().replace(/[^a-z0-9\s-]/g, " ")
+    .split(/[\s-]+/).filter(Boolean);
+  const cut = raw.findIndex(w => SET_FORM_MARKERS.has(w));
+  const leading = (cut > 0 ? raw.slice(0, cut) : raw).filter(w => !SET_FILLERS.has(w));
+  if (leading.length && cut > 0) return leading;
+  // Fallback (form word leads or nothing survives): full stopword strip.
+  return raw.filter(w => !SET_FORM_MARKERS.has(w) && !SET_FILLERS.has(w) && !SET_STOP_WORDS.has(w));
 }
 
 // The map's t values are short ("Elephant Charm Necklace"): cut the raw
@@ -940,8 +963,11 @@ async function judgeCharms(imgs) {
 }
 
 async function ensureSetLinks(product, job) {
-  const myForm = SET_FORM_BY_CATEGORY[job.category] || setFormFromTitle(job.title);
-  const subject = setSubjectTokens(job.title);
+  // Job docs nest the listing data under .payload (see the create function's
+  // own `const p = job.payload`). Tolerate both shapes.
+  const p = (job && job.payload) || job || {};
+  const myForm = SET_FORM_BY_CATEGORY[p.category] || setFormFromTitle(p.title);
+  const subject = setSubjectTokens(p.title);
   if (!myForm || !subject.length) return { partners: [], reason: "no form/subject" };
 
   // Candidate pool: title search on the subject phrase.
@@ -974,7 +1000,7 @@ async function ensureSetLinks(product, job) {
     if (!toJudge.includes(c)) toJudge.push(c);
   }
   const judgeable = toJudge.filter(c => c.featuredImage && c.featuredImage.url);
-  const refUrl = (((job.images || [])[0]) || {}).src;
+  const refUrl = (((p.images || [])[0]) || {}).src;
   if (!judgeable.length || !refUrl) return { partners: [], reason: "no judgeable candidates" };
 
   const imgs = [{ handle: product.handle, url: refUrl, form: myForm }]
@@ -995,7 +1021,7 @@ async function ensureSetLinks(product, job) {
   const partners = judgeable.filter(c => confirmedHandles.has(c.handle)).slice(0, 4);
   if (!partners.length) return { partners: [], reason: "no visual matches", audit };
 
-  const myEntry = { h: product.handle, f: myForm, t: setShortTitle(job.title) };
+  const myEntry = { h: product.handle, f: myForm, t: setShortTitle(p.title) };
   const metafields = [{
     ownerId: product.id, namespace: "brites", key: "set", type: "json",
     value: JSON.stringify(partners.map(p => ({ h: p.handle, f: p.form, t: setShortTitle(p.title) })))
