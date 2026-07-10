@@ -1084,7 +1084,7 @@ async function rankByLLM(refTitle, subject, cands) {
   const model = process.env.OPENAI_VISION_MODEL || "gpt-5.4-mini";
   const list = cands.map(c => `${c.handle} :: ${c.title}`).join("\n");
   const payload = { model, messages: [{ role: "user", content:
-    `Reference product title: ${JSON.stringify(refTitle)}\nCharm subject: ${JSON.stringify(subject.join(" "))}\n\nCandidate products (handle :: title), one per line:\n${list}\n\nReturn ONLY a JSON array of the handles whose title denotes the SAME charm subject as the reference — the same creature/object/symbol (plurals, diminutives and true synonyms count; e.g. pig/piggy/piglet are the same subject). EXCLUDE different subjects even when related or same category (owl vs other birds; citrus vs avocado/kiwi; heart vs puzzle unless the reference is both). Order from most to least certain. [] if none.` }] };
+    `Reference product title: ${JSON.stringify(refTitle)}\nCharm subject: ${JSON.stringify(subject.join(" "))}\n\nCandidate products (handle :: title), one per line:\n${list}\n\nReturn ONLY a JSON array of the handles whose title denotes the SAME charm subject as the reference — the same creature/object/symbol (plurals, diminutives and true synonyms count; e.g. pig/piggy/piglet are the same subject). EXCLUDE different subjects even when related or same category (owl vs other birds; citrus vs avocado/kiwi). When the reference subject is a COMPOUND or variant (e.g. "puzzle heart" = a puzzle piece with a heart cutout), items of the BASE subject (plain puzzle pieces) are the SAME family and must be included. Order from most to least certain. [] if none.` }] };
   if (/^(gpt-5|o\d)/.test(model)) { payload.max_completion_tokens = 2000; payload.reasoning_effort = "low"; }
   else { payload.max_tokens = 800; }
   const controller = new AbortController();
@@ -1257,9 +1257,11 @@ async function ensureSetLinks(product, job) {
     zoomTotals.skipped = (zoomTotals.skipped || 0) + (r.zoomReport.skipped || 0);
     zoomTotals.failures.push(...r.zoomReport.failures.slice(0, 3));
     if (!Array.isArray(r.verdicts)) throw new Error("charm judge returned no parseable verdict");
+    // Order-based mapping: models occasionally misnumber photos (measured:
+    // reasons shifted one candidate late in a 10-image call). Verdicts come
+    // back in presentation order — the index is the truth, not v.photo.
     r.verdicts.forEach((v, i) => {
-      const local = (Number(v && v.photo) || (refShots.length + 1 + i)) - refShots.length - 1;
-      verdicts.push({ ...v, __idx: off + local });
+      verdicts.push({ ...v, __idx: off + i });
     });
   }
   debug.zoom = zoomTotals; // ok = images judged at template zoom (2x charm detail)
