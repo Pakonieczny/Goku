@@ -928,10 +928,18 @@ async function judgeCharms(imgs) {
     "For EACH subsequent photo: zoom in on its charm and decide same_charm: TRUE only if it is the SAME charm design by ALL criteria above — same subject, same silhouette/pose, same cutouts/engraving/details, same meaning — merely worn or mounted differently. When the charm is too small, blurry, or hidden to verify the details, use confidence low and judge from what is genuinely visible.\n" +
     'Reply with ONLY a JSON array, one entry per photo starting from photo 2: [{"photo":2,"same_charm":true,"charm":"<meaning, e.g. Leo (zodiac)>","charm_detail":"<literal depiction incl. silhouette + cutouts>","confidence":"high|medium|low","reason":"short"}]' }];
   // Template-zoom every image (reference AND candidates) before judgment —
-  // in parallel, each falling back to its raw URL if the crop fails.
+  // in parallel, each falling back to its raw URL if the crop fails. The
+  // zoom is MANDATORY for accuracy, so its outcome is reported per image:
+  // an un-zoomed judgment must be visible, never silent.
+  const zoomReport = { ok: 0, failed: 0, failures: [] };
   const zoomed = await Promise.all(imgs.map(async (im) => {
-    try { return await zoomImageForAI(im.url); }
-    catch (e) { console.warn("zoom crop fallback for", im.handle, "-", e && e.message); return im.url; }
+    try { const u = await zoomImageForAI(im.url); zoomReport.ok++; return u; }
+    catch (e) {
+      zoomReport.failed++;
+      zoomReport.failures.push(`${im.handle}: ${String((e && e.message) || e).slice(0, 90)}`);
+      console.warn("zoom crop fallback for", im.handle, "-", e && e.message);
+      return im.url;
+    }
   }));
   zoomed.forEach(u => content.push({ type: "image_url", image_url: { url: u, detail: "high" } }));
 
@@ -959,7 +967,9 @@ async function judgeCharms(imgs) {
   if (!upstream.ok) throw new Error((json && json.error && json.error.message) || text || ("OpenAI HTTP " + upstream.status));
   const raw = ((json.choices || [])[0] || {}).message;
   const out = (raw && raw.content ? raw.content : "").replace(/```json|```/g, "").trim();
-  try { return JSON.parse(out); } catch { return null; }
+  let verdicts = null;
+  try { verdicts = JSON.parse(out); } catch { verdicts = null; }
+  return { verdicts, zoomReport };
 }
 
 // Expand the charm subject with catalog-vocabulary synonyms for SEARCH
@@ -1077,7 +1087,8 @@ async function ensureSetLinks(product, job) {
 
   const imgs = [{ handle: product.handle, url: refUrl, form: myForm }]
     .concat(judgeable.map(c => ({ handle: c.handle, url: c.featuredImage.url, form: c.form })));
-  const verdicts = await judgeCharms(imgs);
+  const { verdicts, zoomReport } = await judgeCharms(imgs);
+  debug.zoom = zoomReport; // ok = images judged at template zoom (2x charm detail)
   if (!Array.isArray(verdicts)) throw new Error("charm judge returned no parseable verdict");
   // Mirror the verifier's gating: only an explicit same_charm true admits a
   // link (the background pruner removes on explicit false; for NEW links we
