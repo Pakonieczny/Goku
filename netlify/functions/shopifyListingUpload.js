@@ -960,7 +960,7 @@ async function judgeCharms(imgs, refCount) {
     "ACCEPTABLE differences (never cause FALSE): metal color/finish, charm size/scale, jewelry format and mounting, chain style, photo angle or lighting, shown singly vs as a pair.\n\n" +
     (refCount === 2
       ? "TASK: Photos 1 and 2 both show the SAME REFERENCE charm (one in a worn/lifestyle context, one as a close-up). Use BOTH to establish the reference design; where they seem to disagree, trust the close-up and ignore background props or decorative staging — only the metal charm itself counts. "
-      : "TASK: Photo 1 is the REFERENCE charm. ") +
+      : "TASK: Photo 1 is the REFERENCE charm, shown as a product close-up. CRITICAL: product photos contain decorative STAGING — rendered sparkles, glints, light rays, flowers, props, text, backgrounds. NONE of that is part of the charm. The reference design is ONLY the metal charm itself: its silhouette, cutouts, and engraving IN the metal. Never treat a sparkle, glint or backdrop element as a design detail, and never reject a candidate for lacking one. ") +
     `For EACH photo starting from photo ${refCount + 1}: zoom in on its charm and decide same_charm: TRUE only if it is the SAME charm design by ALL criteria above — same subject, same silhouette/pose, same cutouts/engraving/details, same meaning — merely worn or mounted differently. When the charm is too small, blurry, or hidden to verify the details, use confidence low and judge from what is genuinely visible.\n` +
     `Reply with ONLY a JSON array, one entry per candidate photo starting from photo ${refCount + 1}: [{"photo":${refCount + 1},"same_charm":true,"charm":"<meaning>","charm_detail":"<literal depiction incl. silhouette + cutouts>","confidence":"high|medium|low","reason":"short"}]` }];
   // Template-zoom every image (reference AND candidates) before judgment —
@@ -1174,16 +1174,11 @@ async function ensureSetLinks(product, job) {
     .filter(n => n.form && n.form !== myForm);
   debug.otherForm = candidates.length;
 
-  // Judge up to 8 candidates (diverse forms first) — visual confirmation
-  // decides what a "partner" is, exactly as in the Set Matcher pipeline.
-  const byForm = {};
-  for (const c of candidates) { (byForm[c.form] = byForm[c.form] || []).push(c); }
-  const toJudge = [];
-  for (const form of Object.keys(byForm)) toJudge.push(byForm[form][0]);
-  for (const c of candidates) {
-    if (toJudge.length >= 12) break;
-    if (!toJudge.includes(c)) toJudge.push(c);
-  }
+  // Judge the TOP 12 by semantic rank — the strongest family candidates
+  // get the judge's attention. (Diversity-first selection wasted slots on
+  // one low-scoring item per form — ducks and binoculars judged while
+  // high-ranked family members never entered the call.)
+  const toJudge = candidates.slice(0, 12);
   const judgeable = toJudge.filter(c => c.featuredImage && c.featuredImage.url);
   debug.withImage = judgeable.length;
   // Reference image: the charm CLOSE-UP (gallery slot 3 by catalog
