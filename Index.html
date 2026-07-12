@@ -1982,7 +1982,7 @@ ANTI-REPETITION (TITLE)
                   4. Output plain text, exactly two words, no punctuation.`;
                           
                 const payload = {
-                    model: window.modelName || "gpt-5.5",
+                    model: window.modelName || "gpt-5.4-mini",
                     input: [
                         // Reinforce the negative constraints in the system prompt
                         { role: "system", content: `Return ONLY two descriptive words. No punctuation. You are strictly forbidden from using any of these words: ${forbiddenWords}.` },
@@ -2658,7 +2658,7 @@ ANTI-REPETITION (TITLE)
   `.trim();
 
           const payload = {
-            model: window.modelName || "gpt-5.5",
+            model: window.modelName || "gpt-5.4-mini",
             input: [
               { role: "system", content: "Return ONLY one plain-text line, <=200 characters." },
               {
@@ -2713,7 +2713,7 @@ ANTI-REPETITION (TITLE)
     window.ETSY_SHOP_URL = "https://www.etsy.com/shop/custombrites";
     window.CLIENT_ID = "k75zdspz4r99txpqdji7i2em";
     window.REDIRECT_URI = "https://delicate-tanuki-616ac0.netlify.app/";
-    window.modelName = "gpt-5.5";
+    window.modelName = "gpt-5.4-mini";
 
     // ── DIAGNOSTIC TRACE ────────────────────────────────────────────────
     // Logs ground truth at every stage of an upload so image-order issues
@@ -4669,7 +4669,7 @@ https://www.etsy.com/your/shops/me/listing-editor/edit/1822973998
     function _normLine(s){ return String(s||"").toLowerCase().replace(/[^a-z0-9]+/g," ").trim(); }
     async function _rephraseAltDifferent(prev){
       const payload = {
-        model: window.modelName || "gpt-5.5",
+        model: window.modelName || "gpt-5.4-mini",
         input: [
           { role: "system", content: "Return ONLY one plain text line (<=200 chars). Must not be identical to the input. Avoid trivial punctuation-only changes." },
           { role: "user", content: `Rephrase this Etsy photo alt text so it says the same thing in different words (<=200 chars):\n${prev}` }
@@ -5470,7 +5470,7 @@ https://www.etsy.com/your/shops/me/listing-editor/edit/1822973998
       `.trim();
 
       const payload = {
-        model: window.modelName,            // "gpt-5.5"
+        model: window.modelName,            // "gpt-5.4-mini"
         input: [
           { role: "system", content: "Generate concise, varied Etsy tags. No duplicates. Each tag ≤ 20 chars." },
           { role: "user", content: prompt }
@@ -6374,7 +6374,7 @@ https://www.etsy.com/your/shops/me/listing-editor/edit/1822973998
       try {
         // Responses API payload for GPT-5
         const payload = {
-          model: window.modelName, // e.g., "gpt-5.5"
+          model: window.modelName, // e.g., "gpt-5.4-mini"
           input: [
             { role: "system", content: "Return ONLY the description as plain text." },
             { role: "user", content: promptText }
