@@ -1,63 +1,99 @@
 const fetch = require("node-fetch");
 
-exports.handler = async function(event, context) {
+const JSON_HEADERS = {
+  "Content-Type": "application/json",
+  "Cache-Control": "no-store"
+};
+
+exports.handler = async function (event) {
   try {
-    // Retrieve query parameters from Netlify (passed via event.queryStringParameters)
-    const code = event.queryStringParameters.code;
-    const codeVerifier = event.queryStringParameters.code_verifier;
-
-    // Retrieve environment variables for Etsy OAuth
-    const CLIENT_ID = process.env.CLIENT_ID || process.env.ETSY_CLIENT_ID || process.env.ETSY_API_KEY || process.env.API_KEY;
-    const CLIENT_SECRET = process.env.CLIENT_SECRET || process.env.ETSY_CLIENT_SECRET;
-    const REDIRECT_URI = process.env.REDIRECT_URI || process.env.ETSY_REDIRECT_URI;
-
-    if (!CLIENT_ID || !CLIENT_SECRET || !REDIRECT_URI) {
-      console.error("Missing Etsy OAuth env vars.");
-      console.log("Env presence:", {
-        CLIENT_ID: !!process.env.CLIENT_ID,
-        ETSY_CLIENT_ID: !!process.env.ETSY_CLIENT_ID,
-        ETSY_API_KEY: !!process.env.ETSY_API_KEY,
-        API_KEY: !!process.env.API_KEY,
-        CLIENT_SECRET: !!process.env.CLIENT_SECRET,
-        ETSY_CLIENT_SECRET: !!process.env.ETSY_CLIENT_SECRET,
-        REDIRECT_URI: !!process.env.REDIRECT_URI,
-        ETSY_REDIRECT_URI: !!process.env.ETSY_REDIRECT_URI,
-      });
+    if (event.httpMethod === "OPTIONS") {
       return {
-        statusCode: 500,
-        body: JSON.stringify({ error: "Missing Etsy OAuth env vars (client id/secret/redirect uri)." }),
+        statusCode: 204,
+        headers: {
+          ...JSON_HEADERS,
+          "Access-Control-Allow-Origin": "*",
+          "Access-Control-Allow-Headers": "Content-Type",
+          "Access-Control-Allow-Methods": "GET,POST,OPTIONS"
+        },
+        body: ""
       };
     }
 
-    // Build the request parameters for the Etsy token exchange
-    const params = new URLSearchParams({
-      grant_type: "authorization_code",
-      client_id: CLIENT_ID,
-      client_secret: CLIENT_SECRET,
-      code: code,
-      redirect_uri: REDIRECT_URI,
-      code_verifier: codeVerifier
-    });
+    const query = event.queryStringParameters || {};
+    let body = {};
+    if (event.body) {
+      try { body = JSON.parse(event.body); } catch (_) {}
+    }
 
-    const response = await fetch("https://api.etsy.com/v3/public/oauth/token", {
+    const grantType = String(body.grant_type || query.grant_type || "authorization_code").trim();
+    const code = String(body.code || query.code || "").trim();
+    const codeVerifier = String(body.code_verifier || query.code_verifier || "").trim();
+    const refreshToken = String(body.refresh_token || query.refresh_token || "").trim();
+
+    const CLIENT_ID =
+      process.env.CLIENT_ID ||
+      process.env.ETSY_CLIENT_ID ||
+      process.env.ETSY_API_KEY ||
+      process.env.API_KEY;
+    const CLIENT_SECRET = process.env.CLIENT_SECRET || process.env.ETSY_CLIENT_SECRET;
+    const REDIRECT_URI = process.env.REDIRECT_URI || process.env.ETSY_REDIRECT_URI;
+
+    if (!CLIENT_ID) {
+      return response(500, { error: "Missing Etsy CLIENT_ID environment variable." });
+    }
+
+    const params = new URLSearchParams();
+    params.set("grant_type", grantType);
+    params.set("client_id", CLIENT_ID);
+
+    if (grantType === "refresh_token") {
+      if (!refreshToken) {
+        return response(400, { error: "Missing refresh_token." });
+      }
+      params.set("refresh_token", refreshToken);
+    } else if (grantType === "authorization_code") {
+      if (!CLIENT_SECRET || !REDIRECT_URI) {
+        return response(500, {
+          error: "Missing Etsy OAuth env vars for authorization-code exchange.",
+          missing: [
+            !CLIENT_SECRET && "CLIENT_SECRET",
+            !REDIRECT_URI && "REDIRECT_URI"
+          ].filter(Boolean)
+        });
+      }
+      if (!code || !codeVerifier) {
+        return response(400, { error: "Missing code or code_verifier." });
+      }
+      params.set("client_secret", CLIENT_SECRET);
+      params.set("code", code);
+      params.set("redirect_uri", REDIRECT_URI);
+      params.set("code_verifier", codeVerifier);
+    } else {
+      return response(400, { error: `Unsupported grant_type: ${grantType}` });
+    }
+
+    const upstream = await fetch("https://api.etsy.com/v3/public/oauth/token", {
       method: "POST",
-      headers: {
-        "Content-Type": "application/x-www-form-urlencoded"
-      },
+      headers: { "Content-Type": "application/x-www-form-urlencoded" },
       body: params
     });
 
-    const data = await response.json();
+    const text = await upstream.text();
+    let data;
+    try { data = JSON.parse(text); } catch (_) { data = { error: text || "Invalid Etsy token response" }; }
 
-    return {
-      statusCode: response.status,
-      body: JSON.stringify(data)
-    };
+    return response(upstream.status, data);
   } catch (error) {
     console.error("Error in exchangeToken:", error);
-    return {
-      statusCode: 500,
-      body: JSON.stringify({ error: error.message })
-    };
+    return response(500, { error: String(error && error.message || error) });
   }
 };
+
+function response(statusCode, payload) {
+  return {
+    statusCode,
+    headers: JSON_HEADERS,
+    body: JSON.stringify(payload)
+  };
+}

@@ -1578,7 +1578,11 @@ exports.handler = async (event) => {
       if (q.recent) res.recent = await recentJobs(Number(q.recent) || 12);
       return out(200, res);
     }
-    if (op === "retryFailed") { const r = await retryFailed(); const drained = await drain(); return out(200, { ...r, drained }); }
+    if (op === "retryFailed") {
+      const r = await retryFailed();
+      await triggerBackgroundDrain();
+      return out(200, { ...r, background: true, budget: await budgetSnapshot() });
+    }
     if (op === "resetSetLinks") {
       // Fully clear one product's set AND its backlink on every partner —
       // clean slate for an accurate re-match. The pair-veto ledger is

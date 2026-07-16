@@ -111,8 +111,12 @@ exports.handler = async function (event) {
     // Used by the post-upload reconciliation pass to remove duplicate
     // retry-twins without touching the listing's legitimate images.
     const onlyRaw =
-      (event.queryStringParameters && event.queryStringParameters.imageIds) || "";
-    const selective = String(onlyRaw).split(",").map(s => s.trim()).filter(Boolean);
+      (event.queryStringParameters && event.queryStringParameters.imageIds) ||
+      body.imageIds ||
+      "";
+    const selective = (Array.isArray(onlyRaw) ? onlyRaw : String(onlyRaw).split(","))
+      .map(s => String(s || "").trim())
+      .filter(Boolean);
 
     // ---- 1) List current images on the listing ----------------------
     let imageIds = [];
