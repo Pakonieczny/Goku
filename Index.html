@@ -61,6 +61,225 @@
       border: 1px solid #000;
       padding: 5px;
     }
+
+
+    /* === Human approval gate for the AI-generated Listing Description === */
+    .listing-desc-heading-row {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 10px;
+      margin-bottom: 8px;
+    }
+    .listing-desc-heading-row h5 {
+      margin: 0;
+    }
+    #descriptionApprovalStateChip {
+      display: inline-flex;
+      align-items: center;
+      gap: 5px;
+      min-height: 24px;
+      padding: 3px 9px;
+      border-radius: 999px;
+      background: #eceff1;
+      color: #455a64;
+      font-size: 11px;
+      font-weight: 800;
+      letter-spacing: .04em;
+      text-transform: uppercase;
+      white-space: nowrap;
+    }
+    #descriptionApprovalStateChip .material-icons {
+      font-size: 15px;
+    }
+    #descriptionApprovalCard {
+      display: none;
+      align-items: flex-start;
+      gap: 10px;
+      margin: 0 0 10px;
+      padding: 11px 12px;
+      border: 2px solid #f9a825;
+      border-radius: 10px;
+      background: linear-gradient(135deg, #fffde7 0%, #fff8e1 100%);
+      box-shadow: 0 8px 20px rgba(249, 168, 37, .18);
+      color: #5d4200;
+    }
+    #descriptionApprovalCard .approval-card-icon {
+      flex: 0 0 auto;
+      width: 34px;
+      height: 34px;
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      border-radius: 50%;
+      background: #f9a825;
+      color: #fff;
+      box-shadow: 0 3px 9px rgba(249, 168, 37, .28);
+    }
+    #descriptionApprovalCard .approval-card-icon .material-icons {
+      font-size: 21px;
+    }
+    #descriptionApprovalCard .approval-card-title {
+      margin: 0 0 3px;
+      font-size: 13px;
+      font-weight: 900;
+      color: #4e3700;
+    }
+    #descriptionApprovalCard .approval-card-copy {
+      margin: 0;
+      font-size: 11px;
+      line-height: 1.35;
+      color: #71520a;
+    }
+    .listing-desc-review-row {
+      display: flex;
+      align-items: stretch;
+      gap: 8px;
+      width: 100%;
+    }
+    .listing-desc-container .listing-desc-review-row input {
+      width: auto;
+      flex: 1 1 auto;
+      min-width: 0;
+      margin: 0;
+      height: 38px;
+      border-radius: 6px;
+      transition: border-color .18s ease, box-shadow .18s ease, background .18s ease;
+    }
+    #acceptListingDescBtn {
+      display: none;
+      flex: 0 0 auto;
+      align-items: center;
+      justify-content: center;
+      gap: 6px;
+      min-width: 158px;
+      height: 38px;
+      padding: 0 15px;
+      border: 0;
+      border-radius: 7px;
+      background: #2e7d32 !important;
+      color: #fff;
+      font-size: 12px;
+      font-weight: 900;
+      letter-spacing: .015em;
+      text-transform: none;
+      box-shadow: 0 5px 14px rgba(46, 125, 50, .28);
+      cursor: pointer;
+    }
+    #acceptListingDescBtn .material-icons {
+      font-size: 18px;
+    }
+    #acceptListingDescBtn:hover,
+    #acceptListingDescBtn:focus {
+      background: #1b5e20 !important;
+      box-shadow: 0 7px 18px rgba(46, 125, 50, .36);
+    }
+    #descriptionApprovalHelper {
+      display: none;
+      margin-top: 7px;
+      font-size: 11px;
+      font-weight: 700;
+      color: #7a5700;
+    }
+    #descriptionApprovalTopAlert {
+      display: none;
+      position: fixed;
+      top: 14px;
+      left: 50%;
+      transform: translateX(-50%);
+      z-index: 100000;
+      width: min(720px, calc(100vw - 28px));
+      box-sizing: border-box;
+      align-items: center;
+      gap: 12px;
+      padding: 12px 14px;
+      border: 2px solid #f9a825;
+      border-radius: 12px;
+      background: rgba(255, 253, 231, .98);
+      color: #4e3700;
+      box-shadow: 0 12px 35px rgba(0, 0, 0, .24);
+      backdrop-filter: blur(7px);
+    }
+    #descriptionApprovalTopAlert .top-alert-icon {
+      flex: 0 0 auto;
+      width: 38px;
+      height: 38px;
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      border-radius: 50%;
+      background: #f9a825;
+      color: #fff;
+    }
+    #descriptionApprovalTopAlert .top-alert-text {
+      flex: 1 1 auto;
+      min-width: 0;
+      line-height: 1.25;
+    }
+    #descriptionApprovalTopAlert .top-alert-text strong {
+      display: block;
+      margin-bottom: 2px;
+      font-size: 14px;
+    }
+    #descriptionApprovalTopAlert .top-alert-text span {
+      display: block;
+      font-size: 11px;
+      color: #71520a;
+    }
+    #reviewListingDescNowBtn {
+      flex: 0 0 auto;
+      border: 0;
+      border-radius: 7px;
+      padding: 8px 12px;
+      background: #5d4200;
+      color: #fff;
+      font-size: 11px;
+      font-weight: 900;
+      cursor: pointer;
+    }
+    body.description-approval-pending #descriptionApprovalTopAlert {
+      display: flex;
+      animation: approvalAlertEnter .25s ease-out both;
+    }
+    body.description-approval-pending #descriptionApprovalCard {
+      display: flex;
+    }
+    body.description-approval-pending #acceptListingDescBtn {
+      display: inline-flex;
+    }
+    body.description-approval-pending #descriptionApprovalHelper {
+      display: block;
+    }
+    body.description-approval-pending #descriptionApprovalStateChip {
+      background: #fff3cd;
+      color: #7a5700;
+      box-shadow: inset 0 0 0 1px #f9a825;
+    }
+    body.description-approval-pending #listingDescContainer {
+      box-sizing: border-box;
+      padding: 12px;
+      border-radius: 12px;
+      background: #fffef7;
+      box-shadow: 0 0 0 4px rgba(249, 168, 37, .22), 0 12px 28px rgba(0, 0, 0, .15);
+    }
+    body.description-approval-pending #listingDescInput {
+      border: 2px solid #f9a825;
+      background: #fff;
+      box-shadow: 0 0 0 3px rgba(249, 168, 37, .15);
+    }
+    body.description-approval-pending #firebaseStatus {
+      background: #7a5700;
+    }
+    @keyframes approvalAlertEnter {
+      from { opacity: 0; transform: translate(-50%, -12px); }
+      to   { opacity: 1; transform: translate(-50%, 0); }
+    }
+    @media (max-width: 760px) {
+      .listing-desc-review-row { flex-direction: column; }
+      #acceptListingDescBtn { width: 100%; }
+      #descriptionApprovalTopAlert { align-items: flex-start; }
+      #reviewListingDescNowBtn { align-self: center; }
+    }
     #searchKeyPhrases {
       resize: none;
       box-sizing: border-box;
@@ -840,14 +1059,41 @@
       <span id="fbText">Waiting...</span>
   </div>
 
+
+  <div id="descriptionApprovalTopAlert" role="alert" aria-live="assertive" aria-hidden="true">
+    <span class="top-alert-icon"><i class="material-icons">notifications_active</i></span>
+    <div class="top-alert-text">
+      <strong>Listing Description approval required</strong>
+      <span>Automation is paused. Review or correct the AI draft, then press Accept &amp; Continue.</span>
+    </div>
+    <button id="reviewListingDescNowBtn" type="button">Review Now</button>
+  </div>
+
   <button id="openConfigBtn" class="btn waves-effect waves-light configurable" style="margin-left:10px;">Open Config</button>
   <button id="toggleAuto" class="btn waves-effect waves-light configurable red darken-1 stopped" style="margin-left:10px;">Start Auto</button>
   <button id="skipListingBtn" class="btn waves-effect waves-light configurable orange darken-2" style="margin-left:10px;" title="Abandon the listing currently being processed and move on to the next one">Skip Listing</button>
   
   <div id="descriptionAndFileUploadContainer">
     <div class="listing-desc-container" id="listingDescContainer">
-      <h5>Listing Description</h5>
-      <input id="listingDescInput" type="text" placeholder="Enter your question here">
+      <div class="listing-desc-heading-row">
+        <h5>Listing Description</h5>
+        <span id="descriptionApprovalStateChip"><i class="material-icons">auto_awesome</i><span id="descriptionApprovalStateText">AI Draft</span></span>
+      </div>
+      <div id="descriptionApprovalCard" role="status" aria-live="assertive">
+        <span class="approval-card-icon"><i class="material-icons">front_hand</i></span>
+        <div>
+          <div class="approval-card-title">Automation paused for your approval</div>
+          <p class="approval-card-copy">Check that the charm has been identified correctly. Keep the draft or overwrite it with the exact shopper-facing jewelry name, then approve it below.</p>
+        </div>
+      </div>
+      <div class="listing-desc-review-row">
+        <input id="listingDescInput" type="text" placeholder="Enter your question here" aria-describedby="descriptionApprovalHelper">
+        <button id="acceptListingDescBtn" type="button" class="btn waves-effect waves-light" disabled>
+          <i class="material-icons">check_circle</i>
+          <span>Accept &amp; Continue</span>
+        </button>
+      </div>
+      <div id="descriptionApprovalHelper">Required: review the AI-generated wording above. Automation will not continue until you press Accept &amp; Continue.</div>
     </div>
   </div>
   
@@ -1425,8 +1671,204 @@ ANTI-REPETITION (TITLE)
         dot.className = "status-dot " + (type || "");
     }
 
+    // ─────────────────────────────────────────────────────────────────────
+    // Listing Description operator approval gate + background-tab chime
+    // ─────────────────────────────────────────────────────────────────────
+    // Browsers only permit reliable programmatic audio after a user gesture.
+    // Clicking Start Auto primes a Web Audio context once; the later approval
+    // chime is then scheduled directly on that context and can be heard while
+    // this page is in another browser tab (subject to the user's browser/OS
+    // sound and site-permission settings).
+    window.__descriptionApproval = window.__descriptionApproval || {
+        pending: false,
+        resolver: null,
+        setName: "",
+        originalValue: "",
+        previousTitle: ""
+    };
+    window.__approvalAudioContext = window.__approvalAudioContext || null;
+
+    function primeDescriptionApprovalChime() {
+        try {
+            const AudioCtx = window.AudioContext || window.webkitAudioContext;
+            if (!AudioCtx) return false;
+            let ctx = window.__approvalAudioContext;
+            if (!ctx || ctx.state === "closed") {
+                ctx = new AudioCtx();
+                window.__approvalAudioContext = ctx;
+            }
+            if (ctx.state === "suspended") {
+                // Called from the Start Auto click, so resume is allowed.
+                ctx.resume().catch(() => {});
+            }
+
+            // A nearly silent, 12 ms tone completes the browser's audio unlock
+            // without making the Start Auto button itself audibly chime.
+            const osc = ctx.createOscillator();
+            const gain = ctx.createGain();
+            gain.gain.setValueAtTime(0.00001, ctx.currentTime);
+            osc.connect(gain).connect(ctx.destination);
+            osc.start(ctx.currentTime);
+            osc.stop(ctx.currentTime + 0.012);
+            return true;
+        } catch (e) {
+            console.warn("Could not prime description approval chime:", e);
+            return false;
+        }
+    }
+
+    async function playDescriptionApprovalChime() {
+        try {
+            if (!window.__approvalAudioContext) primeDescriptionApprovalChime();
+            const ctx = window.__approvalAudioContext;
+            if (!ctx) return false;
+            if (ctx.state === "suspended") {
+                try { await ctx.resume(); } catch (_) {}
+            }
+            if (ctx.state !== "running") return false;
+
+            const master = ctx.createGain();
+            master.gain.setValueAtTime(0.0001, ctx.currentTime);
+            master.gain.exponentialRampToValueAtTime(0.16, ctx.currentTime + 0.025);
+            master.gain.exponentialRampToValueAtTime(0.0001, ctx.currentTime + 1.18);
+            master.connect(ctx.destination);
+
+            // Soft, ascending C–E–G bell tones. They are scheduled on the
+            // audio clock rather than setTimeout, so background-tab timer
+            // throttling cannot pull the notes apart.
+            const notes = [
+                { frequency: 523.25, at: 0.00, length: 0.52 },
+                { frequency: 659.25, at: 0.18, length: 0.58 },
+                { frequency: 783.99, at: 0.38, length: 0.72 }
+            ];
+            for (const note of notes) {
+                const osc = ctx.createOscillator();
+                const voice = ctx.createGain();
+                const start = ctx.currentTime + note.at;
+                osc.type = "sine";
+                osc.frequency.setValueAtTime(note.frequency, start);
+                voice.gain.setValueAtTime(0.0001, start);
+                voice.gain.exponentialRampToValueAtTime(0.42, start + 0.018);
+                voice.gain.exponentialRampToValueAtTime(0.0001, start + note.length);
+                osc.connect(voice).connect(master);
+                osc.start(start);
+                osc.stop(start + note.length + 0.03);
+            }
+            return true;
+        } catch (e) {
+            console.warn("Description approval chime could not play:", e);
+            return false;
+        }
+    }
+
+    function setDescriptionApprovalUI(isPending, setName) {
+        const stateText = document.getElementById("descriptionApprovalStateText");
+        const stateChip = document.getElementById("descriptionApprovalStateChip");
+        const acceptBtn = document.getElementById("acceptListingDescBtn");
+        const topAlert = document.getElementById("descriptionApprovalTopAlert");
+
+        document.body.classList.toggle("description-approval-pending", !!isPending);
+        if (topAlert) topAlert.setAttribute("aria-hidden", isPending ? "false" : "true");
+        if (acceptBtn) acceptBtn.disabled = !isPending;
+        if (stateText) stateText.textContent = isPending ? "Approval Required" : "Approved";
+        if (stateChip) {
+            stateChip.title = isPending
+                ? `Review the AI Listing Description${setName ? ` for ${setName}` : ""}`
+                : "Listing Description approved";
+        }
+    }
+
+    function finishListingDescriptionApproval(accepted) {
+        const state = window.__descriptionApproval;
+        if (!state || !state.pending) return;
+        const input = document.getElementById("listingDescInput");
+        const finalValue = (input?.value || "").trim();
+        const wasEdited = finalValue !== String(state.originalValue || "").trim();
+        const resolver = state.resolver;
+
+        state.pending = false;
+        state.resolver = null;
+        setDescriptionApprovalUI(false, state.setName);
+        if (state.previousTitle) document.title = state.previousTitle;
+
+        if (accepted) {
+            updateFirebaseStatus(wasEdited
+                ? "Edited Listing Description approved — resuming..."
+                : "Listing Description approved — resuming...", "working");
+        }
+
+        if (typeof resolver === "function") {
+            resolver({ accepted: !!accepted, value: finalValue, edited: wasEdited });
+        }
+    }
+
+    function requestListingDescriptionApproval(setName, generatedValue) {
+        const state = window.__descriptionApproval;
+        // Never strand an older promise if a defensive re-entry occurs.
+        if (state.pending && typeof state.resolver === "function") {
+            state.resolver({ accepted: false, value: "", edited: false, replacedByNewRequest: true });
+        }
+
+        state.pending = true;
+        state.setName = String(setName || "");
+        state.originalValue = String(generatedValue || "").trim();
+        state.previousTitle = document.title;
+        document.title = "⚠ Approval Required — Listing Generator";
+        setDescriptionApprovalUI(true, state.setName);
+        updateFirebaseStatus("PAUSED — approve the Listing Description to continue", "working");
+
+        const input = document.getElementById("listingDescInput");
+        if (document.visibilityState === "visible") {
+            requestAnimationFrame(() => {
+                document.getElementById("listingDescContainer")?.scrollIntoView({ behavior: "smooth", block: "center" });
+                input?.focus({ preventScroll: true });
+                input?.select();
+            });
+        }
+        playDescriptionApprovalChime().then((played) => {
+            if (!played) console.warn("Approval is ready, but browser audio was not available.");
+        });
+
+        return new Promise((resolve) => {
+            state.resolver = resolve;
+        });
+    }
+
+    document.getElementById("acceptListingDescBtn")?.addEventListener("click", () => {
+        const input = document.getElementById("listingDescInput");
+        const value = (input?.value || "").trim();
+        if (!window.__descriptionApproval?.pending) return;
+        if (!value) {
+            input?.focus();
+            window.M?.toast?.({ html: "Enter or keep a Listing Description before continuing.", classes: "orange darken-2" });
+            return;
+        }
+        finishListingDescriptionApproval(true);
+    });
+
+    document.getElementById("reviewListingDescNowBtn")?.addEventListener("click", () => {
+        const container = document.getElementById("listingDescContainer");
+        const input = document.getElementById("listingDescInput");
+        container?.scrollIntoView({ behavior: "smooth", block: "center" });
+        setTimeout(() => {
+            input?.focus({ preventScroll: true });
+            input?.select();
+        }, 250);
+    });
+
+    // Enter is a convenient approval shortcut while the gate is active.
+    document.getElementById("listingDescInput")?.addEventListener("keydown", (event) => {
+        if (event.key === "Enter" && window.__descriptionApproval?.pending) {
+            event.preventDefault();
+            document.getElementById("acceptListingDescBtn")?.click();
+        }
+    });
+
     // Toggle Button Logic (Enhanced with Etsy Safeguard)
     document.getElementById("toggleAuto").addEventListener("click", function() {
+        // Unlock Web Audio from this explicit user gesture so the later
+        // approval chime can sound even when this page is in another tab.
+        primeDescriptionApprovalChime();
         
         // Safeguard: Before starting, verify Etsy API is connected
         if (!window.autoProcessingEnabled) { 
@@ -1506,6 +1948,11 @@ ANTI-REPETITION (TITLE)
 
         // 1. Signal all skip-aware checkpoints to bail out.
         window.__skipListingRequested = true;
+        // If the sequence is paused at the human approval gate, release that
+        // pending promise immediately so Skip can actually advance.
+        if (window.__descriptionApproval?.pending) {
+            finishListingDescriptionApproval(false);
+        }
 
         // 2. Permanently (for this session) blacklist the auto set being worked
         //    on, so the scanner doesn't immediately pick it again.
@@ -2225,6 +2672,17 @@ ANTI-REPETITION (TITLE)
 
             // Apply and show inside the "listingDescInput" text box
             document.getElementById("listingDescInput").value = combinedDescription;
+
+            // 2b. HUMAN APPROVAL GATE — pause before this AI identification
+            // becomes the source of truth for keywords, title, descriptions,
+            // metadata, Etsy and Shopify. The operator may keep the generated
+            // wording or overwrite it, then explicitly Accept & Continue.
+            const descriptionApproval = await requestListingDescriptionApproval(setName, combinedDescription);
+            if (!descriptionApproval?.accepted || window.__skipListingRequested) return;
+            // requestListingDescriptionApproval resolves with the live input
+            // value, but assign it explicitly so all later generators consume
+            // the operator-approved wording even if another handler touched it.
+            document.getElementById("listingDescInput").value = descriptionApproval.value;
             
             // 3. Generate Content (Sequentially) — VERIFIED.
             //
