@@ -1054,7 +1054,7 @@
       <textarea id="analyzeRulesTextarea" style="width:100%; height:300px;">
 Default Photo Analysis Rules:
 1. Use SEO-friendly descriptive long-tail key phrases without special characters, focus on describing the jewelry and charm pendant, also focus and tailor Key Phrases and description to appropriate client based on the type of jewelry.
-2. Emphasize charm details, focus image description on the type of jewelry and pendant description (what it is, occasion, metal, size, style).
+2. Emphasize exact charm details, including the subject, pose, action, orientation, or defining object type. Describe what the charm actually depicts (for example: Sitting Dog, Flying Bird, Crescent Moon, Soccer Ball), not its rendering style.
 3. Never estimate or post any sizes or dimensions in the metadata 
 3. Focus solely on the jewelry details especially the charm description.
 4. Ignore environment, model, and clothing.
@@ -1073,7 +1073,8 @@ Default Photo Analysis Rules:
   - Material frequency: words {gold, rosegold, silver, 14k} → max 2 total occurrences across the whole title.
   - “gift for …” phrase appears at most once in the title; avoid stacking variants (“gift for her”, “gift for mom”) in the same title.
   - Ban filler adjectives in titles as well: {dainty, whimsical, delicate, unique, keepsake, inspired, design, lightweight}.
-14. Less narrative and story building with more focus on facts and details about the jewelry and charm to appeal to potential clients.        
+14. Less narrative and story building with more focus on facts and details about the jewelry and charm to appeal to potential clients.
+15. OUTLAWED WORD: Never use “silhouette” anywhere in analysis, key phrases, titles, or descriptions. Do not describe a charm by its rendering style. Replace generic phrases such as “dog silhouette” with the most accurate subject plus pose/action/form, such as “Sitting Dog Charm.”        
       Descriptions of good fit between client needs and our offerings:  
       Example a. Soccer mom would have an appeal for a soccer ball necklace, or a team jersey.         
       Example b. A nurse would have an appeal for a stethoscope earrings, or syringe.        
@@ -1092,6 +1093,13 @@ Default Photo Analysis Rules:
       <h4>Title Rules</h4>
       <textarea id="titleRulesTextarea" style="width:100%; height:300px;">
 TITLE RULES (STRICT — MATCH THE EXAMPLES EXACTLY)
+
+CHARM IDENTIFICATION (CRITICAL)
+- The word “silhouette” is completely forbidden and must never appear in the title.
+- Describe the charm by the exact subject plus its visible pose, action, orientation, species/type, or defining form.
+- Prefer “Sitting Dog Charm,” “Running Wolf Pendant Necklace,” “Flying Hawk Hoop Earrings,” “Crescent Moon Charm,” or “Soccer Ball Charm.”
+- Never use lazy rendering-style labels such as “Dog Silhouette,” “Bird Silhouette,” or “[Subject] Silhouette.”
+- When the input already supplies a concrete motif such as “Sitting Dog,” preserve it exactly rather than reducing it to a generic animal label.
 
 STRICT PRODUCT TYPE INHERITANCE (CRITICAL)
 - You MUST extract the exact product type directly from the "Listing Description".
@@ -1180,6 +1188,9 @@ Compose the title as a chain of distinct, non-repeating search phrases that stil
       <h4>Description Rules</h4>
       <textarea id="descriptionRulesTextarea" style="width:100%; height:300px;">
 Rules for Description:
+- The word “silhouette” is completely forbidden and must never appear in the description.
+- Identify the charm by what it actually depicts: subject plus visible pose, action, orientation, species/type, or defining form. Use “Sitting Dog Charm,” not “Dog Silhouette”; “Flying Bird Charm,” not “Bird Silhouette.”
+- Preserve specific motif wording from the Listing Description and do not generalize it into a rendering-style label.
 - Merge the key phrases with your output.
 - Modify the description to match the jewelry type.
 - Keep the output paragraph to 80 words.
@@ -1371,113 +1382,8 @@ ANTI-REPETITION (TITLE)
     const storage = firebase.storage();
     const auth = firebase.auth();
 
-    // Firebase auth must be READY before any protected Storage call. The old
-    // fire-and-forget sign-in allowed scans to race authentication and gave no
-    // recovery path if an ID token needed refreshing during a long session.
-    let __firebaseAuthPromise = null;
-    async function ensureFirebaseAuth(forceRefresh = false) {
-      if (!__firebaseAuthPromise) {
-        __firebaseAuthPromise = (auth.currentUser
-          ? Promise.resolve(auth.currentUser)
-          : auth.signInAnonymously().then(result => result.user)
-        ).catch(err => {
-          __firebaseAuthPromise = null;
-          throw err;
-        });
-      }
-      let user = await __firebaseAuthPromise;
-      if (!user) {
-        __firebaseAuthPromise = auth.signInAnonymously().then(result => result.user);
-        user = await __firebaseAuthPromise;
-      }
-      if (forceRefresh && user) await user.getIdToken(true);
-      return user;
-    }
-    function isFirebaseUnauthorized(err) {
-      const text = String((err && (err.code || err.message)) || err || "").toLowerCase();
-      return text.includes("storage/unauthorized") || text.includes("unauthorized") || text.includes("403");
-    }
-    async function withFirebaseAuthRetry(label, operation) {
-      await ensureFirebaseAuth(false);
-      try {
-        return await operation();
-      } catch (err) {
-        if (!isFirebaseUnauthorized(err)) throw err;
-        console.warn(`${label}: Firebase authorization failed; refreshing the anonymous session once.`);
-        await ensureFirebaseAuth(true);
-        return await operation();
-      }
-    }
-    ensureFirebaseAuth(false).catch(err => console.error("Firebase anonymous sign-in failed:", err));
-
-    // Etsy OAuth state. Access tokens last one hour; refresh tokens are kept
-    // so long Listing Generator sessions can continue without a redirect.
-    window.accessToken = String(localStorage.getItem("etsyAccessToken") || window.accessToken || "").trim();
-    window.etsyRefreshToken = String(localStorage.getItem("etsyRefreshToken") || "").trim();
-    window.etsyAccessTokenExpiresAt = Number(localStorage.getItem("etsyAccessTokenExpiresAt") || 0) || 0;
-    let __etsyRefreshPromise = null;
-
-    function applyEtsyTokenData(tokenData) {
-      if (!tokenData || !tokenData.access_token) throw new Error((tokenData && tokenData.error) || "Etsy did not return an access token.");
-      window.accessToken = String(tokenData.access_token).trim();
-      localStorage.setItem("etsyAccessToken", window.accessToken);
-
-      if (tokenData.refresh_token) {
-        window.etsyRefreshToken = String(tokenData.refresh_token).trim();
-        localStorage.setItem("etsyRefreshToken", window.etsyRefreshToken);
-      }
-
-      const expiresIn = Math.max(60, Number(tokenData.expires_in || 3600));
-      window.etsyAccessTokenExpiresAt = Date.now() + expiresIn * 1000;
-      localStorage.setItem("etsyAccessTokenExpiresAt", String(window.etsyAccessTokenExpiresAt));
-      window.etsyUserId = tokenData.user_id || String(window.accessToken).split(".")[0] || window.etsyUserId;
-      return window.accessToken;
-    }
-
-    async function refreshEtsyAccessToken(force = false) {
-      const current = String(window.accessToken || localStorage.getItem("etsyAccessToken") || "").trim();
-      const expiry = Number(window.etsyAccessTokenExpiresAt || localStorage.getItem("etsyAccessTokenExpiresAt") || 0) || 0;
-      const refreshToken = String(window.etsyRefreshToken || localStorage.getItem("etsyRefreshToken") || "").trim();
-
-      // Refresh five minutes early so a multi-image job cannot cross the expiry
-      // boundary in the middle of its purge/upload/update sequence.
-      if (!force && current && expiry && Date.now() < expiry - 5 * 60 * 1000) return current;
-      if (!force && current && !expiry && !refreshToken) return current; // legacy session; reconnect once to seed refresh_token
-      if (!refreshToken) return current;
-      if (__etsyRefreshPromise) return __etsyRefreshPromise;
-
-      __etsyRefreshPromise = (async () => {
-        const response = await fetch("/.netlify/functions/exchangeToken", {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ grant_type: "refresh_token", refresh_token: refreshToken })
-        });
-        const data = await response.json().catch(() => ({}));
-        if (!response.ok || !data.access_token) {
-          throw new Error(data.error_description || data.error || `Etsy token refresh failed (HTTP ${response.status}).`);
-        }
-        const token = applyEtsyTokenData(data);
-        // Update queued snapshots so a daemon job never falls back to a stale token.
-        try {
-          const q = JSON.parse(localStorage.getItem("etsyUploadJobs") || "[]");
-          for (const id of q) {
-            const key = `etsyJob:${id}`;
-            const job = JSON.parse(localStorage.getItem(key) || "null");
-            if (job) {
-              job.accessToken = token;
-              localStorage.setItem(key, JSON.stringify(job));
-            }
-          }
-        } catch (_) {}
-        return token;
-      })().finally(() => { __etsyRefreshPromise = null; });
-
-      return __etsyRefreshPromise;
-    }
-
-    async function getValidEtsyAccessToken() {
-      return refreshEtsyAccessToken(false);
-    }
+    // Login logic
+    auth.signInAnonymously().catch(console.error);
     
     // Auto-pilot control vars
     window.autoProcessingEnabled = false; // default off
@@ -1620,7 +1526,6 @@ ANTI-REPETITION (TITLE)
         let foundReadySet = false;
 
         try {
-            await ensureFirebaseAuth(false);
             if (window.autoProcessingEnabled && !window.isProcessingSet) {
                 updateFirebaseStatus("Scanning...", "working");
             }
@@ -1642,28 +1547,19 @@ ANTI-REPETITION (TITLE)
             const legacyListedRef = storage.ref('listing-generator-1/Listed_Sets');
             let processedNames = [];
             try {
-                const approvedRes = await withFirebaseAuthRetry("Approved sets scan", () => approvedRef.listAll());
+                const approvedRes = await approvedRef.listAll();
                 processedNames = approvedRes.prefixes.map(p => p.name.replace(/\/$/, ""));
             } catch(e) { }
-            // The legacy folder is no longer required by the active hand-off.
-            // Probe it at most once per page session; if Storage rules reject
-            // the path, disable future probes instead of emitting a 403 every
-            // 15 seconds forever.
-            if (window.__legacyListedSetsLookupEnabled !== false) {
-                try {
-                    const legacyRes = await withFirebaseAuthRetry("Legacy listed-sets scan", () => legacyListedRef.listAll());
-                    for (const p of legacyRes.prefixes) {
-                        const n = p.name.replace(/\/$/, "");
-                        if (!processedNames.includes(n)) processedNames.push(n);
-                    }
-                } catch(e) {
-                    window.__legacyListedSetsLookupEnabled = false;
-                    console.warn("Legacy Listed_Sets lookup disabled for this session:", e && (e.code || e.message || e));
+            try {
+                const legacyRes = await legacyListedRef.listAll();
+                for (const p of legacyRes.prefixes) {
+                    const n = p.name.replace(/\/$/, "");
+                    if (!processedNames.includes(n)) processedNames.push(n);
                 }
-            }
+            } catch(e) { }
 
             const listRef = storage.ref('listing-generator-1/Generated_Listing_Sets/Completed_Listing_Sets');
-            const res = await withFirebaseAuthRetry("Completed sets scan", () => listRef.listAll());
+            const res = await listRef.listAll();
             
             // 2. Filter folders (prefixes): Skip if it's already in Listed_Sets
             const newSets = res.prefixes.filter(p => {
@@ -1829,7 +1725,7 @@ ANTI-REPETITION (TITLE)
                         // writes a manifest.json next to the slot images;
                         // exclude it from the count so the threshold reflects
                         // image slots only.
-                        const setFiles = await withFirebaseAuthRetry(`Set readiness scan (${setName})`, () => setRef.listAll());
+                        const setFiles = await setRef.listAll();
                         const imageItems = setFiles.items.filter(
                           (it) => !/manifest\.json$/i.test(it.name)
                         );
@@ -2085,16 +1981,18 @@ ANTI-REPETITION (TITLE)
         while (retries > 0) {
             try {
                 // Proactively list ALL forbidden words to feed into the prompt
-                const forbiddenWords = "gold, golden, silver, sterling, charm, pendant, featuring, dainty, small, large, cute, red, blue, green, yellow, pink, purple, orange, black, white, grey, brown";
+                const forbiddenWords = "gold, golden, silver, sterling, charm, pendant, silhouette, featuring, dainty, small, large, cute, red, blue, green, yellow, pink, purple, orange, black, white, grey, brown";
                 
                 // Explicitly map out the rules so the AI can't miss them
-                const promptText = `Analyze this image and return exactly two highly descriptive words focusing solely on the charm/pendant core shape, motif, or subject matter. If a human ear is present in the image, you MUST strictly focus ONLY on the charm attached to the Ear Lobe, completely disregarding any other charms positioned elsewhere on the ear. 
-                
-                  STRICT RULES: 
-                  1. NEVER use material colors or any color names. 
-                  2. NEVER use ANY of these exact words: ${forbiddenWords}. 
-                  3. Disregard the chain, background, model, or scale. 
-                  4. Output plain text, exactly two words, no punctuation.`;
+                const promptText = `Analyze this image and return exactly two highly descriptive words identifying what the charm actually depicts. Prefer a visible pose, action, orientation, species/type, or defining object form plus the subject noun, such as “Sitting Dog”, “Flying Bird”, “Crescent Moon”, “Soccer Ball”, or “Open Book”. If a human ear is present in the image, you MUST strictly focus ONLY on the charm attached to the Ear Lobe, completely disregarding any other charms positioned elsewhere on the ear.
+
+                  STRICT RULES:
+                  1. NEVER describe the rendering style. The word “silhouette” is forbidden.
+                  2. NEVER use material colors or any color names.
+                  3. NEVER use ANY of these exact words: ${forbiddenWords}.
+                  4. Disregard the chain, background, model, or scale.
+                  5. Be concrete and visually specific; do not return a generic category when a pose or defining form is visible.
+                  6. Output plain text, exactly two words, no punctuation.`;
                           
                 const payload = {
                     model: window.modelName || "gpt-5.4-mini",
@@ -2219,7 +2117,7 @@ ANTI-REPETITION (TITLE)
             await wait(500);
 
             // 1. Populate Images (Download from Firebase)
-            const setFiles = await withFirebaseAuthRetry(`Set load (${setName})`, () => setRef.listAll());
+            const setFiles = await setRef.listAll();
             
             // Sort files by slot number (Slot_1, Slot_2...)
             const sortedItems = setFiles.items.sort((a, b) => {
@@ -2618,7 +2516,7 @@ ANTI-REPETITION (TITLE)
     async function archiveSetInBackground(setRef, setName) {
         try {
             const destPath = `listing-generator-1/Generated_Listing_Sets/Approved_Listing_Sets/${setName}`;
-            const itemsToMove = await withFirebaseAuthRetry(`Archive list (${setName})`, () => setRef.listAll());
+            const itemsToMove = await setRef.listAll();
 
             let movedCount = 0;
             let failedCount = 0;
@@ -3867,25 +3765,11 @@ https://www.etsy.com/your/shops/me/listing-editor/edit/1822973998
           (window.__etsyJobOutcomes = window.__etsyJobOutcomes || {})[jobId] = patch.status;
         }
       };
-      // Always begin with a valid token. Etsy access tokens expire after one
-      // hour; getValidEtsyAccessToken() refreshes five minutes early using the
-      // stored refresh token so long auto-pilot sessions do not stop mid-run.
-      let token = "";
-      try {
-        token = await getValidEtsyAccessToken();
-      } catch (tokenErr) {
-        console.error("Etsy token refresh failed:", tokenErr);
-        save({ status: "AUTH_NEEDED", error: String(tokenErr && tokenErr.message || tokenErr) });
-        window.M?.toast?.({ html: 'Etsy authorization needs attention — click "Connect to Etsy" once, then restart Auto.' });
-        return;
-      }
-      token = String(token || job.accessToken || "").trim();
-      if (!token) {
-        save({ status: "AUTH_NEEDED", error: "missing_token" });
-        window.M?.toast?.({ html: 'Please connect Etsy before uploading.' });
-        return;
-      }
-      if (token !== job.accessToken) save({ accessToken: token });
+      // Always prefer the freshest token (after OAuth reconnect)
+      let token = (window.accessToken && String(window.accessToken).trim())
+        || (localStorage.getItem("etsyAccessToken") || "").trim()
+        || job.accessToken;
+      if (token && token !== job.accessToken) save({ accessToken: token });
       const listingId = job.listingId;
       window.__DIAG.log("job-start", { jobId, listingId, photoCount: job.photoCount, reservedCount: job.reservedCount });
       save({ status: "RUNNING", lastActivityAt: Date.now() });
@@ -3925,33 +3809,11 @@ https://www.etsy.com/your/shops/me/listing-editor/edit/1822973998
         // and continue — better to upload (and accept potential
         // duplicates this run) than to abort the entire job.
         let purgeLeftovers = [];
-        const callImagePurge = (imageIds, label) => etsyFetchWithTimeout(
-          "/.netlify/functions/listingImagesPurge",
-          {
-            method: "POST",
-            headers: {
-              "Content-Type": "application/json",
-              Authorization: `Bearer ${token}`
-            },
-            body: JSON.stringify({ listingId, imageIds: imageIds || [] })
-          },
-          60000,
-          label || "Image purge"
-        );
         try {
-          let purgeResp = await callImagePurge([], "Image purge");
-          if (purgeResp.status === 401) {
-            try {
-              const refreshed = await refreshEtsyAccessToken(true);
-              if (refreshed) {
-                token = refreshed;
-                save({ accessToken: token, lastActivityAt: Date.now() });
-                purgeResp = await callImagePurge([], "Image purge retry after token refresh");
-              }
-            } catch (refreshErr) {
-              console.warn("Etsy token refresh after purge 401 failed:", refreshErr);
-            }
-          }
+          const purgeResp = await etsyFetchWithTimeout(
+            `/.netlify/functions/listingImagesPurge?listingId=${encodeURIComponent(listingId)}&token=${encodeURIComponent(token)}`,
+            { method: "POST" }, 60000, "Image purge"
+          );
           if (purgeResp.ok) {
             const purgeJson = await purgeResp.json().catch(() => ({}));
             const totalSeen = Number(purgeJson && purgeJson.totalSeen) || 0;
@@ -3979,13 +3841,13 @@ https://www.etsy.com/your/shops/me/listing-editor/edit/1822973998
             // Token expired right at the start — treat the same as any
             // other 401 below: pause the job and trigger reconnect.
             const t = await purgeResp.text();
-            if (/invalid_token|expired|unauthorized|token_rejected|authentication/i.test(t)) {
+            if (/invalid_token|expired/i.test(t)) {
               // AUTH error. Auto-resume / auto-reconnect REMOVED: fail the job
               // cleanly so the user can reconnect manually, instead of
               // redirecting away to "resume" it (the behaviour that caused the
               // stuck-in-a-loop reports). The daemon drops this job afterward.
               save({ status: "AUTH_NEEDED", error: "token_expired" });
-              window.M?.toast?.({ html: 'Etsy authorization expired and could not be refreshed — click "Connect to Etsy" once, then restart Auto.' });
+              window.M?.toast?.({ html: 'Etsy session expired — click "Connect to Etsy", then re-run this listing.' });
               return;
             }
             console.warn("Purge auth check failed:", t);
@@ -4019,42 +3881,14 @@ https://www.etsy.com/your/shops/me/listing-editor/edit/1822973998
         const uploadImage = async (fd, label) => {
           save({ lastActivityAt: Date.now() });
           window.__DIAG.log("upload-request", { label, listingId, rank: fd.get ? String(fd.get("rank")) : "?", name: fd.get ? String(fd.get("fileName")) : "?" });
-
-          const perform = (attemptLabel) => etsyFetchWithTimeout(
-            "/.netlify/functions/imageUpload",
-            { method: "POST", body: fd },
-            120000,
-            attemptLabel
-          );
-
           let r;
           try {
-            r = await perform(label);
+            r = await etsyFetchWithTimeout("/.netlify/functions/imageUpload", { method: "POST", body: fd }, 120000, label);
           } catch (e) {
             window.__DIAG.log("upload-response", { label, error: e.message });
             console.warn(`${label} failed:`, e.message);
             return { ok: false, authExpired: false, detail: e.message };
           }
-
-          // A token can still be revoked or expire unexpectedly. Refresh once,
-          // replace the multipart token field, and retry this exact image.
-          if (r.status === 401) {
-            const firstText = await r.text().catch(() => "");
-            try {
-              const refreshed = await refreshEtsyAccessToken(true);
-              if (refreshed) {
-                token = refreshed;
-                save({ accessToken: token, lastActivityAt: Date.now() });
-                if (typeof fd.set === "function") fd.set("token", token);
-                r = await perform(`${label} retry after token refresh`);
-              } else {
-                return { ok: false, authExpired: true, detail: firstText };
-              }
-            } catch (refreshErr) {
-              return { ok: false, authExpired: true, detail: String(refreshErr && refreshErr.message || refreshErr || firstText) };
-            }
-          }
-
           if (r.ok) {
             // Etsy echoes the created image back — capture its id and the
             // rank ETSY assigned (vs what we requested).
@@ -4068,9 +3902,7 @@ https://www.etsy.com/your/shops/me/listing-editor/edit/1822973998
           }
           const t = await r.text().catch(() => "");
           window.__DIAG.log("upload-response", { label, status: r.status, body: t.slice(0, 150) });
-          if (r.status === 401 && /invalid_token|expired|unauthorized|token_rejected|authentication/i.test(t)) {
-            return { ok: false, authExpired: true, detail: t };
-          }
+          if (r.status === 401 && /invalid_token|expired/i.test(t)) return { ok: false, authExpired: true, detail: t };
           console.warn(`${label} HTTP ${r.status}:`, t.slice(0, 200));
           return { ok: false, authExpired: false, detail: `HTTP ${r.status}` };
         };
@@ -4148,7 +3980,9 @@ https://www.etsy.com/your/shops/me/listing-editor/edit/1822973998
         // If they STILL cannot be removed, fail the job HERE — before the
         // Shopify stage can copy a dirty gallery.
         if (purgeLeftovers.length) {
-          const del = await callImagePurge(purgeLeftovers, "Deferred leftover removal");
+          const del = await etsyFetchWithTimeout(
+            `/.netlify/functions/listingImagesPurge?listingId=${encodeURIComponent(listingId)}&token=${encodeURIComponent(token)}&imageIds=${encodeURIComponent(purgeLeftovers.join(","))}`,
+            { method: "POST" }, 60000, "Deferred leftover removal");
           const dj = await del.json().catch(() => ({}));
           window.__DIAG.log("purge-leftovers", { listingId, requested: purgeLeftovers, removed: (dj && dj.removed) || 0, failures: ((dj && dj.failures) || []).slice(0, 3) });
           if (!dj || Number(dj.removed) < purgeLeftovers.length) {
@@ -4183,52 +4017,29 @@ https://www.etsy.com/your/shops/me/listing-editor/edit/1822973998
           sku: job.sku
         };
         save({ lastActivityAt: Date.now() });
-        const sendInfoUpdate = (label) => etsyFetchWithTimeout(
-          `/.netlify/functions/updateListing?listingId=${encodeURIComponent(listingId)}`,
-          {
-            method: "PUT",
-            headers: { "Content-Type": "application/json", Authorization: "Bearer " + token },
-            body: JSON.stringify(payload)
-          },
-          60000,
-          label
-        );
-        let infoResp = await sendInfoUpdate("Info update");
-        if (infoResp.status === 401) {
-          try {
-            const refreshed = await refreshEtsyAccessToken(true);
-            if (refreshed) {
-              token = refreshed;
-              save({ accessToken: token, lastActivityAt: Date.now() });
-              infoResp = await sendInfoUpdate("Info update retry after token refresh");
-            }
-          } catch (refreshErr) {
-            console.warn("Etsy token refresh after info-update 401 failed:", refreshErr);
-          }
-        }
+        const infoResp = await etsyFetchWithTimeout(`/.netlify/functions/updateListing?listingId=${encodeURIComponent(listingId)}`, {
+          method: "PUT",
+          headers: { "Content-Type": "application/json", Authorization: "Bearer " + token },
+          body: JSON.stringify(payload)
+        }, 60000, "Info update");
         const infoJson = await infoResp.json().catch(() => ({}));
         if (!infoResp.ok) {
           const msg = JSON.stringify(infoJson || {});
-          if (infoResp.status === 401 && /invalid_token|expired|unauthorized|token_rejected|authentication/i.test(msg)) {
+          // AUTH error. Auto-resume / auto-reconnect REMOVED — fail cleanly.
+          if (infoResp.status === 401 && /invalid_token|expired/i.test(msg)) {
             save({ status: "AUTH_NEEDED", error: "token_expired" });
-            window.M?.toast?.({ html: 'Etsy authorization expired and could not be refreshed — click "Connect to Etsy" once, then restart Auto.' });
+            window.M?.toast?.({ html: 'Etsy session expired — click "Connect to Etsy", then re-run this listing.' });
             return;
           }
           throw new Error(`Info update failed ${infoResp.status} — ${JSON.stringify(infoJson)}`);
         }
 
-        // Inventory SKU (same as your current flow). Keep the token in the
-        // Authorization header instead of leaking it into the request URL.
+        // Inventory SKU (same as your current flow)
         save({ lastActivityAt: Date.now() });
         await etsyFetchWithTimeout(
-          `/.netlify/functions/updateListingInventory?listingId=${encodeURIComponent(listingId)}`,
-          {
-            method: "PUT",
-            headers: { "Content-Type": "application/json", Authorization: "Bearer " + token },
-            body: JSON.stringify({ sku: job.sku })
-          },
-          60000,
-          "Inventory SKU update"
+          `/.netlify/functions/updateListingInventory?listingId=${encodeURIComponent(listingId)}&token=${encodeURIComponent(token)}`,
+          { method: "PUT", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ sku: job.sku }) },
+          60000, "Inventory SKU update"
         ).catch(e => console.warn("Inventory SKU update error:", e));
 
         if (typeof setCreateProgress === "function") setCreateProgress(100);
@@ -6376,20 +6187,14 @@ https://www.etsy.com/your/shops/me/listing-editor/edit/1822973998
         return;
       }
       try {
-        const response = await fetch("/.netlify/functions/exchangeToken", {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({
-            grant_type: "authorization_code",
-            code,
-            code_verifier: codeVerifier
-          })
-        });
-        const tokenData = await response.json().catch(() => ({}));
-        if (response.ok && tokenData.access_token) {
-          applyEtsyTokenData(tokenData);
-          localStorage.removeItem("etsy_code_verifier");
-          M.toast({ html: "Connected to Etsy — automatic token refresh enabled." });
+        let response = await fetch(`/.netlify/functions/exchangeToken?code=${encodeURIComponent(code)}&code_verifier=${encodeURIComponent(codeVerifier)}`);
+        let tokenData = await response.json();
+        if (tokenData.access_token) {
+          window.accessToken = tokenData.access_token;
+          window.etsyUserId = tokenData.user_id; // needed for Etsy v3 Bearer format
+          // Persist latest token so background jobs can read it after redirects
+          localStorage.setItem("etsyAccessToken", window.accessToken);
+          M.toast({ html: "Connected to Etsy!" });
           // NEW: write-through latest token to any queued jobs so they don't use stale tokens
           try {
             const q = JSON.parse(localStorage.getItem("etsyUploadJobs") || "[]");
@@ -6409,7 +6214,7 @@ https://www.etsy.com/your/shops/me/listing-editor/edit/1822973998
           // whose image slots were already full). We no longer auto-resume;
           // the user re-runs any unfinished listing manually.
         } else {
-          M.toast({ html: "Error obtaining Etsy token: " + (tokenData.error_description || tokenData.error || `HTTP ${response.status}`) });
+          M.toast({ html: "Error obtaining token: " + JSON.stringify(tokenData) });
         }
       } catch (error) {
         console.error(error);
@@ -6467,6 +6272,18 @@ https://www.etsy.com/your/shops/me/listing-editor/edit/1822973998
       await generateDescriptionOnly();
     });
     
+    const OUTLAWED_CHARM_WORD_RE = /\bsilhouette\b/i;
+
+    function enforceOutlawedCharmWord(text) {
+      return String(text || "")
+        .replace(/\bsilhouette\s+charm\b/gi, "charm")
+        .replace(/\bcharm\s+silhouette\b/gi, "charm")
+        .replace(/\bsilhouette\b/gi, "charm")
+        .replace(/\bcharm\s+charm\b/gi, "charm")
+        .replace(/\s{2,}/g, " ")
+        .trim();
+    }
+
     async function generateTitleOnly() {
       let etsyLink = window.ETSY_SHOP_URL;
       let keyPhrases = document.getElementById("searchKeyPhrases").value.trim();
@@ -6483,6 +6300,7 @@ https://www.etsy.com/your/shops/me/listing-editor/edit/1822973998
     Key Phrases: "${keyPhrases}"
     --- Rules for TITLE ---
     ${rulesText}
+    NON-NEGOTIABLE: The word “silhouette” is outlawed. Describe the exact charm motif using its subject plus pose, action, orientation, species/type, or defining form.
     Important: Return ONLY the title as plain text.`;
 
         document.getElementById("listingTitle").value = "Generating title...";
@@ -6490,7 +6308,7 @@ https://www.etsy.com/your/shops/me/listing-editor/edit/1822973998
       const payload = {
         model: window.modelName,
         input: [
-          { role: "system", content: "Return ONLY the title as plain text." },
+          { role: "system", content: "Return ONLY the title as plain text. Never use the word silhouette. Describe charms by their exact subject and visible pose, action, orientation, or defining form." },
           { role: "user", content: promptText }
         ],
         max_output_tokens: 600,   // was 120 — reasoning tokens count against this cap
@@ -6499,7 +6317,18 @@ https://www.etsy.com/your/shops/me/listing-editor/edit/1822973998
       };
 
       try {
-        const output = await callOpenAIForText(payload, "Title");
+        let output = await callOpenAIForText(payload, "Title");
+        if (OUTLAWED_CHARM_WORD_RE.test(output)) {
+          const retryPayload = {
+            ...payload,
+            input: [
+              { role: "system", content: "Rewrite the title only. The word silhouette is strictly forbidden. Replace rendering-style language with the exact charm subject plus pose, action, orientation, species/type, or defining form. Return only the corrected title." },
+              { role: "user", content: `Correct this title using the supplied Listing Description (${rawDescription}): ${output}` }
+            ]
+          };
+          output = await callOpenAIForText(retryPayload, "Title correction");
+        }
+        output = enforceOutlawedCharmWord(output);
         document.getElementById("listingTitle").value = output;
         updateTitleCount(output);
       } catch (error) {
@@ -6571,6 +6400,7 @@ https://www.etsy.com/your/shops/me/listing-editor/edit/1822973998
     Key Phrases: "${keyPhrases}"
     --- Rules for DESCRIPTION ---
     ${rulesText}
+    NON-NEGOTIABLE: The word “silhouette” is outlawed. Describe the exact charm motif using its subject plus pose, action, orientation, species/type, or defining form.
     Important: Return ONLY the description as plain text.`.trim();
 
       const out = document.getElementById("listingDescription");
@@ -6584,7 +6414,7 @@ https://www.etsy.com/your/shops/me/listing-editor/edit/1822973998
         const payload = {
           model: window.modelName, // e.g., "gpt-5.4-mini"
           input: [
-            { role: "system", content: "Return ONLY the description as plain text." },
+            { role: "system", content: "Return ONLY the description as plain text. Never use the word silhouette. Describe charms by their exact subject and visible pose, action, orientation, or defining form." },
             { role: "user", content: promptText }
           ],
           max_output_tokens: 800,   // was 350 — reasoning tokens count against this cap
@@ -6599,6 +6429,19 @@ https://www.etsy.com/your/shops/me/listing-editor/edit/1822973998
         catch (e) { console.warn("Description generation failed after retry:", e.message); }
 
         text = (text || "").trim();
+
+        if (OUTLAWED_CHARM_WORD_RE.test(text)) {
+          const correctionPayload = {
+            ...payload,
+            input: [
+              { role: "system", content: "Rewrite the description only. The word silhouette is strictly forbidden. Replace rendering-style language with the exact charm subject plus pose, action, orientation, species/type, or defining form. Return only the corrected description." },
+              { role: "user", content: `Correct this description using the supplied Listing Description (${rawDescription}): ${text}` }
+            ]
+          };
+          try { text = await callOpenAIForText(correctionPayload, "Description correction"); }
+          catch (e) { console.warn("Description correction failed:", e.message); }
+        }
+        text = enforceOutlawedCharmWord(text);
 
         // If nothing came back, build a local fallback that respects house rules
         if (!text) {
@@ -6770,26 +6613,21 @@ async function callOpenAI(payload, opts = {}) {
 
                     const seen = new Map(); // name → {ref, source}
                     try {
-                        const approvedRes = await withFirebaseAuthRetry("Upload history approved sets", () => approvedRef.listAll());
+                        const approvedRes = await approvedRef.listAll();
                         for (const p of approvedRes.prefixes) {
                             const name = p.name.replace(/\/$/, "");
                             seen.set(name, { ref: p, source: "Approved_Listing_Sets" });
                         }
                     } catch (e) { console.warn("Couldn't list Approved_Listing_Sets:", e); }
-                    if (window.__legacyListedSetsLookupEnabled !== false) {
-                        try {
-                            const legacyRes = await withFirebaseAuthRetry("Upload history legacy sets", () => legacyRef.listAll());
-                            for (const p of legacyRes.prefixes) {
-                                const name = p.name.replace(/\/$/, "");
-                                if (!seen.has(name)) {
-                                    seen.set(name, { ref: p, source: "Listed_Sets (legacy)" });
-                                }
+                    try {
+                        const legacyRes = await legacyRef.listAll();
+                        for (const p of legacyRes.prefixes) {
+                            const name = p.name.replace(/\/$/, "");
+                            if (!seen.has(name)) {
+                                seen.set(name, { ref: p, source: "Listed_Sets (legacy)" });
                             }
-                        } catch (e) {
-                            window.__legacyListedSetsLookupEnabled = false;
-                            console.warn("Couldn't list Listed_Sets; legacy lookup disabled:", e);
                         }
-                    }
+                    } catch (e) { console.warn("Couldn't list Listed_Sets:", e); }
 
                     const folders = [...seen.entries()].map(([name, info]) => ({
                         name, ...info
@@ -7012,7 +6850,7 @@ async function callOpenAI(payload, opts = {}) {
               const r = await fetch(FN + "?op=drain");
               const j = await r.json().catch(() => ({}));
               if (!r.ok) throw new Error(j.error || ("HTTP " + r.status));
-              window.M?.toast?.({ html: "Shopify background drain started." });
+              window.M?.toast?.({ html: "Drain: " + describeDrain(j.drained) });
             } catch (e) {
               window.M?.toast?.({ html: "Drain failed: " + ((e && e.message) || e) });
             }
@@ -7024,7 +6862,7 @@ async function callOpenAI(payload, opts = {}) {
               const r = await fetch(FN, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ op: "retryFailed" }) });
               const j = await r.json().catch(() => ({}));
               if (!r.ok) throw new Error(j.error || ("HTTP " + r.status));
-              window.M?.toast?.({ html: `Requeued ${j.requeued || 0} failed job(s); background drain started.` });
+              window.M?.toast?.({ html: `Requeued ${j.requeued || 0} failed job(s) · ` + describeDrain(j.drained) });
             } catch (e) {
               window.M?.toast?.({ html: "Retry failed: " + ((e && e.message) || e) });
             }
@@ -7189,11 +7027,8 @@ async function callOpenAI(payload, opts = {}) {
       });
       setTimeout(refreshShopifyStatus, 2500);
       setInterval(refreshShopifyStatus, 60 * 1000);
-      document.addEventListener("visibilitychange", () => {
-        if (!document.hidden) refreshShopifyStatus();
-      });
-      // Fast in-app safety net. The Netlify scheduled function provides the
-      // same drain trigger when this tab is hidden or fully closed.
+      // Self-drain while the app is open: picks up queued jobs after the
+      // Toronto-midnight budget reset without any external cron.
       setInterval(() => { fetch(FN + "?op=drain").then(refreshShopifyStatus).catch(() => {}); }, 30 * 60 * 1000);
 
       // ---- category inference ----
@@ -7343,11 +7178,13 @@ RULES:
       let busy = false;
       // PIPELINED: the CAPTURE phase (AI fields + image collection) reads the
       // page for the CURRENT set and must finish before the auto pilot moves
-      // on. The ENQUEUE phase is also awaited so the product is durably handed
-      // to Firestore before the current set can be archived. Only the long
-      // server-status monitor is detached; background-tab timer throttling can
-      // delay the panel refresh, but it can no longer delay or prevent the next
-      // Shopify job from reaching the server queue.
+      // on. The SEND phase (enqueue + server-side create: product, variants,
+      // media, collections, vision set-matching) is pure network — it runs
+      // detached on a serialized chain, so the next set's Etsy work overlaps
+      // the previous set's Shopify server work. Guardrails: capture is
+      // awaited (no cross-set DOM reads), sends are chained one-at-a-time
+      // (no interleaved drains), and set archiving/retry semantics are
+      // unchanged (a Shopify failure never re-queued the set before either).
       async function queueShopifyUpload(category) {
         if (busy) { window.M?.toast?.({ html: "Shopify capture already in progress…" }); return; }
         busy = true;
@@ -7369,74 +7206,54 @@ RULES:
             images,
             source: "index-app"
           };
-          // Serialize only the short enqueue POST. This prevents simultaneous
-          // DOM captures from crossing while ensuring every product is stored
-          // server-side before the auto pilot advances and archives the set.
-          const enqueue = async () => {
-            setShopifyStage(70, `Handing “${fields.title}” to the Shopify server queue…`);
-            const r = await fetch(FN, {
-              method: "POST",
-              headers: { "Content-Type": "application/json" },
-              body: JSON.stringify({ op: "enqueue", payload })
-            });
-            const j = await r.json().catch(() => ({}));
-            if (!r.ok || j.ok === false || !j.jobId) {
-              throw new Error((j.errors && j.errors.join("; ")) || j.error || ("HTTP " + r.status));
+          // Detached, serialized send — the caller (auto pilot) is free as
+          // soon as capture is done.
+          const send = async () => {
+            try {
+              setShopifyStage(70, `Uploading “${fields.title}” — product, variants, collections, set matching (vision)…`);
+              const r = await fetch(FN, {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({ op: "enqueue", payload })
+              });
+              const j = await r.json();
+              if (!r.ok || j.ok === false) throw new Error((j.errors && j.errors.join("; ")) || j.error || ("HTTP " + r.status));
+              // The server drains in the BACKGROUND now (product creation +
+              // vision set-matching exceed the sync limit) — poll the job's
+              // status for the real outcome (up to ~6 min).
+              setShopifyStage(85, `Uploading “${fields.title}” in background — product, variants, collections, set matching (vision)…`);
+              let mine = null;
+              for (let t = 0; t < 60; t++) {
+                await new Promise(res => setTimeout(res, 6000));
+                try {
+                  const sr = await fetch(FN + "?op=status&recent=20");
+                  const sj = await sr.json();
+                  const job = (sj.recent || []).find(x => x.id === j.jobId);
+                  if (job && (job.status === "DONE" || job.status === "FAILED")) { mine = job; break; }
+                } catch (_) {}
+              }
+              if (mine && mine.status === "FAILED") throw new Error(mine.error || "upload failed (see panel)");
+              const setTxt = mine && mine.setLinks && mine.setLinks.partners && mine.setLinks.partners.length
+                ? ` · set: ${mine.setLinks.partners.length} partner${mine.setLinks.partners.length > 1 ? "s" : ""} linked`
+                : "";
+              setShopifyStage(100, mine
+                ? `LIVE: “${fields.title}” — ${j.variantCount} variants, tier ${j.tier}${setTxt}.`
+                : `Queued: “${fields.title}” (${j.variantCount} variants) — uploads in background; panel shows LIVE when done.`);
+              window.M?.toast?.({
+                html: mine
+                  ? `Shopify: LIVE — ${j.variantCount} variants${setTxt}.`
+                  : `Shopify: queued (${j.variantCount} variants) — background upload in progress.`
+              });
+              if (typeof refreshShopifyStatus === "function") refreshShopifyStatus();
+              return j;
+            } catch (e) {
+              setShopifyStage(100, `Shopify upload failed: “${fields.title}” — ${(e && e.message) || e}`, true);
+              window.M?.toast?.({ html: "Shopify upload failed: " + ((e && e.message) || e) });
+              console.error("Shopify send failed (Etsy pipeline unaffected):", e);
             }
-            return j;
           };
-
-          const previousEnqueue = window.__spEnqueueChain || Promise.resolve();
-          const enqueuePromise = previousEnqueue.then(enqueue, enqueue);
-          // Keep the chain usable after a failed job; the current caller still
-          // receives the original rejection through enqueuePromise.
-          window.__spEnqueueChain = enqueuePromise.then(() => undefined, () => undefined);
-          const j = await enqueuePromise;
-
-          setShopifyStage(85, `Queued server-side: “${fields.title}” — background upload in progress…`);
-          if (typeof refreshShopifyStatus === "function") refreshShopifyStatus();
-
-          // Monitoring is deliberately detached. A hidden browser tab may
-          // slow these visual status checks, but the durable Firestore job has
-          // already been accepted and the server worker continues independently.
-          (async () => {
-            let mine = null;
-            for (let t = 0; t < 60; t++) {
-              await new Promise(res => setTimeout(res, 6000));
-              try {
-                const sr = await fetch(FN + "?op=status&recent=20", { cache: "no-store" });
-                const sj = await sr.json();
-                const job = (sj.recent || []).find(x => x.id === j.jobId);
-                if (job && (job.status === "DONE" || job.status === "FAILED")) { mine = job; break; }
-              } catch (_) {}
-            }
-            if (mine && mine.status === "FAILED") throw new Error(mine.error || "upload failed (see panel)");
-            const setTxt = mine && mine.setLinks && mine.setLinks.partners && mine.setLinks.partners.length
-              ? ` · set: ${mine.setLinks.partners.length} partner${mine.setLinks.partners.length > 1 ? "s" : ""} linked`
-              : "";
-            setShopifyStage(100, mine
-              ? `LIVE: “${fields.title}” — ${j.variantCount} variants, tier ${j.tier}${setTxt}.`
-              : `Queued: “${fields.title}” (${j.variantCount} variants) — server upload continues in background.`);
-            window.M?.toast?.({
-              html: mine
-                ? `Shopify: LIVE — ${j.variantCount} variants${setTxt}.`
-                : `Shopify: queued (${j.variantCount} variants) — server upload continues.`
-            });
-            if (typeof refreshShopifyStatus === "function") refreshShopifyStatus();
-          })().catch((e) => {
-            setShopifyStage(100, `Shopify upload failed: “${fields.title}” — ${(e && e.message) || e}`, true);
-            window.M?.toast?.({ html: "Shopify upload failed: " + ((e && e.message) || e) });
-            console.error("Shopify background job failed (Etsy pipeline unaffected):", e);
-            if (typeof refreshShopifyStatus === "function") refreshShopifyStatus();
-          });
-
-          return {
-            queued: true,
-            title: fields.title,
-            jobId: j.jobId,
-            variantCount: j.variantCount,
-            tier: j.tier
-          };
+          window.__spSendChain = (window.__spSendChain || Promise.resolve()).then(send);
+          return { queued: true, title: fields.title };
         } finally { busy = false; }
       }
       window.queueShopifyUpload = queueShopifyUpload;
