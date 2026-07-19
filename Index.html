@@ -4233,6 +4233,9 @@ https://www.etsy.com/your/shops/me/listing-editor/edit/1822973998
           (window.__etsyJobOutcomes = window.__etsyJobOutcomes || {})[jobId] = patch.status;
         }
       };
+      // TOKEN-EXPIRY FIX: proactively renew before the job starts so long
+      // automation runs never trip Etsy's 1-hour access-token expiry mid-run.
+      try { await ensureFreshEtsyToken(); } catch (_) {}
       // Always prefer the freshest token (after OAuth reconnect)
       let token = (window.accessToken && String(window.accessToken).trim())
         || (localStorage.getItem("etsyAccessToken") || "").trim()
@@ -4309,7 +4312,23 @@ https://www.etsy.com/your/shops/me/listing-editor/edit/1822973998
             // Token expired right at the start — treat the same as any
             // other 401 below: pause the job and trigger reconnect.
             const t = await purgeResp.text();
-            if (/invalid_token|expired/i.test(t)) {
+            // TOKEN-EXPIRY FIX: one silent refresh + retry before failing.
+            if (/invalid_token|expired/i.test(t) && await refreshEtsyAccessToken()) {
+              token = window.accessToken;
+              save({ accessToken: token });
+              const retryResp = await etsyFetchWithTimeout(
+                `/.netlify/functions/listingImagesPurge?listingId=${encodeURIComponent(listingId)}&token=${encodeURIComponent(token)}`,
+                { method: "POST" }, 60000, "Image purge (retry)"
+              );
+              if (retryResp.ok) {
+                const rj = await retryResp.json().catch(() => ({}));
+                console.log(`Purge (after refresh): removed ${rj.removed}/${rj.totalSeen}.`);
+              } else {
+                save({ status: "AUTH_NEEDED", error: "token_expired" });
+                window.M?.toast?.({ html: 'Etsy session expired — click "Connect to Etsy", then re-run this listing.' });
+                return;
+              }
+            } else if (/invalid_token|expired/i.test(t)) {
               // AUTH error. Auto-resume / auto-reconnect REMOVED: fail the job
               // cleanly so the user can reconnect manually, instead of
               // redirecting away to "resume" it (the behaviour that caused the
@@ -6662,6 +6681,11 @@ https://www.etsy.com/your/shops/me/listing-editor/edit/1822973998
           window.etsyUserId = tokenData.user_id; // needed for Etsy v3 Bearer format
           // Persist latest token so background jobs can read it after redirects
           localStorage.setItem("etsyAccessToken", window.accessToken);
+          // TOKEN-EXPIRY FIX: persist the refresh token + issue time so long
+          // automation runs can silently renew past Etsy's 1-hour access-token
+          // TTL instead of failing every job with AUTH_NEEDED.
+          if (tokenData.refresh_token) localStorage.setItem("etsyRefreshToken", tokenData.refresh_token);
+          localStorage.setItem("etsyTokenIssuedAt", String(Date.now()));
           M.toast({ html: "Connected to Etsy!" });
           // NEW: write-through latest token to any queued jobs so they don't use stale tokens
           try {
@@ -6689,6 +6713,61 @@ https://www.etsy.com/your/shops/me/listing-editor/edit/1822973998
         M.toast({ html: "Error exchanging code for token" });
       }
     }
+
+    // TOKEN-EXPIRY FIX: silent access-token renewal via the refresh_token
+    // grant that exchangeToken.js already supports. Etsy access tokens live
+    // exactly 1 hour; refresh tokens live ~90 days and ROTATE on every use,
+    // so both the new access token and the new refresh token are persisted.
+    async function refreshEtsyAccessToken() {
+      const rt = (localStorage.getItem("etsyRefreshToken") || "").trim();
+      if (!rt) return false; // never connected with the new flow — cannot refresh
+      try {
+        const r = await fetch("/.netlify/functions/exchangeToken", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ grant_type: "refresh_token", refresh_token: rt })
+        });
+        const d = await r.json().catch(() => ({}));
+        if (!r.ok || !d.access_token) {
+          console.warn("Etsy token refresh failed:", r.status, d);
+          return false;
+        }
+        window.accessToken = d.access_token;
+        localStorage.setItem("etsyAccessToken", d.access_token);
+        if (d.refresh_token) localStorage.setItem("etsyRefreshToken", d.refresh_token); // rotated
+        localStorage.setItem("etsyTokenIssuedAt", String(Date.now()));
+        // Write-through to any queued jobs (same as the connect flow)
+        try {
+          const q = JSON.parse(localStorage.getItem("etsyUploadJobs") || "[]");
+          for (const id of q) {
+            const key = `etsyJob:${id}`;
+            const job = JSON.parse(localStorage.getItem(key) || "null");
+            if (job && job.accessToken !== window.accessToken) {
+              job.accessToken = window.accessToken;
+              localStorage.setItem(key, JSON.stringify(job));
+            }
+          }
+        } catch {}
+        console.log("Etsy access token silently refreshed.");
+        return true;
+      } catch (e) {
+        console.warn("Etsy token refresh error:", e);
+        return false;
+      }
+    }
+
+    // Proactive renewal: refresh when the current access token is older than
+    // 50 minutes (10-minute safety margin before Etsy's 60-minute expiry).
+    async function ensureFreshEtsyToken() {
+      const issued = Number(localStorage.getItem("etsyTokenIssuedAt") || 0);
+      const ageMs = Date.now() - issued;
+      if (!issued || ageMs > 50 * 60 * 1000) {
+        return await refreshEtsyAccessToken();
+      }
+      return true;
+    }
+    window.refreshEtsyAccessToken = refreshEtsyAccessToken;
+    window.ensureFreshEtsyToken = ensureFreshEtsyToken;
 
     // NEW: beginEtsyReconnect — reuse your Connect flow to silently refresh auth
     async function beginEtsyReconnect() {
