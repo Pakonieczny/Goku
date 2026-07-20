@@ -706,6 +706,26 @@
       z-index: 3050;
     }
 
+    /* Photo Budget control: caps API calls per listing (each photo = 1
+       Etsy API call). Sits in the toolbar beside the mode toggles. */
+    #photoBudgetCtl {
+      display: inline-flex; align-items: center; gap: 7px;
+      background: #263238; border: 1px solid #37474f; border-radius: 20px;
+      padding: 4px 10px; margin-left: 10px; color: #cfd8dc;
+      font-size: 11.5px; font-weight: 700; white-space: nowrap; user-select: none;
+    }
+    #photoBudgetCtl select {
+      display: inline-block; width: auto; height: 24px; line-height: 24px;
+      background: #37474f; color: #fff; border: 0; border-radius: 6px;
+      padding: 0 4px; font-size: 12px; font-weight: 700;
+    }
+    #photoBudgetCtl .pb-brand {
+      border: 0; border-radius: 12px; padding: 3px 9px; font-size: 10.5px;
+      font-weight: 800; letter-spacing: .03em; cursor: pointer;
+      background: #2e7d32; color: #fff;
+    }
+    #photoBudgetCtl .pb-brand.off { background: #6d4c41; }
+
     /* Duplicate Mode toggle (sits near the Duplicate Listing button) */
     #duplicateModeToggle {
       display: inline-flex;
@@ -1123,6 +1143,20 @@
          <span class="dmt-knob"></span>
        </span>
        <span id="duplicateModeState" class="dmt-state">ON</span>
+     </div>
+
+     <!-- Photo Budget: every photo is exactly one Etsy API call, so this is
+          the largest per-listing quota lever (image uploads are ~65-70% of a
+          listing's total API cost). "Main" caps the product photos taken from
+          the set's slots; "Brand" toggles the 2 generic reserved images
+          (packaging / brand shots) that are otherwise re-uploaded on every
+          listing. Persisted in localStorage. -->
+     <div id="photoBudgetCtl" class="configurable" title="Each photo costs exactly 1 Etsy API call. Main = product photos from the set (uploads the first N slots in order). Brand = the 2 generic packaging/brand images appended after the product photos.">
+       <span>Photos</span>
+       <select id="photoBudgetMax" aria-label="Maximum main product photos per listing">
+         <option value="8">8</option><option value="7">7</option><option value="6">6</option><option value="5">5</option><option value="4">4</option>
+       </select>
+       <button id="photoBudgetBrand" class="pb-brand" type="button">BRAND: ON</button>
      </div>
 
      <!-- Shopify mirror-upload controls: toggle (auto pipeline), manual push
@@ -2555,7 +2589,7 @@ ANTI-REPETITION (TITLE)
           // (covers a missed in-memory mirror, e.g. after a reload).
           try { st = (JSON.parse(localStorage.getItem(`etsyJob:${jobId}`) || "null") || {}).status; } catch (_) {}
         }
-        if (st === "DONE" || st === "FAILED" || st === "AUTH_NEEDED") return st;
+        if (st === "DONE" || st === "FAILED" || st === "AUTH_NEEDED" || st === "QUOTA_HALT") return st;
         await wait(2000);
       }
       return "TIMEOUT";
@@ -2821,6 +2855,14 @@ ANTI-REPETITION (TITLE)
                     const stillRunning = liveStatus === "RUNNING";
                     console.warn(`Original upload for ${setName} ended ${outcome}${stillRunning ? " (job still RUNNING — listing ID NOT restored)" : ""}; keeping the folder.`);
                     if (!stillRunning && consumed.queueId && consumed.listingId) restoreListingId(consumed.queueId, consumed.listingId);
+                    // DAILY-QUOTA FIX: this outcome isn't the set's fault —
+                    // don't strike it or mark it skipped. The job's own
+                    // handler already stopped Auto-Pilot; just leave the
+                    // folder untouched for the next run (today's later
+                    // resume, or tomorrow) and exit the sequence quietly.
+                    if (outcome === "QUOTA_HALT") {
+                        return; // no strike, no skip, no archive, no folder decrement
+                    }
                     window.__setFailureCounts = window.__setFailureCounts || {};
                     const fails = (window.__setFailureCounts[setName] = (window.__setFailureCounts[setName] || 0) + 1);
                     if (fails >= 2) {
@@ -4099,7 +4141,19 @@ https://www.etsy.com/your/shops/me/listing-editor/edit/1822973998
       const photos = [];
       const photoNames = [];
       const photoMeta = [];
+      // PHOTO BUDGET: cap product photos at the configured maximum. Applied
+      // AFTER dedup/fake-review filtering so the cap counts only real,
+      // upload-worthy photos; slots are consumed in order, and slot order is
+      // already the generator's quality ranking, so a cap of N keeps the N
+      // best. Each skipped photo is exactly 1 Etsy API call saved.
+      const photoBudget = window.etsyPhotoBudget || { maxMain: 8, includeBrand: true };
+      const maxMain = Math.min(8, Math.max(4, Number(photoBudget.maxMain) || 8));
       for (let i = 0; i < rawPhotos.length; i++) {
+        if (photos.length >= maxMain) {
+          console.log(`Photo budget: cap of ${maxMain} reached — skipping remaining slot(s) from ${i}.`);
+          window.__DIAG.log("photo-budget-cap", { cap: maxMain, firstSkippedSlot: i, totalSlots: rawPhotos.length });
+          break;
+        }
         let du = rawPhotos[i];
         if (!du) continue;
         du = await normalizeImageForEtsy(du);
@@ -4127,7 +4181,13 @@ https://www.etsy.com/your/shops/me/listing-editor/edit/1822973998
       }));
 
       // Reserved (8–9) from reservedPhotos [{src,name,meta}], also deduped.
-      const rawReserved = Array.from(window.reservedPhotos || []);
+      // PHOTO BUDGET: when Brand images are OFF, skip the whole block —
+      // saves 2 API calls per listing with zero effect on product photos.
+      const rawReserved = photoBudget.includeBrand === false ? [] : Array.from(window.reservedPhotos || []);
+      if (photoBudget.includeBrand === false && (window.reservedPhotos || []).length) {
+        console.log("Photo budget: Brand images OFF — skipping reserved uploads.");
+        window.__DIAG.log("photo-budget-brand-off", { skipped: (window.reservedPhotos || []).length });
+      }
       const seenReserved = new Set();
       const reservedSrc = [];
       const reservedNames = [];
@@ -4220,6 +4280,31 @@ https://www.etsy.com/your/shops/me/listing-editor/edit/1822973998
       } finally { clearTimeout(t); }
     }
 
+    // DAILY-QUOTA FIX: Etsy's "Exceeded daily rate limit" 429 is NOT
+    // transient like a per-second 429 — retrying does nothing until the
+    // quota resets (next day). Left undetected, every subsequent listing
+    // in the automation loop hits the same 429, burns its 2 strikes, and
+    // gets permanently marked "skipped" — mislabeling dozens of perfectly
+    // good sets as bad. Detect it specifically and halt the whole pipeline
+    // instead of striking the set that happened to be running when quota ran out.
+    function isDailyQuotaError(status, bodyText) {
+      return Number(status) === 429 && /exceeded daily rate limit/i.test(String(bodyText || ""));
+    }
+
+    function haltAutomationForQuota() {
+      if (window.__quotaHalted) return; // already halted, avoid duplicate toasts
+      window.__quotaHalted = true;
+      window.autoProcessingEnabled = false;
+      const btn = document.getElementById("toggleAuto");
+      if (btn) {
+        btn.textContent = "Start Auto";
+        btn.classList.remove("running", "green", "darken-2");
+        btn.classList.add("stopped", "red", "darken-1");
+      }
+      updateFirebaseStatus("Etsy daily API quota exceeded — Auto-Pilot paused. Resume after Etsy's quota resets (Etsy resets daily quotas at midnight UTC).", "");
+      window.M?.toast?.({ html: "Etsy daily API quota exceeded — Auto-Pilot paused. Try again after quota resets.", classes: "red", displayLength: 8000 });
+    }
+
     async function runEtsyJob(jobId) {
       let job = JSON.parse(localStorage.getItem(`etsyJob:${jobId}`) || "null");
       if (!job) return;
@@ -4299,6 +4384,15 @@ https://www.etsy.com/your/shops/me/listing-editor/edit/1822973998
                 gateErr.purgeGate = true; // must NOT be swallowed by the legacy purge catch
                 throw gateErr;
               }
+              // DAILY-QUOTA FIX: don't treat this like an ordinary undeletable-
+              // last-image case — halt the whole run instead of letting this
+              // set (and every set after it) burn strikes against a quota
+              // problem that has nothing to do with them.
+              if (isDailyQuotaError(firstFail.status, firstFail.detail)) {
+                const quotaErr = new Error("Etsy daily API quota exceeded.");
+                quotaErr.quotaExceeded = true;
+                throw quotaErr;
+              }
               // Etsy refuses to delete the LAST image of an active listing
               // (and occasionally refuses transiently). Correct handling is
               // an ORDER change, not a stop: upload the new images first —
@@ -4338,6 +4432,13 @@ https://www.etsy.com/your/shops/me/listing-editor/edit/1822973998
               return;
             }
             console.warn("Purge auth check failed:", t);
+          } else if (isDailyQuotaError(purgeResp.status, await purgeResp.clone().text().catch(() => ""))) {
+            // DAILY-QUOTA FIX: the GET-images-list call itself was
+            // rate-limited at the daily level — halt now, don't fail this
+            // set as if it were a normal error.
+            const quotaErr = new Error("Etsy daily API quota exceeded.");
+            quotaErr.quotaExceeded = true;
+            throw quotaErr;
           } else if (purgeResp.status === 404) {
             // Function not deployed yet — soft warn and continue.
             console.warn(
@@ -4357,11 +4458,22 @@ https://www.etsy.com/your/shops/me/listing-editor/edit/1822973998
           // (This catch previously swallowed the gate, which let one
           // undeletable leftover produce another corrupted gallery.)
           if (purgeErr && purgeErr.purgeGate) throw purgeErr;
+          // DAILY-QUOTA FIX: must also escape this catch, same reasoning.
+          if (purgeErr && purgeErr.quotaExceeded) throw purgeErr;
           // Anything else (network blip) — log and continue with upload.
           console.warn("Purge request errored, continuing with upload:", purgeErr);
         }
 
         let mainUploaded = 0, mainAttempted = 0;
+        // UPLOAD-RESPONSE HARVEST (quota optimization): Etsy's
+        // uploadListingImage response echoes the full created image record —
+        // listing_image_id, rank, and permanent i.etsystatic.com CDN URLs.
+        // We're already paying for these responses; harvesting them replaces
+        // BOTH the final-state diagnostic GET and the Shopify-capture GET
+        // (2 API calls per listing) with data we already have. altSent is
+        // carried alongside because the response's alt_text field may lag —
+        // we KNOW what we sent, so ours is authoritative for Shopify.
+        const uploadedImageHarvest = [];
         // Leftover image ids the pre-upload purge could not delete (e.g.
         // Etsy's last-image-of-active-listing rule); removed post-upload.
         // (Populated inside the purge block above via outer scope.)
@@ -4385,11 +4497,21 @@ https://www.etsy.com/your/shops/me/listing-editor/edit/1822973998
               etsy_image_id: body && body.listing_image_id,
               etsy_rank: body && body.rank
             });
+            if (body && body.listing_image_id) {
+              uploadedImageHarvest.push({
+                listing_image_id: body.listing_image_id,
+                rank: Number(body.rank) || (fd.get ? Number(fd.get("rank")) : 0) || 0,
+                src: body.url_fullxfull || body.url_570xN || body.url || null,
+                alt: String((fd.get && fd.get("alt_text")) || body.alt_text || "").slice(0, 250)
+              });
+            }
             return { ok: true };
           }
           const t = await r.text().catch(() => "");
           window.__DIAG.log("upload-response", { label, status: r.status, body: t.slice(0, 150) });
           if (r.status === 401 && /invalid_token|expired/i.test(t)) return { ok: false, authExpired: true, detail: t };
+          // DAILY-QUOTA FIX: distinguish from an ordinary 429/failure.
+          if (isDailyQuotaError(r.status, t)) return { ok: false, authExpired: false, quotaExceeded: true, detail: t };
           console.warn(`${label} HTTP ${r.status}:`, t.slice(0, 200));
           return { ok: false, authExpired: false, detail: `HTTP ${r.status}` };
         };
@@ -4415,6 +4537,11 @@ https://www.etsy.com/your/shops/me/listing-editor/edit/1822973998
             // AUTH error. Auto-resume / auto-reconnect REMOVED — fail cleanly.
             save({ status: "AUTH_NEEDED", error: "token_expired" });
             window.M?.toast?.({ html: 'Etsy session expired — click "Connect to Etsy", then re-run this listing.' });
+            return;
+          }
+          if (up.quotaExceeded) {
+            save({ status: "QUOTA_HALT", error: "etsy_daily_quota" });
+            haltAutomationForQuota();
             return;
           }
           if (up.ok) {
@@ -4454,6 +4581,11 @@ https://www.etsy.com/your/shops/me/listing-editor/edit/1822973998
             window.M?.toast?.({ html: 'Etsy session expired — click "Connect to Etsy", then re-run this listing.' });
             return;
           }
+          if (up.quotaExceeded) {
+            save({ status: "QUOTA_HALT", error: "etsy_daily_quota" });
+            haltAutomationForQuota();
+            return;
+          }
           if (up.ok) {
             if (typeof bumpCreateProgressPerImage === "function") bumpCreateProgressPerImage();
           } else {
@@ -4473,26 +4605,35 @@ https://www.etsy.com/your/shops/me/listing-editor/edit/1822973998
           const dj = await del.json().catch(() => ({}));
           window.__DIAG.log("purge-leftovers", { listingId, requested: purgeLeftovers, removed: (dj && dj.removed) || 0, failures: ((dj && dj.failures) || []).slice(0, 3) });
           if (!dj || Number(dj.removed) < purgeLeftovers.length) {
+            // DAILY-QUOTA FIX: this is the exact path that used to mask a
+            // 429 "Exceeded daily rate limit" as a generic "leftover image(s)
+            // could not be removed" failure — which then burned this set's
+            // 2 strikes (and every set after it) instead of pausing the run.
+            const failList = (dj && dj.failures) || [];
+            const quotaFail = failList.find(f => isDailyQuotaError(f && f.status, f && f.detail));
+            if (quotaFail) {
+              const quotaErr = new Error("Etsy daily API quota exceeded.");
+              quotaErr.quotaExceeded = true;
+              throw quotaErr;
+            }
             throw new Error(`Listing ${listingId}: ${purgeLeftovers.length - (Number(dj && dj.removed) || 0)} leftover image(s) could not be removed even after upload — failing before Shopify copies a dirty gallery.`);
           }
           console.log(`Deferred leftovers removed: ${dj.removed}/${purgeLeftovers.length}.`);
         }
 
-        // Read-only diagnostic: what does the LISTING actually hold now?
-        try {
-          const lr = await etsyFetchWithTimeout(
-            `/.netlify/functions/etsyProxy?listingId=${encodeURIComponent(listingId)}&includes=Images`,
-            { headers: { "access-token": token } }, 30000, "Final-state read");
-          if (lr.ok) {
-            const lj = await lr.json().catch(() => null);
-            const arr = ((lj && (lj.images || lj.Images)) || [])
-              .slice().sort((a, b) => (a.rank || 0) - (b.rank || 0))
-              .map(im => ({ id: im.listing_image_id, rank: im.rank, alt: String(im.alt_text || "").slice(0, 40) }));
-            window.__DIAG.log("etsy-final-state", { listingId, count: arr.length, images: arr });
-          } else {
-            window.__DIAG.log("etsy-final-state", { listingId, error: "HTTP " + lr.status });
-          }
-        } catch (e) { window.__DIAG.log("etsy-final-state", { listingId, error: e && e.message }); }
+        // QUOTA OPTIMIZATION: the final-state diagnostic GET is replaced by
+        // the upload-response harvest — same information (id, rank, alt per
+        // image), zero additional API calls. The harvest is also published
+        // for the Shopify capture stage, replacing ITS separate GET too.
+        // Combined saving: 2 Etsy API calls per listing, every listing.
+        {
+          const sorted = uploadedImageHarvest.slice().sort((a, b) => (a.rank || 0) - (b.rank || 0));
+          window.__DIAG.log("etsy-final-state", {
+            listingId, source: "upload-response-harvest", count: sorted.length,
+            images: sorted.map(im => ({ id: im.listing_image_id, rank: im.rank, alt: String(im.alt || "").slice(0, 40) }))
+          });
+          window.__lastEtsyUploadImages = { listingId: String(listingId), at: Date.now(), images: sorted };
+        }
 
         // --- Stage 2: Info (title/desc/tags + SKU)
         const payload = {
@@ -4550,6 +4691,16 @@ https://www.etsy.com/your/shops/me/listing-editor/edit/1822973998
         window.M?.toast?.({ html: "Create Listing complete from queue." });
       } catch (err) {
         console.error("Etsy job failed:", err);
+        // DAILY-QUOTA FIX: purgeGate-style escape for quota errors thrown
+        // from the purge stages above — halt the pipeline, don't strike
+        // the set or mask it as a generic failure.
+        if (err && err.quotaExceeded) {
+          save({ status: "QUOTA_HALT", error: "etsy_daily_quota" });
+          window.__DIAG.log("job-failed", { jobId, listingId, error: "etsy_daily_quota" });
+          window.__DIAG.report();
+          haltAutomationForQuota();
+          return;
+        }
         save({ status: "FAILED", error: String(err && err.message || err) });
         window.__DIAG.log("job-failed", { jobId, listingId, error: String(err && err.message || err) });
         window.__DIAG.report();
@@ -5364,6 +5515,44 @@ https://www.etsy.com/your/shops/me/listing-editor/edit/1822973998
           set(wrap.getAttribute("aria-checked") !== "true");
         }
       });
+    })();
+
+    // PHOTO BUDGET: each photo is exactly 1 Etsy API call, so this is the
+    // single largest per-listing quota lever (image uploads are ~65-70% of a
+    // listing's API cost). maxMain caps the product photos (first N slots in
+    // set order — slot order is already quality-ranked by the generator);
+    // includeBrand toggles the 2 generic reserved packaging/brand images.
+    // Persisted so the choice survives reloads; read at queue time.
+    (function initPhotoBudget(){
+      const KEY = "etsyPhotoBudget.v1";
+      const sel  = document.getElementById("photoBudgetMax");
+      const brand = document.getElementById("photoBudgetBrand");
+      if (!sel || !brand) return;
+      let saved = { maxMain: 8, includeBrand: true };
+      try { const s = JSON.parse(localStorage.getItem(KEY) || "null"); if (s && s.maxMain) saved = s; } catch (e) {}
+      window.etsyPhotoBudget = {
+        maxMain: Math.min(8, Math.max(4, Number(saved.maxMain) || 8)),
+        includeBrand: saved.includeBrand !== false
+      };
+      const persist = () => { try { localStorage.setItem(KEY, JSON.stringify(window.etsyPhotoBudget)); } catch (e) {} };
+      const render = () => {
+        sel.value = String(window.etsyPhotoBudget.maxMain);
+        brand.textContent = "BRAND: " + (window.etsyPhotoBudget.includeBrand ? "ON" : "OFF");
+        brand.classList.toggle("off", !window.etsyPhotoBudget.includeBrand);
+      };
+      sel.addEventListener("change", () => {
+        window.etsyPhotoBudget.maxMain = Math.min(8, Math.max(4, Number(sel.value) || 8));
+        persist(); render();
+        window.M?.toast?.({ html: `Photo budget: up to ${window.etsyPhotoBudget.maxMain} product photos per listing (${window.etsyPhotoBudget.maxMain} API calls).` });
+      });
+      brand.addEventListener("click", () => {
+        window.etsyPhotoBudget.includeBrand = !window.etsyPhotoBudget.includeBrand;
+        persist(); render();
+        window.M?.toast?.({ html: window.etsyPhotoBudget.includeBrand
+          ? "Brand images ON — the 2 packaging/brand photos are appended to every listing (+2 API calls each)."
+          : "Brand images OFF — listings upload product photos only (saves 2 API calls per listing)." });
+      });
+      render();
     })();
 
     // NEW: Duplicate Listing sequential orchestrator
@@ -7631,6 +7820,43 @@ async function callOpenAI(payload, opts = {}) {
         // instead — durable forever, correct order, alt text included.
         try {
           const consumed = window.__lastConsumedListing || {};
+          // QUOTA OPTIMIZATION: prefer the upload-response harvest published
+          // by runEtsyJob — the exact same i.etsystatic.com CDN URLs the old
+          // GET fetched, already in hand at zero API cost. INTEGRITY GUARDS
+          // (all must hold or we fall through to the original GET path):
+          //   1. Harvest is for THIS listing and fresh (< 10 min old);
+          //   2. Every entry has a usable https URL;
+          //   3. All URLs are UNIQUE — Etsy has a documented race where a
+          //      fresh upload response occasionally echoes a URL belonging
+          //      to a DIFFERENT image; the common signature is a duplicate
+          //      URL across entries, which this check catches. If any guard
+          //      fails, nothing is lost: the GET below runs exactly as
+          //      before.
+          const harvest = window.__lastEtsyUploadImages || null;
+          if (window.isProcessingSet && consumed.listingId && harvest &&
+              String(harvest.listingId) === String(consumed.listingId) &&
+              (Date.now() - (harvest.at || 0)) < 10 * 60 * 1000 &&
+              Array.isArray(harvest.images) && harvest.images.length > 0) {
+            const mapped = harvest.images
+              .slice()
+              .sort((a, b) => (a.rank || 0) - (b.rank || 0))
+              .map(im => ({ src: im.src, alt: String(im.alt || "").slice(0, 250) }))
+              .filter(im => im.src && /^https:\/\//i.test(im.src));
+            const allValid = mapped.length === harvest.images.length;
+            const allUnique = new Set(mapped.map(m => m.src)).size === mapped.length;
+            if (allValid && allUnique) {
+              window.__DIAG.log("shopify-source", {
+                listingId: consumed.listingId, source: "upload-response-harvest",
+                images: harvest.images.map(im => ({ id: im.listing_image_id, rank: im.rank, alt: String(im.alt || "").slice(0, 40) }))
+              });
+              window.__DIAG.log("shopify-submit", {
+                order: mapped.map((m, i) => ({ pos: i, alt: m.alt.slice(0, 40), srcTail: String(m.src).slice(-28) }))
+              });
+              return mapped;
+            }
+            console.warn(`collectShopifyImages: harvest failed integrity guards (valid=${allValid}, unique=${allUnique}) — falling back to live Etsy fetch.`);
+            window.__DIAG.log("shopify-source-harvest-rejected", { listingId: consumed.listingId, valid: allValid, unique: allUnique });
+          }
           if (window.isProcessingSet && consumed.listingId && window.accessToken) {
             const r = await fetch(
               `/.netlify/functions/etsyProxy?listingId=${encodeURIComponent(consumed.listingId)}&includes=Images`,
