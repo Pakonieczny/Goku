@@ -201,7 +201,8 @@
     }
     #batchReviewHeader h5 { margin: 0 0 4px; font-size: 21px; font-weight: 700; color: #2c2a24; }
     #batchReviewHeader p  { margin: 0; font-size: 12.5px; color: #6d675a; max-width: 760px; line-height: 1.45; }
-    #batchReviewApproveBtn { margin-left: auto; flex: 0 0 auto; height: 44px; font-weight: 700; }
+    #batchReviewApproveBtn { flex: 0 0 auto; height: 44px; font-weight: 700; }
+    #batchReviewCancelBtn { margin-left: auto; flex: 0 0 auto; height: 44px; color: #6d675a; font-weight: 700; }
     #batchReviewList {
       flex: 1; overflow-y: auto; padding: 16px 22px 22px;
       display: flex; flex-direction: column; gap: 16px;
@@ -211,12 +212,20 @@
       background: #fff; border: 1px solid #e6e0d2; border-radius: 12px;
       padding: 14px; align-items: start;
     }
-    .brv-img {
-      width: 340px; height: 340px; object-fit: cover;
-      border-radius: 10px; background: #efece4; display: block;
-      cursor: zoom-in; transition: transform .12s ease;
+    .brv-imgbox {
+      width: 340px; height: 340px; overflow: hidden; border-radius: 10px;
+      background: #efece4; position: relative; touch-action: none;
+      cursor: zoom-in; user-select: none;
     }
-    .brv-img:hover { transform: scale(1.02); }
+    .brv-imgbox img {
+      width: 100%; height: 100%; object-fit: cover; display: block;
+      transform-origin: center center; pointer-events: none;
+    }
+    .brv-zoomhint {
+      position: absolute; left: 8px; bottom: 8px; z-index: 2;
+      background: rgba(20,20,20,.55); color: #fff; border-radius: 8px;
+      padding: 3px 8px; font-size: 10px; font-weight: 700; pointer-events: none;
+    }
     .brv-side { display: flex; flex-direction: column; gap: 8px; min-width: 0; align-self: stretch; }
     .brv-head { font-size: 13px; font-weight: 800; color: #3a372f; letter-spacing: .01em; }
     .brv-warn {
@@ -233,7 +242,7 @@
     .brv-desc:focus { outline: none; border-color: #a9823f; box-shadow: 0 0 0 3px rgba(169,130,63,.14); }
     @media (max-width: 860px) {
       .brv-row { grid-template-columns: 1fr; }
-      .brv-img { width: 100%; height: auto; aspect-ratio: 1/1; }
+      .brv-imgbox { width: 100%; height: auto; aspect-ratio: 1/1; }
     }
 
     #descriptionApprovalTopAlert {
@@ -1153,8 +1162,9 @@
       <div id="batchReviewHeader">
         <div>
           <h5 id="batchReviewTitle">Review the next <span id="batchReviewCount">10</span> listings</h5>
-          <p id="batchReviewSub">Automation is paused. Correct any Listing Description below — each seeds its listing's title, keywords and full description — then approve the whole batch. Approved descriptions are injected automatically with no further pauses until the batch runs out.</p>
+          <p id="batchReviewSub">Automation is paused. Correct any Listing Description below — each seeds its listing's title, keywords and full description — then approve the whole batch. Scroll/pinch to zoom and drag to reframe any primary image; your framing is applied to the uploaded photos exactly like the preview boxes. Cancel reverts to one-at-a-time approval for this listing only.</p>
         </div>
+        <button id="batchReviewCancelBtn" class="btn-flat waves-effect" type="button" title="Close without saving. Nothing is approved; the current listing falls back to the normal single-listing approval step.">Cancel</button>
         <button id="batchReviewApproveBtn" class="btn waves-effect waves-light green darken-2" type="button">Approve All &amp; Resume</button>
       </div>
       <div id="batchReviewList"></div>
@@ -2173,9 +2183,15 @@ ANTI-REPETITION (TITLE)
             };
             await Promise.all([worker(), worker(), worker()]);
 
-            const approvedMap = await showBatchReviewPopup(prepared);
+            const reviewResult = await showBatchReviewPopup(prepared);
             document.title = prevTitle;
-            if (!approvedMap) return null; // popup could not be shown — fallback
+            if (!reviewResult) return null; // popup could not be shown — fallback
+            if (reviewResult === "CANCELLED") {
+                updateFirebaseStatus("Batch review cancelled — using single-listing approval for this set.", "working");
+                return null; // nothing saved; legacy gate handles the current set
+            }
+            const approvedMap = reviewResult.map || {};
+            const zoomMap = reviewResult.zooms || {};
 
             // Persist every approval; hand the current set's value back.
             const store = readBatchApproved();
@@ -2183,6 +2199,12 @@ ANTI-REPETITION (TITLE)
                 if (name !== currentSetName) store[name] = desc;
             }
             writeBatchApproved(store);
+            // Persist zoom framings for ALL sets (including the current one —
+            // its slot 0 is already populated, so its zoom is applied by the
+            // caller immediately after this gate returns).
+            const zoomStore = readBatchZoom();
+            for (const [name, t] of Object.entries(zoomMap)) zoomStore[name] = t;
+            writeBatchZoom(zoomStore);
             updateFirebaseStatus(`Batch approved: ${Object.keys(approvedMap).length} listing description(s) saved — resuming...`, "working");
             return String(approvedMap[currentSetName] || "").trim() || null;
         } catch (e) {
@@ -2191,13 +2213,180 @@ ANTI-REPETITION (TITLE)
         }
     }
 
-    // Render the popup and resolve with { setName: description } on
-    // Approve All. Blob URLs are revoked on close to free memory.
+    // ── Batch zoom store ──────────────────────────────────────────────
+    // The operator's zoom/pan framing on a popup primary image, persisted
+    // per set (single-use, like the descriptions). At process time the
+    // transform is replayed onto previewCell0's img.dataset — from there
+    // the EXISTING crop-commit step (cropPreviewsForIndices inside the
+    // metadata stage) bakes it into the uploaded image bytes exactly the
+    // way a manual preview-box zoom is baked today. Same mechanism, same
+    // 3000×3000 JPEG output, guaranteed identical behavior.
+    const BATCH_ZOOM_KEY = "etsyBatchZoom.v1";
+    function readBatchZoom() {
+        try { const m = JSON.parse(localStorage.getItem(BATCH_ZOOM_KEY) || "{}"); return (m && typeof m === "object") ? m : {}; }
+        catch (_) { return {}; }
+    }
+    function writeBatchZoom(map) {
+        try { localStorage.setItem(BATCH_ZOOM_KEY, JSON.stringify(map || {})); } catch (_) {}
+    }
+    function consumeBatchZoom(setName) {
+        const map = readBatchZoom();
+        if (!(setName in map)) return null;
+        const t = map[setName];
+        delete map[setName];
+        writeBatchZoom(map);
+        return (t && Number(t.s) > 1 && Number(t.vw) > 0) ? t : null;
+    }
+    // Both the popup box and the preview box are SQUARE viewports with the
+    // image cover-fitted, so the geometry is identical up to scale: the
+    // zoom factor transfers 1:1 and pre-scale pixel offsets scale linearly
+    // with the viewport edge length.
+    function convertBatchZoom(t, targetW) {
+        const ratio = (Number(targetW) || 120) / (Number(t.vw) || 340);
+        return { s: Number(t.s) || 1, x: (Number(t.x) || 0) * ratio, y: (Number(t.y) || 0) * ratio };
+    }
+    // Replay a stored batch zoom onto previewCell0 (the primary image the
+    // pipeline crops and uploads). Uses the page-level clampAndApply so the
+    // transform is clamped by the same rules as a manual zoom.
+    function applyBatchZoomToSlot0(setName) {
+        try {
+            const t = consumeBatchZoom(setName);
+            if (!t) return false;
+            const cell = document.getElementById("previewCell0");
+            const box = cell && cell.querySelector(".preview-box");
+            const img = box && box.querySelector("img");
+            if (!box || !img) return false;
+            const apply = () => {
+                const c = convertBatchZoom(t, box.clientWidth || 120);
+                clampAndApply(img, box, c.s, c.x, c.y);
+                window.__DIAG.log("batch-zoom-applied", { set: setName, scale: c.s });
+            };
+            if (img.complete && img.clientWidth) apply();
+            else img.addEventListener("load", apply, { once: true });
+            return true;
+        } catch (e) {
+            console.warn("applyBatchZoomToSlot0 failed:", e && e.message);
+            return false;
+        }
+    }
+
+    // Zoom/pan/pinch for a popup image box — same interaction semantics as
+    // attachPreviewBoxListeners on the 10 preview cells (wheel zoom to 8×,
+    // click-to-zoom toward the clicked point, drag-to-pan, clamped so the
+    // image always covers the viewport), plus true two-finger pinch and
+    // one-finger pan for touch screens. Trackpad pinch already arrives as
+    // wheel events, so it works through the same handler as the cells.
+    function attachBatchZoomListeners(box) {
+        const MAX_SCALE = 8;
+        function clampApply(img, scale, offX, offY) {
+            const vw = box.clientWidth || 340, vh = box.clientHeight || 340;
+            const bw = img.clientWidth || vw, bh = img.clientHeight || vh;
+            const maxX = Math.max(0, (bw * scale - vw) / 2 / scale);
+            const maxY = Math.max(0, (bh * scale - vh) / 2 / scale);
+            offX = Math.max(-maxX, Math.min(maxX, offX));
+            offY = Math.max(-maxY, Math.min(maxY, offY));
+            img.dataset.scale = scale;
+            img.dataset.offsetX = offX;
+            img.dataset.offsetY = offY;
+            img.style.transform = `scale(${scale}) translate(${offX}px, ${offY}px)`;
+        }
+        const st = () => {
+            const img = box.querySelector("img");
+            return img ? {
+                img,
+                s: parseFloat(img.dataset.scale) || 1,
+                x: parseFloat(img.dataset.offsetX) || 0,
+                y: parseFloat(img.dataset.offsetY) || 0
+            } : null;
+        };
+
+        box.addEventListener("wheel", (ev) => {
+            const c = st(); if (!c) return;
+            ev.preventDefault();
+            let s = c.s, x = c.x, y = c.y;
+            if (ev.deltaY < 0) s *= 1.1;
+            else { s /= 1.1; if (s <= 1) { s = 1; x = 0; y = 0; } }
+            if (s > MAX_SCALE) s = MAX_SCALE;
+            clampApply(c.img, s, x, y);
+        }, { passive: false });
+
+        let isDragging = false, isMouseDown = false;
+        let dragStartX = 0, dragStartY = 0, lastX = 0, lastY = 0;
+        const dragThreshold = 3;
+        box.addEventListener("mousedown", (ev) => {
+            const c = st(); if (!c || c.s <= 1) return;
+            ev.preventDefault();
+            isMouseDown = true; isDragging = false;
+            dragStartX = lastX = ev.clientX; dragStartY = lastY = ev.clientY;
+        });
+        box.addEventListener("mousemove", (ev) => {
+            if (!isMouseDown) return;
+            ev.preventDefault();
+            if (Math.abs(ev.clientX - dragStartX) > dragThreshold || Math.abs(ev.clientY - dragStartY) > dragThreshold) isDragging = true;
+            const c = st(); if (!c) return;
+            clampApply(c.img, c.s, c.x + (ev.clientX - lastX) * 0.5, c.y + (ev.clientY - lastY) * 0.5);
+            lastX = ev.clientX; lastY = ev.clientY;
+        });
+        box.addEventListener("mouseup", () => { isMouseDown = false; });
+        box.addEventListener("mouseleave", () => { isMouseDown = false; });
+
+        box.addEventListener("click", (ev) => {
+            if (isDragging) { isDragging = false; return; }
+            const c = st(); if (!c) return;
+            const rect = box.getBoundingClientRect();
+            const dxs = ev.clientX - (rect.left + box.clientWidth / 2);
+            const dys = ev.clientY - (rect.top + box.clientHeight / 2);
+            const px = dxs / c.s - c.x, py = dys / c.s - c.y;
+            let tx = -px, ty = -py;
+            const halfW = (c.img.clientWidth || 340) / 2, halfH = (c.img.clientHeight || 340) / 2;
+            const need = (d, h) => { const r = Math.abs(d) / h; return r >= 1 ? Infinity : 1 / (1 - r); };
+            let s1 = Math.max(1.33, c.s * 1.5, need(tx, halfW), need(ty, halfH));
+            if (!Number.isFinite(s1) || s1 > MAX_SCALE) s1 = MAX_SCALE;
+            clampApply(c.img, s1, tx, ty);
+        });
+
+        // Touch: one-finger pan when zoomed, two-finger pinch anywhere.
+        let touchMode = null, pinchStartDist = 0, pinchStartScale = 1;
+        const dist = (t) => Math.hypot(t[0].clientX - t[1].clientX, t[0].clientY - t[1].clientY);
+        box.addEventListener("touchstart", (ev) => {
+            const c = st(); if (!c) return;
+            if (ev.touches.length === 2) {
+                ev.preventDefault();
+                touchMode = "pinch";
+                pinchStartDist = dist(ev.touches);
+                pinchStartScale = c.s;
+            } else if (ev.touches.length === 1 && c.s > 1) {
+                ev.preventDefault();
+                touchMode = "pan";
+                lastX = ev.touches[0].clientX; lastY = ev.touches[0].clientY;
+            }
+        }, { passive: false });
+        box.addEventListener("touchmove", (ev) => {
+            const c = st(); if (!c || !touchMode) return;
+            ev.preventDefault();
+            if (touchMode === "pinch" && ev.touches.length === 2 && pinchStartDist > 0) {
+                let s = pinchStartScale * (dist(ev.touches) / pinchStartDist);
+                if (s <= 1) s = 1;
+                if (s > MAX_SCALE) s = MAX_SCALE;
+                clampApply(c.img, s, s === 1 ? 0 : c.x, s === 1 ? 0 : c.y);
+            } else if (touchMode === "pan" && ev.touches.length === 1) {
+                clampApply(c.img, c.s, c.x + (ev.touches[0].clientX - lastX) * 0.5, c.y + (ev.touches[0].clientY - lastY) * 0.5);
+                lastX = ev.touches[0].clientX; lastY = ev.touches[0].clientY;
+            }
+        }, { passive: false });
+        box.addEventListener("touchend", () => { touchMode = null; pinchStartDist = 0; });
+    }
+
+    // Render the popup. Resolves with { map: {setName: description},
+    // zooms: {setName: {s,x,y,vw}} } on Approve All, with "CANCELLED" when
+    // the operator cancels, and with null when the popup DOM is missing.
+    // Blob URLs are revoked on close to free memory.
     function showBatchReviewPopup(rows) {
         return new Promise((resolve) => {
             const overlay = document.getElementById("batchReviewOverlay");
             const list = document.getElementById("batchReviewList");
             const approveBtn = document.getElementById("batchReviewApproveBtn");
+            const cancelBtn = document.getElementById("batchReviewCancelBtn");
             const countEl = document.getElementById("batchReviewCount");
             if (!overlay || !list || !approveBtn) { resolve(null); return; }
 
@@ -2206,11 +2395,20 @@ ANTI-REPETITION (TITLE)
             rows.forEach((row, i) => {
                 const item = document.createElement("div");
                 item.className = "brv-row";
+                const imgbox = document.createElement("div");
+                imgbox.className = "brv-imgbox";
+                imgbox.setAttribute("data-set-name", row.setName);
                 const img = document.createElement("img");
-                img.className = "brv-img";
                 img.alt = row.setName + " primary image";
                 img.src = row.displayUrl || "";
                 img.loading = "lazy";
+                img.draggable = false;
+                imgbox.appendChild(img);
+                const hint = document.createElement("div");
+                hint.className = "brv-zoomhint";
+                hint.textContent = "Click / scroll / pinch to zoom · drag to reframe";
+                imgbox.appendChild(hint);
+                attachBatchZoomListeners(imgbox);
                 const side = document.createElement("div");
                 side.className = "brv-side";
                 const head = document.createElement("div");
@@ -2229,7 +2427,7 @@ ANTI-REPETITION (TITLE)
                 ta.spellcheck = true;
                 side.appendChild(head);
                 side.appendChild(ta);
-                item.appendChild(img);
+                item.appendChild(imgbox);
                 item.appendChild(side);
                 list.appendChild(item);
             });
@@ -2237,7 +2435,13 @@ ANTI-REPETITION (TITLE)
             const cleanup = () => {
                 overlay.style.display = "none";
                 approveBtn.onclick = null;
+                if (cancelBtn) cancelBtn.onclick = null;
                 rows.forEach(r => { if (r.blobUrl) { try { URL.revokeObjectURL(r.blobUrl); } catch (_) {} } });
+            };
+
+            if (cancelBtn) cancelBtn.onclick = () => {
+                cleanup();
+                resolve("CANCELLED");
             };
 
             approveBtn.onclick = () => {
@@ -2251,12 +2455,28 @@ ANTI-REPETITION (TITLE)
                 });
                 if (firstEmpty) {
                     firstEmpty.focus();
-                    firstEmpty.scrollIntoView({ behavior: "smooth", block: "center" });
+                    firstEmpty.scrollIntoView?.({ behavior: "smooth", block: "center" });
                     window.M?.toast?.({ html: "Every listing needs a description before approving the batch.", classes: "orange darken-2" });
                     return;
                 }
+                // Capture each image's zoom/pan framing (only when actually
+                // zoomed) so it can be replayed onto the pipeline's preview
+                // slot 0 and baked by the existing crop-commit step.
+                const zooms = {};
+                list.querySelectorAll(".brv-imgbox").forEach(bx => {
+                    const im = bx.querySelector("img");
+                    const s = im ? parseFloat(im.dataset.scale) || 1 : 1;
+                    if (im && s > 1) {
+                        zooms[bx.getAttribute("data-set-name")] = {
+                            s,
+                            x: parseFloat(im.dataset.offsetX) || 0,
+                            y: parseFloat(im.dataset.offsetY) || 0,
+                            vw: bx.clientWidth || 340
+                        };
+                    }
+                });
                 cleanup();
-                resolve(map);
+                resolve({ map, zooms });
             };
 
             overlay.style.display = "flex";
@@ -3098,6 +3318,12 @@ ANTI-REPETITION (TITLE)
                 // the operator-approved wording even if another handler touched it.
                 document.getElementById("listingDescInput").value = descriptionApproval.value;
             }
+
+            // Replay any operator zoom framing captured in the batch review
+            // popup onto slot 0. The metadata stage's existing crop-commit
+            // (cropPreviewsForIndices) then bakes it into the uploaded
+            // image bytes exactly as a manual preview-box zoom is baked.
+            applyBatchZoomToSlot0(setName);
             
             // 3. Generate Content (Sequentially) — VERIFIED.
             //
