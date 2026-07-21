@@ -1229,6 +1229,7 @@
     .dkpi{padding:12px 14px; border-radius:var(--rSm); background:var(--card2); border:1px solid var(--line2)}
     .dkpi .lab{font-size:10.5px; color:var(--ink45); letter-spacing:.06em; text-transform:uppercase; font-weight:700}
     .dkpi .val{font-family:var(--mono); font-size:22px; font-weight:600; margin-top:4px; letter-spacing:-.5px; font-variant-numeric:tabular-nums}
+    .dkpi .val.kpi-bad{color:var(--clay)}
 
     /* ---- Stats & Review ---- */
     .dstatsbar{display:flex; gap:10px; flex-wrap:wrap; align-items:center; margin-bottom:12px}
@@ -4981,12 +4982,15 @@ ANTI-REPETITION (TITLE)
       move(gridWrap, ["previewGridContainer"]);
       cStudio.appendChild(gridWrap);
 
-      // Shopify Uploads: a heavily-used panel — previously fell back to
-      // document.body (its old host id no longer exists) and landed at the
-      // very bottom of the page. Now sits right below Content/Studio.
-      const cShopify = card(main, "dCardShopifyUploads", "Shopify Uploads", null, "work");
+      // Shopify Uploads panel: retired from the Workspace (Queued/Failed
+      // now surface as Statistics KPIs; the rest was redundant there).
+      // ensurePanel() still needs its host, so it lives hidden — every
+      // binding (Drain now / Retry failed buttons, list renders, the
+      // progress writes from setShopifyStage) keeps working off-screen.
       const shopifyHost = mk("div", "dShopifyUploadsHost");
-      cShopify.appendChild(shopifyHost);
+      shopifyHost.style.display = "none";
+      shopifyHost.setAttribute("aria-hidden", "true");
+      main.appendChild(shopifyHost);
 
       const cOut = card(main, "dCardOutput", "Generated Output", null, "work");
       move(cOut, ["etsyListingTitleContainer", "etsyListingDescriptionContainer"]);
@@ -5003,6 +5007,8 @@ ANTI-REPETITION (TITLE)
           <div class="dkpi"><div class="lab">Last 7 Days</div><div class="val" id="kpi7d">—</div></div>
           <div class="dkpi"><div class="lab">Total Recorded</div><div class="val" id="kpiTotal">—</div></div>
           <div class="dkpi"><div class="lab">Shopify Live</div><div class="val" id="kpiShopify">—</div></div>
+          <div class="dkpi"><div class="lab">Shopify Queued</div><div class="val" id="kpiShopQueued">—</div></div>
+          <div class="dkpi"><div class="lab">Shopify Failed</div><div class="val" id="kpiShopFailed">—</div></div>
           <div class="dkpi"><div class="lab">Top Category (7d)</div><div class="val" id="kpiTopCat" style="font-size:15px">—</div></div>
         </div>
         <div class="dstatsbar">
@@ -9407,6 +9413,15 @@ async function callOpenAI(payload, opts = {}) {
           const c = document.getElementById("spCounts");
           if (c) c.innerHTML = `<span>Done ${j.done ?? 0}</span><span class="sp-q">Queued ${j.queued ?? 0}</span>` +
             `<span class="sp-fail">Failed ${j.failed ?? 0}</span><span>Budget ${b.used ?? 0}/${b.ceiling ?? 950}</span>`;
+          // Statistics-view KPI mirrors (the Workspace panel is retired;
+          // Queued/Failed now live in the Statistics tab).
+          const kq = document.getElementById("kpiShopQueued");
+          if (kq) kq.textContent = String(j.queued ?? 0);
+          const kf = document.getElementById("kpiShopFailed");
+          if (kf) {
+            kf.textContent = String(j.failed ?? 0);
+            kf.classList.toggle("kpi-bad", (j.failed ?? 0) > 0);
+          }
           renderRecent(j.recent);
         } catch (e) { if (el) el.textContent = "Shopify: offline"; }
       }
