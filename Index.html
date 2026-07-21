@@ -1350,17 +1350,47 @@
     html.responsive .progress{background:var(--line2); border-radius:6px}
     html.responsive .progress .determinate, html.responsive .progress .indeterminate{background:var(--gold)}
 
-    /* ── Round 4 (revised round 7): rail Pipeline stepper — now its own
-       pinned section between the nav and the scrolling stats, so it can
-       never be scrolled out of view. Only the stat blocks below scroll,
-       behind a thin, velvet-toned scrollbar (hidden until hover) instead
-       of the heavy default one. ── */
-    .drail__pipeline{padding:14px 16px 15px; border-top:1px solid var(--velvetLine); flex:0 0 auto}
-    .drail__stats{scrollbar-width:thin; scrollbar-color:rgba(233,227,215,.18) transparent}
-    .drail__stats::-webkit-scrollbar{width:5px}
-    .drail__stats::-webkit-scrollbar-track{background:transparent}
-    .drail__stats::-webkit-scrollbar-thumb{background:transparent; border-radius:4px}
-    .drail__stats:hover::-webkit-scrollbar-thumb{background:rgba(233,227,215,.18)}
+    /* ── Round 9: the Pipeline console now owns the whole lower rail
+       (stat blocks retired to Statistics view). Scrolls as one region
+       behind the same thin hover-reveal scrollbar. ── */
+    .drail__pipeline{padding:14px 16px 15px; border-top:1px solid var(--velvetLine); flex:1 1 auto; min-height:0; overflow-y:auto; display:flex; flex-direction:column;
+      scrollbar-width:thin; scrollbar-color:rgba(233,227,215,.18) transparent}
+    .drail__pipeline::-webkit-scrollbar{width:5px}
+    .drail__pipeline::-webkit-scrollbar-track{background:transparent}
+    .drail__pipeline::-webkit-scrollbar-thumb{background:transparent; border-radius:4px}
+    .drail__pipeline:hover::-webkit-scrollbar-thumb{background:rgba(233,227,215,.18)}
+    .dsteps{flex:0 0 auto}
+    /* overall set progress */
+    .dr-overall{margin:2px 0 16px; flex:0 0 auto}
+    .dr-overall-row{display:flex; justify-content:space-between; align-items:baseline; font-size:11px; color:#cfc7b8; font-weight:600}
+    .dr-overall-row #railOverallPct{font-family:var(--mono); color:var(--gold2)}
+    .dr-overall-track{height:5px; border-radius:3px; background:rgba(255,255,255,.08); overflow:hidden; margin:5px 0 4px}
+    .dr-overall-fill{height:100%; width:0%; border-radius:3px; background:linear-gradient(90deg,var(--gold),var(--gold2)); transition:width .5s ease}
+    .dr-overall-sub{font-size:10px; color:#8c8476; font-weight:600}
+    .dr-overall-sub #railSetElapsed{font-family:var(--mono)}
+    .dr-overall-sub #railQueueChips{font-family:var(--mono); color:#9a9183}
+    /* per-step elapsed time, right of the label */
+    .dstep-lbl{display:flex; align-items:baseline; gap:6px}
+    .dstep-time{font-family:var(--mono); font-size:9.5px; color:#635d51; font-weight:500; margin-left:auto; flex:0 0 auto}
+    .dstep-done .dstep-time{color:#7d9179}
+    .dstep-active .dstep-time{color:var(--gold2)}
+    /* session counters */
+    .dr-session{display:grid; grid-template-columns:repeat(4,1fr); gap:6px; margin:14px 0 16px; flex:0 0 auto}
+    .dr-schip{background:var(--velvet2); border:1px solid var(--velvetLine); border-radius:9px; padding:6px 4px 5px; display:flex; flex-direction:column; align-items:center; gap:1px}
+    .dr-sval{font-family:var(--mono); font-size:14px; color:#e9e3d7; font-variant-numeric:tabular-nums; line-height:1.1}
+    .dr-sval-done{color:#9fbf9a}
+    .dr-sval-skip{color:var(--gold2)}
+    .dr-sval-err{color:#e08a68}
+    .dr-slab{font-size:8.5px; letter-spacing:.1em; text-transform:uppercase; color:#8c8476; font-weight:700}
+    /* activity log */
+    .dr-actlabel{margin-bottom:8px}
+    .dr-activity{flex:1 1 auto; min-height:60px; display:flex; flex-direction:column; gap:0}
+    .dr-act{display:flex; gap:8px; padding:3.5px 0; border-top:1px solid rgba(255,255,255,.04); font-size:10.5px; line-height:1.35; align-items:baseline}
+    .dr-act:first-child{border-top:0}
+    .dr-act .t{font-family:var(--mono); font-size:9.5px; color:#635d51; flex:0 0 auto; font-variant-numeric:tabular-nums}
+    .dr-act .m{color:#a89f8e; min-width:0; overflow-wrap:anywhere}
+    .dr-act.ok .m{color:#9fbf9a}
+    .dr-act.err .m{color:#e08a68}
 
     /* per-step thin progress bars */
     .dstep-txt{flex:1 1 auto}
@@ -4861,39 +4891,34 @@ ANTI-REPETITION (TITLE)
         </div>
         <div class="drail__pipeline">
           <div class="dr-plabel">Pipeline <span class="dr-pset" id="railPipelineSet">Idle</span></div>
+          <div class="dr-overall">
+            <div class="dr-overall-row"><span id="railOverallStep">—</span><span id="railOverallPct">0%</span></div>
+            <div class="dr-overall-track"><div class="dr-overall-fill" id="railOverallFill"></div></div>
+            <div class="dr-overall-row dr-overall-sub"><span id="railSetElapsed"></span><span id="railQueueChips"></span></div>
+          </div>
           <ol class="dsteps" id="dSteps">
-            <li class="dstep dstep-pending" data-step="prep"><span class="dstep-dot"></span><div class="dstep-txt"><span class="dstep-lbl">Preparing Images</span><span class="dstep-sub"></span><span class="dstep-bar"><span class="dstep-bar-fill"></span></span></div></li>
-            <li class="dstep dstep-pending" data-step="identify"><span class="dstep-dot"></span><div class="dstep-txt"><span class="dstep-lbl">Identifying Charm</span><span class="dstep-sub"></span><span class="dstep-bar"><span class="dstep-bar-fill"></span></span></div></li>
-            <li class="dstep dstep-pending" data-step="tags"><span class="dstep-dot"></span><div class="dstep-txt"><span class="dstep-lbl">Generating Tags</span><span class="dstep-sub"></span><span class="dstep-bar"><span class="dstep-bar-fill"></span></span></div></li>
-            <li class="dstep dstep-pending" data-step="title"><span class="dstep-dot"></span><div class="dstep-txt"><span class="dstep-lbl">Generating Title</span><span class="dstep-sub"></span><span class="dstep-bar"><span class="dstep-bar-fill"></span></span></div></li>
-            <li class="dstep dstep-pending" data-step="desc"><span class="dstep-dot"></span><div class="dstep-txt"><span class="dstep-lbl">Generating Description</span><span class="dstep-sub"></span><span class="dstep-bar"><span class="dstep-bar-fill"></span></span></div></li>
-            <li class="dstep dstep-pending" data-step="metadata"><span class="dstep-dot"></span><div class="dstep-txt"><span class="dstep-lbl">Editing Image Metadata</span><span class="dstep-sub"></span><span class="dstep-bar"><span class="dstep-bar-fill"></span></span></div></li>
-            <li class="dstep dstep-pending" data-step="etsy"><span class="dstep-dot"></span><div class="dstep-txt"><span class="dstep-lbl">Uploading to Etsy</span><span class="dstep-sub"></span><span class="dstep-bar"><span class="dstep-bar-fill"></span></span></div></li>
-            <li class="dstep dstep-pending" data-step="shopify"><span class="dstep-dot"></span><div class="dstep-txt"><span class="dstep-lbl">Publishing to Shopify</span><span class="dstep-sub"></span><span class="dstep-bar"><span class="dstep-bar-fill"></span></span></div></li>
+            <li class="dstep dstep-pending" data-step="prep"><span class="dstep-dot"></span><div class="dstep-txt"><span class="dstep-lbl">Preparing Images<span class="dstep-time"></span></span><span class="dstep-sub"></span><span class="dstep-bar"><span class="dstep-bar-fill"></span></span></div></li>
+            <li class="dstep dstep-pending" data-step="identify"><span class="dstep-dot"></span><div class="dstep-txt"><span class="dstep-lbl">Identifying Charm<span class="dstep-time"></span></span><span class="dstep-sub"></span><span class="dstep-bar"><span class="dstep-bar-fill"></span></span></div></li>
+            <li class="dstep dstep-pending" data-step="tags"><span class="dstep-dot"></span><div class="dstep-txt"><span class="dstep-lbl">Generating Tags<span class="dstep-time"></span></span><span class="dstep-sub"></span><span class="dstep-bar"><span class="dstep-bar-fill"></span></span></div></li>
+            <li class="dstep dstep-pending" data-step="title"><span class="dstep-dot"></span><div class="dstep-txt"><span class="dstep-lbl">Generating Title<span class="dstep-time"></span></span><span class="dstep-sub"></span><span class="dstep-bar"><span class="dstep-bar-fill"></span></span></div></li>
+            <li class="dstep dstep-pending" data-step="desc"><span class="dstep-dot"></span><div class="dstep-txt"><span class="dstep-lbl">Generating Description<span class="dstep-time"></span></span><span class="dstep-sub"></span><span class="dstep-bar"><span class="dstep-bar-fill"></span></span></div></li>
+            <li class="dstep dstep-pending" data-step="metadata"><span class="dstep-dot"></span><div class="dstep-txt"><span class="dstep-lbl">Editing Image Metadata<span class="dstep-time"></span></span><span class="dstep-sub"></span><span class="dstep-bar"><span class="dstep-bar-fill"></span></span></div></li>
+            <li class="dstep dstep-pending" data-step="etsy"><span class="dstep-dot"></span><div class="dstep-txt"><span class="dstep-lbl">Uploading to Etsy<span class="dstep-time"></span></span><span class="dstep-sub"></span><span class="dstep-bar"><span class="dstep-bar-fill"></span></span></div></li>
+            <li class="dstep dstep-pending" data-step="shopify"><span class="dstep-dot"></span><div class="dstep-txt"><span class="dstep-lbl">Publishing to Shopify<span class="dstep-time"></span></span><span class="dstep-sub"></span><span class="dstep-bar"><span class="dstep-bar-fill"></span></span></div></li>
           </ol>
+          <div class="dr-session">
+            <div class="dr-schip"><span class="dr-sval dr-sval-done" id="railSessDone">0</span><span class="dr-slab">Done</span></div>
+            <div class="dr-schip"><span class="dr-sval dr-sval-skip" id="railSessSkipped">0</span><span class="dr-slab">Skipped</span></div>
+            <div class="dr-schip"><span class="dr-sval dr-sval-err" id="railSessErrors">0</span><span class="dr-slab">Errors</span></div>
+            <div class="dr-schip"><span class="dr-sval" id="railSessAvg">—</span><span class="dr-slab">Avg / set</span></div>
+          </div>
+          <div class="dr-plabel dr-actlabel">Activity</div>
+          <div class="dr-activity" id="railActivity"></div>
         </div>
-        <div class="drail__stats">
-          <div class="dr-block"><div class="dr-lab">Folders Ready</div><div class="dr-val" id="railFolders">—</div></div>
-          <div class="dr-block"><div class="dr-lab">Listed Today</div><div class="dr-val" id="railToday">—</div></div>
-          <div class="dr-block"><div class="dr-lab">Total Recorded</div><div class="dr-val" id="railTotal">—</div></div>
-
-          <div class="dr-toggle" role="tablist">
-            <button class="dr-toggle-btn dr-toggle-active" data-platform-btn="etsy" type="button" role="tab">Etsy</button>
-            <button class="dr-toggle-btn" data-platform-btn="shopify" type="button" role="tab">Shopify</button>
-          </div>
-          <div class="dr-platform" data-platform-panel="etsy">
-            <div class="dr-block"><div class="dr-lab">Etsy Today</div><div class="dr-val" id="railEtsyToday">—</div></div>
-            <div class="dr-block"><div class="dr-lab">Etsy 7 Days</div><div class="dr-val" id="railEtsy7d">—</div></div>
-            <div class="dr-block"><div class="dr-lab">Etsy Total</div><div class="dr-val" id="railEtsyTotal">—</div></div>
-            <div class="dr-block"><div class="dr-lab">Variants (7d)</div><div class="dr-val" id="railVariants7d">—</div></div>
-          </div>
-          <div class="dr-platform" data-platform-panel="shopify" hidden>
-            <div class="dr-block"><div class="dr-lab">Shopify Live Today</div><div class="dr-val" id="railShopifyToday">—</div></div>
-            <div class="dr-block"><div class="dr-lab">Shopify Live 7d</div><div class="dr-val" id="railShopify7d">—</div></div>
-            <div class="dr-block"><div class="dr-lab">Shopify Live Total</div><div class="dr-val" id="railShopifyTotal">—</div></div>
-            <div class="dr-block"><div class="dr-lab">Budget Today</div><div class="dr-val dr-sm" id="railShopifyBudget">—</div></div>
-            <div class="dr-block"><div class="dr-lab">Failed (7d)</div><div class="dr-val" id="railShopifyFailed">—</div></div>
-          </div>
+        <div id="dRailHiddenStats" style="display:none" aria-hidden="true">
+          <span id="railQueueIds">—</span><span id="railFolders">—</span><span id="railToday">—</span><span id="railTotal">—</span>
+          <span id="railEtsyToday">—</span><span id="railEtsy7d">—</span><span id="railEtsyTotal">—</span><span id="railVariants7d">—</span>
+          <span id="railShopifyToday">—</span><span id="railShopify7d">—</span><span id="railShopifyTotal">—</span><span id="railShopifyBudget">—</span><span id="railShopifyFailed">—</span>
         </div>
         <div class="drail__foot"><span class="dot"></span><span class="lbl">Firestore live</span></div>`;
       app.appendChild(rail);
@@ -5062,6 +5087,12 @@ ANTI-REPETITION (TITLE)
           if (m) folders += Number(m[0]);
         });
         if (t("railFolders")) t("railFolders").textContent = String(folders);
+        // compact queue context in the pipeline console
+        const chips = t("railQueueChips");
+        if (chips) {
+          const ids = (q && q.textContent || "0").trim() || "0";
+          chips.textContent = `${ids} IDs · ${folders} folders`;
+        }
       };
       setInterval(window.updateRailStats, 2000);
       setTimeout(window.updateRailStats, 400);
@@ -5076,6 +5107,73 @@ ANTI-REPETITION (TITLE)
       // there is the only thing that could ever require an update here.
       const RAIL_STEPS = ["prep", "identify", "tags", "title", "desc", "metadata", "etsy", "shopify"];
       window.__railStepState = {};
+      // ── Round 9: pipeline console state ──
+      const railT = {
+        setStart: null,          // ms — when the current set began
+        stepStart: {},           // key → ms when the step went active
+        stepDur: {},             // key → seconds (frozen at done/error)
+        session: { done: 0, skipped: 0, errors: 0, durations: [] }
+      };
+      const railFmtSec = (s) => {
+        s = Math.max(0, Math.round(s));
+        return s < 60 ? s + "s" : Math.floor(s / 60) + "m " + String(s % 60).padStart(2, "0") + "s";
+      };
+      function railLog(msg, cls) {
+        const box = document.getElementById("railActivity");
+        if (!box) return;
+        // skip consecutive duplicates (poll loops repeat the same status)
+        if (box.firstChild && box.firstChild.dataset && box.firstChild.dataset.msg === msg) return;
+        const row = document.createElement("div");
+        row.className = "dr-act" + (cls ? " " + cls : "");
+        row.dataset.msg = msg;
+        const now = new Date();
+        const hh = String(now.getHours()).padStart(2, "0"), mm = String(now.getMinutes()).padStart(2, "0"), ss = String(now.getSeconds()).padStart(2, "0");
+        row.innerHTML = `<span class="t">${hh}:${mm}:${ss}</span><span class="m"></span>`;
+        row.querySelector(".m").textContent = msg;
+        box.insertBefore(row, box.firstChild);
+        while (box.children.length > 60) box.removeChild(box.lastChild);
+      }
+      function railSetSession() {
+        const t = (id) => document.getElementById(id);
+        if (t("railSessDone")) t("railSessDone").textContent = String(railT.session.done);
+        if (t("railSessSkipped")) t("railSessSkipped").textContent = String(railT.session.skipped);
+        if (t("railSessErrors")) t("railSessErrors").textContent = String(railT.session.errors);
+        const avgEl = t("railSessAvg");
+        if (avgEl) {
+          const d = railT.session.durations;
+          avgEl.textContent = d.length ? railFmtSec(d.reduce((a, b) => a + b, 0) / d.length) : "—";
+        }
+      }
+      function railRenderOverall() {
+        const doneN = RAIL_STEPS.filter(k => window.__railStepState[k] === "done").length;
+        const activeK = RAIL_STEPS.find(k => window.__railStepState[k] === "active");
+        // active steps count half; the concurrent tags/title/desc trio is
+        // one logical phase, so cap the numerator at 8
+        const activeN = RAIL_STEPS.filter(k => window.__railStepState[k] === "active").length;
+        const pct = Math.min(100, Math.round(((doneN + activeN * 0.5) / RAIL_STEPS.length) * 100));
+        const stepEl = document.getElementById("railOverallStep");
+        const pctEl = document.getElementById("railOverallPct");
+        const fillEl = document.getElementById("railOverallFill");
+        if (stepEl) {
+          if (activeK) stepEl.textContent = `Step ${RAIL_STEPS.indexOf(activeK) + 1} of ${RAIL_STEPS.length}`;
+          else if (doneN === RAIL_STEPS.length) stepEl.textContent = "Complete";
+          else if (doneN === 0) stepEl.textContent = "—";
+        }
+        if (pctEl) pctEl.textContent = pct + "%";
+        if (fillEl) fillEl.style.width = pct + "%";
+      }
+      function railStepTimeEl(key) { const li = railStepEl(key); return li && li.querySelector(".dstep-time"); }
+      // 1s ticker: live elapsed for the set + the active steps
+      setInterval(() => {
+        const el = document.getElementById("railSetElapsed");
+        if (el) el.textContent = railT.setStart ? "Elapsed " + railFmtSec((Date.now() - railT.setStart) / 1000) : "";
+        RAIL_STEPS.forEach(k => {
+          if (window.__railStepState[k] === "active" && railT.stepStart[k]) {
+            const te = railStepTimeEl(k);
+            if (te) te.textContent = railFmtSec((Date.now() - railT.stepStart[k]) / 1000);
+          }
+        });
+      }, 1000);
 
       function railStepEl(key) { return document.querySelector(`.dstep[data-step="${key}"]`); }
       // Which steps have a REAL percentage source to mirror; everything
@@ -5106,12 +5204,25 @@ ANTI-REPETITION (TITLE)
       function railSetStep(key, state, sub) {
         const li = railStepEl(key);
         if (!li) return;
+        const prev = window.__railStepState[key];
         li.classList.remove("dstep-pending", "dstep-active", "dstep-done", "dstep-error");
         li.classList.add("dstep-" + state);
         window.__railStepState[key] = state;
         const subEl = li.querySelector(".dstep-sub");
         if (subEl) subEl.textContent = sub || "";
+        // ── timing bookkeeping ──
+        const te = railStepTimeEl(key);
+        if (state === "active" && prev !== "active") {
+          railT.stepStart[key] = Date.now();
+        } else if ((state === "done" || state === "error") && railT.stepStart[key]) {
+          railT.stepDur[key] = (Date.now() - railT.stepStart[key]) / 1000;
+          if (te) te.textContent = railFmtSec(railT.stepDur[key]);
+        } else if (state === "pending") {
+          delete railT.stepStart[key]; delete railT.stepDur[key];
+          if (te) te.textContent = "";
+        }
         railSetBar(li, key, state);
+        railRenderOverall();
       }
       // Live mirror: while a percentage-backed step is active, keep its
       // bar synced with the real progress element every 500ms.
@@ -5145,24 +5256,29 @@ ANTI-REPETITION (TITLE)
         if ((m = s.match(/^Processing:\s*(.+)$/))) {
           railResetSteps();
           railSetLabel(m[1]);
+          railT.setStart = Date.now();
+          railT.stepStart = {}; railT.stepDur = {};
           railSetStep("prep", "active", "Starting…");
+          railLog("Started: " + m[1]);
           return;
         }
-        if (s === "Downloading images...") { railSetStep("prep", "active", "Downloading photos…"); return; }
-        if (s === "Analyzing Details...") { railDoneBefore("identify"); railSetStep("identify", "active", "Reading charm details…"); return; }
-        if (/^PAUSED/.test(s)) { railSetStep("identify", "active", s.replace(/^PAUSED\s*—\s*/, "")); return; }
-        if (/^Batch[- ]approved description injected/.test(s)) { railSetStep("identify", "active", "Description approved"); return; }
-        if (/^Batch approved:/.test(s)) { railSetStep("identify", "active", s); return; }
-        if (/^Batch review cancelled/.test(s)) { railSetStep("identify", "active", "Using single-listing approval"); return; }
+        if (s === "Downloading images...") { railSetStep("prep", "active", "Downloading photos…"); railLog(s); return; }
+        if (s === "Analyzing Details...") { railDoneBefore("identify"); railSetStep("identify", "active", "Reading charm details…"); railLog(s); return; }
+        if (/^PAUSED/.test(s)) { railSetStep("identify", "active", s.replace(/^PAUSED\s*—\s*/, "")); railLog(s); return; }
+        if (/^Batch[- ]approved description injected/.test(s)) { railSetStep("identify", "active", "Description approved"); railLog("Batch-approved description injected"); return; }
+        if (/^Batch approved:/.test(s)) { railSetStep("identify", "active", s); railLog(s, "ok"); return; }
+        if (/^Batch review cancelled/.test(s)) { railSetStep("identify", "active", "Using single-listing approval"); railLog(s); return; }
         if (s === "Generating Info...") {
           railDoneBefore("tags");
           ["tags", "title", "desc"].forEach(k => railSetStep(k, "active", "Writing tags, title & description…"));
+          railLog("Generating tags, title & description…");
           return;
         }
-        if (s === "Key phrases empty — retrying...") { railSetStep("tags", "active", "Retrying tags…"); return; }
+        if (s === "Key phrases empty — retrying...") { railSetStep("tags", "active", "Retrying tags…"); railLog(s); return; }
         if (s === "Title/description incomplete — retrying...") {
           railSetStep("title", "active", "Retrying…");
           railSetStep("desc", "active", "Retrying…");
+          railLog(s);
           return;
         }
         if ((m = s.match(/^Generation failed \(([^)]+)\):/))) {
@@ -5170,30 +5286,56 @@ ANTI-REPETITION (TITLE)
           if (/key phrases/.test(what)) railSetStep("tags", "error", "Failed — will retry later");
           if (/title/.test(what)) railSetStep("title", "error", "Failed — will retry later");
           if (/description/.test(what)) railSetStep("desc", "error", "Failed — will retry later");
+          railT.session.errors++; railSetSession();
+          railLog(s, "err");
           return;
         }
-        if (s === "Analyzing Metadata...") { railDoneBefore("metadata"); railSetStep("metadata", "active", "Cropping & tagging photos…"); return; }
-        if (s === "Uploading Original...") { railDoneBefore("etsy"); railSetStep("etsy", "active", "Publishing photos to Etsy…"); return; }
-        if (/^Error: No Listing ID/.test(s)) { railSetStep("etsy", "error", "No Listing ID available"); return; }
-        if (/^Upload failed twice/.test(s)) { railSetStep("etsy", "error", "Failed twice — skipped"); return; }
-        if (/^Upload \S+: .* kept for retry/.test(s)) { railSetStep("etsy", "error", "Upload issue — retrying later"); return; }
-        if (/^Capturing for Shopify/.test(s)) { railDoneBefore("shopify"); railSetStep("shopify", "active", "Queuing Shopify listing…"); return; }
-        if (s === "Duplicating...") { railSetStep("shopify", "active", "Duplicating for a second listing…"); return; }
-        if (s === "Uploading Variant...") { railSetStep("shopify", "active", "Uploading variant listing…"); return; }
-        if (s === "Single mode: skipping duplicate") { railSetStep("shopify", "active", "Single mode — no duplicate"); return; }
-        if (/^Done:/.test(s)) { railDoneBefore("shopify"); railSetStep("shopify", "done", "Done — archiving…"); railSetLabel("Idle"); return; }
-        if (/^Listing skipped/.test(s)) { railResetSteps(); railSetLabel("Idle"); return; }
+        if (s === "Analyzing Metadata...") { railDoneBefore("metadata"); railSetStep("metadata", "active", "Cropping & tagging photos…"); railLog(s); return; }
+        if (s === "Uploading Original...") { railDoneBefore("etsy"); railSetStep("etsy", "active", "Publishing photos to Etsy…"); railLog("Uploading listing to Etsy…"); return; }
+        if (/^Error: No Listing ID/.test(s)) { railSetStep("etsy", "error", "No Listing ID available"); railT.session.errors++; railSetSession(); railLog(s, "err"); return; }
+        if (/^Upload failed twice/.test(s)) { railSetStep("etsy", "error", "Failed twice — skipped"); railT.session.errors++; railT.session.skipped++; railSetSession(); railLog(s, "err"); return; }
+        if (/^Upload \S+: .* kept for retry/.test(s)) { railSetStep("etsy", "error", "Upload issue — retrying later"); railT.session.errors++; railSetSession(); railLog(s, "err"); return; }
+        if (/^Capturing for Shopify/.test(s)) { railDoneBefore("shopify"); railSetStep("shopify", "active", "Queuing Shopify listing…"); railLog("Capturing listing for Shopify…"); return; }
+        if (s === "Duplicating...") { railSetStep("shopify", "active", "Duplicating for a second listing…"); railLog("Duplicating for variant listing…"); return; }
+        if (s === "Uploading Variant...") { railSetStep("shopify", "active", "Uploading variant listing…"); railLog(s); return; }
+        if (s === "Single mode: skipping duplicate") { railSetStep("shopify", "active", "Single mode — no duplicate"); railLog(s); return; }
+        if ((m = s.match(/^Done:\s*([^(]+)/))) {
+          railDoneBefore("shopify"); railSetStep("shopify", "done", "Done — archiving…");
+          if (railT.setStart) railT.session.durations.push((Date.now() - railT.setStart) / 1000);
+          railT.session.done++; railSetSession();
+          railLog("✓ Done: " + m[1].trim(), "ok");
+          railSetLabel("Idle");
+          railT.setStart = null;
+          return;
+        }
+        if (/^Listing skipped/.test(s)) {
+          railResetSteps(); railSetLabel("Idle");
+          railT.session.skipped++; railSetSession();
+          railT.setStart = null;
+          railLog(s);
+          return;
+        }
         if (/^Skipping current listing/.test(s)) {
           const active = railActiveStep();
           if (active) railSetStep(active, "active", "Skipping…");
+          railLog(s);
           return;
         }
         if (/^Auto Error/.test(s)) {
           const active = railActiveStep();
           if (active) railSetStep(active, "error", "Unexpected error — check console");
+          railT.session.errors++; railSetSession();
+          railT.setStart = null;
+          railLog("Automation error — check console", "err");
           return;
         }
-        if (/^(Waiting|Scanning|Auto Paused|Auto Started|Pausing|Scan Error)/.test(s)) { railSetLabel(s); return; }
+        if (/^(Waiting|Scanning|Auto Paused|Auto Started|Pausing|Scan Error)/.test(s)) {
+          railSetLabel(s);
+          if (/^(Auto Started|Auto Paused|Scan Error)/.test(s)) railLog(s, /Error/.test(s) ? "err" : "");
+          return;
+        }
+        // anything unmatched still lands in the activity feed
+        if (s) railLog(s);
       };
 
       // Real-time module boots after the DOM shell exists.
