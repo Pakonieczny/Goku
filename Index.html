@@ -1361,6 +1361,20 @@
     .drail__stats::-webkit-scrollbar-track{background:transparent}
     .drail__stats::-webkit-scrollbar-thumb{background:transparent; border-radius:4px}
     .drail__stats:hover::-webkit-scrollbar-thumb{background:rgba(233,227,215,.18)}
+
+    /* per-step thin progress bars */
+    .dstep-txt{flex:1 1 auto}
+    .dstep-bar{display:block; height:3px; border-radius:2px; background:rgba(255,255,255,.08); margin-top:5px; overflow:hidden; position:relative; opacity:0; transition:opacity .2s}
+    .dstep-bar-fill{display:block; height:100%; width:0%; border-radius:2px; background:var(--gold2); transition:width .4s ease}
+    .dstep-active .dstep-bar, .dstep-done .dstep-bar, .dstep-error .dstep-bar{opacity:1}
+    .dstep-done .dstep-bar-fill{width:100% !important; background:var(--sage)}
+    .dstep-error .dstep-bar-fill{background:var(--clay)}
+    /* no real percentage available → indeterminate sweep */
+    .dstep-active .dstep-bar.indet .dstep-bar-fill{width:36% !important; animation:dbarSweep 1.4s ease-in-out infinite}
+    @keyframes dbarSweep{
+      0%{transform:translateX(-110%)}
+      100%{transform:translateX(310%)}
+    }
     .dr-plabel{font-size:9.5px; letter-spacing:.14em; text-transform:uppercase; color:#8c8476; font-weight:700; margin-bottom:11px; display:flex; align-items:baseline; gap:6px; overflow:hidden}
     .dr-pset{font-family:var(--mono); font-size:10.5px; letter-spacing:0; text-transform:none; color:#cfc7b8; font-weight:600; overflow:hidden; text-overflow:ellipsis; white-space:nowrap}
     .dsteps{list-style:none; margin:0; padding:0}
@@ -4848,14 +4862,14 @@ ANTI-REPETITION (TITLE)
         <div class="drail__pipeline">
           <div class="dr-plabel">Pipeline <span class="dr-pset" id="railPipelineSet">Idle</span></div>
           <ol class="dsteps" id="dSteps">
-            <li class="dstep dstep-pending" data-step="prep"><span class="dstep-dot"></span><div class="dstep-txt"><span class="dstep-lbl">Preparing Images</span><span class="dstep-sub"></span></div></li>
-            <li class="dstep dstep-pending" data-step="identify"><span class="dstep-dot"></span><div class="dstep-txt"><span class="dstep-lbl">Identifying Charm</span><span class="dstep-sub"></span></div></li>
-            <li class="dstep dstep-pending" data-step="tags"><span class="dstep-dot"></span><div class="dstep-txt"><span class="dstep-lbl">Generating Tags</span><span class="dstep-sub"></span></div></li>
-            <li class="dstep dstep-pending" data-step="title"><span class="dstep-dot"></span><div class="dstep-txt"><span class="dstep-lbl">Generating Title</span><span class="dstep-sub"></span></div></li>
-            <li class="dstep dstep-pending" data-step="desc"><span class="dstep-dot"></span><div class="dstep-txt"><span class="dstep-lbl">Generating Description</span><span class="dstep-sub"></span></div></li>
-            <li class="dstep dstep-pending" data-step="metadata"><span class="dstep-dot"></span><div class="dstep-txt"><span class="dstep-lbl">Editing Image Metadata</span><span class="dstep-sub"></span></div></li>
-            <li class="dstep dstep-pending" data-step="etsy"><span class="dstep-dot"></span><div class="dstep-txt"><span class="dstep-lbl">Uploading to Etsy</span><span class="dstep-sub"></span></div></li>
-            <li class="dstep dstep-pending" data-step="shopify"><span class="dstep-dot"></span><div class="dstep-txt"><span class="dstep-lbl">Publishing to Shopify</span><span class="dstep-sub"></span></div></li>
+            <li class="dstep dstep-pending" data-step="prep"><span class="dstep-dot"></span><div class="dstep-txt"><span class="dstep-lbl">Preparing Images</span><span class="dstep-sub"></span><span class="dstep-bar"><span class="dstep-bar-fill"></span></span></div></li>
+            <li class="dstep dstep-pending" data-step="identify"><span class="dstep-dot"></span><div class="dstep-txt"><span class="dstep-lbl">Identifying Charm</span><span class="dstep-sub"></span><span class="dstep-bar"><span class="dstep-bar-fill"></span></span></div></li>
+            <li class="dstep dstep-pending" data-step="tags"><span class="dstep-dot"></span><div class="dstep-txt"><span class="dstep-lbl">Generating Tags</span><span class="dstep-sub"></span><span class="dstep-bar"><span class="dstep-bar-fill"></span></span></div></li>
+            <li class="dstep dstep-pending" data-step="title"><span class="dstep-dot"></span><div class="dstep-txt"><span class="dstep-lbl">Generating Title</span><span class="dstep-sub"></span><span class="dstep-bar"><span class="dstep-bar-fill"></span></span></div></li>
+            <li class="dstep dstep-pending" data-step="desc"><span class="dstep-dot"></span><div class="dstep-txt"><span class="dstep-lbl">Generating Description</span><span class="dstep-sub"></span><span class="dstep-bar"><span class="dstep-bar-fill"></span></span></div></li>
+            <li class="dstep dstep-pending" data-step="metadata"><span class="dstep-dot"></span><div class="dstep-txt"><span class="dstep-lbl">Editing Image Metadata</span><span class="dstep-sub"></span><span class="dstep-bar"><span class="dstep-bar-fill"></span></span></div></li>
+            <li class="dstep dstep-pending" data-step="etsy"><span class="dstep-dot"></span><div class="dstep-txt"><span class="dstep-lbl">Uploading to Etsy</span><span class="dstep-sub"></span><span class="dstep-bar"><span class="dstep-bar-fill"></span></span></div></li>
+            <li class="dstep dstep-pending" data-step="shopify"><span class="dstep-dot"></span><div class="dstep-txt"><span class="dstep-lbl">Publishing to Shopify</span><span class="dstep-sub"></span><span class="dstep-bar"><span class="dstep-bar-fill"></span></span></div></li>
           </ol>
         </div>
         <div class="drail__stats">
@@ -5064,6 +5078,31 @@ ANTI-REPETITION (TITLE)
       window.__railStepState = {};
 
       function railStepEl(key) { return document.querySelector(`.dstep[data-step="${key}"]`); }
+      // Which steps have a REAL percentage source to mirror; everything
+      // else shows an indeterminate sweep while active. Sources are the
+      // progress elements the pipeline already drives — read-only.
+      const RAIL_PCT_SOURCES = {
+        metadata: () => {
+          const t = document.querySelector("#analyzeMetadataProgress .pct")?.textContent || "";
+          const m = t.match(/(\d+)\s*%/); return m ? Number(m[1]) : null;
+        },
+        etsy: () => (typeof window._createPct === "number" ? window._createPct : null),
+        shopify: () => {
+          // setShopifyStage drives #spbBar's inline width (10→100%)
+          const w = document.getElementById("spbBar")?.style?.width || "";
+          const m = w.match(/(\d+(?:\.\d+)?)\s*%/); return m ? Number(m[1]) : null;
+        }
+      };
+      function railSetBar(li, key, state) {
+        const bar = li.querySelector(".dstep-bar");
+        const fill = li.querySelector(".dstep-bar-fill");
+        if (!bar || !fill) return;
+        if (state === "pending") { bar.classList.remove("indet"); fill.style.width = "0%"; return; }
+        if (state !== "active") { bar.classList.remove("indet"); return; } // done/error styled in CSS
+        const pct = RAIL_PCT_SOURCES[key] ? RAIL_PCT_SOURCES[key]() : null;
+        if (pct == null) { bar.classList.add("indet"); }
+        else { bar.classList.remove("indet"); fill.style.width = Math.max(0, Math.min(100, pct)) + "%"; }
+      }
       function railSetStep(key, state, sub) {
         const li = railStepEl(key);
         if (!li) return;
@@ -5072,7 +5111,18 @@ ANTI-REPETITION (TITLE)
         window.__railStepState[key] = state;
         const subEl = li.querySelector(".dstep-sub");
         if (subEl) subEl.textContent = sub || "";
+        railSetBar(li, key, state);
       }
+      // Live mirror: while a percentage-backed step is active, keep its
+      // bar synced with the real progress element every 500ms.
+      setInterval(() => {
+        RAIL_STEPS.forEach(k => {
+          if (window.__railStepState[k] === "active" && RAIL_PCT_SOURCES[k]) {
+            const li = railStepEl(k);
+            if (li) railSetBar(li, k, "active");
+          }
+        });
+      }, 500);
       function railDoneBefore(stepKey) {
         const idx = RAIL_STEPS.indexOf(stepKey);
         RAIL_STEPS.forEach((k, i) => { if (i < idx) railSetStep(k, "done", ""); });
@@ -8980,6 +9030,8 @@ async function callOpenAI(payload, opts = {}) {
               <button id="spRetryBtn" title="Requeue all failed jobs">Retry failed</button>
             </span>
           </h6>
+          <div id="shopifyProgressWrap"><div class="spb-label" id="spbLabel"></div>
+            <div class="spb-track"><div class="spb-bar" id="spbBar"></div></div></div>
           <div id="spBody">
             <div class="sp-filters">
               <input type="search" id="spSearch" placeholder="Search title, collection, theme…" title="Filter by text">
@@ -8992,8 +9044,6 @@ async function callOpenAI(payload, opts = {}) {
               </select>
               <select id="spFilterDate" title="Filter by date"><option value="">All dates</option></select>
             </div>
-            <div id="shopifyProgressWrap"><div class="spb-label" id="spbLabel"></div>
-              <div class="spb-track"><div class="spb-bar" id="spbBar"></div></div></div>
             <ul id="shopifyList"><li style="border:none;color:#777;">No Shopify uploads yet this session.</li></ul>
           </div>`;
         host.appendChild(p);
