@@ -770,25 +770,6 @@
       z-index: 3050;
     }
 
-    /* Photo Budget control: caps API calls per listing (each photo = 1
-       Etsy API call). Sits in the toolbar beside the mode toggles. */
-    #photoBudgetCtl {
-      display: inline-flex; align-items: center; gap: 7px;
-      background: #263238; border: 1px solid #37474f; border-radius: 20px;
-      padding: 4px 10px; margin-left: 10px; color: #cfd8dc;
-      font-size: 11.5px; font-weight: 700; white-space: nowrap; user-select: none;
-    }
-    #photoBudgetCtl select {
-      display: inline-block; width: auto; height: 24px; line-height: 24px;
-      background: #37474f; color: #fff; border: 0; border-radius: 6px;
-      padding: 0 4px; font-size: 12px; font-weight: 700;
-    }
-    #photoBudgetCtl .pb-brand {
-      border: 0; border-radius: 12px; padding: 3px 9px; font-size: 10.5px;
-      font-weight: 800; letter-spacing: .03em; cursor: pointer;
-      background: #2e7d32; color: #fff;
-    }
-    #photoBudgetCtl .pb-brand.off { background: #6d4c41; }
 
     /* Duplicate Mode toggle (sits near the Duplicate Listing button) */
     #duplicateModeToggle {
@@ -1240,7 +1221,6 @@
     html.responsive .fb-folder-count{color:var(--slate); font-weight:700; font-size:12px}
     html.responsive .preview-box{border:1px solid var(--line); border-radius:10px; background:var(--card2); box-shadow:var(--sh)}
     html.responsive #dropZone{border:2px dashed var(--goldLine); border-radius:var(--r); background:var(--card2); color:var(--ink45)}
-    html.responsive #photoBudgetCtl{background:var(--velvet); border-color:var(--velvetLine)}
     html.responsive #batchReviewPanel{background:var(--card)}
     html.responsive .toast{background:var(--velvet); border-radius:10px; font-weight:600}
 
@@ -1273,6 +1253,94 @@
     .dchip.cat{background:var(--slateSoft); color:#33525d}
     .dsync{font-family:var(--mono); font-size:11px; color:var(--ink45)}
     .dempty{padding:26px; text-align:center; color:var(--ink45); font-size:13px}
+
+    /* ── App shell: collapsible velvet rail ── */
+    .dapp{display:grid; grid-template-columns:230px minmax(0,1fr); min-height:100vh; transition:grid-template-columns .18s ease}
+    .dapp.collapsed{grid-template-columns:58px minmax(0,1fr)}
+    .drail{background:var(--velvet); color:#e9e3d7; display:flex; flex-direction:column; position:sticky; top:0; height:100vh; overflow:hidden; z-index:3001}
+    .drail__brand{padding:16px 14px 12px; border-bottom:1px solid var(--velvetLine); display:flex; align-items:flex-start; gap:8px}
+    .drail .dbrand{display:flex; flex-direction:column; line-height:1.15; min-width:0}
+    .drail .dbrand .logo{font-family:var(--serif); font-size:17px; color:#fff; white-space:nowrap}
+    .drail .dbrand .logo b{color:var(--gold2); font-weight:400}
+    .drail .dbrand .tag{font-size:9px; letter-spacing:.2em; text-transform:uppercase; color:#9a9183; margin-top:2px; white-space:nowrap}
+    .drail__collapse{margin-left:auto; flex:0 0 auto; width:24px; height:24px; border-radius:7px; background:var(--velvet2); color:#cfc7b8; border:1px solid var(--velvetLine); font-size:14px; line-height:1; cursor:pointer; padding:0}
+    .drail__collapse:hover{color:#fff}
+    .drail .dnav{padding:10px 10px; display:flex; flex-direction:column; gap:2px; background:transparent}
+    .dnav button{display:flex; align-items:center; gap:10px; padding:9px 11px; border-radius:10px; color:#cfc7b8; font-size:13px; font-weight:500; text-align:left; width:100%; background:none; border:0; cursor:pointer; transition:background .15s,color .15s; white-space:nowrap; box-sizing:border-box}
+    .dnav button .ic{width:16px; flex:0 0 16px; opacity:.85; font-size:14px}
+    .dnav button .badge{margin-left:auto; font-family:var(--mono); font-size:10.5px; background:var(--gold); color:#2a2114; border-radius:20px; padding:1px 7px; font-weight:700}
+    .dnav button:hover{background:var(--velvet2); color:#fff}
+    .dnav button.dnav-active{background:linear-gradient(180deg,#34302a,#2b2722) !important; color:#fff !important; box-shadow:inset 2px 0 0 var(--gold2)}
+    .drail__stats{padding:12px 14px; display:flex; flex-direction:column; gap:11px; border-top:1px solid var(--velvetLine); overflow:auto; flex:1}
+    .dr-block .dr-lab{font-size:9.5px; letter-spacing:.14em; text-transform:uppercase; color:#8c8476; font-weight:700; white-space:nowrap}
+    .dr-block .dr-val{font-family:var(--mono); font-size:19px; color:#fff; font-variant-numeric:tabular-nums; margin-top:1px; white-space:nowrap}
+    .dr-block .dr-val.dr-sm{font-size:11.5px; color:#cfc7b8}
+    .dr-toggle{display:flex; gap:4px; background:var(--velvet2); border-radius:9px; padding:3px; margin-top:2px}
+    .dr-toggle-btn{flex:1; border:0; background:transparent; color:#9a9183; font-size:11px; font-weight:700; padding:6px 0; border-radius:7px; cursor:pointer; transition:background .15s,color .15s}
+    .dr-toggle-btn:hover{color:#e9e3d7}
+    .dr-toggle-btn.dr-toggle-active{background:var(--gold); color:#2a2114}
+    .dr-platform{display:flex; flex-direction:column; gap:11px}
+    .dr-platform[hidden]{display:none !important}
+    .drail__foot{padding:12px 14px; border-top:1px solid var(--velvetLine); font-size:10.5px; color:#8c8476; white-space:nowrap}
+    .drail__foot .dot{display:inline-block; width:7px; height:7px; border-radius:50%; background:var(--sage); margin-right:6px; box-shadow:0 0 0 3px rgba(95,122,91,.18)}
+    .dapp.collapsed .dbrand, .dapp.collapsed .dnav .lbl, .dapp.collapsed .dnav .badge,
+    .dapp.collapsed .drail__stats, .dapp.collapsed .drail__foot .lbl{display:none}
+    .dapp.collapsed .dnav button{justify-content:center; padding:9px 0}
+    .dcolumn{display:flex; flex-direction:column; min-width:0; min-height:100vh}
+
+    /* View switching — instant show/hide, no reflow of the other view */
+    .dview-hidden{display:none !important}
+    body.dview-stats #dCardStats{display:flex; flex-direction:column; flex:1; min-height:0}
+    body.dview-stats #dCardStats .dtablewrap{flex:1; max-height:none; min-height:0}
+    body.dview-stats .dmain{flex:1; min-height:0; display:flex; flex-direction:column}
+
+    /* ── One-screen compactness ── */
+    .dtopbar{padding:8px 16px; gap:10px}
+    .dmain{padding:12px 16px 20px; gap:11px; max-width:none}
+    .dcard{padding:12px 15px}
+    .dcard>.dhead{margin-bottom:9px}
+    .dcard>.dhead h3{font-size:16px}
+    #dCardContent textarea{max-height:150px; min-height:90px}
+    #dCardOutput textarea{height:72px; min-height:72px; max-height:150px}
+    #dCardOutput .dhead{margin-bottom:6px}
+    html.responsive #etsyShopListingsContainer .section-heading{font-size:15px; margin:0 0 6px}
+    html.responsive #shopListingsWrapper input[type=text]{height:34px; padding:5px 10px}
+    .dkpis{margin-bottom:10px}
+
+    /* ── Legacy color eradication ── */
+    html.responsive .btn-small, html.responsive .btn-large{
+      border:1px solid var(--ink); background:var(--ink); color:#fff; border-radius:8px;
+      padding:0 11px; height:30px; line-height:28px; font-size:12px; font-weight:600;
+      text-transform:none; letter-spacing:0; box-shadow:none;
+      transition:transform .08s, opacity .15s;
+    }
+    html.responsive .btn-small:hover, html.responsive .btn-large:hover{opacity:.9; box-shadow:none}
+    html.responsive .btn.blue, html.responsive .btn-small.blue, html.responsive .btn.teal,
+    html.responsive .btn-small.teal, html.responsive .btn.cyan,
+    html.responsive .regen-btn, html.responsive .copy-btn{
+      background:transparent !important; color:var(--ink) !important; border:1px solid var(--line) !important;
+    }
+    html.responsive .btn.blue:hover, html.responsive .btn-small.blue:hover,
+    html.responsive .regen-btn:hover, html.responsive .copy-btn:hover{background:var(--card2) !important}
+    html.responsive .update-btn{background:var(--gold) !important; border-color:var(--gold) !important; color:#2a2013 !important}
+    html.responsive #listingQueueCount{
+      width:auto; height:auto; border:0; background:var(--goldSoft); color:#7a5a1d;
+      border-radius:20px; padding:2px 10px; font-family:var(--mono); font-weight:700; font-size:13px;
+      display:inline-flex; align-items:center; margin-left:8px;
+    }
+    html.responsive .q-count, html.responsive .q-count a{color:var(--gold); font-weight:700}
+    html.responsive input::placeholder, html.responsive textarea::placeholder{color:var(--ink25)}
+    /* Materialize switch → sage brand */
+    html.responsive .switch label input[type=checkbox]:checked + .lever{background-color:var(--sageSoft)}
+    html.responsive .switch label input[type=checkbox]:checked + .lever:after{background-color:var(--sage)}
+    html.responsive .switch label .lever{background-color:var(--line)}
+    html.responsive .switch label .lever:after{background-color:var(--card)}
+    /* Empty preview cells */
+    html.responsive [id^="previewCell"]{border:1.5px dashed var(--line); border-radius:10px; background:var(--card2); color:var(--ink25)}
+    html.responsive [id^="previewCell"] .preview-box{border-radius:9px}
+    /* Progress bars → gold on paper */
+    html.responsive .progress{background:var(--line2); border-radius:6px}
+    html.responsive .progress .determinate, html.responsive .progress .indeterminate{background:var(--gold)}
   </style>
 </head>
 <body>
@@ -1329,7 +1397,7 @@
         </div>
       </div>
       <div class="listing-desc-review-row">
-        <input id="listingDescInput" type="text" placeholder="Enter your question here" aria-describedby="descriptionApprovalHelper">
+        <input id="listingDescInput" type="text" placeholder="Charm identification — e.g. Westie Terrier Charm Beady Necklace" aria-describedby="descriptionApprovalHelper">
         <button id="acceptListingDescBtn" type="button" class="btn waves-effect waves-light" disabled>
           <i class="material-icons">check_circle</i>
           <span>Accept &amp; Continue</span>
@@ -1367,19 +1435,10 @@
        <span id="duplicateModeState" class="dmt-state">ON</span>
      </div>
 
-     <!-- Photo Budget: every photo is exactly one Etsy API call, so this is
-          the largest per-listing quota lever (image uploads are ~65-70% of a
-          listing's total API cost). "Main" caps the product photos taken from
-          the set's slots; "Brand" toggles the 2 generic reserved images
-          (packaging / brand shots) that are otherwise re-uploaded on every
-          listing. Persisted in localStorage. -->
-     <div id="photoBudgetCtl" class="configurable" title="Each photo costs exactly 1 Etsy API call. Main = product photos from the set (uploads the first N slots in order). Brand = the 2 generic packaging/brand images appended after the product photos.">
-       <span>Photos</span>
-       <select id="photoBudgetMax" aria-label="Maximum main product photos per listing">
-         <option value="8">8</option><option value="7">7</option><option value="6">6</option><option value="5">5</option><option value="4">4</option>
-       </select>
-       <button id="photoBudgetBrand" class="pb-brand" type="button">BRAND: ON</button>
-     </div>
+     <!-- Photo Budget control removed per operator request (2026-07-21):
+          the pipeline still applies a photo cap internally via
+          window.etsyPhotoBudget, defaulting to 8 main photos + brand
+          images ON when no override is set — see queueListingUploadFromUI. -->
 
      <!-- Shopify mirror-upload controls: toggle (auto pipeline), manual push
           button, and live queue/budget chip. Uploads are queued server-side in
@@ -2046,6 +2105,37 @@ ANTI-REPETITION (TITLE)
         set("kpi7d", last7.length);
         set("kpiTotal", allRows.length);
         set("kpiShopify", allRows.filter(r => r.shopify && r.shopify.url).length);
+        // Mirror into the rail so the numbers are visible from any view.
+        set("railToday", allRows.filter(r => r.day === today).length);
+        set("railTotal", allRows.length);
+        const badge = document.getElementById("dNavStatsBadge");
+        if (badge) {
+          const todayN = allRows.filter(r => r.day === today).length;
+          badge.style.display = todayN ? "" : "none";
+          badge.textContent = String(todayN);
+        }
+        // Etsy-specific rail breakdown (a row counts as an Etsy listing
+        // once it has a listingId — every recorded row does, but this
+        // stays explicit so it reads correctly if that ever changes).
+        const etsyRows = allRows.filter(r => r.listingId);
+        set("railEtsyToday", etsyRows.filter(r => r.day === today).length);
+        set("railEtsy7d", etsyRows.filter(r => (r.tsMs || 0) >= weekAgo).length);
+        set("railEtsyTotal", etsyRows.length);
+        set("railVariants7d", last7.filter(r => r.variantOf).length);
+        // Shopify-specific rail breakdown.
+        const shopLive = allRows.filter(r => r.shopify && r.shopify.url);
+        set("railShopifyToday", shopLive.filter(r => r.day === today).length);
+        set("railShopify7d", shopLive.filter(r => (r.tsMs || 0) >= weekAgo).length);
+        set("railShopifyTotal", shopLive.length);
+        set("railShopifyFailed", last7.filter(r => r.shopify && r.shopify.status === "FAILED").length);
+        // Budget mirrors the live Shopify chip text (already fed by
+        // refreshShopifyStatus's own poll) rather than recomputing it.
+        const spChip = document.getElementById("shopifyQueueStatus");
+        const budgetEl = document.getElementById("railShopifyBudget");
+        if (spChip && budgetEl) {
+          const m = String(spChip.textContent || "").match(/(\d+)\/(\d+)\s*today/);
+          budgetEl.textContent = m ? `${m[1]}/${m[2]} today` : "—";
+        }
         const catCounts = {};
         last7.forEach(r => { const c = (r.category || "?").replace(/_/g, " "); catCounts[c] = (catCounts[c] || 0) + 1; });
         const top = Object.entries(catCounts).sort((a, b) => b[1] - a[1])[0];
@@ -4643,41 +4733,90 @@ ANTI-REPETITION (TITLE)
       const mk = (tag, id, cls, html) => { const e = document.createElement(tag); if (id) e.id = id; if (cls) e.className = cls; if (html != null) e.innerHTML = html; return e; };
       const move = (parent, ids) => ids.forEach((id) => { const e = typeof id === "string" ? $(id) : id; if (e) parent.appendChild(e); });
       const group = (parent, ids) => { const g = mk("div", null, "dgroup"); move(g, ids); parent.appendChild(g); return g; };
-      const card = (parent, id, title, sub) => {
+      const card = (parent, id, title, sub, view) => {
         const c = mk("section", id, "dcard");
+        if (view) c.setAttribute("data-view", view);
         c.appendChild(mk("div", null, "dhead", `<h3>${title}</h3>${sub ? `<span class="sub">${sub}</span>` : ""}`));
         parent.appendChild(c);
         return c;
       };
 
-      // ── Topbar: brand · live status · Shopify chip · primary controls ──
+      // ── App shell: collapsible velvet rail + main column ──
+      const app = mk("div", "dApp", "dapp");
+      const rail = mk("aside", "dRail", "drail");
+      rail.innerHTML = `
+        <div class="drail__brand">
+          <div class="dbrand">
+            <span class="logo">Brites <b>Listing Generator</b></span>
+            <span class="tag">Etsy · Shopify Automation</span>
+          </div>
+          <button id="dRailCollapse" class="drail__collapse" type="button" title="Collapse menu">‹</button>
+        </div>
+        <div class="dnav">
+          <button id="dNavWork" class="dnav-active" data-view-btn="work"><span class="ic">◧</span><span class="lbl">Workspace</span></button>
+          <button id="dNavStats" data-view-btn="stats"><span class="ic">◫</span><span class="lbl">Statistics &amp; Review</span><span id="dNavStatsBadge" class="badge" style="display:none">0</span></button>
+        </div>
+        <div class="drail__stats">
+          <div class="dr-block"><div class="dr-lab">IDs in Queue</div><div class="dr-val" id="railQueueIds">—</div></div>
+          <div class="dr-block"><div class="dr-lab">Folders Ready</div><div class="dr-val" id="railFolders">—</div></div>
+          <div class="dr-block"><div class="dr-lab">Listed Today</div><div class="dr-val" id="railToday">—</div></div>
+          <div class="dr-block"><div class="dr-lab">Total Recorded</div><div class="dr-val" id="railTotal">—</div></div>
+
+          <div class="dr-toggle" role="tablist">
+            <button class="dr-toggle-btn dr-toggle-active" data-platform-btn="etsy" type="button" role="tab">Etsy</button>
+            <button class="dr-toggle-btn" data-platform-btn="shopify" type="button" role="tab">Shopify</button>
+          </div>
+          <div class="dr-platform" data-platform-panel="etsy">
+            <div class="dr-block"><div class="dr-lab">Etsy Today</div><div class="dr-val" id="railEtsyToday">—</div></div>
+            <div class="dr-block"><div class="dr-lab">Etsy 7 Days</div><div class="dr-val" id="railEtsy7d">—</div></div>
+            <div class="dr-block"><div class="dr-lab">Etsy Total</div><div class="dr-val" id="railEtsyTotal">—</div></div>
+            <div class="dr-block"><div class="dr-lab">Variants (7d)</div><div class="dr-val" id="railVariants7d">—</div></div>
+          </div>
+          <div class="dr-platform" data-platform-panel="shopify" hidden>
+            <div class="dr-block"><div class="dr-lab">Shopify Live Today</div><div class="dr-val" id="railShopifyToday">—</div></div>
+            <div class="dr-block"><div class="dr-lab">Shopify Live 7d</div><div class="dr-val" id="railShopify7d">—</div></div>
+            <div class="dr-block"><div class="dr-lab">Shopify Live Total</div><div class="dr-val" id="railShopifyTotal">—</div></div>
+            <div class="dr-block"><div class="dr-lab">Budget Today</div><div class="dr-val dr-sm" id="railShopifyBudget">—</div></div>
+            <div class="dr-block"><div class="dr-lab">Failed (7d)</div><div class="dr-val" id="railShopifyFailed">—</div></div>
+          </div>
+        </div>
+        <div class="drail__foot"><span class="dot"></span><span class="lbl">Firestore live</span></div>`;
+      app.appendChild(rail);
+      const column = mk("div", "dColumn", "dcolumn");
+      app.appendChild(column);
+
+      // ── Topbar: live status + primary controls (brand lives in the rail) ──
       const topbar = mk("div", "dTopbar", "dtopbar");
-      topbar.appendChild(mk("div", null, "dbrand",
-        `<span class="logo">Brites <b>Listing Generator</b></span><span class="tag">Etsy · Shopify Automation</span>`));
       move(topbar, ["firebaseStatus"]);
       topbar.appendChild(mk("div", null, "dspacer"));
       move(topbar, ["shopifyQueueStatus", "connectEtsyBtn"]);
       group(topbar, ["toggleAuto", "skipListingBtn"]);
       move(topbar, ["clearBtn"]);
+      column.appendChild(topbar);
 
       const main = mk("div", "dMain", "dmain");
+      column.appendChild(main);
 
-      // ── Card: Listing Queues (Etsy Shop Listings + counts) ──
-      const cQueues = card(main, "dCardQueues", "Listing Queues",
-        `<span id="dQueueSync" class="dsync">local</span>`);
+      // ── WORKSPACE view ──
+      const cQueues = card(main, "dCardQueues", "Listing Queues", `<span id="dQueueSync" class="dsync">local</span>`, "work");
       move(cQueues, ["etsyShopListingsContainer"]);
 
-      // ── Card: Pipeline controls ──
-      const cPipe = card(main, "dCardPipeline", "Pipeline");
+      const cPipe = card(main, "dCardPipeline", "Pipeline", null, "work");
       const pipeRow = mk("div", null, "dtoolrow");
       group(pipeRow, ["createListingBtn", "createListingProgress", "createListingCheck", "globalUploadCount", "expandUploadHistoryBtn"]);
       group(pipeRow, ["duplicateListingBtn", "duplicateListingProgress", "duplicateListingCheck", "duplicateModeToggle"]);
       group(pipeRow, ["shopifyModeToggle", "uploadShopifyBtn"]);
-      group(pipeRow, ["photoBudgetCtl"]);
       cPipe.appendChild(pipeRow);
 
-      // ── Two-column workspace: Content (left) · Image Studio (right) ──
+      // ── Shopify Uploads: a heavily-used panel — previously fell back to
+      // document.body (its old host id no longer exists) and landed at the
+      // very bottom of the page. Now a proper, prominent card of its own.
+      const cShopify = card(main, "dCardShopifyUploads", "Shopify Uploads", null, "work");
+      const shopifyHost = mk("div", "dShopifyUploadsHost");
+      cShopify.appendChild(shopifyHost);
+
       const twocol = mk("div", null, "dtwocol");
+      twocol.setAttribute("data-view", "work");
       main.appendChild(twocol);
       const cContent = card(twocol, "dCardContent", "Listing Content");
       move(cContent, ["descriptionAndFileUploadContainer", "searchKeyPhrasesHeading", "container13", "generateBtn"]);
@@ -4689,13 +4828,12 @@ ANTI-REPETITION (TITLE)
       move(gridWrap, ["previewGridContainer", "dropZone"]);
       cStudio.appendChild(gridWrap);
 
-      // ── Full-width: Generated Output ──
-      const cOut = card(main, "dCardOutput", "Generated Output");
+      const cOut = card(main, "dCardOutput", "Generated Output", null, "work");
       move(cOut, ["etsyListingTitleContainer", "etsyListingDescriptionContainer"]);
 
-      // ── Full-width: Statistics & Review (Firestore-backed, real-time) ──
+      // ── STATISTICS view (own full-height view, reached from the rail) ──
       const cStats = card(main, "dCardStats", "Statistics &amp; Review",
-        `<span id="dStatsSync" class="dsync">connecting…</span>`);
+        `<span id="dStatsSync" class="dsync">connecting…</span>`, "stats");
       cStats.insertAdjacentHTML("beforeend", `
         <div class="dkpis" id="dKpis">
           <div class="dkpi"><div class="lab">Listed Today</div><div class="val" id="kpiToday">—</div></div>
@@ -4730,14 +4868,65 @@ ANTI-REPETITION (TITLE)
           </table>
         </div>`);
 
-      // Assemble: topbar first, then the card canvas.
-      document.body.insertBefore(main, document.body.firstChild);
-      document.body.insertBefore(topbar, main);
+      document.body.insertBefore(app, document.body.firstChild);
       ["topButtons", "belowSearch", "userProvidedKeyPhrasesContainer"].forEach((id) => {
         const e = $(id);
         if (e && e.querySelectorAll("button, input, textarea, select").length === 0) e.classList.add("rg-drained");
       });
-      // openConfigBtn stays in place (display:none via CSS in responsive mode)
+
+      // ── View switching (instant, no reload) ──
+      function setView(v) {
+        document.querySelectorAll("#dMain [data-view]").forEach(el => {
+          el.classList.toggle("dview-hidden", el.getAttribute("data-view") !== v);
+        });
+        document.querySelectorAll(".dnav [data-view-btn]").forEach(b => {
+          b.classList.toggle("dnav-active", b.getAttribute("data-view-btn") === v);
+        });
+        document.body.classList.toggle("dview-stats", v === "stats");
+      }
+      window.dSetView = setView;
+      document.querySelectorAll(".dnav [data-view-btn]").forEach(b =>
+        b.addEventListener("click", () => setView(b.getAttribute("data-view-btn"))));
+      setView("work");
+
+      // ── Etsy / Shopify platform toggle in the rail ──
+      document.querySelectorAll(".dr-toggle-btn").forEach(b => {
+        b.addEventListener("click", () => {
+          const platform = b.getAttribute("data-platform-btn");
+          document.querySelectorAll(".dr-toggle-btn").forEach(x => x.classList.toggle("dr-toggle-active", x === b));
+          document.querySelectorAll(".dr-platform").forEach(p => {
+            p.hidden = p.getAttribute("data-platform-panel") !== platform;
+          });
+        });
+      });
+
+      // ── Rail collapse (persisted) ──
+      const collapseBtn = $("dRailCollapse");
+      const applyCollapsed = (c) => {
+        app.classList.toggle("collapsed", c);
+        if (collapseBtn) { collapseBtn.textContent = c ? "›" : "‹"; collapseBtn.title = c ? "Expand menu" : "Collapse menu"; }
+      };
+      applyCollapsed(localStorage.getItem("dRailCollapsed") === "1");
+      collapseBtn?.addEventListener("click", () => {
+        const c = !app.classList.contains("collapsed");
+        localStorage.setItem("dRailCollapsed", c ? "1" : "0");
+        applyCollapsed(c);
+      });
+
+      // ── Rail live numbers: instant mirrors of workspace state ──
+      window.updateRailStats = function updateRailStats() {
+        const t = (id) => document.getElementById(id);
+        const q = t("listingQueueCount");
+        if (q && t("railQueueIds")) t("railQueueIds").textContent = q.textContent || "0";
+        let folders = 0;
+        document.querySelectorAll(".fb-folder-count").forEach(el => {
+          const m = String(el.textContent || "").match(/\d+/);
+          if (m) folders += Number(m[0]);
+        });
+        if (t("railFolders")) t("railFolders").textContent = String(folders);
+      };
+      setInterval(window.updateRailStats, 2000);
+      setTimeout(window.updateRailStats, 400);
 
       // Real-time module boots after the DOM shell exists.
       if (typeof initListingStats === "function") { try { initListingStats(); } catch (e) { console.warn("Stats init failed:", e); } }
@@ -5324,6 +5513,37 @@ https://www.etsy.com/your/shops/me/listing-editor/edit/1822973998
       } finally { clearTimeout(t); }
     }
 
+    // TRANSIENT-OUTAGE RESILIENCE: gateway blips (502/503/504 "Web Server
+    // Error" / "Could Not Connect" bursts from the Netlify→Etsy path, or a
+    // 408/network drop) currently fail an entire job even when 7 of 10
+    // photos already uploaded — the retry then re-pays every API call. One
+    // request-level retry with backoff absorbs those blips. This is
+    // BOUNDED (max 2 extra attempts per request) and per-request, so it
+    // cannot recreate the old job-level endless-retry loop. Deliberately
+    // NOT retried: 429 (the daily-quota halt logic downstream must see it
+    // untouched) and every other 4xx (deterministic — a retry is a wasted
+    // quota call).
+    async function etsyFetchWithTransientRetry(url, opts = {}, timeoutMs = 90000, label = "request") {
+      const RETRY_STATUSES = [408, 502, 503, 504];
+      const BACKOFF_MS = [2500, 5000];
+      let lastErr = null;
+      for (let attempt = 0; attempt <= BACKOFF_MS.length; attempt++) {
+        if (attempt > 0) {
+          window.__DIAG.log("transient-retry", { label, attempt, waitMs: BACKOFF_MS[attempt - 1] });
+          await new Promise(r => setTimeout(r, BACKOFF_MS[attempt - 1]));
+        }
+        try {
+          const r = await etsyFetchWithTimeout(url, opts, timeoutMs, label);
+          if (!RETRY_STATUSES.includes(r.status) || attempt === BACKOFF_MS.length) return r;
+          lastErr = null; // transient status — loop for another attempt
+        } catch (e) {
+          lastErr = e; // network drop / timeout — also transient
+          if (attempt === BACKOFF_MS.length) throw e;
+        }
+      }
+      if (lastErr) throw lastErr;
+    }
+
     // DAILY-QUOTA FIX: Etsy's "Exceeded daily rate limit" 429 is NOT
     // transient like a per-second 429 — retrying does nothing until the
     // quota resets (next day). Left undetected, every subsequent listing
@@ -5410,7 +5630,7 @@ https://www.etsy.com/your/shops/me/listing-editor/edit/1822973998
         // duplicates this run) than to abort the entire job.
         let purgeLeftovers = [];
         try {
-          const purgeResp = await etsyFetchWithTimeout(
+          const purgeResp = await etsyFetchWithTransientRetry(
             `/.netlify/functions/listingImagesPurge?listingId=${encodeURIComponent(listingId)}&token=${encodeURIComponent(token)}`,
             { method: "POST" }, 60000, "Image purge"
           );
@@ -5526,7 +5746,7 @@ https://www.etsy.com/your/shops/me/listing-editor/edit/1822973998
           window.__DIAG.log("upload-request", { label, listingId, rank: fd.get ? String(fd.get("rank")) : "?", name: fd.get ? String(fd.get("fileName")) : "?" });
           let r;
           try {
-            r = await etsyFetchWithTimeout("/.netlify/functions/imageUpload", { method: "POST", body: fd }, 120000, label);
+            r = await etsyFetchWithTransientRetry("/.netlify/functions/imageUpload", { method: "POST", body: fd }, 120000, label);
           } catch (e) {
             window.__DIAG.log("upload-response", { label, error: e.message });
             console.warn(`${label} failed:`, e.message);
@@ -5643,7 +5863,7 @@ https://www.etsy.com/your/shops/me/listing-editor/edit/1822973998
         // If they STILL cannot be removed, fail the job HERE — before the
         // Shopify stage can copy a dirty gallery.
         if (purgeLeftovers.length) {
-          const del = await etsyFetchWithTimeout(
+          const del = await etsyFetchWithTransientRetry(
             `/.netlify/functions/listingImagesPurge?listingId=${encodeURIComponent(listingId)}&token=${encodeURIComponent(token)}&imageIds=${encodeURIComponent(purgeLeftovers.join(","))}`,
             { method: "POST" }, 60000, "Deferred leftover removal");
           const dj = await del.json().catch(() => ({}));
@@ -5689,7 +5909,7 @@ https://www.etsy.com/your/shops/me/listing-editor/edit/1822973998
           sku: job.sku
         };
         save({ lastActivityAt: Date.now() });
-        const infoResp = await etsyFetchWithTimeout(`/.netlify/functions/updateListing?listingId=${encodeURIComponent(listingId)}`, {
+        const infoResp = await etsyFetchWithTransientRetry(`/.netlify/functions/updateListing?listingId=${encodeURIComponent(listingId)}`, {
           method: "PUT",
           headers: { "Content-Type": "application/json", Authorization: "Bearer " + token },
           body: JSON.stringify(payload)
@@ -5708,7 +5928,7 @@ https://www.etsy.com/your/shops/me/listing-editor/edit/1822973998
 
         // Inventory SKU (same as your current flow)
         save({ lastActivityAt: Date.now() });
-        await etsyFetchWithTimeout(
+        await etsyFetchWithTransientRetry(
           `/.netlify/functions/updateListingInventory?listingId=${encodeURIComponent(listingId)}&token=${encodeURIComponent(token)}`,
           { method: "PUT", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ sku: job.sku }) },
           60000, "Inventory SKU update"
@@ -6570,37 +6790,10 @@ https://www.etsy.com/your/shops/me/listing-editor/edit/1822973998
     // set order — slot order is already quality-ranked by the generator);
     // includeBrand toggles the 2 generic reserved packaging/brand images.
     // Persisted so the choice survives reloads; read at queue time.
-    (function initPhotoBudget(){
-      const KEY = "etsyPhotoBudget.v1";
-      const sel  = document.getElementById("photoBudgetMax");
-      const brand = document.getElementById("photoBudgetBrand");
-      if (!sel || !brand) return;
-      let saved = { maxMain: 8, includeBrand: true };
-      try { const s = JSON.parse(localStorage.getItem(KEY) || "null"); if (s && s.maxMain) saved = s; } catch (e) {}
-      window.etsyPhotoBudget = {
-        maxMain: Math.min(8, Math.max(4, Number(saved.maxMain) || 8)),
-        includeBrand: saved.includeBrand !== false
-      };
-      const persist = () => { try { localStorage.setItem(KEY, JSON.stringify(window.etsyPhotoBudget)); } catch (e) {} };
-      const render = () => {
-        sel.value = String(window.etsyPhotoBudget.maxMain);
-        brand.textContent = "BRAND: " + (window.etsyPhotoBudget.includeBrand ? "ON" : "OFF");
-        brand.classList.toggle("off", !window.etsyPhotoBudget.includeBrand);
-      };
-      sel.addEventListener("change", () => {
-        window.etsyPhotoBudget.maxMain = Math.min(8, Math.max(4, Number(sel.value) || 8));
-        persist(); render();
-        window.M?.toast?.({ html: `Photo budget: up to ${window.etsyPhotoBudget.maxMain} product photos per listing (${window.etsyPhotoBudget.maxMain} API calls).` });
-      });
-      brand.addEventListener("click", () => {
-        window.etsyPhotoBudget.includeBrand = !window.etsyPhotoBudget.includeBrand;
-        persist(); render();
-        window.M?.toast?.({ html: window.etsyPhotoBudget.includeBrand
-          ? "Brand images ON — the 2 packaging/brand photos are appended to every listing (+2 API calls each)."
-          : "Brand images OFF — listings upload product photos only (saves 2 API calls per listing)." });
-      });
-      render();
-    })();
+    // Photo Budget control removed from UI per operator request. The
+    // pipeline's own default fallback in queueListingUploadFromUI
+    // (window.etsyPhotoBudget || { maxMain: 8, includeBrand: true })
+    // preserves the exact same behavior with no control needed.
 
     // NEW: Duplicate Listing sequential orchestrator
     document.getElementById("duplicateListingBtn").addEventListener("click", async () => {
@@ -8552,7 +8745,7 @@ async function callOpenAI(payload, opts = {}) {
       // ---- Shopify uploads panel (injected under the preview grid) ----
       function ensurePanel() {
         if (document.getElementById("shopifyPanel")) return;
-        const host = document.getElementById("rgRight") || document.body;
+        const host = document.getElementById("dShopifyUploadsHost") || document.getElementById("rgRight") || document.body;
         const p = document.createElement("div");
         p.id = "shopifyPanel";
         // Collapsed by default (persisted): the header row stays as a
