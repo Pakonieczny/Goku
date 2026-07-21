@@ -1205,12 +1205,12 @@
     html.responsive #shopifyQueueStatus.warn{background:var(--claySoft); border-color:var(--claySoft); color:#8a3a26}
 
     /* ---- page + cards ---- */
-    .dmain{padding:18px 22px 80px; max-width:1560px; margin:0 auto; display:flex; flex-direction:column; gap:16px}
+    .dmain{padding:18px 22px 80px; width:100%; box-sizing:border-box; display:flex; flex-direction:column; gap:16px}
     .dcard{background:var(--card); border:1px solid var(--line); border-radius:var(--r); box-shadow:var(--sh); padding:16px 18px}
     .dcard>.dhead{display:flex; align-items:baseline; gap:10px; margin-bottom:12px}
     .dcard>.dhead h3{font-family:var(--serif); font-size:18px; font-weight:500; margin:0; color:var(--ink)}
     .dcard>.dhead .sub{font-size:11.5px; color:var(--ink45); margin-left:auto}
-    .dtwocol{display:grid; grid-template-columns:minmax(360px,5fr) minmax(520px,7fr); gap:16px; align-items:start}
+    .dtwocol{display:grid; grid-template-columns:minmax(360px,5fr) minmax(520px,7fr); gap:16px; align-items:stretch}
     @media(max-width:1180px){.dtwocol{grid-template-columns:1fr}}
     .dtoolrow{display:flex; align-items:center; gap:10px; flex-wrap:wrap}
     .dtoolrow .dgroup{display:inline-flex; align-items:center; gap:8px; background:var(--card2); border:1px solid var(--line2); border-radius:11px; padding:7px 10px}
@@ -1254,10 +1254,18 @@
     .dsync{font-family:var(--mono); font-size:11px; color:var(--ink45)}
     .dempty{padding:26px; text-align:center; color:var(--ink45); font-size:13px}
 
-    /* ── App shell: collapsible velvet rail ── */
-    .dapp{display:grid; grid-template-columns:230px minmax(0,1fr); min-height:100vh; transition:grid-template-columns .18s ease}
-    .dapp.collapsed{grid-template-columns:58px minmax(0,1fr)}
-    .drail{background:var(--velvet); color:#e9e3d7; display:flex; flex-direction:column; position:sticky; top:0; height:100vh; overflow:hidden; z-index:3001}
+    /* ── App shell: collapsible velvet rail ──
+       Round 7: the rail was position:sticky, but the global
+       `html.responsive, body { overflow-x:hidden }` rule (needed by the
+       legacy layout) silently disables sticky positioning — so the rail
+       scrolled away with the page. Fixed positioning is immune: the rail
+       is now pinned to the viewport permanently, and the main column
+       compensates with a margin. Width raised 230 → 264px. */
+    .dapp{display:block; min-height:100vh}
+    .drail{background:var(--velvet); color:#e9e3d7; display:flex; flex-direction:column; position:fixed; left:0; top:0; width:264px; height:100vh; height:100dvh; overflow:hidden; z-index:3001; transition:width .18s ease}
+    .dcolumn-offset{margin-left:264px; transition:margin-left .18s ease}
+    .dapp.collapsed .drail{width:58px}
+    .dapp.collapsed .dcolumn-offset{margin-left:58px}
     .drail__brand{padding:16px 14px 12px; border-bottom:1px solid var(--velvetLine); display:flex; align-items:flex-start; gap:8px}
     .drail .dbrand{display:flex; flex-direction:column; line-height:1.15; min-width:0}
     .drail .dbrand .logo{font-family:var(--serif); font-size:17px; color:#fff; white-space:nowrap}
@@ -1296,7 +1304,7 @@
 
     /* ── One-screen compactness ── */
     .dtopbar{padding:8px 16px; gap:10px}
-    .dmain{padding:12px 16px 20px; gap:11px; max-width:none}
+    .dmain{padding:12px 16px 20px; gap:11px; max-width:none; margin:0}
     .dcard{padding:12px 15px}
     .dcard>.dhead{margin-bottom:9px}
     .dcard>.dhead h3{font-size:16px}
@@ -1341,6 +1349,79 @@
     /* Progress bars → gold on paper */
     html.responsive .progress{background:var(--line2); border-radius:6px}
     html.responsive .progress .determinate, html.responsive .progress .indeterminate{background:var(--gold)}
+
+    /* ── Round 4 (revised round 7): rail Pipeline stepper — now its own
+       pinned section between the nav and the scrolling stats, so it can
+       never be scrolled out of view. Only the stat blocks below scroll,
+       behind a thin, velvet-toned scrollbar (hidden until hover) instead
+       of the heavy default one. ── */
+    .drail__pipeline{padding:14px 16px 15px; border-top:1px solid var(--velvetLine); flex:0 0 auto}
+    .drail__stats{scrollbar-width:thin; scrollbar-color:rgba(233,227,215,.18) transparent}
+    .drail__stats::-webkit-scrollbar{width:5px}
+    .drail__stats::-webkit-scrollbar-track{background:transparent}
+    .drail__stats::-webkit-scrollbar-thumb{background:transparent; border-radius:4px}
+    .drail__stats:hover::-webkit-scrollbar-thumb{background:rgba(233,227,215,.18)}
+    .dr-plabel{font-size:9.5px; letter-spacing:.14em; text-transform:uppercase; color:#8c8476; font-weight:700; margin-bottom:11px; display:flex; align-items:baseline; gap:6px; overflow:hidden}
+    .dr-pset{font-family:var(--mono); font-size:10.5px; letter-spacing:0; text-transform:none; color:#cfc7b8; font-weight:600; overflow:hidden; text-overflow:ellipsis; white-space:nowrap}
+    .dsteps{list-style:none; margin:0; padding:0}
+    .dstep{position:relative; display:flex; gap:10px; padding-bottom:15px}
+    .dstep:last-child{padding-bottom:2px}
+    .dstep-dot{position:relative; flex:0 0 16px; width:16px; height:16px; border-radius:50%; background:var(--velvet2); border:2px solid #4a4438; display:flex; align-items:center; justify-content:center; font-size:9px; font-weight:700; color:transparent; margin-top:1px; transition:background .2s,border-color .2s; z-index:1}
+    .dstep-dot::before{content:""}
+    .dstep-dot::after{content:""; position:absolute; left:50%; top:16px; width:2px; height:15px; transform:translateX(-50%); background:#3b362f}
+    .dstep:last-child .dstep-dot::after{display:none}
+    .dstep-txt{display:flex; flex-direction:column; min-width:0; padding-top:1px}
+    .dstep-lbl{font-size:12px; font-weight:600; color:#847c6d; line-height:1.25; transition:color .2s}
+    .dstep-sub{font-size:10.5px; color:#635d51; line-height:1.3; margin-top:1px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap}
+    .dstep-done .dstep-dot{background:var(--sage); border-color:var(--sage); color:#fff}
+    .dstep-done .dstep-dot::before{content:"✓"}
+    .dstep-done .dstep-dot::after{background:var(--sage)}
+    .dstep-done .dstep-lbl{color:#b7c9b3}
+    .dstep-active .dstep-dot{background:var(--gold); border-color:var(--gold2); box-shadow:0 0 0 4px rgba(202,168,97,.22); animation:dstepPulse 1.5s ease-in-out infinite}
+    .dstep-active .dstep-lbl{color:#fff}
+    .dstep-active .dstep-sub{color:var(--gold2)}
+    .dstep-error .dstep-dot{background:var(--clay); border-color:var(--clay); color:#fff}
+    .dstep-error .dstep-dot::before{content:"!"}
+    .dstep-error .dstep-lbl{color:#e7b8a6}
+    .dstep-error .dstep-sub{color:#e08a68}
+    @keyframes dstepPulse{
+      0%,100%{box-shadow:0 0 0 4px rgba(202,168,97,.22)}
+      50%{box-shadow:0 0 0 7px rgba(202,168,97,.08)}
+    }
+    .dapp.collapsed .drail__pipeline{display:none}
+
+    /* ── Round 4: Image Studio now gets the full card width (Analyze
+       Photos row + Image Drop zone retired) — let the preview grid grow
+       into that reclaimed space instead of staying pinned at 120px. ── */
+    html.responsive #rgGridWrap{display:block}
+    html.responsive #previewGridContainer{max-width:none; width:100%; margin:0}
+    html.responsive #previewGridStatic{grid-template-columns:repeat(5, minmax(0,1fr)) !important; width:100% !important; grid-column-gap:18px; grid-row-gap:18px}
+    html.responsive .preview-cell{width:100% !important; height:auto !important; aspect-ratio:120/158}
+
+    /* ── Round 6: topbar console cleanup ──────────────────────────────
+       One line, no wrapping: the status chip is the only flexible item
+       (it truncates), everything else keeps its natural size. The boxed
+       .dgroup wrappers are gone from the topbar — buttons/toggles sit
+       directly in the row, separated into sections by thin dividers. */
+    .dtopbar{gap:12px; flex-wrap:nowrap; overflow:hidden}
+    .dtopbar #firebaseStatus, .dtopbar #shopifyQueueStatus{
+      height:36px; box-sizing:border-box; padding:0 16px; display:inline-flex; align-items:center; white-space:nowrap;
+    }
+    .dtopbar #firebaseStatus{flex:0 1 auto; min-width:0; overflow:hidden}
+    .dtopbar #firebaseStatus #fbText{overflow:hidden; text-overflow:ellipsis; white-space:nowrap}
+    .dtopbar > *{flex:0 0 auto}
+    .dtopbar .dspacer{flex:1 1 0; min-width:8px}
+    .dtopbar #duplicateModeToggle, .dtopbar #shopifyModeToggle{height:36px; box-sizing:border-box}
+    .dtopbar #duplicateModeToggle{background:transparent; border:0; box-shadow:none}
+    .dtopbar .dsep{align-self:center; width:1px; height:24px; background:var(--line); flex:0 0 1px}
+    /* the create-listing progress bar lives beside the status chip while
+       a job runs; give it a sane inline size in the flex row */
+    .dtopbar #createListingProgress{width:150px; flex:0 0 150px; align-self:center}
+    /* legacy teal/green toggle colors → sage brand */
+    html.responsive #duplicateModeToggle[aria-checked="true"] .dmt-track{background-color:var(--sage)}
+    html.responsive #duplicateModeToggle .dmt-state{color:var(--sage)}
+    html.responsive #shopifyModeToggle[aria-checked="true"] .smt-track{background:var(--sage)}
+    html.responsive #shopifyModeToggle .smt-state{color:var(--sage)}
   </style>
 </head>
 <body>
@@ -2223,6 +2304,14 @@ ANTI-REPETITION (TITLE)
         const txt = document.getElementById('fbText');
         txt.textContent = status;
         dot.className = "status-dot " + (type || "");
+        // Round 4: every stage transition already flows through this one
+        // function — piggyback the rail pipeline stepper here instead of
+        // touching any of the individual call sites or the automation
+        // logic. window.updateRailStepper only exists in responsive mode
+        // (defined in initResponsiveLayout), hence the guard.
+        if (window.updateRailStepper) {
+            try { window.updateRailStepper(status, type); } catch (e) { console.warn("Rail stepper update failed:", e); }
+        }
     }
 
     // ─────────────────────────────────────────────────────────────────────
@@ -4756,8 +4845,20 @@ ANTI-REPETITION (TITLE)
           <button id="dNavWork" class="dnav-active" data-view-btn="work"><span class="ic">◧</span><span class="lbl">Workspace</span></button>
           <button id="dNavStats" data-view-btn="stats"><span class="ic">◫</span><span class="lbl">Statistics &amp; Review</span><span id="dNavStatsBadge" class="badge" style="display:none">0</span></button>
         </div>
+        <div class="drail__pipeline">
+          <div class="dr-plabel">Pipeline <span class="dr-pset" id="railPipelineSet">Idle</span></div>
+          <ol class="dsteps" id="dSteps">
+            <li class="dstep dstep-pending" data-step="prep"><span class="dstep-dot"></span><div class="dstep-txt"><span class="dstep-lbl">Preparing Images</span><span class="dstep-sub"></span></div></li>
+            <li class="dstep dstep-pending" data-step="identify"><span class="dstep-dot"></span><div class="dstep-txt"><span class="dstep-lbl">Identifying Charm</span><span class="dstep-sub"></span></div></li>
+            <li class="dstep dstep-pending" data-step="tags"><span class="dstep-dot"></span><div class="dstep-txt"><span class="dstep-lbl">Generating Tags</span><span class="dstep-sub"></span></div></li>
+            <li class="dstep dstep-pending" data-step="title"><span class="dstep-dot"></span><div class="dstep-txt"><span class="dstep-lbl">Generating Title</span><span class="dstep-sub"></span></div></li>
+            <li class="dstep dstep-pending" data-step="desc"><span class="dstep-dot"></span><div class="dstep-txt"><span class="dstep-lbl">Generating Description</span><span class="dstep-sub"></span></div></li>
+            <li class="dstep dstep-pending" data-step="metadata"><span class="dstep-dot"></span><div class="dstep-txt"><span class="dstep-lbl">Editing Image Metadata</span><span class="dstep-sub"></span></div></li>
+            <li class="dstep dstep-pending" data-step="etsy"><span class="dstep-dot"></span><div class="dstep-txt"><span class="dstep-lbl">Uploading to Etsy</span><span class="dstep-sub"></span></div></li>
+            <li class="dstep dstep-pending" data-step="shopify"><span class="dstep-dot"></span><div class="dstep-txt"><span class="dstep-lbl">Publishing to Shopify</span><span class="dstep-sub"></span></div></li>
+          </ol>
+        </div>
         <div class="drail__stats">
-          <div class="dr-block"><div class="dr-lab">IDs in Queue</div><div class="dr-val" id="railQueueIds">—</div></div>
           <div class="dr-block"><div class="dr-lab">Folders Ready</div><div class="dr-val" id="railFolders">—</div></div>
           <div class="dr-block"><div class="dr-lab">Listed Today</div><div class="dr-val" id="railToday">—</div></div>
           <div class="dr-block"><div class="dr-lab">Total Recorded</div><div class="dr-val" id="railTotal">—</div></div>
@@ -4782,38 +4883,43 @@ ANTI-REPETITION (TITLE)
         </div>
         <div class="drail__foot"><span class="dot"></span><span class="lbl">Firestore live</span></div>`;
       app.appendChild(rail);
-      const column = mk("div", "dColumn", "dcolumn");
+      const column = mk("div", "dColumn", "dcolumn dcolumn-offset");
       app.appendChild(column);
 
-      // ── Topbar: live status + primary controls (brand lives in the rail) ──
+      // ── Topbar: live status + primary controls (brand lives in the rail).
+      // Round 6: single-line console layout. "To Shopify", the Uploads
+      // counter, and "Expand" are retired from view (Statistics covers
+      // them now) into #dTopbarHidden — NOT deleted: other code still
+      // writes to #globalUploadCount, binds #expandUploadHistoryBtn and
+      // #uploadShopifyBtn, and automation clicks #createListingBtn.
+      // #createListingProgress stays visible: it's the live per-photo
+      // upload bar (display:none until a job runs).
+      // The boxed .dgroup card wrappers are gone (they read as broken
+      // white pills around the buttons) — sections are now separated by
+      // thin dividers only: STATUS | CONNECTION | MODES | RUN. ──
+      const sep = (parent) => parent.appendChild(mk("div", null, "dsep"));
       const topbar = mk("div", "dTopbar", "dtopbar");
-      move(topbar, ["firebaseStatus"]);
+      const tbHidden = mk("div", "dTopbarHidden");
+      tbHidden.style.display = "none";
+      move(tbHidden, ["createListingBtn", "createListingCheck", "globalUploadCount", "expandUploadHistoryBtn", "uploadShopifyBtn"]);
+      topbar.appendChild(tbHidden);
+      move(topbar, ["firebaseStatus", "createListingProgress"]);
       topbar.appendChild(mk("div", null, "dspacer"));
       move(topbar, ["shopifyQueueStatus", "connectEtsyBtn"]);
-      group(topbar, ["toggleAuto", "skipListingBtn"]);
-      move(topbar, ["clearBtn"]);
+      sep(topbar);
+      move(topbar, ["duplicateListingBtn", "duplicateListingProgress", "duplicateListingCheck", "duplicateModeToggle"]);
+      sep(topbar);
+      move(topbar, ["shopifyModeToggle"]);
+      sep(topbar);
+      move(topbar, ["toggleAuto", "skipListingBtn", "clearBtn"]);
       column.appendChild(topbar);
 
       const main = mk("div", "dMain", "dmain");
       column.appendChild(main);
 
-      // ── WORKSPACE view ──
-      const cQueues = card(main, "dCardQueues", "Listing Queues", `<span id="dQueueSync" class="dsync">local</span>`, "work");
-      move(cQueues, ["etsyShopListingsContainer"]);
-
-      const cPipe = card(main, "dCardPipeline", "Pipeline", null, "work");
-      const pipeRow = mk("div", null, "dtoolrow");
-      group(pipeRow, ["createListingBtn", "createListingProgress", "createListingCheck", "globalUploadCount", "expandUploadHistoryBtn"]);
-      group(pipeRow, ["duplicateListingBtn", "duplicateListingProgress", "duplicateListingCheck", "duplicateModeToggle"]);
-      group(pipeRow, ["shopifyModeToggle", "uploadShopifyBtn"]);
-      cPipe.appendChild(pipeRow);
-
-      // ── Shopify Uploads: a heavily-used panel — previously fell back to
-      // document.body (its old host id no longer exists) and landed at the
-      // very bottom of the page. Now a proper, prominent card of its own.
-      const cShopify = card(main, "dCardShopifyUploads", "Shopify Uploads", null, "work");
-      const shopifyHost = mk("div", "dShopifyUploadsHost");
-      cShopify.appendChild(shopifyHost);
+      // ── WORKSPACE view — Content/Studio (the working pair) leads, then
+      // Shopify Uploads right below it, then Output, with Listing Queues
+      // (set up once, rarely revisited) last. ──
 
       const twocol = mk("div", null, "dtwocol");
       twocol.setAttribute("data-view", "work");
@@ -4821,15 +4927,33 @@ ANTI-REPETITION (TITLE)
       const cContent = card(twocol, "dCardContent", "Listing Content");
       move(cContent, ["descriptionAndFileUploadContainer", "searchKeyPhrasesHeading", "container13", "generateBtn"]);
       const cStudio = card(twocol, "dCardStudio", "Image Studio");
-      const rightTop = mk("div", "rgRightTop", "dtoolrow");
-      move(rightTop, ["analyzeMetadataBtn", "analyzeMetadataProgress", "analyzeMetadataCheck"]);
-      cStudio.appendChild(rightTop);
+      // Analyze Photos button (+ its progress/check) and the manual Image
+      // Drop zone are retired from view per operator request — the
+      // metadata-analysis stage they represented is now tracked live by the
+      // rail Pipeline stepper instead. Both are kept alive off-screen
+      // (never deleted): automation still calls
+      // analyzeMetadataBtn.click() directly, and toggleCheck/
+      // showMetadataProgress still toggle inline styles on the other two.
+      const legacyHidden = mk("div", "dLegacyHidden");
+      legacyHidden.style.display = "none";
+      move(legacyHidden, ["analyzeMetadataBtn", "analyzeMetadataProgress", "analyzeMetadataCheck", "dropZone"]);
+      cStudio.appendChild(legacyHidden);
       const gridWrap = mk("div", "rgGridWrap");
-      move(gridWrap, ["previewGridContainer", "dropZone"]);
+      move(gridWrap, ["previewGridContainer"]);
       cStudio.appendChild(gridWrap);
+
+      // Shopify Uploads: a heavily-used panel — previously fell back to
+      // document.body (its old host id no longer exists) and landed at the
+      // very bottom of the page. Now sits right below Content/Studio.
+      const cShopify = card(main, "dCardShopifyUploads", "Shopify Uploads", null, "work");
+      const shopifyHost = mk("div", "dShopifyUploadsHost");
+      cShopify.appendChild(shopifyHost);
 
       const cOut = card(main, "dCardOutput", "Generated Output", null, "work");
       move(cOut, ["etsyListingTitleContainer", "etsyListingDescriptionContainer"]);
+
+      const cQueues = card(main, "dCardQueues", "Listing Queues", `<span id="dQueueSync" class="dsync">local</span>`, "work");
+      move(cQueues, ["etsyShopListingsContainer"]);
 
       // ── STATISTICS view (own full-height view, reached from the rail) ──
       const cStats = card(main, "dCardStats", "Statistics &amp; Review",
@@ -4927,6 +5051,100 @@ ANTI-REPETITION (TITLE)
       };
       setInterval(window.updateRailStats, 2000);
       setTimeout(window.updateRailStats, 400);
+
+      // ── Rail Pipeline stepper ──────────────────────────────────────────
+      // Maps the exact status strings updateFirebaseStatus() already
+      // receives at every stage of runFullAutomationSequence onto a
+      // compact vertical stepper (the standard CI/CD-sidebar pattern:
+      // connected circles, pending/active/done/error states, a live
+      // sub-status line per step). This only reads status text — nothing
+      // here touches the automation sequence itself, so a wording change
+      // there is the only thing that could ever require an update here.
+      const RAIL_STEPS = ["prep", "identify", "tags", "title", "desc", "metadata", "etsy", "shopify"];
+      window.__railStepState = {};
+
+      function railStepEl(key) { return document.querySelector(`.dstep[data-step="${key}"]`); }
+      function railSetStep(key, state, sub) {
+        const li = railStepEl(key);
+        if (!li) return;
+        li.classList.remove("dstep-pending", "dstep-active", "dstep-done", "dstep-error");
+        li.classList.add("dstep-" + state);
+        window.__railStepState[key] = state;
+        const subEl = li.querySelector(".dstep-sub");
+        if (subEl) subEl.textContent = sub || "";
+      }
+      function railDoneBefore(stepKey) {
+        const idx = RAIL_STEPS.indexOf(stepKey);
+        RAIL_STEPS.forEach((k, i) => { if (i < idx) railSetStep(k, "done", ""); });
+      }
+      function railResetSteps() {
+        RAIL_STEPS.forEach(k => railSetStep(k, "pending", ""));
+      }
+      function railSetLabel(text) {
+        const el = document.getElementById("railPipelineSet");
+        if (el) el.textContent = text || "Idle";
+      }
+      function railActiveStep() {
+        return RAIL_STEPS.find(k => window.__railStepState[k] === "active");
+      }
+
+      window.updateRailStepper = function updateRailStepper(status, type) {
+        const s = String(status || "").trim();
+        let m;
+
+        if ((m = s.match(/^Processing:\s*(.+)$/))) {
+          railResetSteps();
+          railSetLabel(m[1]);
+          railSetStep("prep", "active", "Starting…");
+          return;
+        }
+        if (s === "Downloading images...") { railSetStep("prep", "active", "Downloading photos…"); return; }
+        if (s === "Analyzing Details...") { railDoneBefore("identify"); railSetStep("identify", "active", "Reading charm details…"); return; }
+        if (/^PAUSED/.test(s)) { railSetStep("identify", "active", s.replace(/^PAUSED\s*—\s*/, "")); return; }
+        if (/^Batch[- ]approved description injected/.test(s)) { railSetStep("identify", "active", "Description approved"); return; }
+        if (/^Batch approved:/.test(s)) { railSetStep("identify", "active", s); return; }
+        if (/^Batch review cancelled/.test(s)) { railSetStep("identify", "active", "Using single-listing approval"); return; }
+        if (s === "Generating Info...") {
+          railDoneBefore("tags");
+          ["tags", "title", "desc"].forEach(k => railSetStep(k, "active", "Writing tags, title & description…"));
+          return;
+        }
+        if (s === "Key phrases empty — retrying...") { railSetStep("tags", "active", "Retrying tags…"); return; }
+        if (s === "Title/description incomplete — retrying...") {
+          railSetStep("title", "active", "Retrying…");
+          railSetStep("desc", "active", "Retrying…");
+          return;
+        }
+        if ((m = s.match(/^Generation failed \(([^)]+)\):/))) {
+          const what = m[1];
+          if (/key phrases/.test(what)) railSetStep("tags", "error", "Failed — will retry later");
+          if (/title/.test(what)) railSetStep("title", "error", "Failed — will retry later");
+          if (/description/.test(what)) railSetStep("desc", "error", "Failed — will retry later");
+          return;
+        }
+        if (s === "Analyzing Metadata...") { railDoneBefore("metadata"); railSetStep("metadata", "active", "Cropping & tagging photos…"); return; }
+        if (s === "Uploading Original...") { railDoneBefore("etsy"); railSetStep("etsy", "active", "Publishing photos to Etsy…"); return; }
+        if (/^Error: No Listing ID/.test(s)) { railSetStep("etsy", "error", "No Listing ID available"); return; }
+        if (/^Upload failed twice/.test(s)) { railSetStep("etsy", "error", "Failed twice — skipped"); return; }
+        if (/^Upload \S+: .* kept for retry/.test(s)) { railSetStep("etsy", "error", "Upload issue — retrying later"); return; }
+        if (/^Capturing for Shopify/.test(s)) { railDoneBefore("shopify"); railSetStep("shopify", "active", "Queuing Shopify listing…"); return; }
+        if (s === "Duplicating...") { railSetStep("shopify", "active", "Duplicating for a second listing…"); return; }
+        if (s === "Uploading Variant...") { railSetStep("shopify", "active", "Uploading variant listing…"); return; }
+        if (s === "Single mode: skipping duplicate") { railSetStep("shopify", "active", "Single mode — no duplicate"); return; }
+        if (/^Done:/.test(s)) { railDoneBefore("shopify"); railSetStep("shopify", "done", "Done — archiving…"); railSetLabel("Idle"); return; }
+        if (/^Listing skipped/.test(s)) { railResetSteps(); railSetLabel("Idle"); return; }
+        if (/^Skipping current listing/.test(s)) {
+          const active = railActiveStep();
+          if (active) railSetStep(active, "active", "Skipping…");
+          return;
+        }
+        if (/^Auto Error/.test(s)) {
+          const active = railActiveStep();
+          if (active) railSetStep(active, "error", "Unexpected error — check console");
+          return;
+        }
+        if (/^(Waiting|Scanning|Auto Paused|Auto Started|Pausing|Scan Error)/.test(s)) { railSetLabel(s); return; }
+      };
 
       // Real-time module boots after the DOM shell exists.
       if (typeof initListingStats === "function") { try { initListingStats(); } catch (e) { console.warn("Stats init failed:", e); } }
