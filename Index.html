@@ -181,6 +181,61 @@
       font-weight: 700;
       color: #7a5700;
     }
+    /* ── BATCH REVIEW OVERLAY — next-10 Listing Description review ──── */
+    #batchReviewOverlay {
+      position: fixed; inset: 0; z-index: 100010;
+      background: rgba(15, 18, 22, .72);
+      display: flex; align-items: center; justify-content: center;
+      padding: 24px;
+    }
+    #batchReviewPanel {
+      width: min(1180px, 96vw); height: min(88vh, 980px);
+      background: #fdfcf9; border-radius: 14px;
+      box-shadow: 0 26px 90px rgba(0,0,0,.45);
+      display: flex; flex-direction: column; overflow: hidden;
+    }
+    #batchReviewHeader {
+      display: flex; align-items: flex-start; gap: 18px;
+      padding: 18px 22px 14px; border-bottom: 2px solid #e8e2d4;
+      background: linear-gradient(180deg, #fff8ea, #fdfcf9);
+    }
+    #batchReviewHeader h5 { margin: 0 0 4px; font-size: 21px; font-weight: 700; color: #2c2a24; }
+    #batchReviewHeader p  { margin: 0; font-size: 12.5px; color: #6d675a; max-width: 760px; line-height: 1.45; }
+    #batchReviewApproveBtn { margin-left: auto; flex: 0 0 auto; height: 44px; font-weight: 700; }
+    #batchReviewList {
+      flex: 1; overflow-y: auto; padding: 16px 22px 22px;
+      display: flex; flex-direction: column; gap: 16px;
+    }
+    .brv-row {
+      display: grid; grid-template-columns: 340px minmax(0, 1fr); gap: 18px;
+      background: #fff; border: 1px solid #e6e0d2; border-radius: 12px;
+      padding: 14px; align-items: start;
+    }
+    .brv-img {
+      width: 340px; height: 340px; object-fit: cover;
+      border-radius: 10px; background: #efece4; display: block;
+      cursor: zoom-in; transition: transform .12s ease;
+    }
+    .brv-img:hover { transform: scale(1.02); }
+    .brv-side { display: flex; flex-direction: column; gap: 8px; min-width: 0; align-self: stretch; }
+    .brv-head { font-size: 13px; font-weight: 800; color: #3a372f; letter-spacing: .01em; }
+    .brv-warn {
+      display: inline-block; margin-left: 10px; padding: 2px 8px;
+      background: #fdecdb; color: #9a4d0c; border-radius: 10px;
+      font-size: 10.5px; font-weight: 800;
+    }
+    .brv-desc {
+      flex: 1; width: 100%; min-height: 120px; resize: vertical;
+      border: 1.5px solid #d9d2c1; border-radius: 9px;
+      padding: 12px 14px; font-size: 17px; line-height: 1.45;
+      background: #fffdf8; color: #23211c; box-sizing: border-box;
+    }
+    .brv-desc:focus { outline: none; border-color: #a9823f; box-shadow: 0 0 0 3px rgba(169,130,63,.14); }
+    @media (max-width: 860px) {
+      .brv-row { grid-template-columns: 1fr; }
+      .brv-img { width: 100%; height: auto; aspect-ratio: 1/1; }
+    }
+
     #descriptionApprovalTopAlert {
       display: none;
       position: fixed;
@@ -1089,6 +1144,23 @@
     <button id="reviewListingDescNowBtn" type="button">Review Now</button>
   </div>
 
+  <!-- BATCH REVIEW OVERLAY: 10-ahead Listing Description review. Shown by
+       showBatchReviewPopup(); the automation sequence is awaiting inside
+       runBatchReviewGate() the whole time it is open, so processing is
+       genuinely paused. One Approve All saves every row. -->
+  <div id="batchReviewOverlay" role="dialog" aria-modal="true" aria-labelledby="batchReviewTitle" style="display:none;">
+    <div id="batchReviewPanel">
+      <div id="batchReviewHeader">
+        <div>
+          <h5 id="batchReviewTitle">Review the next <span id="batchReviewCount">10</span> listings</h5>
+          <p id="batchReviewSub">Automation is paused. Correct any Listing Description below — each seeds its listing's title, keywords and full description — then approve the whole batch. Approved descriptions are injected automatically with no further pauses until the batch runs out.</p>
+        </div>
+        <button id="batchReviewApproveBtn" class="btn waves-effect waves-light green darken-2" type="button">Approve All &amp; Resume</button>
+      </div>
+      <div id="batchReviewList"></div>
+    </div>
+  </div>
+
   <button id="openConfigBtn" class="btn waves-effect waves-light configurable" style="margin-left:10px;">Open Config</button>
   <button id="toggleAuto" class="btn waves-effect waves-light configurable red darken-1 stopped" style="margin-left:10px;">Start Auto</button>
   <button id="skipListingBtn" class="btn waves-effect waves-light configurable orange darken-2" style="margin-left:10px;" title="Abandon the listing currently being processed and move on to the next one">Skip Listing</button>
@@ -1762,31 +1834,45 @@ ANTI-REPETITION (TITLE)
             if (ctx.state !== "running") return false;
 
             const master = ctx.createGain();
+            // LOUDNESS: raised from 0.16 to 0.55 peak (~+10 dB) — the chime
+            // has to cut through other-room / other-tab listening. Character
+            // is unchanged: the same pleasant ascending C–E–G sine bells,
+            // now reinforced with a sub-octave body under each note and a
+            // second, slightly softer echo pass so the alert reads clearly
+            // without becoming harsh.
             master.gain.setValueAtTime(0.0001, ctx.currentTime);
-            master.gain.exponentialRampToValueAtTime(0.16, ctx.currentTime + 0.025);
-            master.gain.exponentialRampToValueAtTime(0.0001, ctx.currentTime + 1.18);
+            master.gain.exponentialRampToValueAtTime(0.55, ctx.currentTime + 0.025);
+            master.gain.setValueAtTime(0.55, ctx.currentTime + 1.30);
+            master.gain.exponentialRampToValueAtTime(0.0001, ctx.currentTime + 2.45);
             master.connect(ctx.destination);
 
             // Soft, ascending C–E–G bell tones. They are scheduled on the
             // audio clock rather than setTimeout, so background-tab timer
-            // throttling cannot pull the notes apart.
-            const notes = [
+            // throttling cannot pull the notes apart. Each note carries a
+            // half-volume sub-octave partial for body (perceived loudness
+            // without shrillness), and the whole triad repeats once.
+            const triad = [
                 { frequency: 523.25, at: 0.00, length: 0.52 },
                 { frequency: 659.25, at: 0.18, length: 0.58 },
                 { frequency: 783.99, at: 0.38, length: 0.72 }
             ];
-            for (const note of notes) {
-                const osc = ctx.createOscillator();
-                const voice = ctx.createGain();
-                const start = ctx.currentTime + note.at;
-                osc.type = "sine";
-                osc.frequency.setValueAtTime(note.frequency, start);
-                voice.gain.setValueAtTime(0.0001, start);
-                voice.gain.exponentialRampToValueAtTime(0.42, start + 0.018);
-                voice.gain.exponentialRampToValueAtTime(0.0001, start + note.length);
-                osc.connect(voice).connect(master);
-                osc.start(start);
-                osc.stop(start + note.length + 0.03);
+            const passes = [ { offset: 0.00, level: 1.0 }, { offset: 0.95, level: 0.78 } ];
+            for (const pass of passes) {
+                for (const note of triad) {
+                    const start = ctx.currentTime + pass.offset + note.at;
+                    for (const layer of [ { mult: 1, gainMult: 1 }, { mult: 0.5, gainMult: 0.5 } ]) {
+                        const osc = ctx.createOscillator();
+                        const voice = ctx.createGain();
+                        osc.type = "sine";
+                        osc.frequency.setValueAtTime(note.frequency * layer.mult, start);
+                        voice.gain.setValueAtTime(0.0001, start);
+                        voice.gain.exponentialRampToValueAtTime(0.85 * pass.level * layer.gainMult, start + 0.018);
+                        voice.gain.exponentialRampToValueAtTime(0.0001, start + note.length);
+                        osc.connect(voice).connect(master);
+                        osc.start(start);
+                        osc.stop(start + note.length + 0.03);
+                    }
+                }
             }
             return true;
         } catch (e) {
@@ -1897,6 +1983,290 @@ ANTI-REPETITION (TITLE)
             document.getElementById("acceptListingDescBtn")?.click();
         }
     });
+
+    // ═══════════════════════════════════════════════════════════════════
+    // BATCH REVIEW — 10-ahead Listing Description approval
+    //
+    // Replaces the one-at-a-time approval pause with a batched review:
+    // the popup shows the NEXT 10 sets in true processing order, each with
+    // a large zoomed primary image and an editable AI-generated Listing
+    // Description. One "Approve All" saves every row; the automation then
+    // consumes the approved descriptions one by one with no further pauses
+    // and no further vision calls, until the batch is exhausted — at which
+    // point the popup returns with the following 10, the pipeline pauses,
+    // and the (now louder) chime sounds.
+    //
+    // Approvals are persisted in localStorage keyed by set name, so they
+    // survive reloads and remain correct even if the scanner's set order
+    // shifts (each description belongs to its set, not to a position).
+    // ═══════════════════════════════════════════════════════════════════
+
+    const BATCH_APPROVED_KEY = "etsyBatchApproved.v1";
+    function readBatchApproved() {
+        try { const m = JSON.parse(localStorage.getItem(BATCH_APPROVED_KEY) || "{}"); return (m && typeof m === "object") ? m : {}; }
+        catch (_) { return {}; }
+    }
+    function writeBatchApproved(map) {
+        try { localStorage.setItem(BATCH_APPROVED_KEY, JSON.stringify(map || {})); } catch (_) {}
+    }
+    // Returns the approved description for a set and REMOVES it (single
+    // use — a consumed approval must never leak onto a different run),
+    // or null when the set has no pending approval.
+    function consumeBatchApprovedDescription(setName) {
+        const map = readBatchApproved();
+        if (!(setName in map)) return null;
+        const value = String(map[setName] || "").trim();
+        delete map[setName];
+        writeBatchApproved(map);
+        return value || null;
+    }
+
+    // Candidate builder — replicates the scanner's exact selection order
+    // (processed-set exclusion, strict category draining, per-category
+    // Listing-ID availability, session skips, archiving guard, ≥7 images)
+    // so the popup's "next 10" is genuinely the next 10 the pipeline will
+    // process. Tolerant by design: any per-set listing error skips that
+    // set rather than failing the batch.
+    async function listBatchCandidates(currentSetRef, currentSetName, limit) {
+        limit = Math.max(1, Number(limit) || 10);
+        const out = [{ setRef: currentSetRef, setName: currentSetName }];
+        const already = readBatchApproved();
+        try {
+            const processedNames = [];
+            try {
+                const approvedRes = await storage.ref('listing-generator-1/Generated_Listing_Sets/Approved_Listing_Sets').listAll();
+                approvedRes.prefixes.forEach(p => processedNames.push(p.name.replace(/\/$/, "")));
+            } catch (_) {}
+            try {
+                const legacyRes = await storage.ref('listing-generator-1/Listed_Sets').listAll();
+                legacyRes.prefixes.forEach(p => { const n = p.name.replace(/\/$/, ""); if (!processedNames.includes(n)) processedNames.push(n); });
+            } catch (_) {}
+
+            const res = await storage.ref('listing-generator-1/Generated_Listing_Sets/Completed_Listing_Sets').listAll();
+            const newSets = res.prefixes.filter(p => !processedNames.includes(p.name.replace(/\/$/, "")));
+
+            const CATEGORY_ORDER = ["queueRegNecklace", "queueBeadyNecklace", "queueStudEarrings", "queueHoopEarrings", "queueCharms"];
+            const setsByQueue = {};
+            CATEGORY_ORDER.forEach(q => setsByQueue[q] = []);
+            for (const sr of newSets) {
+                const route = routeFolderName(sr.name);
+                const q = route ? route.queueId : "queueRegNecklace";
+                if (!setsByQueue[q]) setsByQueue[q] = [];
+                setsByQueue[q].push(sr);
+            }
+            const ordered = [];
+            for (const q of CATEGORY_ORDER) {
+                const bucket = setsByQueue[q] || [];
+                if (!bucket.length) continue;
+                const qEl = document.getElementById(q);
+                if (!qEl || !qEl.value.trim()) continue; // no Listing IDs in this category
+                for (const sr of bucket) ordered.push(sr);
+            }
+
+            const now = Date.now();
+            const TEN_MINUTES = 10 * 60 * 1000;
+            for (const sr of ordered) {
+                if (out.length >= limit) break;
+                const name = sr.name.replace(/\/$/, "");
+                if (name === currentSetName) continue;                       // already first
+                if (name in already) continue;                               // still holds an unused approval
+                if (window.__manuallySkippedSets && window.__manuallySkippedSets.has(name)) continue;
+                if (window.__archivingSets && window.__archivingSets.has(name)) continue;
+                const cooled = window.__incompleteSetsTracker && window.__incompleteSetsTracker[name];
+                if (cooled && now - cooled < TEN_MINUTES) continue;
+                try {
+                    const files = await sr.listAll();
+                    const imageCount = files.items.filter(it => !/manifest\.json$/i.test(it.name)).length;
+                    if (imageCount < 7) continue;
+                    out.push({ setRef: sr, setName: name });
+                } catch (e) {
+                    console.warn("Batch candidates: could not inspect", name, e && e.message);
+                }
+            }
+        } catch (e) {
+            console.warn("Batch candidates: scan failed — batch will contain only the current set:", e && e.message);
+        }
+        return out;
+    }
+
+    // Shared with the legacy fallback path — one source of truth for how
+    // the set name and the two-word charm identification combine.
+    function composeCombinedDescription(setName, focalDescription) {
+        const cleanContext = String(setName || "").split("_Set_")[0].replace(/_/g, " ").trim();
+        let combined = cleanContext;
+        const focal = String(focalDescription || "").trim();
+        if (focal) {
+            const lower = cleanContext.toLowerCase();
+            combined = (lower === "charm" || lower === "charms")
+                ? `${focal} charm`
+                : `${focal} Charm ${cleanContext}`;
+        }
+        return combined;
+    }
+
+    // Prepare one candidate: primary image (Slot_1) hydrated through the
+    // chunked proxy (CORS-safe for both display and canvas crop), zoomed
+    // crop, then the same two-word charm identification the legacy path
+    // uses. Any failure degrades gracefully: display falls back to the raw
+    // URL; the description falls back to the set-name context — the
+    // operator sees exactly what happened and can type the right wording.
+    async function prepareBatchCandidate(cand) {
+        const result = { setName: cand.setName, displayUrl: "", blobUrl: "", description: "", aiFailed: false };
+        try {
+            const files = await cand.setRef.listAll();
+            const primary = files.items.find(it => /^Slot_1\./i.test(it.name)) ||
+                            files.items.filter(it => !/manifest\.json$/i.test(it.name))
+                                       .sort((a, b) => (parseInt(a.name.match(/Slot_(\d+)/)?.[1] || 999)) - (parseInt(b.name.match(/Slot_(\d+)/)?.[1] || 999)))[0];
+            if (!primary) throw new Error("no primary image in set");
+            const rawUrl = (await primary.getDownloadURL()) + "&cb=" + Date.now();
+            result.displayUrl = rawUrl;
+            try {
+                const blobUrl = await fetchImageViaChunkedProxy(rawUrl);
+                result.blobUrl = blobUrl;
+                result.displayUrl = blobUrl;
+            } catch (e) {
+                console.warn("Batch prepare: chunked fetch failed for", cand.setName, "- display may be degraded:", e && e.message);
+            }
+            let imgData = null;
+            try {
+                // Zoomed crop needs the CORS-safe blob; without one, fall
+                // back to the raw URL (server-side vision fetch, no crop).
+                imgData = result.blobUrl ? await cropImageForAI(result.blobUrl) : rawUrl;
+            } catch (e) {
+                console.warn("Batch prepare: crop failed for", cand.setName, "- using unzoomed image:", e && e.message);
+                imgData = rawUrl;
+            }
+            const focal = await getTwoWordCharmDescriptionFromImage(imgData);
+            result.aiFailed = !focal;
+            result.description = composeCombinedDescription(cand.setName, focal);
+        } catch (e) {
+            console.warn("Batch prepare failed for", cand.setName, e && e.message);
+            result.aiFailed = true;
+            result.description = composeCombinedDescription(cand.setName, "");
+        }
+        return result;
+    }
+
+    // The gate itself. Pauses the sequence (the caller awaits), builds and
+    // shows the popup, chimes, and resolves with THIS set's approved
+    // description once the operator approves the whole batch — the other
+    // 9 approvals are persisted for the runs that follow. Returns null on
+    // build failure so the caller can use the legacy single-set gate.
+    async function runBatchReviewGate(currentSetRef, currentSetName) {
+        try {
+            updateFirebaseStatus("PAUSED — building the next 10-listing review batch...", "working");
+            const prevTitle = document.title;
+            document.title = "⚠ Batch Review — Listing Generator";
+
+            const candidates = await listBatchCandidates(currentSetRef, currentSetName, 10);
+
+            // Identify charms with bounded concurrency (3-wide): fast
+            // enough for 10 sets, gentle on the OpenAI proxy.
+            updateFirebaseStatus(`PAUSED — identifying ${candidates.length} charm(s) for review...`, "working");
+            const prepared = new Array(candidates.length);
+            let next = 0;
+            const worker = async () => {
+                while (next < candidates.length) {
+                    const i = next++;
+                    prepared[i] = await prepareBatchCandidate(candidates[i]);
+                }
+            };
+            await Promise.all([worker(), worker(), worker()]);
+
+            const approvedMap = await showBatchReviewPopup(prepared);
+            document.title = prevTitle;
+            if (!approvedMap) return null; // popup could not be shown — fallback
+
+            // Persist every approval; hand the current set's value back.
+            const store = readBatchApproved();
+            for (const [name, desc] of Object.entries(approvedMap)) {
+                if (name !== currentSetName) store[name] = desc;
+            }
+            writeBatchApproved(store);
+            updateFirebaseStatus(`Batch approved: ${Object.keys(approvedMap).length} listing description(s) saved — resuming...`, "working");
+            return String(approvedMap[currentSetName] || "").trim() || null;
+        } catch (e) {
+            console.warn("Batch review gate failed — falling back to single-set approval:", e && e.message);
+            return null;
+        }
+    }
+
+    // Render the popup and resolve with { setName: description } on
+    // Approve All. Blob URLs are revoked on close to free memory.
+    function showBatchReviewPopup(rows) {
+        return new Promise((resolve) => {
+            const overlay = document.getElementById("batchReviewOverlay");
+            const list = document.getElementById("batchReviewList");
+            const approveBtn = document.getElementById("batchReviewApproveBtn");
+            const countEl = document.getElementById("batchReviewCount");
+            if (!overlay || !list || !approveBtn) { resolve(null); return; }
+
+            list.innerHTML = "";
+            if (countEl) countEl.textContent = String(rows.length);
+            rows.forEach((row, i) => {
+                const item = document.createElement("div");
+                item.className = "brv-row";
+                const img = document.createElement("img");
+                img.className = "brv-img";
+                img.alt = row.setName + " primary image";
+                img.src = row.displayUrl || "";
+                img.loading = "lazy";
+                const side = document.createElement("div");
+                side.className = "brv-side";
+                const head = document.createElement("div");
+                head.className = "brv-head";
+                head.textContent = `#${i + 1} — ${row.setName}`;
+                if (row.aiFailed) {
+                    const warn = document.createElement("span");
+                    warn.className = "brv-warn";
+                    warn.textContent = "AI identification failed — please review wording";
+                    head.appendChild(warn);
+                }
+                const ta = document.createElement("textarea");
+                ta.className = "brv-desc";
+                ta.value = row.description || "";
+                ta.setAttribute("data-set-name", row.setName);
+                ta.spellcheck = true;
+                side.appendChild(head);
+                side.appendChild(ta);
+                item.appendChild(img);
+                item.appendChild(side);
+                list.appendChild(item);
+            });
+
+            const cleanup = () => {
+                overlay.style.display = "none";
+                approveBtn.onclick = null;
+                rows.forEach(r => { if (r.blobUrl) { try { URL.revokeObjectURL(r.blobUrl); } catch (_) {} } });
+            };
+
+            approveBtn.onclick = () => {
+                const areas = list.querySelectorAll("textarea.brv-desc");
+                const map = {};
+                let firstEmpty = null;
+                areas.forEach(a => {
+                    const v = (a.value || "").trim();
+                    if (!v && !firstEmpty) firstEmpty = a;
+                    map[a.getAttribute("data-set-name")] = v;
+                });
+                if (firstEmpty) {
+                    firstEmpty.focus();
+                    firstEmpty.scrollIntoView({ behavior: "smooth", block: "center" });
+                    window.M?.toast?.({ html: "Every listing needs a description before approving the batch.", classes: "orange darken-2" });
+                    return;
+                }
+                cleanup();
+                resolve(map);
+            };
+
+            overlay.style.display = "flex";
+            list.scrollTop = 0;
+            updateFirebaseStatus("PAUSED — review & approve the next batch of listing descriptions", "working");
+            playDescriptionApprovalChime().then((played) => {
+                if (!played) console.warn("Batch review is ready, but browser audio was not available.");
+            });
+        });
+    }
 
     // Toggle Button Logic (Enhanced with Etsy Safeguard)
     document.getElementById("toggleAuto").addEventListener("click", function() {
@@ -2463,6 +2833,14 @@ ANTI-REPETITION (TITLE)
         // this one call seeds the Listing Description that the ENTIRE
         // pipeline (title, keywords, themes, collections) derives from.
         const imgData = await imageDataForVisionZoomed(0);
+        return getTwoWordCharmDescriptionFromImage(imgData);
+    }
+
+    // Parameterized core — identical prompt, rules, filtering and retry
+    // behavior to the legacy path, but takes the (already cropped/zoomed)
+    // image data directly so the BATCH REVIEW builder can identify charms
+    // for future sets without touching the live preview grid state.
+    async function getTwoWordCharmDescriptionFromImage(imgData) {
         if (!imgData) return "";
 
         let retries = 3; 
@@ -2683,40 +3061,43 @@ ANTI-REPETITION (TITLE)
             // 2. Generate Description/Context
             updateFirebaseStatus("Analyzing Details...", "working");
 
-            // Parse Set Name to extract the descriptive words
-            // Example: "Beady_Necklace_Set_22" -> "Beady Necklace"
-            // Example: "Charm_Set_1" -> "Charm"
-            const rawContext = setName.split("_Set_")[0].replace(/_/g, " ");
-            const cleanContext = rawContext.trim();
-
-            // Call the OpenAI vision analysis for the focal item
-            const focalDescription = await getTwoWordCharmDescription();
-
-            let combinedDescription = cleanContext;
-            if (focalDescription && focalDescription.trim().length > 0) {
-                // Check if the parsed folder name is exactly "Charm" or "Charms" (case-insensitive check)
-                const lowerContext = cleanContext.toLowerCase();
-                if (lowerContext === "charm" || lowerContext === "charms") {
-                    combinedDescription = `${focalDescription.trim()} charm`;
-                } else {
-                    // Standard logic for all other names
-                    combinedDescription = `${focalDescription.trim()} Charm ${cleanContext}`;
-                }
+            // ── BATCH REVIEW GATE ─────────────────────────────────────────
+            // The per-set approval pause is replaced by a 10-ahead batch:
+            // if this set already has an operator-approved Listing
+            // Description from a prior batch review, inject it directly —
+            // no vision call, no pause. Otherwise, build the next batch
+            // (this set first), pause the pipeline with the review popup +
+            // chime, and continue only after the operator approves all.
+            // The single-set gate below remains as the fallback if batch
+            // construction fails, so the pipeline can never be stranded.
+            let approvedDesc = consumeBatchApprovedDescription(setName);
+            if (approvedDesc == null) {
+                approvedDesc = await runBatchReviewGate(setRef, setName);
             }
+            if (window.__skipListingRequested) return;
 
-            // Apply and show inside the "listingDescInput" text box
-            document.getElementById("listingDescInput").value = combinedDescription;
+            if (approvedDesc != null && String(approvedDesc).trim()) {
+                document.getElementById("listingDescInput").value = String(approvedDesc).trim();
+                updateFirebaseStatus(`Batch-approved description injected: ${setName}`, "working");
+            } else {
+                // FALLBACK — legacy single-set flow (vision + inline gate).
+                const focalDescription = await getTwoWordCharmDescription();
+                const combinedDescription = composeCombinedDescription(setName, focalDescription);
 
-            // 2b. HUMAN APPROVAL GATE — pause before this AI identification
-            // becomes the source of truth for keywords, title, descriptions,
-            // metadata, Etsy and Shopify. The operator may keep the generated
-            // wording or overwrite it, then explicitly Accept & Continue.
-            const descriptionApproval = await requestListingDescriptionApproval(setName, combinedDescription);
-            if (!descriptionApproval?.accepted || window.__skipListingRequested) return;
-            // requestListingDescriptionApproval resolves with the live input
-            // value, but assign it explicitly so all later generators consume
-            // the operator-approved wording even if another handler touched it.
-            document.getElementById("listingDescInput").value = descriptionApproval.value;
+                // Apply and show inside the "listingDescInput" text box
+                document.getElementById("listingDescInput").value = combinedDescription;
+
+                // 2b. HUMAN APPROVAL GATE — pause before this AI identification
+                // becomes the source of truth for keywords, title, descriptions,
+                // metadata, Etsy and Shopify. The operator may keep the generated
+                // wording or overwrite it, then explicitly Accept & Continue.
+                const descriptionApproval = await requestListingDescriptionApproval(setName, combinedDescription);
+                if (!descriptionApproval?.accepted || window.__skipListingRequested) return;
+                // requestListingDescriptionApproval resolves with the live input
+                // value, but assign it explicitly so all later generators consume
+                // the operator-approved wording even if another handler touched it.
+                document.getElementById("listingDescInput").value = descriptionApproval.value;
+            }
             
             // 3. Generate Content (Sequentially) — VERIFIED.
             //
