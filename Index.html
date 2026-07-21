@@ -1133,6 +1133,146 @@
     #shopifyList .sp-err { color: #c62828; }
     #shopifyList a { color: #1565c0; font-weight: 600; }
 
+    /* ════════════════════════════════════════════════════════════════════
+       BRITES DESIGN SYSTEM — brand skin (ported from etsy-pricing.html /
+       brites-adwords.html). Appended LAST so it wins the cascade over the
+       legacy styles and Materialize. Warm paper canvas, gold precision
+       accent, sage=good / clay=bad, serif headings, tabular-mono metrics.
+       All behavioral IDs untouched — this is presentation only.
+       ════════════════════════════════════════════════════════════════════ */
+    :root{
+      --paper:#f3f0ea; --paper2:#ece6da; --card:#fffefb; --card2:#faf7f1;
+      --ink:#1c1a17; --ink70:#5b554c; --ink45:#938c80; --ink25:#c4bdb0;
+      --line:#e4ddd0; --line2:#efe9dd;
+      --velvet:#221f1b; --velvet2:#2d2924; --velvetLine:#3b362f;
+      --gold:#a9823f; --gold2:#caa861; --goldSoft:#f0e6cd; --goldLine:#e3d3a6;
+      --sage:#5f7a5b; --sageSoft:#e7eddf;
+      --clay:#b0563f; --claySoft:#f4e3dc;
+      --slate:#4a6b78; --slateSoft:#e1ebee;
+      --serif:'Hoefler Text','Iowan Old Style',Georgia,'Times New Roman',serif;
+      --sans:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,system-ui,sans-serif;
+      --mono:ui-monospace,'SF Mono','Cascadia Code','Roboto Mono',Menlo,Consolas,monospace;
+      --r:14px; --rSm:10px; --sh:0 1px 2px rgba(30,26,20,.04),0 8px 24px rgba(30,26,20,.05);
+    }
+    html.responsive body{
+      background:var(--paper); color:var(--ink);
+      font-family:var(--sans); font-size:14px; line-height:1.5;
+      -webkit-font-smoothing:antialiased;
+    }
+    html.responsive .btn, html.responsive .btn-flat{
+      border:1px solid var(--ink); background:var(--ink); color:#fff;
+      border-radius:9px; padding:0 14px; height:36px; line-height:34px;
+      font-size:13px; font-weight:600; text-transform:none; letter-spacing:0;
+      box-shadow:none; transition:transform .08s, opacity .15s, background .15s;
+    }
+    html.responsive .btn:hover{opacity:.9; background:var(--ink); box-shadow:none}
+    html.responsive .btn:active{transform:translateY(1px)}
+    html.responsive .btn:focus{background:var(--ink)}
+    html.responsive .btn.green, html.responsive .btn.green.darken-2, html.responsive .btn.running{
+      background:var(--sage); border-color:var(--sage); color:#fff;
+    }
+    html.responsive .btn.green:hover, html.responsive .btn.running:hover{background:var(--sage)}
+    html.responsive .btn.red, html.responsive .btn.red.darken-1, html.responsive .btn.stopped{
+      background:var(--clay); border-color:var(--clay); color:#fff;
+    }
+    html.responsive .btn.red:hover, html.responsive .btn.stopped:hover{background:var(--clay)}
+    html.responsive .btn.orange{background:var(--gold); border-color:var(--gold); color:#2a2013}
+    html.responsive .btn-flat{background:transparent; color:var(--ink70); border-color:transparent}
+    html.responsive .btn-flat:hover{background:var(--card2); color:var(--ink)}
+    html.responsive input[type=text], html.responsive input[type=date],
+    html.responsive input[type=search], html.responsive textarea,
+    html.responsive select{
+      background:var(--card); border:1.5px solid var(--line); border-radius:9px;
+      padding:8px 11px; font-family:var(--sans); font-size:13px; color:var(--ink);
+      box-shadow:none; height:auto; margin:0; box-sizing:border-box; transition:border-color .15s, box-shadow .15s;
+    }
+    html.responsive input[type=text]:focus, html.responsive textarea:focus,
+    html.responsive input[type=date]:focus, html.responsive input[type=search]:focus,
+    html.responsive select:focus{
+      border-color:var(--gold); box-shadow:0 0 0 3px rgba(169,130,63,.14); outline:none;
+    }
+    html.responsive select{display:inline-block; width:auto}
+    html.responsive .eyebrow{font-size:10.5px;letter-spacing:.18em;text-transform:uppercase;color:var(--ink45);font-weight:700}
+
+    /* ---- topbar shell ---- */
+    .dtopbar{
+      position:sticky; top:0; z-index:3000;
+      background:rgba(243,240,234,.88); backdrop-filter:blur(10px);
+      border-bottom:1px solid var(--line);
+      padding:10px 22px; display:flex; align-items:center; gap:14px; flex-wrap:wrap;
+    }
+    .dtopbar .dbrand{display:flex; flex-direction:column; line-height:1.15; margin-right:4px}
+    .dtopbar .dbrand .logo{font-family:var(--serif); font-size:19px; color:var(--ink)}
+    .dtopbar .dbrand .logo b{color:var(--gold); font-weight:400}
+    .dtopbar .dbrand .tag{font-size:9.5px; letter-spacing:.22em; text-transform:uppercase; color:var(--ink45)}
+    .dtopbar .dspacer{flex:1}
+    html.responsive #firebaseStatus{
+      position:static !important; transform:none !important; margin:0;
+      background:var(--card); border:1px solid var(--line); border-radius:30px;
+      padding:6px 14px; font-size:12.5px; font-weight:600; color:var(--ink70);
+      box-shadow:none; max-width:520px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap;
+    }
+    html.responsive #firebaseStatus.working{border-color:var(--goldLine); background:var(--goldSoft); color:#7a5a1d}
+    html.responsive #firebaseStatus:has(.status-dot.working){border-color:var(--goldLine); background:var(--goldSoft); color:#7a5a1d}
+    html.responsive #firebaseStatus .status-dot{width:8px; height:8px; border-radius:50%; background:var(--sage); display:inline-block; margin-right:7px}
+    html.responsive #firebaseStatus .status-dot.working{background:var(--gold); animation:dpulse 1.6s infinite}
+    @keyframes dpulse{0%,100%{box-shadow:0 0 0 0 rgba(169,130,63,.45)}50%{box-shadow:0 0 0 5px rgba(169,130,63,0)}}
+    html.responsive #shopifyQueueStatus{
+      border:1px solid var(--line); border-radius:30px; background:var(--sageSoft);
+      color:#3c5a39; font-size:11px; font-weight:700; padding:5px 11px;
+    }
+    html.responsive #shopifyQueueStatus.warn{background:var(--claySoft); border-color:var(--claySoft); color:#8a3a26}
+
+    /* ---- page + cards ---- */
+    .dmain{padding:18px 22px 80px; max-width:1560px; margin:0 auto; display:flex; flex-direction:column; gap:16px}
+    .dcard{background:var(--card); border:1px solid var(--line); border-radius:var(--r); box-shadow:var(--sh); padding:16px 18px}
+    .dcard>.dhead{display:flex; align-items:baseline; gap:10px; margin-bottom:12px}
+    .dcard>.dhead h3{font-family:var(--serif); font-size:18px; font-weight:500; margin:0; color:var(--ink)}
+    .dcard>.dhead .sub{font-size:11.5px; color:var(--ink45); margin-left:auto}
+    .dtwocol{display:grid; grid-template-columns:minmax(360px,5fr) minmax(520px,7fr); gap:16px; align-items:start}
+    @media(max-width:1180px){.dtwocol{grid-template-columns:1fr}}
+    .dtoolrow{display:flex; align-items:center; gap:10px; flex-wrap:wrap}
+    .dtoolrow .dgroup{display:inline-flex; align-items:center; gap:8px; background:var(--card2); border:1px solid var(--line2); border-radius:11px; padding:7px 10px}
+
+    /* Existing structural pieces, reskinned */
+    html.responsive #etsyShopListingsContainer h4,
+    html.responsive #etsyShopListingsContainer h5{font-family:var(--serif); font-weight:500}
+    html.responsive .fb-folder-count{color:var(--slate); font-weight:700; font-size:12px}
+    html.responsive .preview-box{border:1px solid var(--line); border-radius:10px; background:var(--card2); box-shadow:var(--sh)}
+    html.responsive #dropZone{border:2px dashed var(--goldLine); border-radius:var(--r); background:var(--card2); color:var(--ink45)}
+    html.responsive #photoBudgetCtl{background:var(--velvet); border-color:var(--velvetLine)}
+    html.responsive #batchReviewPanel{background:var(--card)}
+    html.responsive .toast{background:var(--velvet); border-radius:10px; font-weight:600}
+
+    /* ---- KPI tiles ---- */
+    .dkpis{display:grid; grid-template-columns:repeat(auto-fit,minmax(130px,1fr)); gap:12px; margin-bottom:14px}
+    .dkpi{padding:12px 14px; border-radius:var(--rSm); background:var(--card2); border:1px solid var(--line2)}
+    .dkpi .lab{font-size:10.5px; color:var(--ink45); letter-spacing:.06em; text-transform:uppercase; font-weight:700}
+    .dkpi .val{font-family:var(--mono); font-size:22px; font-weight:600; margin-top:4px; letter-spacing:-.5px; font-variant-numeric:tabular-nums}
+
+    /* ---- Stats & Review ---- */
+    .dstatsbar{display:flex; gap:10px; flex-wrap:wrap; align-items:center; margin-bottom:12px}
+    .dstatsbar input[type=search]{flex:1; min-width:220px}
+    .dstatsbar label{font-size:11px; font-weight:700; color:var(--ink45); display:inline-flex; align-items:center; gap:6px}
+    .dtablewrap{max-height:520px; overflow:auto; border:1px solid var(--line2); border-radius:var(--rSm)}
+    table.dtable{width:100%; border-collapse:collapse; font-size:12.5px}
+    table.dtable thead th{
+      position:sticky; top:0; background:var(--card2); text-align:left;
+      font-size:10.5px; letter-spacing:.06em; text-transform:uppercase; color:var(--ink45);
+      padding:9px 12px; border-bottom:1px solid var(--line); z-index:1; white-space:nowrap;
+    }
+    table.dtable tbody td{padding:9px 12px; border-bottom:1px solid var(--line2); vertical-align:top}
+    table.dtable tbody tr:hover{background:var(--card2)}
+    table.dtable .mono{font-family:var(--mono); font-variant-numeric:tabular-nums; font-size:11.5px; color:var(--ink70)}
+    table.dtable a{color:var(--gold); font-weight:700; text-decoration:none}
+    table.dtable a:hover{text-decoration:underline}
+    .dchip{display:inline-block; padding:2px 9px; border-radius:20px; font-size:10.5px; font-weight:800}
+    .dchip.live{background:var(--sageSoft); color:#3c5a39}
+    .dchip.pend{background:var(--goldSoft); color:#7a5a1d}
+    .dchip.fail{background:var(--claySoft); color:#8a3a26}
+    .dchip.cat{background:var(--slateSoft); color:#33525d}
+    .dsync{font-family:var(--mono); font-size:11px; color:var(--ink45)}
+    .dempty{padding:26px; text-align:center; color:var(--ink45); font-size:13px}
   </style>
 </head>
 <body>
@@ -1666,6 +1806,7 @@ ANTI-REPETITION (TITLE)
       "queueHoopEarrings",
       "queueCharms",
     ];
+    window.QUEUE_IDS_LIST = QUEUE_IDS; // consumed by the Firestore queue sync
 
     // Single source of truth for routing a Listing-Generator-1 folder
     // name (e.g. "Beady_Necklace_Set_42", "Bracelets_Set_3") to the right
@@ -1750,6 +1891,213 @@ ANTI-REPETITION (TITLE)
 
     firebase.initializeApp(firebaseConfig);
     const storage = firebase.storage();
+
+    // ══════════════════════════════════════════════════════════════════
+    // LISTING STATS + CLOUD QUEUE SYNC (Firestore, real-time)
+    //
+    // Collections (client SDK, anonymous auth — Firestore rules must allow
+    // authenticated read/write on these two):
+    //   ListingGen_Stats          one doc per published listing:
+    //     { setName, category, listingId, etsyUrl, seedDescription,
+    //       variantOf|null, shopify:{status,title,url}|null, ts, day }
+    //   ListingGen_Config/queues  the 5 "Etsy Shop Listings" ID boxes —
+    //     synced live so every terminal shows identical, accurate queues.
+    // ══════════════════════════════════════════════════════════════════
+    const fsdb = firebase.firestore();
+    const STATS_COLL = "ListingGen_Stats";
+    const QUEUES_DOC = fsdb.collection("ListingGen_Config").doc("queues");
+    const CLIENT_ID = (localStorage.getItem("lgClientId") ||
+      (() => { const v = "c" + Math.random().toString(36).slice(2, 10); localStorage.setItem("lgClientId", v); return v; })());
+
+    function dayKeyLocal(d = new Date()) {
+      const p = (n) => String(n).padStart(2, "0");
+      return `${d.getFullYear()}-${p(d.getMonth() + 1)}-${p(d.getDate())}`;
+    }
+
+    const ListingStats = {
+      // Record a published Etsy listing the moment its upload verifies DONE.
+      // Fire-and-forget: a stats failure must never touch the pipeline.
+      async recordListing({ setName, category, listingId, seedDescription, variantOf = null }) {
+        try {
+          const doc = {
+            setName: String(setName || ""),
+            category: String(category || ""),
+            listingId: String(listingId || ""),
+            etsyUrl: listingId ? `https://www.etsy.com/listing/${listingId}` : "",
+            seedDescription: String(seedDescription || ""),
+            variantOf: variantOf ? String(variantOf) : null,
+            shopify: null,
+            client: CLIENT_ID,
+            day: dayKeyLocal(),
+            ts: firebase.firestore.FieldValue.serverTimestamp()
+          };
+          const ref = await fsdb.collection(STATS_COLL).add(doc);
+          window.__lastStatsDocId = ref.id;
+          return ref.id;
+        } catch (e) {
+          console.warn("Stats record failed (pipeline unaffected):", e && e.message);
+          return null;
+        }
+      },
+      // Attach the Shopify outcome to a previously recorded listing.
+      async updateShopify(docId, { status, title, url }) {
+        if (!docId) return;
+        try {
+          await fsdb.collection(STATS_COLL).doc(docId).update({
+            shopify: { status: String(status || ""), title: String(title || ""), url: String(url || "") }
+          });
+        } catch (e) { console.warn("Stats shopify update failed:", e && e.message); }
+      }
+    };
+    window.ListingStats = ListingStats;
+
+    // ---- Queue cloud sync: the 5 ID boxes live in Firestore ----
+    let __queuePushTimer = null;
+    let __applyingRemoteQueues = false;
+    function pushQueuesToCloud() {
+      clearTimeout(__queuePushTimer);
+      __queuePushTimer = setTimeout(() => {
+        const data = { updatedBy: CLIENT_ID, updatedAt: firebase.firestore.FieldValue.serverTimestamp() };
+        (window.QUEUE_IDS_LIST || ["queueRegNecklace","queueBeadyNecklace","queueStudEarrings","queueHoopEarrings","queueCharms"]).forEach(id => {
+          const el = document.getElementById(id);
+          if (el) data[id] = el.value || "";
+        });
+        QUEUES_DOC.set(data, { merge: true }).then(() => {
+          const s = document.getElementById("dQueueSync");
+          if (s) { s.textContent = "synced " + new Date().toLocaleTimeString(); }
+        }).catch(e => {
+          const s = document.getElementById("dQueueSync");
+          if (s) s.textContent = "cloud sync unavailable";
+          console.warn("Queue cloud push failed:", e && e.message);
+        });
+      }, 900);
+    }
+    window.pushQueuesToCloud = pushQueuesToCloud;
+
+    // ---- Stats & Review UI (called by initResponsiveLayout once DOM exists) ----
+    function initListingStats() {
+      // Live queue mirror: remote edits land in the boxes instantly unless
+      // the operator is typing in that exact box right now.
+      QUEUES_DOC.onSnapshot((snap) => {
+        const d = snap.data();
+        const s = document.getElementById("dQueueSync");
+        if (!d) { if (s) s.textContent = "cloud: empty (local only)"; pushQueuesToCloud(); return; }
+        __applyingRemoteQueues = true;
+        try {
+          let changed = false;
+          (window.QUEUE_IDS_LIST || []).forEach(id => {
+            const el = document.getElementById(id);
+            if (el && typeof d[id] === "string" && el.value !== d[id] && document.activeElement !== el) {
+              el.value = d[id];
+              localStorage.setItem(id, d[id]);
+              changed = true;
+            }
+          });
+          if (changed && typeof updateListingQueueCount === "function") updateListingQueueCount();
+          if (s) s.textContent = (d.updatedBy === CLIENT_ID ? "synced (this terminal) " : "synced (remote) ") + new Date().toLocaleTimeString();
+        } finally { __applyingRemoteQueues = false; }
+      }, (e) => {
+        const s = document.getElementById("dQueueSync");
+        if (s) s.textContent = "cloud sync unavailable — local only";
+        console.warn("Queue snapshot failed (check Firestore rules for ListingGen_Config):", e && e.message);
+      });
+
+      // Live stats feed.
+      let allRows = [];
+      const body = document.getElementById("dStatsBody");
+      const render = () => {
+        if (!body) return;
+        const q = (document.getElementById("dStatsSearch")?.value || "").trim().toLowerCase();
+        const from = document.getElementById("dStatsFrom")?.value || "";
+        const to = document.getElementById("dStatsTo")?.value || "";
+        const sort = document.getElementById("dStatsSort")?.value || "desc";
+        const source = document.getElementById("dStatsSource")?.value || "all";
+        let rows = filterStatsRows(allRows, { q, from, to, source, sort });
+        const countEl = document.getElementById("dStatsCount");
+        if (countEl) countEl.textContent = rows.length + " of " + allRows.length;
+        if (!rows.length) {
+          body.innerHTML = `<tr><td colspan="6" class="dempty">${allRows.length ? "No listings match the current filters." : "No listings recorded yet — statistics begin with the next published listing."}</td></tr>`;
+          return;
+        }
+        body.innerHTML = rows.slice(0, 400).map(r => {
+          const dt = r.tsMs ? new Date(r.tsMs) : null;
+          const when = dt ? `${r.day || ""} <span class="mono">${dt.toLocaleTimeString([], {hour:"2-digit",minute:"2-digit"})}</span>` : (r.day || "—");
+          const sp = r.shopify;
+          const spCell = sp
+            ? (sp.url
+                ? `<a href="${escAttr(sp.url)}" target="_blank" rel="noopener">Open ↗</a> <span class="dchip live">LIVE</span>`
+                : `<span class="dchip ${sp.status === "FAILED" ? "fail" : "pend"}">${escHtml(sp.status || "QUEUED")}</span>`)
+            : `<span class="dchip pend">—</span>`;
+          return `<tr>
+            <td>${when}</td>
+            <td>${escHtml(r.setName || "—")}${r.variantOf ? ' <span class="dchip cat">variant</span>' : ""}</td>
+            <td><span class="dchip cat">${escHtml((r.category || "").replace(/_/g, " ") || "—")}</span></td>
+            <td>${escHtml(r.seedDescription || "—")}</td>
+            <td>${r.etsyUrl ? `<a href="${escAttr(r.etsyUrl)}" target="_blank" rel="noopener">${escHtml(r.listingId)} ↗</a>` : "—"}</td>
+            <td>${spCell}</td>
+          </tr>`;
+        }).join("");
+        // KPIs
+        const today = dayKeyLocal();
+        const weekAgo = Date.now() - 7 * 86400000;
+        const set = (id, v) => { const el = document.getElementById(id); if (el) el.textContent = String(v); };
+        set("kpiToday", allRows.filter(r => r.day === today).length);
+        const last7 = allRows.filter(r => (r.tsMs || 0) >= weekAgo);
+        set("kpi7d", last7.length);
+        set("kpiTotal", allRows.length);
+        set("kpiShopify", allRows.filter(r => r.shopify && r.shopify.url).length);
+        const catCounts = {};
+        last7.forEach(r => { const c = (r.category || "?").replace(/_/g, " "); catCounts[c] = (catCounts[c] || 0) + 1; });
+        const top = Object.entries(catCounts).sort((a, b) => b[1] - a[1])[0];
+        set("kpiTopCat", top ? `${top[0]} (${top[1]})` : "—");
+      };
+      window.__renderStats = render;
+
+      fsdb.collection(STATS_COLL).orderBy("ts", "desc").limit(600).onSnapshot((snap) => {
+        allRows = snap.docs.map(d => {
+          const x = d.data() || {};
+          return { id: d.id, ...x, tsMs: x.ts && x.ts.toMillis ? x.ts.toMillis() : 0 };
+        });
+        const s = document.getElementById("dStatsSync");
+        if (s) s.textContent = "live · " + new Date().toLocaleTimeString();
+        render();
+      }, (e) => {
+        const s = document.getElementById("dStatsSync");
+        if (s) s.textContent = "Firestore unavailable — check rules for ListingGen_Stats";
+        if (body) body.innerHTML = `<tr><td colspan="6" class="dempty">Cannot reach Firestore (${escHtml(e && e.message || "permission error")}). Statistics need read/write rules for the ListingGen_Stats and ListingGen_Config collections.</td></tr>`;
+      });
+
+      // Instant, real-time filtering — every keystroke re-renders.
+      ["dStatsSearch", "dStatsFrom", "dStatsTo", "dStatsSort", "dStatsSource"].forEach(id => {
+        const el = document.getElementById(id);
+        if (el) { el.addEventListener("input", render); el.addEventListener("change", render); }
+      });
+    }
+    window.initListingStats = initListingStats;
+
+    // Pure helper (tested): filter + sort the stats rows.
+    function filterStatsRows(rows, { q = "", from = "", to = "", source = "all", sort = "desc" } = {}) {
+      q = String(q || "").toLowerCase();
+      let out = rows.filter(r => {
+        if (q) {
+          const hay = `${r.setName || ""} ${r.seedDescription || ""} ${r.listingId || ""} ${r.category || ""} ${(r.shopify && r.shopify.title) || ""}`.toLowerCase();
+          if (!hay.includes(q)) return false;
+        }
+        if (from && (r.day || "") < from) return false;
+        if (to && (r.day || "") > to) return false;
+        if (source === "etsy" && !r.listingId) return false;
+        if (source === "shopify" && !(r.shopify && r.shopify.url)) return false;
+        if (source === "variant" && !r.variantOf) return false;
+        return true;
+      });
+      out.sort((a, b) => sort === "asc" ? (a.tsMs || 0) - (b.tsMs || 0) : (b.tsMs || 0) - (a.tsMs || 0));
+      return out;
+    }
+    window.filterStatsRows = filterStatsRows;
+
+    function escHtml(s) { return String(s == null ? "" : s).replace(/[&<>"']/g, m => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#039;" }[m])); }
+    function escAttr(s) { return escHtml(s); }
+
     const auth = firebase.auth();
 
     // Login logic
@@ -3495,6 +3843,19 @@ ANTI-REPETITION (TITLE)
                 }
             }
 
+            // --- STATISTICS: the original upload verified DONE — record it
+            // in Firestore now (fire-and-forget; never blocks the pipeline).
+            // The Shopify outcome is attached to this same doc later.
+            try {
+                window.__statsOriginalListingId = (window.__lastConsumedListing || {}).listingId || null;
+                await ListingStats.recordListing({
+                    setName,
+                    category: route ? route.category : "Regular_Necklace",
+                    listingId: window.__statsOriginalListingId,
+                    seedDescription: document.getElementById("listingDescInput")?.value || ""
+                });
+            } catch (_) {}
+
             // --- Shopify mirror upload (first pass only) ------------------
             // Push the freshly generated listing to the Shopify website as a
             // LIVE product. The server queues it in Firestore and uploads
@@ -3561,6 +3922,19 @@ ANTI-REPETITION (TITLE)
                             restoreListingId(consumed2.queueId, consumed2.listingId);
                             window.M?.toast?.({ html: `Variant upload ${outcome2} — listing ID returned to queue.` });
                         }
+                    }
+                    // STATISTICS: variant verified DONE — record it, linked
+                    // to the original listing it duplicates.
+                    if (outcome2 === "DONE") {
+                        try {
+                            await ListingStats.recordListing({
+                                setName,
+                                category: route ? route.category : "Regular_Necklace",
+                                listingId: consumed2.listingId,
+                                seedDescription: document.getElementById("listingDescInput")?.value || "",
+                                variantOf: window.__statsOriginalListingId || null
+                            });
+                        } catch (_) {}
                     }
                 }
             } else {
@@ -4266,53 +4640,107 @@ ANTI-REPETITION (TITLE)
     // ------------------------------------------------------------------
     function initResponsiveLayout() {
       const $ = (id) => document.getElementById(id);
-      const mk = (tag, id, cls) => { const e = document.createElement(tag); if (id) e.id = id; if (cls) e.className = cls; return e; };
+      const mk = (tag, id, cls, html) => { const e = document.createElement(tag); if (id) e.id = id; if (cls) e.className = cls; if (html != null) e.innerHTML = html; return e; };
       const move = (parent, ids) => ids.forEach((id) => { const e = typeof id === "string" ? $(id) : id; if (e) parent.appendChild(e); });
-      const group = (parent, ids) => { const g = mk("div", null, "rg-group"); move(g, ids); parent.appendChild(g); return g; };
+      const group = (parent, ids) => { const g = mk("div", null, "dgroup"); move(g, ids); parent.appendChild(g); return g; };
+      const card = (parent, id, title, sub) => {
+        const c = mk("section", id, "dcard");
+        c.appendChild(mk("div", null, "dhead", `<h3>${title}</h3>${sub ? `<span class="sub">${sub}</span>` : ""}`));
+        parent.appendChild(c);
+        return c;
+      };
 
-      const root = mk("div", "rgRoot");
-      const toolbar = mk("div", "rgToolbar");
-      const main = mk("div", "rgMain");
-      const left = mk("div", "rgLeft");
-      const right = mk("div", "rgRight");
-      const rightTop = mk("div", "rgRightTop");
-      const gridWrap = mk("div", "rgGridWrap");
-      root.appendChild(toolbar); root.appendChild(main);
-      main.appendChild(left); main.appendChild(right);
+      // ── Topbar: brand · live status · Shopify chip · primary controls ──
+      const topbar = mk("div", "dTopbar", "dtopbar");
+      topbar.appendChild(mk("div", null, "dbrand",
+        `<span class="logo">Brites <b>Listing Generator</b></span><span class="tag">Etsy · Shopify Automation</span>`));
+      move(topbar, ["firebaseStatus"]);
+      topbar.appendChild(mk("div", null, "dspacer"));
+      move(topbar, ["shopifyQueueStatus", "connectEtsyBtn"]);
+      group(topbar, ["toggleAuto", "skipListingBtn"]);
+      move(topbar, ["clearBtn"]);
 
-      // --- toolbar: connect | auto controls | create | duplicate | shopify | clear ---
-      group(toolbar, ["connectEtsyBtn"]);
-      group(toolbar, ["toggleAuto", "skipListingBtn"]);
-      group(toolbar, ["createListingBtn", "createListingProgress", "createListingCheck", "globalUploadCount", "expandUploadHistoryBtn"]);
-      group(toolbar, ["duplicateListingBtn", "duplicateListingProgress", "duplicateListingCheck", "duplicateModeToggle"]);
-      group(toolbar, ["shopifyModeToggle", "uploadShopifyBtn", "shopifyQueueStatus"]);
-      const spacer = mk("div", null, "rg-spacer"); toolbar.appendChild(spacer);
-      group(toolbar, ["clearBtn"]);
+      const main = mk("div", "dMain", "dmain");
 
-      // --- left column: queues -> listing description -> key phrases -> title -> description ---
-      move(left, ["etsyShopListingsContainer", "descriptionAndFileUploadContainer",
-                  "searchKeyPhrasesHeading", "container13", "generateBtn"]);
+      // ── Card: Listing Queues (Etsy Shop Listings + counts) ──
+      const cQueues = card(main, "dCardQueues", "Listing Queues",
+        `<span id="dQueueSync" class="dsync">local</span>`);
+      move(cQueues, ["etsyShopListingsContainer"]);
 
-      // TITLE + DESCRIPTION get a full-width band under both columns so the
-      // generated text has the entire page width instead of a cramped box.
-      const bottom = mk("div", "rgBottom");
-      move(bottom, ["etsyListingTitleContainer", "etsyListingDescriptionContainer"]);
+      // ── Card: Pipeline controls ──
+      const cPipe = card(main, "dCardPipeline", "Pipeline");
+      const pipeRow = mk("div", null, "dtoolrow");
+      group(pipeRow, ["createListingBtn", "createListingProgress", "createListingCheck", "globalUploadCount", "expandUploadHistoryBtn"]);
+      group(pipeRow, ["duplicateListingBtn", "duplicateListingProgress", "duplicateListingCheck", "duplicateModeToggle"]);
+      group(pipeRow, ["shopifyModeToggle", "uploadShopifyBtn"]);
+      group(pipeRow, ["photoBudgetCtl"]);
+      cPipe.appendChild(pipeRow);
 
-      // --- right column: analyze row, then preview grid + image drop side by side ---
+      // ── Two-column workspace: Content (left) · Image Studio (right) ──
+      const twocol = mk("div", null, "dtwocol");
+      main.appendChild(twocol);
+      const cContent = card(twocol, "dCardContent", "Listing Content");
+      move(cContent, ["descriptionAndFileUploadContainer", "searchKeyPhrasesHeading", "container13", "generateBtn"]);
+      const cStudio = card(twocol, "dCardStudio", "Image Studio");
+      const rightTop = mk("div", "rgRightTop", "dtoolrow");
       move(rightTop, ["analyzeMetadataBtn", "analyzeMetadataProgress", "analyzeMetadataCheck"]);
-      right.appendChild(rightTop);
+      cStudio.appendChild(rightTop);
+      const gridWrap = mk("div", "rgGridWrap");
       move(gridWrap, ["previewGridContainer", "dropZone"]);
-      right.appendChild(gridWrap);
-      main.appendChild(bottom);
+      cStudio.appendChild(gridWrap);
 
-      // insert the grid after the fixed status pill, then hide drained wrappers
-      const ref = $("firebaseStatus");
-      document.body.insertBefore(root, ref ? ref.nextSibling : document.body.firstChild);
+      // ── Full-width: Generated Output ──
+      const cOut = card(main, "dCardOutput", "Generated Output");
+      move(cOut, ["etsyListingTitleContainer", "etsyListingDescriptionContainer"]);
+
+      // ── Full-width: Statistics & Review (Firestore-backed, real-time) ──
+      const cStats = card(main, "dCardStats", "Statistics &amp; Review",
+        `<span id="dStatsSync" class="dsync">connecting…</span>`);
+      cStats.insertAdjacentHTML("beforeend", `
+        <div class="dkpis" id="dKpis">
+          <div class="dkpi"><div class="lab">Listed Today</div><div class="val" id="kpiToday">—</div></div>
+          <div class="dkpi"><div class="lab">Last 7 Days</div><div class="val" id="kpi7d">—</div></div>
+          <div class="dkpi"><div class="lab">Total Recorded</div><div class="val" id="kpiTotal">—</div></div>
+          <div class="dkpi"><div class="lab">Shopify Live</div><div class="val" id="kpiShopify">—</div></div>
+          <div class="dkpi"><div class="lab">Top Category (7d)</div><div class="val" id="kpiTopCat" style="font-size:15px">—</div></div>
+        </div>
+        <div class="dstatsbar">
+          <input type="search" id="dStatsSearch" placeholder="Search listings — set name, description, listing ID, category…" autocomplete="off">
+          <label>From <input type="date" id="dStatsFrom"></label>
+          <label>To <input type="date" id="dStatsTo"></label>
+          <label>Sort <select id="dStatsSort">
+            <option value="desc" selected>Newest first</option>
+            <option value="asc">Oldest first</option>
+          </select></label>
+          <label>Show <select id="dStatsSource">
+            <option value="all" selected>All</option>
+            <option value="etsy">Etsy</option>
+            <option value="shopify">Shopify live</option>
+            <option value="variant">Variants</option>
+          </select></label>
+          <span class="dsync" id="dStatsCount"></span>
+        </div>
+        <div class="dtablewrap">
+          <table class="dtable">
+            <thead><tr>
+              <th>Date</th><th>Set</th><th>Category</th><th>Listing Description</th>
+              <th>Etsy</th><th>Shopify</th>
+            </tr></thead>
+            <tbody id="dStatsBody"><tr><td colspan="6" class="dempty">Waiting for Firestore…</td></tr></tbody>
+          </table>
+        </div>`);
+
+      // Assemble: topbar first, then the card canvas.
+      document.body.insertBefore(main, document.body.firstChild);
+      document.body.insertBefore(topbar, main);
       ["topButtons", "belowSearch", "userProvidedKeyPhrasesContainer"].forEach((id) => {
         const e = $(id);
         if (e && e.querySelectorAll("button, input, textarea, select").length === 0) e.classList.add("rg-drained");
       });
       // openConfigBtn stays in place (display:none via CSS in responsive mode)
+
+      // Real-time module boots after the DOM shell exists.
+      if (typeof initListingStats === "function") { try { initListingStats(); } catch (e) { console.warn("Stats init failed:", e); } }
     }
 
     // 3.5 Wire up modal + save handler (same ids as shipping-1)
@@ -5416,6 +5844,9 @@ https://www.etsy.com/your/shops/me/listing-editor/edit/1822973998
         localStorage.setItem(id, parsed);
       }
       updateListingQueueCount();
+      // Mirror to Firestore (debounced) — the queues are shared state now,
+      // so any terminal shows the same accurate numbers in real time.
+      if (typeof pushQueuesToCloud === "function") pushQueuesToCloud();
     }
 
     function restoreDataAfterRedirect() {
@@ -8585,6 +9016,10 @@ RULES:
       async function queueShopifyUpload(category) {
         if (busy) { window.M?.toast?.({ html: "Shopify capture already in progress…" }); return; }
         busy = true;
+        // STATISTICS linkage: the automation records the Etsy stat doc just
+        // before calling us, so capture its id NOW (the variant pass will
+        // overwrite window.__lastStatsDocId before our background poll ends).
+        const statsDocId = window.__lastStatsDocId || null;
         try {
           category = category || inferCategory();
           setShopifyStage(10, "Generating Shopify title, description, tags (AI)…");
@@ -8642,11 +9077,19 @@ RULES:
                   : `Shopify: queued (${j.variantCount} variants) — background upload in progress.`
               });
               if (typeof refreshShopifyStatus === "function") refreshShopifyStatus();
+              try {
+                window.ListingStats?.updateShopify(statsDocId, {
+                  status: mine ? "LIVE" : "QUEUED",
+                  title: fields.title,
+                  url: (mine && mine.handle) ? ("https://britesjewelry.com/products/" + mine.handle) : ""
+                });
+              } catch (_) {}
               return j;
             } catch (e) {
               setShopifyStage(100, `Shopify upload failed: “${fields.title}” — ${(e && e.message) || e}`, true);
               window.M?.toast?.({ html: "Shopify upload failed: " + ((e && e.message) || e) });
               console.error("Shopify send failed (Etsy pipeline unaffected):", e);
+              try { window.ListingStats?.updateShopify(statsDocId, { status: "FAILED", title: fields.title, url: "" }); } catch (_) {}
             }
           };
           window.__spSendChain = (window.__spSendChain || Promise.resolve()).then(send);
