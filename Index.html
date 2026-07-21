@@ -3067,27 +3067,33 @@ ANTI-REPETITION (TITLE)
         
         while (retries > 0) {
             try {
-                // Proactively list ALL forbidden words to feed into the prompt
-                const forbiddenWords = "gold, golden, silver, sterling, charm, pendant, silhouette, canine, feline, avian, equine, bovine, ursine, featuring, dainty, small, large, cute, red, blue, green, yellow, pink, purple, orange, black, white, grey, brown";
+                // Proactively list ALL forbidden words to feed into the prompt.
+                // The second group bans vague marketing fluff — warmth must
+                // come from SPECIFICITY (breed, species, characterful action),
+                // never from empty adjectives that dilute search keywords.
+                const forbiddenWords = "gold, golden, silver, sterling, charm, pendant, silhouette, canine, feline, avian, equine, bovine, ursine, featuring, dainty, small, large, cute, red, blue, green, yellow, pink, purple, orange, black, white, grey, brown, elegant, beautiful, lovely, timeless, stunning, gorgeous, chic, minimalist, delicate, adorable";
                 
                 // Explicitly map out the rules so the AI can't miss them
-                const promptText = `Analyze this image and return exactly two highly descriptive words identifying what the charm actually depicts. Prefer a visible pose, action, orientation, species/type, or defining object form plus the subject noun, such as “Sitting Dog”, “Flying Bird”, “Crescent Moon”, “Soccer Ball”, or “Open Book”. If a human ear is present in the image, you MUST strictly focus ONLY on the charm attached to the Ear Lobe, completely disregarding any other charms positioned elsewhere on the ear.
+                const promptText = `Identify what this jewelry charm depicts in 2-3 words. Your words become the heart of a product title for handmade charm jewelry bought by women aged 18-50 as meaningful gifts for occasions — the identification must feel warm, specific, and personal, the way the buyer herself would describe it, while staying literally true to the image. If a human ear is present in the image, you MUST strictly focus ONLY on the charm attached to the Ear Lobe, completely disregarding any other charms positioned elsewhere on the ear.
+
+                  PRIORITY ORDER:
+                  1. SPECIFIC IDENTITY FIRST. Name the exact breed, species, flower variety, or object type whenever the shape makes it recognizable: "Westie Terrier", "Dachshund", "Corgi", "Hummingbird", "Sunflower", "Monstera Leaf", "Sea Turtle". A specific name is what a shopper searching for HER dog's breed or HER favorite flower types into Etsy — it sells; a generic word does not. Only fall back to the generic subject ("Dog", "Bird", "Flower") when the design is genuinely too abstract to identify further.
+                  2. CHARACTER SECOND. You may add ONE modifier, and only when it reflects something actually visible that adds feeling: a lively action ("Leaping", "Running", "Sleeping", "Curled", "Soaring", "Blooming") or a true characterful trait ("Playful", "Scruffy", "Perched"). NEVER default to "Standing" or "Sitting" — if the pose is unremarkable, omit the pose entirely and spend the words on a more specific identity instead. "Dachshund" alone beats "Standing Dog" every time.
 
                   STRICT RULES:
-                  1. NEVER describe the rendering style. The word “silhouette” is forbidden.
+                  1. NEVER describe the rendering style. The word "silhouette" is forbidden.
                   2. NEVER use clinical or taxonomic category labels. Say Dog, not canine; Cat, not feline; Bird, not avian; Horse, not equine.
                   3. NEVER use material colors or any color names.
-                  4. NEVER use ANY of these exact words: ${forbiddenWords}.
+                  4. NEVER use ANY of these exact words: ${forbiddenWords}. Warmth comes from specificity, never from vague praise adjectives.
                   5. Disregard the chain, background, model, or scale.
-                  6. Be concrete and visually specific. Prefer a visible pose/action plus the familiar subject noun, such as “Standing Dog” or “Sitting Cat.”
-                  7. Use natural words a jewelry shopper would search, not object-recognition vocabulary.
-                  8. Output plain text, exactly two words, no punctuation.`;
+                  6. Every word must be concrete, visually true, and something a real shopper would type into a search box.
+                  7. Output plain text, 2 to 3 words, no punctuation.`;
                           
                 const payload = {
                     model: window.modelName || "gpt-5.4-mini",
                     input: [
                         // Reinforce the negative constraints in the system prompt
-                        { role: "system", content: `Return ONLY two descriptive words. No punctuation. You are strictly forbidden from using any of these words: ${forbiddenWords}.` },
+                        { role: "system", content: `Return ONLY 2-3 concrete descriptive words identifying the charm's subject — prefer exact breed/species/variety names over generic nouns. No punctuation. You are strictly forbidden from using any of these words: ${forbiddenWords}.` },
                         {
                             role: "user",
                             content: [
@@ -3110,19 +3116,22 @@ ANTI-REPETITION (TITLE)
                 rawText = rawText.replace(/[^a-zA-Z0-9\s]/g, "").trim(); 
                 
                 // Hardcoded fail-safe: Strip banned words if the AI disobeys the strict prompt
-                const bannedRegex = /\b(gold|golden|silver|sterling|charm|pendant|silhouette|canine|feline|avian|equine|bovine|ursine|featuring|dainty|small|large|cute|red|blue|green|yellow|pink|purple|orange|black|white|grey|brown)\b/gi;
+                const bannedRegex = /\b(gold|golden|silver|sterling|charm|pendant|silhouette|canine|feline|avian|equine|bovine|ursine|featuring|dainty|small|large|cute|red|blue|green|yellow|pink|purple|orange|black|white|grey|brown|elegant|beautiful|lovely|timeless|stunning|gorgeous|chic|minimalist|delicate|adorable)\b/gi;
                 rawText = rawText.replace(bannedRegex, "").replace(/\s+/g, " ").trim();
 
                 // Split the remaining text into an array of valid words
                 const wordsArray = rawText.split(" ").filter(w => w.length > 0);
 
-                // Validation check: If we have less than 2 words, force a retry.
-                if (wordsArray.length < 2) {
-                    throw new Error(`AI returned fewer than 2 valid words after filtering: '${rawText}'`);
+                // Validation: at least one real word must survive filtering.
+                // One strong specific word ("Dachshund") is a BETTER seed than
+                // two generic ones ("Standing Dog"), so a single word is
+                // accepted rather than retried into filler.
+                if (wordsArray.length < 1) {
+                    throw new Error(`AI returned no valid words after filtering: '${rawText}'`);
                 }
 
-                // Strictly grab the first two words just in case the AI returned 3+
-                return wordsArray.slice(0, 2).join(" ");
+                // Cap at three words (specificity + one characterful modifier)
+                return wordsArray.slice(0, 3).join(" ");
                 
             } catch (e) {
                 console.warn(`Charm analysis error. Retries left: ${retries - 1}`, e);
