@@ -1351,10 +1351,12 @@
     html.responsive .progress{background:var(--line2); border-radius:6px}
     html.responsive .progress .determinate, html.responsive .progress .indeterminate{background:var(--gold)}
 
-    /* ── Round 9: the Pipeline console now owns the whole lower rail
-       (stat blocks retired to Statistics view). Scrolls as one region
-       behind the same thin hover-reveal scrollbar. ── */
-    .drail__pipeline{padding:14px 16px 15px; border-top:1px solid var(--velvetLine); flex:1 1 auto; min-height:0; overflow-y:auto; display:flex; flex-direction:column;
+    /* ── Round 9 (revised round 11): pipeline header (label + overall
+       progress) is pinned above the scroll region so it can never be
+       clipped mid-scroll; the steps/session/activity scroll below it. ── */
+    .drail__pipehead{padding:14px 16px 12px; border-top:1px solid var(--velvetLine); flex:0 0 auto}
+    .drail__pipehead .dr-overall{margin:8px 0 0}
+    .drail__pipeline{padding:4px 16px 15px; flex:1 1 auto; min-height:0; overflow-y:auto; display:flex; flex-direction:column;
       scrollbar-width:thin; scrollbar-color:rgba(233,227,215,.18) transparent}
     .drail__pipeline::-webkit-scrollbar{width:5px}
     .drail__pipeline::-webkit-scrollbar-track{background:transparent}
@@ -1383,8 +1385,14 @@
     .dr-sval-skip{color:var(--gold2)}
     .dr-sval-err{color:#e08a68}
     .dr-slab{font-size:8.5px; letter-spacing:.1em; text-transform:uppercase; color:#8c8476; font-weight:700}
-    /* activity log */
-    .dr-actlabel{margin-bottom:8px}
+    /* activity log — collapsible, collapsed by default */
+    .dr-actlabel{margin:0 0 4px; display:flex; align-items:center; gap:7px; background:none; border:0; padding:6px 0; cursor:pointer; width:100%;
+      font-size:9.5px; letter-spacing:.14em; text-transform:uppercase; color:#8c8476; font-weight:700; text-align:left}
+    .dr-actlabel:hover{color:#cfc7b8}
+    .dr-act-chev{display:inline-block; font-size:10px; transition:transform .15s ease}
+    .dr-actlabel[aria-expanded="true"] .dr-act-chev{transform:rotate(90deg)}
+    .dr-act-count{margin-left:auto; font-family:var(--mono); font-size:9.5px; letter-spacing:0; color:#635d51}
+    .dr-activity[hidden]{display:none}
     .dr-activity{flex:1 1 auto; min-height:60px; display:flex; flex-direction:column; gap:0}
     .dr-act{display:flex; gap:8px; padding:3.5px 0; border-top:1px solid rgba(255,255,255,.04); font-size:10.5px; line-height:1.35; align-items:baseline}
     .dr-act:first-child{border-top:0}
@@ -1433,7 +1441,7 @@
       0%,100%{box-shadow:0 0 0 4px rgba(202,168,97,.22)}
       50%{box-shadow:0 0 0 7px rgba(202,168,97,.08)}
     }
-    .dapp.collapsed .drail__pipeline{display:none}
+    .dapp.collapsed .drail__pipeline, .dapp.collapsed .drail__pipehead{display:none}
 
     /* ── Round 4: Image Studio now gets the full card width (Analyze
        Photos row + Image Drop zone retired) — let the preview grid grow
@@ -4890,13 +4898,15 @@ ANTI-REPETITION (TITLE)
           <button id="dNavWork" class="dnav-active" data-view-btn="work"><span class="ic">◧</span><span class="lbl">Workspace</span></button>
           <button id="dNavStats" data-view-btn="stats"><span class="ic">◫</span><span class="lbl">Statistics &amp; Review</span><span id="dNavStatsBadge" class="badge" style="display:none">0</span></button>
         </div>
-        <div class="drail__pipeline">
+        <div class="drail__pipehead">
           <div class="dr-plabel">Pipeline <span class="dr-pset" id="railPipelineSet">Idle</span></div>
           <div class="dr-overall">
             <div class="dr-overall-row"><span id="railOverallStep">—</span><span id="railOverallPct">0%</span></div>
             <div class="dr-overall-track"><div class="dr-overall-fill" id="railOverallFill"></div></div>
             <div class="dr-overall-row dr-overall-sub"><span id="railSetElapsed"></span><span id="railQueueChips"></span></div>
           </div>
+        </div>
+        <div class="drail__pipeline">
           <ol class="dsteps" id="dSteps">
             <li class="dstep dstep-pending" data-step="prep"><span class="dstep-dot"></span><div class="dstep-txt"><span class="dstep-lbl">Preparing Images<span class="dstep-time"></span></span><span class="dstep-sub"></span><span class="dstep-bar"><span class="dstep-bar-fill"></span></span></div></li>
             <li class="dstep dstep-pending" data-step="identify"><span class="dstep-dot"></span><div class="dstep-txt"><span class="dstep-lbl">Identifying Charm<span class="dstep-time"></span></span><span class="dstep-sub"></span><span class="dstep-bar"><span class="dstep-bar-fill"></span></span></div></li>
@@ -4913,8 +4923,8 @@ ANTI-REPETITION (TITLE)
             <div class="dr-schip"><span class="dr-sval dr-sval-err" id="railSessErrors">0</span><span class="dr-slab">Errors</span></div>
             <div class="dr-schip"><span class="dr-sval" id="railSessAvg">—</span><span class="dr-slab">Avg / set</span></div>
           </div>
-          <div class="dr-plabel dr-actlabel">Activity</div>
-          <div class="dr-activity" id="railActivity"></div>
+          <button type="button" class="dr-actlabel" id="railActivityToggle" aria-expanded="false"><span class="dr-act-chev">▸</span>Activity<span class="dr-act-count" id="railActivityCount"></span></button>
+          <div class="dr-activity" id="railActivity" hidden></div>
         </div>
         <div id="dRailHiddenStats" style="display:none" aria-hidden="true">
           <span id="railQueueIds">—</span><span id="railFolders">—</span><span id="railToday">—</span><span id="railTotal">—</span>
@@ -5138,7 +5148,25 @@ ANTI-REPETITION (TITLE)
         row.querySelector(".m").textContent = msg;
         box.insertBefore(row, box.firstChild);
         while (box.children.length > 60) box.removeChild(box.lastChild);
+        const cnt = document.getElementById("railActivityCount");
+        if (cnt) cnt.textContent = String(box.children.length);
       }
+      // Activity dropdown (collapsed by default, persisted)
+      (function () {
+        const btn = document.getElementById("railActivityToggle");
+        const box = document.getElementById("railActivity");
+        if (!btn || !box) return;
+        const apply = (open) => {
+          box.hidden = !open;
+          btn.setAttribute("aria-expanded", open ? "true" : "false");
+        };
+        apply(localStorage.getItem("railActivityOpen") === "1");
+        btn.addEventListener("click", () => {
+          const open = box.hidden;
+          localStorage.setItem("railActivityOpen", open ? "1" : "0");
+          apply(open);
+        });
+      })();
       function railSetSession() {
         const t = (id) => document.getElementById(id);
         if (t("railSessDone")) t("railSessDone").textContent = String(railT.session.done);
@@ -5258,7 +5286,10 @@ ANTI-REPETITION (TITLE)
       window.updateRailStepper = function updateRailStepper(status, type) {
         const s = String(status || "").trim();
         let m;
-
+        // The Activity log records OUTCOMES and attention-worthy events
+        // only (start/done/skip/pause/fail). Per-stage progress chatter is
+        // already visible live on the stepper — logging it too just
+        // buries the entries that matter.
         if ((m = s.match(/^Processing:\s*(.+)$/))) {
           railResetSteps();
           railSetLabel(m[1]);
@@ -5268,23 +5299,21 @@ ANTI-REPETITION (TITLE)
           railLog("Started: " + m[1]);
           return;
         }
-        if (s === "Downloading images...") { railSetStep("prep", "active", "Downloading photos…"); railLog(s); return; }
-        if (s === "Analyzing Details...") { railDoneBefore("identify"); railSetStep("identify", "active", "Reading charm details…"); railLog(s); return; }
+        if (s === "Downloading images...") { railSetStep("prep", "active", "Downloading photos…"); return; }
+        if (s === "Analyzing Details...") { railDoneBefore("identify"); railSetStep("identify", "active", "Reading charm details…"); return; }
         if (/^PAUSED/.test(s)) { railSetStep("identify", "active", s.replace(/^PAUSED\s*—\s*/, "")); railLog(s); return; }
-        if (/^Batch[- ]approved description injected/.test(s)) { railSetStep("identify", "active", "Description approved"); railLog("Batch-approved description injected"); return; }
+        if (/^Batch[- ]approved description injected/.test(s)) { railSetStep("identify", "active", "Description approved"); return; }
         if (/^Batch approved:/.test(s)) { railSetStep("identify", "active", s); railLog(s, "ok"); return; }
-        if (/^Batch review cancelled/.test(s)) { railSetStep("identify", "active", "Using single-listing approval"); railLog(s); return; }
+        if (/^Batch review cancelled/.test(s)) { railSetStep("identify", "active", "Using single-listing approval"); return; }
         if (s === "Generating Info...") {
           railDoneBefore("tags");
           ["tags", "title", "desc"].forEach(k => railSetStep(k, "active", "Writing tags, title & description…"));
-          railLog("Generating tags, title & description…");
           return;
         }
-        if (s === "Key phrases empty — retrying...") { railSetStep("tags", "active", "Retrying tags…"); railLog(s); return; }
+        if (s === "Key phrases empty — retrying...") { railSetStep("tags", "active", "Retrying tags…"); return; }
         if (s === "Title/description incomplete — retrying...") {
           railSetStep("title", "active", "Retrying…");
           railSetStep("desc", "active", "Retrying…");
-          railLog(s);
           return;
         }
         if ((m = s.match(/^Generation failed \(([^)]+)\):/))) {
@@ -5296,20 +5325,21 @@ ANTI-REPETITION (TITLE)
           railLog(s, "err");
           return;
         }
-        if (s === "Analyzing Metadata...") { railDoneBefore("metadata"); railSetStep("metadata", "active", "Cropping & tagging photos…"); railLog(s); return; }
-        if (s === "Uploading Original...") { railDoneBefore("etsy"); railSetStep("etsy", "active", "Publishing photos to Etsy…"); railLog("Uploading listing to Etsy…"); return; }
+        if (s === "Analyzing Metadata...") { railDoneBefore("metadata"); railSetStep("metadata", "active", "Cropping & tagging photos…"); return; }
+        if (s === "Uploading Original...") { railDoneBefore("etsy"); railSetStep("etsy", "active", "Publishing photos to Etsy…"); return; }
         if (/^Error: No Listing ID/.test(s)) { railSetStep("etsy", "error", "No Listing ID available"); railT.session.errors++; railSetSession(); railLog(s, "err"); return; }
         if (/^Upload failed twice/.test(s)) { railSetStep("etsy", "error", "Failed twice — skipped"); railT.session.errors++; railT.session.skipped++; railSetSession(); railLog(s, "err"); return; }
         if (/^Upload \S+: .* kept for retry/.test(s)) { railSetStep("etsy", "error", "Upload issue — retrying later"); railT.session.errors++; railSetSession(); railLog(s, "err"); return; }
-        if (/^Capturing for Shopify/.test(s)) { railDoneBefore("shopify"); railSetStep("shopify", "active", "Queuing Shopify listing…"); railLog("Capturing listing for Shopify…"); return; }
-        if (s === "Duplicating...") { railSetStep("shopify", "active", "Duplicating for a second listing…"); railLog("Duplicating for variant listing…"); return; }
-        if (s === "Uploading Variant...") { railSetStep("shopify", "active", "Uploading variant listing…"); railLog(s); return; }
-        if (s === "Single mode: skipping duplicate") { railSetStep("shopify", "active", "Single mode — no duplicate"); railLog(s); return; }
+        if (/^Capturing for Shopify/.test(s)) { railDoneBefore("shopify"); railSetStep("shopify", "active", "Queuing Shopify listing…"); return; }
+        if (s === "Duplicating...") { railSetStep("shopify", "active", "Duplicating for a second listing…"); return; }
+        if (s === "Uploading Variant...") { railSetStep("shopify", "active", "Uploading variant listing…"); return; }
+        if (s === "Single mode: skipping duplicate") { railSetStep("shopify", "active", "Single mode — no duplicate"); return; }
         if ((m = s.match(/^Done:\s*([^(]+)/))) {
           railDoneBefore("shopify"); railSetStep("shopify", "done", "Done — archiving…");
-          if (railT.setStart) railT.session.durations.push((Date.now() - railT.setStart) / 1000);
+          let dur = null;
+          if (railT.setStart) { dur = (Date.now() - railT.setStart) / 1000; railT.session.durations.push(dur); }
           railT.session.done++; railSetSession();
-          railLog("✓ Done: " + m[1].trim(), "ok");
+          railLog("✓ Done: " + m[1].trim() + (dur != null ? " (" + railFmtSec(dur) + ")" : ""), "ok");
           railSetLabel("Idle");
           railT.setStart = null;
           return;
@@ -5318,13 +5348,12 @@ ANTI-REPETITION (TITLE)
           railResetSteps(); railSetLabel("Idle");
           railT.session.skipped++; railSetSession();
           railT.setStart = null;
-          railLog(s);
+          railLog("Skipped: " + (window.__currentProcessingSetName || "current listing"));
           return;
         }
         if (/^Skipping current listing/.test(s)) {
           const active = railActiveStep();
           if (active) railSetStep(active, "active", "Skipping…");
-          railLog(s);
           return;
         }
         if (/^Auto Error/.test(s)) {
@@ -5340,8 +5369,6 @@ ANTI-REPETITION (TITLE)
           if (/^(Auto Started|Auto Paused|Scan Error)/.test(s)) railLog(s, /Error/.test(s) ? "err" : "");
           return;
         }
-        // anything unmatched still lands in the activity feed
-        if (s) railLog(s);
       };
 
       // Real-time module boots after the DOM shell exists.
