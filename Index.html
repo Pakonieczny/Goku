@@ -1252,6 +1252,10 @@
     .dchip.pend{background:var(--goldSoft); color:#7a5a1d}
     .dchip.fail{background:var(--claySoft); color:#8a3a26}
     .dchip.cat{background:var(--slateSoft); color:#33525d}
+    .dretry-btn{display:inline-block; margin-left:5px; padding:2px 10px; border-radius:20px; font-size:10.5px; font-weight:700;
+      background:transparent; border:1px solid var(--line); color:var(--ink70); cursor:pointer; transition:opacity .15s, background .15s}
+    .dretry-btn:hover:not(:disabled){background:var(--card2)}
+    .dretry-btn:disabled{opacity:.55; cursor:default}
     .dsync{font-family:var(--mono); font-size:11px; color:var(--ink45)}
     .dempty{padding:26px; text-align:center; color:var(--ink45); font-size:13px}
 
@@ -2133,11 +2137,11 @@ ANTI-REPETITION (TITLE)
         }
       },
       // Attach the Shopify outcome to a previously recorded listing.
-      async updateShopify(docId, { status, title, url }) {
+      async updateShopify(docId, { status, title, url, jobId }) {
         if (!docId) return;
         try {
           await fsdb.collection(STATS_COLL).doc(docId).update({
-            shopify: { status: String(status || ""), title: String(title || ""), url: String(url || "") }
+            shopify: { status: String(status || ""), title: String(title || ""), url: String(url || ""), jobId: jobId ? String(jobId) : null }
           });
         } catch (e) { console.warn("Stats shopify update failed:", e && e.message); }
       }
@@ -2197,6 +2201,7 @@ ANTI-REPETITION (TITLE)
 
       // Live stats feed.
       let allRows = [];
+      const retryingRows = new Set(); // row ids currently mid-retry — survives re-renders
       const body = document.getElementById("dStatsBody");
       const render = () => {
         if (!body) return;
@@ -2216,10 +2221,14 @@ ANTI-REPETITION (TITLE)
           const dt = r.tsMs ? new Date(r.tsMs) : null;
           const when = dt ? `${r.day || ""} <span class="mono">${dt.toLocaleTimeString([], {hour:"2-digit",minute:"2-digit"})}</span>` : (r.day || "—");
           const sp = r.shopify;
+          const retrying = retryingRows.has(r.id);
           const spCell = sp
             ? (sp.url
                 ? `<a href="${escAttr(sp.url)}" target="_blank" rel="noopener">Open ↗</a> <span class="dchip live">LIVE</span>`
-                : `<span class="dchip ${sp.status === "FAILED" ? "fail" : "pend"}">${escHtml(sp.status || "QUEUED")}</span>`)
+                : `<span class="dchip ${sp.status === "FAILED" ? "fail" : "pend"}">${escHtml(sp.status || "QUEUED")}</span>` +
+                  (sp.status === "FAILED" || sp.status === "QUEUED"
+                    ? ` <button type="button" class="dretry-btn" data-row-id="${escAttr(r.id)}" data-job-id="${escAttr(sp.jobId || "")}" title="Requeue this listing's Shopify upload"${retrying ? " disabled" : ""}>${retrying ? "Retrying…" : "Retry"}</button>`
+                    : ""))
             : `<span class="dchip pend">—</span>`;
           return `<tr>
             <td>${when}</td>
@@ -2295,6 +2304,87 @@ ANTI-REPETITION (TITLE)
       ["dStatsSearch", "dStatsFrom", "dStatsTo", "dStatsSort", "dStatsSource"].forEach(id => {
         const el = document.getElementById(id);
         if (el) { el.addEventListener("input", render); el.addEventListener("change", render); }
+      });
+
+      // Retry button (FAILED/QUEUED Shopify cells) — delegated so it keeps
+      // working across re-renders. Requeues + drains server-side (the same
+      // mechanism the old Shopify Uploads panel's Retry/Drain buttons used),
+      // then — when the row carries a jobId — polls that ONE job for its
+      // outcome and writes it back via ListingStats.updateShopify(), which
+      // the live onSnapshot listener above turns into an instant table
+      // refresh. Rows recorded before this feature shipped have no jobId;
+      // for those the requeue still happens, but the row itself won't
+      // auto-update since there's nothing to poll against.
+      if (body) body.addEventListener("click", async (e) => {
+        const btn = e.target.closest(".dretry-btn");
+        if (!btn || btn.disabled) return;
+        const rowId = btn.dataset.rowId;
+        let jobId = btn.dataset.jobId || "";
+        const wasQueued = btn.closest("tr")?.querySelector(".dchip.pend");
+        retryingRows.add(rowId);
+        render();
+        const SP_FN = "/.netlify/functions/shopifyListingUpload";
+        try {
+          // A QUEUED job isn't broken — draining is the right nudge.
+          // A FAILED job needs requeuing first, then a drain to move now
+          // rather than waiting for the next scheduled cron pass.
+          if (!wasQueued) {
+            await fetch(SP_FN, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ op: "retryFailed" }) }).catch(() => {});
+          }
+          await fetch(SP_FN, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ op: "drain" }) }).catch(() => {});
+          if (typeof window.refreshShopifyStatus === "function") window.refreshShopifyStatus();
+          if (!jobId) {
+            // Pre-feature row, no jobId on file. If retryFailed() just
+            // flipped an existing FAILED job back to QUEUED, that same
+            // job is still findable by title (+ category, when known) in
+            // the recent list — adopt its id so this row (and every
+            // retry after this one) becomes trackable like a normal row.
+            const row = allRows.find(x => x.id === rowId);
+            const wantTitle = row && row.shopify && row.shopify.title;
+            if (wantTitle) {
+              await new Promise(res => setTimeout(res, 3000)); // let the requeue land
+              try {
+                const sr = await fetch(SP_FN + "?op=status&recent=150");
+                const sj = await sr.json();
+                const candidates = (sj.recent || []).filter(x =>
+                  x.title === wantTitle && (!row.category || !x.category || x.category === row.category)
+                );
+                candidates.sort((a, b) => (b.createdAtMs || 0) - (a.createdAtMs || 0));
+                if (candidates.length) jobId = candidates[0].id;
+              } catch (_) {}
+            }
+            if (!jobId) {
+              window.M?.toast?.({ html: "Requeued — couldn't find a matching job to track live, so watch the Shopify chip/Statistics for the result." });
+              return;
+            }
+            // Found it — attach the id now so future retries of this row
+            // track properly even if this poll doesn't catch the finish.
+            try { await window.ListingStats?.updateShopify(rowId, { status: row.shopify.status, title: wantTitle, url: row.shopify.url || "", jobId }); } catch (_) {}
+            window.M?.toast?.({ html: "Found the matching job — now tracking it live." });
+          } else {
+            window.M?.toast?.({ html: "Retrying — watching for the result…" });
+          }
+          for (let t = 0; t < 60; t++) {
+            await new Promise(res => setTimeout(res, 6000));
+            try {
+              const sr = await fetch(SP_FN + "?op=status&recent=60");
+              const sj = await sr.json();
+              const job = (sj.recent || []).find(x => x.id === jobId);
+              if (job && (job.status === "DONE" || job.status === "FAILED")) {
+                await window.ListingStats?.updateShopify(rowId, {
+                  status: job.status === "DONE" ? "LIVE" : "FAILED",
+                  title: job.title || "",
+                  url: job.handle ? ("https://britesjewelry.com/products/" + job.handle) : "",
+                  jobId
+                });
+                break;
+              }
+            } catch (_) {}
+          }
+        } finally {
+          retryingRows.delete(rowId);
+          render();
+        }
       });
     }
     window.initListingStats = initListingStats;
@@ -9684,58 +9774,88 @@ RULES:
             source: "index-app"
           };
           // Detached, serialized send — the caller (auto pilot) is free as
-          // soon as capture is done.
-          const send = async () => {
-            try {
-              setShopifyStage(70, `Uploading “${fields.title}” — product, variants, collections, set matching (vision)…`);
-              const r = await fetch(FN, {
-                method: "POST",
-                headers: { "Content-Type": "application/json" },
-                body: JSON.stringify({ op: "enqueue", payload })
-              });
-              const j = await r.json();
-              if (!r.ok || j.ok === false) throw new Error((j.errors && j.errors.join("; ")) || j.error || ("HTTP " + r.status));
-              // The server drains in the BACKGROUND now (product creation +
-              // vision set-matching exceed the sync limit) — poll the job's
-              // status for the real outcome (up to ~6 min).
-              setShopifyStage(85, `Uploading “${fields.title}” in background — product, variants, collections, set matching (vision)…`);
-              let mine = null;
-              for (let t = 0; t < 60; t++) {
-                await new Promise(res => setTimeout(res, 6000));
-                try {
-                  const sr = await fetch(FN + "?op=status&recent=20");
-                  const sj = await sr.json();
-                  const job = (sj.recent || []).find(x => x.id === j.jobId);
-                  if (job && (job.status === "DONE" || job.status === "FAILED")) { mine = job; break; }
-                } catch (_) {}
-              }
-              if (mine && mine.status === "FAILED") throw new Error(mine.error || "upload failed (see panel)");
-              const setTxt = mine && mine.setLinks && mine.setLinks.partners && mine.setLinks.partners.length
-                ? ` · set: ${mine.setLinks.partners.length} partner${mine.setLinks.partners.length > 1 ? "s" : ""} linked`
-                : "";
-              setShopifyStage(100, mine
-                ? `LIVE: “${fields.title}” — ${j.variantCount} variants, tier ${j.tier}${setTxt}.`
-                : `Queued: “${fields.title}” (${j.variantCount} variants) — uploads in background; panel shows LIVE when done.`);
-              window.M?.toast?.({
-                html: mine
-                  ? `Shopify: LIVE — ${j.variantCount} variants${setTxt}.`
-                  : `Shopify: queued (${j.variantCount} variants) — background upload in progress.`
-              });
-              if (typeof refreshShopifyStatus === "function") refreshShopifyStatus();
+          // soon as capture is done. One automatic retry on failure (network
+          // blip, non-ok response, or an explicit FAILED job) — the enqueue
+          // + poll logic lives in attemptSend() so the retry re-runs the
+          // exact same steps. Note: if a "failed" enqueue actually reached
+          // the server (rare — most network-level failures never do), the
+          // retry could create a second Shopify product for the same set;
+          // this wasn't guarded against since it mirrors what you asked for.
+          const attemptSend = async () => {
+            setShopifyStage(70, `Uploading “${fields.title}” — product, variants, collections, set matching (vision)…`);
+            const r = await fetch(FN, {
+              method: "POST",
+              headers: { "Content-Type": "application/json" },
+              body: JSON.stringify({ op: "enqueue", payload })
+            });
+            const j = await r.json();
+            if (!r.ok || j.ok === false) throw new Error((j.errors && j.errors.join("; ")) || j.error || ("HTTP " + r.status));
+            // The server drains in the BACKGROUND now (product creation +
+            // vision set-matching exceed the sync limit) — poll the job's
+            // status for the real outcome (up to ~6 min).
+            setShopifyStage(85, `Uploading “${fields.title}” in background — product, variants, collections, set matching (vision)…`);
+            let mine = null;
+            for (let t = 0; t < 60; t++) {
+              await new Promise(res => setTimeout(res, 6000));
               try {
-                window.ListingStats?.updateShopify(statsDocId, {
-                  status: mine ? "LIVE" : "QUEUED",
-                  title: fields.title,
-                  url: (mine && mine.handle) ? ("https://britesjewelry.com/products/" + mine.handle) : ""
-                });
+                const sr = await fetch(FN + "?op=status&recent=20");
+                const sj = await sr.json();
+                const job = (sj.recent || []).find(x => x.id === j.jobId);
+                if (job && (job.status === "DONE" || job.status === "FAILED")) { mine = job; break; }
               } catch (_) {}
-              return j;
-            } catch (e) {
-              setShopifyStage(100, `Shopify upload failed: “${fields.title}” — ${(e && e.message) || e}`, true);
-              window.M?.toast?.({ html: "Shopify upload failed: " + ((e && e.message) || e) });
-              console.error("Shopify send failed (Etsy pipeline unaffected):", e);
-              try { window.ListingStats?.updateShopify(statsDocId, { status: "FAILED", title: fields.title, url: "" }); } catch (_) {}
             }
+            if (mine && mine.status === "FAILED") {
+              // We do have a jobId at this point (the enqueue succeeded;
+              // the job itself later failed) — attach it so a Retry click
+              // from the Statistics table later can find this exact job.
+              const err = new Error(mine.error || "upload failed (see panel)");
+              err.jobId = j.jobId;
+              throw err;
+            }
+            return { j, mine };
+          };
+          const send = async () => {
+            let result;
+            try {
+              result = await attemptSend();
+            } catch (e1) {
+              console.warn("Shopify send failed, retrying once:", e1);
+              setShopifyStage(70, `Retrying Shopify upload for “${fields.title}”…`);
+              await new Promise(res => setTimeout(res, 5000));
+              try {
+                result = await attemptSend();
+              } catch (e2) {
+                setShopifyStage(100, `Shopify upload failed: “${fields.title}” — ${(e2 && e2.message) || e2}`, true);
+                window.M?.toast?.({ html: "Shopify upload failed: " + ((e2 && e2.message) || e2) });
+                console.error("Shopify send failed after 1 retry (Etsy pipeline unaffected):", e2);
+                // jobId (when the failure happened after enqueue) lets the
+                // Statistics table's Retry button requeue this exact job.
+                try { window.ListingStats?.updateShopify(statsDocId, { status: "FAILED", title: fields.title, url: "", jobId: (e2 && e2.jobId) || null }); } catch (_) {}
+                return;
+              }
+            }
+            const { j, mine } = result;
+            const setTxt = mine && mine.setLinks && mine.setLinks.partners && mine.setLinks.partners.length
+              ? ` · set: ${mine.setLinks.partners.length} partner${mine.setLinks.partners.length > 1 ? "s" : ""} linked`
+              : "";
+            setShopifyStage(100, mine
+              ? `LIVE: “${fields.title}” — ${j.variantCount} variants, tier ${j.tier}${setTxt}.`
+              : `Queued: “${fields.title}” (${j.variantCount} variants) — uploads in background; panel shows LIVE when done.`);
+            window.M?.toast?.({
+              html: mine
+                ? `Shopify: LIVE — ${j.variantCount} variants${setTxt}.`
+                : `Shopify: queued (${j.variantCount} variants) — background upload in progress.`
+            });
+            if (typeof refreshShopifyStatus === "function") refreshShopifyStatus();
+            try {
+              window.ListingStats?.updateShopify(statsDocId, {
+                status: mine ? "LIVE" : "QUEUED",
+                title: fields.title,
+                url: (mine && mine.handle) ? ("https://britesjewelry.com/products/" + mine.handle) : "",
+                jobId: j.jobId
+              });
+            } catch (_) {}
+            return j;
           };
           window.__spSendChain = (window.__spSendChain || Promise.resolve()).then(send);
           return { queued: true, title: fields.title };
