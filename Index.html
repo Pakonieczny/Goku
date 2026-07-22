@@ -2173,6 +2173,38 @@ ANTI-REPETITION (TITLE)
 
     // ---- Stats & Review UI (called by initResponsiveLayout once DOM exists) ----
     function initListingStats() {
+      // AUTO-CORRECT: strip every already-published listing ID (per the
+      // Statistics records in window.__usedListingIds) from all five queue
+      // boxes, fix the counts, and push the cleaned lists to the cloud so
+      // the correction sticks across refreshes and terminals. Runs after
+      // every stats snapshot AND after every remote queue sync, so a
+      // late-arriving stale cloud list gets cleaned the moment it lands.
+      // Boxes being typed in are skipped (same courtesy as the sync).
+      window.scrubUsedIdsFromQueues = function scrubUsedIdsFromQueues() {
+        if (!window.__usedListingIds || !window.__usedListingIds.size) return;
+        try {
+          let scrubbed = 0;
+          (window.QUEUE_IDS_LIST || ["queueRegNecklace","queueBeadyNecklace","queueStudEarrings","queueHoopEarrings","queueCharms"]).forEach(qid => {
+            const el = document.getElementById(qid);
+            if (!el || document.activeElement === el) return;
+            const ids = (typeof parseListingNumbers === "function") ? parseListingNumbers(el.value) : [];
+            if (!ids.length) return;
+            const clean = ids.filter(id => !window.__usedListingIds.has(String(id)));
+            if (clean.length !== ids.length) {
+              scrubbed += ids.length - clean.length;
+              el.value = clean.join(", ");
+              try { localStorage.setItem(qid, el.value); } catch (_) {}
+            }
+          });
+          if (scrubbed) {
+            if (typeof updateListingQueueCount === "function") updateListingQueueCount();
+            if (typeof window.pushQueuesToCloud === "function") window.pushQueuesToCloud();
+            console.warn(`Queue auto-correct: removed ${scrubbed} already-published listing ID(s) from the queue boxes.`);
+            window.M?.toast?.({ html: `Queue auto-correct: removed ${scrubbed} already-used listing ID(s).` });
+          }
+        } catch (e) { console.warn("Queue auto-correct failed:", e && e.message); }
+      };
+
       // Live queue mirror: remote edits land in the boxes instantly unless
       // the operator is typing in that exact box right now.
       QUEUES_DOC.onSnapshot((snap) => {
@@ -2193,6 +2225,10 @@ ANTI-REPETITION (TITLE)
           if (changed && typeof updateListingQueueCount === "function") updateListingQueueCount();
           if (s) s.textContent = (d.updatedBy === CLIENT_ID ? "synced (this terminal) " : "synced (remote) ") + new Date().toLocaleTimeString();
         } finally { __applyingRemoteQueues = false; }
+        // If the incoming cloud list carried used IDs (stale doc from
+        // before the consume-sync fix, or another terminal mid-run),
+        // clean them immediately rather than displaying an inflated count.
+        window.scrubUsedIdsFromQueues();
       }, (e) => {
         const s = document.getElementById("dQueueSync");
         if (s) s.textContent = "cloud sync unavailable — local only";
@@ -2291,6 +2327,15 @@ ANTI-REPETITION (TITLE)
           const x = d.data() || {};
           return { id: d.id, ...x, tsMs: x.ts && x.ts.toMillis ? x.ts.toMillis() : 0 };
         });
+        // Overwrite guard source of truth: every listingId that already has
+        // a published record must never be consumed from a queue box again.
+        // (limit(600) above caps this window — see auditOverwrites note.)
+        window.__usedListingIds = new Set(allRows.map(r => String(r.listingId || "")).filter(Boolean));
+        // AUTO-CORRECT: scrub already-published IDs out of the queue boxes
+        // right now (not just lazily at consume time) — see the function
+        // definition below; also invoked after every remote queue sync so
+        // a late-arriving stale cloud list gets cleaned too.
+        if (typeof window.scrubUsedIdsFromQueues === "function") window.scrubUsedIdsFromQueues();
         const s = document.getElementById("dStatsSync");
         if (s) s.textContent = "live · " + new Date().toLocaleTimeString();
         render();
@@ -2299,6 +2344,35 @@ ANTI-REPETITION (TITLE)
         if (s) s.textContent = "Firestore unavailable — check rules for ListingGen_Stats";
         if (body) body.innerHTML = `<tr><td colspan="6" class="dempty">Cannot reach Firestore (${escHtml(e && e.message || "permission error")}). Statistics need read/write rules for the ListingGen_Stats and ListingGen_Config collections.</td></tr>`;
       });
+
+      // Damage audit: any listingId recorded under MORE THAN ONE set name
+      // was overwritten (a later set consumed an already-used ID and its
+      // upload purged + replaced the earlier listing's images). Run
+      // auditOverwrites() in the console — the LAST row per ID is what the
+      // listing currently shows; every earlier row is a lost set that needs
+      // re-listing on a fresh ID. Scans the same 600-row window as the
+      // table; older history than that isn't checked.
+      window.auditOverwrites = function auditOverwrites() {
+        const byId = {};
+        allRows.forEach(r => {
+          const lid = String(r.listingId || "");
+          if (!lid) return;
+          (byId[lid] = byId[lid] || []).push(r);
+        });
+        const conflicts = Object.entries(byId)
+          .map(([lid, rows]) => [lid, rows.filter((r, i, a) => a.findIndex(x => x.setName === r.setName) === i)])
+          .filter(([, rows]) => rows.length > 1);
+        if (!conflicts.length) { console.log("auditOverwrites: no listing ID appears under more than one set — no overwrites detected in the last", allRows.length, "records."); return []; }
+        console.warn(`auditOverwrites: ${conflicts.length} listing ID(s) were used by multiple sets:`);
+        const report = conflicts.map(([lid, rows]) => {
+          const sorted = rows.slice().sort((a, b) => (a.tsMs || 0) - (b.tsMs || 0));
+          const current = sorted[sorted.length - 1];
+          const lost = sorted.slice(0, -1);
+          console.warn(`  ${lid} → NOW SHOWS: ${current.setName} (${current.day}) · OVERWRITTEN: ${lost.map(r => `${r.setName} (${r.day})`).join(", ")} · https://www.etsy.com/listing/${lid}`);
+          return { listingId: lid, nowShows: current.setName, overwritten: lost.map(r => r.setName), url: `https://www.etsy.com/listing/${lid}` };
+        });
+        return report;
+      };
 
       // Instant, real-time filtering — every keystroke re-renders.
       ["dStatsSearch", "dStatsFrom", "dStatsTo", "dStatsSort", "dStatsSource"].forEach(id => {
@@ -3824,6 +3898,10 @@ ANTI-REPETITION (TITLE)
       el.value = Array.from(new Set(arr)).join(", ");
       try { localStorage.setItem(queueId, el.value); } catch (_) {}
       if (typeof updateListingQueueCount === "function") updateListingQueueCount();
+      // Same cloud-mirror fix as consumption: without this push the cloud
+      // doc drifts from local truth and the sync listener "corrects" the
+      // boxes with stale data on the next refresh.
+      if (typeof pushQueuesToCloud === "function") pushQueuesToCloud();
     }
 
     // Wait for a queued job's final status. Returns "DONE", a failure status,
@@ -7080,6 +7158,26 @@ https://www.etsy.com/your/shops/me/listing-editor/edit/1822973998
 
         const rawVal = qEl.value.trim();
         let queueArr = parseListingNumbers(rawVal);
+
+        // OVERWRITE GUARD: drop any ID that Statistics already records as a
+        // published listing — a used ID consumed again would have its live
+        // Etsy listing purged and overwritten by the next set. (This is the
+        // safety net for stale cloud-sync resurrection; the root cause is
+        // also fixed by pushing consumption to the cloud below.)
+        if (window.__usedListingIds && window.__usedListingIds.size) {
+          const before = queueArr.length;
+          const dropped = queueArr.filter(id => window.__usedListingIds.has(String(id)));
+          if (dropped.length) {
+            queueArr = queueArr.filter(id => !window.__usedListingIds.has(String(id)));
+            qEl.value = queueArr.join(", ");
+            localStorage.setItem(targetInputId, qEl.value);
+            if (typeof updateListingQueueCount === "function") updateListingQueueCount();
+            if (typeof pushQueuesToCloud === "function") pushQueuesToCloud();
+            console.warn(`Overwrite guard: removed ${dropped.length} already-published listing ID(s) from ${targetInputId}:`, dropped.join(", "));
+            window.M?.toast?.({ html: `⚠ Removed ${dropped.length} already-used listing ID(s) from the queue — they have live listings recorded in Statistics.` });
+            if (!queueArr.length) { M.toast({ html: "No unused listing IDs left in this queue." }); return; }
+          }
+        }
         listingId = queueArr[0];
 
         // Consume (pop out) the ID we just used and update UI/Storage
@@ -7087,6 +7185,13 @@ https://www.etsy.com/your/shops/me/listing-editor/edit/1822973998
         qEl.value = queueArr.join(", ");
         localStorage.setItem(targetInputId, qEl.value);
         if (typeof updateListingQueueCount === "function") updateListingQueueCount();
+        // CRITICAL FIX: mirror the consumption to the Firestore queues doc.
+        // This was missing — only manual edits (saveQueue) ever pushed, so
+        // the cloud kept the full pre-run list and the sync listener
+        // restored consumed IDs into the boxes on every refresh. A
+        // resurrected ID re-consumed for a different set = its live Etsy
+        // listing purged and overwritten.
+        if (typeof pushQueuesToCloud === "function") pushQueuesToCloud();
 
         // Remember exactly which ID left which queue so the automation can
         // RESTORE it if the upload job fails (failed job = ID must go back).
