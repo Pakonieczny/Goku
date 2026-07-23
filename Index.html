@@ -1471,6 +1471,48 @@
     .dtopbar #duplicateModeToggle, .dtopbar #shopifyModeToggle{height:36px; box-sizing:border-box}
     .dtopbar #duplicateModeToggle{background:transparent; border:0; box-shadow:none}
     .dtopbar .dsep{align-self:center; width:1px; height:24px; background:var(--line); flex:0 0 1px}
+    /* Verified Etsy API usage readout — same visual language and layout as
+       etsy-pricing.html. Values come from the server-side distributed gate,
+       never from browser-side estimates. */
+    .apiWidget{
+      display:flex; flex-direction:column; gap:7px; padding:10px 40px 10px 16px;
+      border:1px solid var(--line); border-radius:12px; background:var(--card);
+      min-width:320px; max-width:380px; position:relative; flex:0 1 360px;
+      box-sizing:border-box;
+    }
+    .apiWidget .awRow{display:flex; align-items:center; gap:14px; font-size:12.5px; line-height:1.1}
+    .apiWidget .awLabel{
+      width:30px; flex:0 0 auto; font-weight:700; color:var(--ink45);
+      text-transform:uppercase; font-size:10px; letter-spacing:.05em;
+    }
+    .apiWidget .awNum{
+      font-variant-numeric:tabular-nums; font-weight:700; color:var(--ink);
+      white-space:nowrap; min-width:78px; flex:0 0 auto;
+    }
+    .apiWidget .awBar{
+      flex:1; height:6px; border-radius:999px; background:var(--paper2);
+      overflow:hidden; min-width:70px;
+    }
+    .apiWidget .awBar i{
+      display:block; height:100%; width:0; background:var(--sage);
+      transition:width .3s;
+    }
+    .apiWidget .awBar.warn i{background:var(--gold)}
+    .apiWidget .awBar.bad i{background:var(--clay)}
+    .apiWidget .awQps{
+      font-size:11px; color:var(--ink45); white-space:nowrap;
+      flex:0 0 auto; min-width:62px; text-align:right;
+    }
+    .apiWidget .awInfo{
+      position:absolute; top:50%; right:12px; transform:translateY(-50%);
+      border:0; background:none; color:var(--ink45); font-size:15px;
+      cursor:help; padding:0; line-height:1; width:auto; height:auto;
+      box-shadow:none; text-transform:none;
+    }
+    .apiWidget .awInfo:hover{color:var(--ink); background:none}
+    .apiWidget .awInfo.warnDot{color:var(--gold)}
+    .apiWidget.awUnavailable{border-color:var(--clay); background:var(--claySoft)}
+    @media(max-width:1400px){.apiWidget{display:none}}
     /* the create-listing progress bar lives beside the status chip while
        a job runs; give it a sane inline size in the flex row */
     .dtopbar #createListingProgress{width:150px; flex:0 0 150px; align-self:center}
@@ -1487,6 +1529,28 @@
 <div id="firebaseStatus">
       <div class="status-dot" id="fbDot"></div>
       <span id="fbText">Waiting...</span>
+  </div>
+
+  <div class="apiWidget" id="apiWidget" aria-label="Verified Etsy API usage">
+    <div class="awRow" data-row="app">
+      <span class="awLabel">App</span>
+      <span class="awNum" id="awAppNum">…</span>
+      <span class="awBar"><i id="awAppBar"></i></span>
+      <span class="awQps" id="awQps">— QPS</span>
+    </div>
+    <div class="awRow" data-row="key">
+      <span class="awLabel">Key</span>
+      <span class="awNum" id="awKeyNum">…</span>
+      <span class="awBar"><i id="awKeyBar"></i></span>
+      <span class="awQps" aria-hidden="true"></span>
+    </div>
+    <button
+      class="awInfo"
+      id="awInfo"
+      type="button"
+      aria-label="What do these API statistics mean?"
+      title="App = this Listing Generator’s verified Etsy calls today. Key = Etsy’s authoritative whole-key meter. QPS = highest server-observed calls per second."
+    >ⓘ</button>
   </div>
 
 
@@ -5200,7 +5264,7 @@ ANTI-REPETITION (TITLE)
       tbHidden.style.display = "none";
       move(tbHidden, ["createListingBtn", "createListingCheck", "globalUploadCount", "expandUploadHistoryBtn", "uploadShopifyBtn"]);
       topbar.appendChild(tbHidden);
-      move(topbar, ["firebaseStatus", "createListingProgress"]);
+      move(topbar, ["firebaseStatus", "createListingProgress", "apiWidget"]);
       topbar.appendChild(mk("div", null, "dspacer"));
       move(topbar, ["shopifyQueueStatus", "connectEtsyBtn"]);
       sep(topbar);
@@ -10062,6 +10126,150 @@ RULES:
         catch (e) { setShopifyStage(100, "Shopify upload failed: " + ((e && e.message) || e), true); window.M?.toast?.({ html: "Shopify upload failed: " + ((e && e.message) || e) }); }
         finally { btn.disabled = false; }
       });
+    })();
+  </script>
+  <script>
+    // Verified Etsy API usage. The app row is the exact transactional count
+    // reserved by this Listing Generator. The key row is calculated only
+    // from Etsy's own x-limit-per-day / x-remaining-today response headers.
+    (() => {
+      let refreshInFlight = false;
+
+      const byId = (id) => document.getElementById(id);
+      const abbreviate = (n) => {
+        const value = Number(n || 0);
+        return value >= 1000
+          ? (value / 1000).toFixed(value % 1000 === 0 ? 0 : 1) + "k"
+          : String(value);
+      };
+      const ageText = (ms) => {
+        if (!Number.isFinite(ms) || ms < 0) return "unknown";
+        if (ms < 60000) return "under a minute";
+        if (ms < 3600000) return Math.round(ms / 60000) + " min";
+        return Math.round(ms / 3600000) + " hr";
+      };
+      const setBar = (id, percent, state) => {
+        const bar = byId(id);
+        if (!bar) return;
+        bar.style.width = Math.max(0, Math.min(100, percent)) + "%";
+        bar.parentElement.className = "awBar" + (state ? " " + state : "");
+      };
+
+      async function refreshApiUsage() {
+        if (refreshInFlight) return;
+        refreshInFlight = true;
+        const widget = byId("apiWidget");
+        try {
+          const response = await fetch("/.netlify/functions/etsyApiUsage?t=" + Date.now(), {
+            method: "GET",
+            cache: "no-store",
+            headers: { Accept: "application/json" },
+          });
+          const data = await response.json().catch(() => ({}));
+          if (!response.ok || data.ok === false || data.verified !== true) {
+            throw new Error(data.error || "API statistics unavailable");
+          }
+
+          const used = Number(data.count || 0);
+          const budget = Number(data.budget || 2500);
+          const appPercent = budget > 0 ? Math.round((used / budget) * 100) : 0;
+          byId("awAppNum").textContent = abbreviate(used) + " / " + abbreviate(budget);
+          setBar(
+            "awAppBar",
+            appPercent,
+            used >= budget ? "bad" : used >= budget * 0.8 ? "warn" : ""
+          );
+
+          const qps = Number(data.max_qps || 0);
+          const qpsCap = Number(data.qps_cap || 2.5);
+          byId("awQps").textContent = qps + "/" + qpsCap + " QPS";
+
+          const keyLimit =
+            data.etsy_limit_per_day == null ? null : Number(data.etsy_limit_per_day);
+          const keyRemaining =
+            data.etsy_remaining_today == null ? null : Number(data.etsy_remaining_today);
+          const hasKeyReading =
+            Number.isFinite(keyLimit) && keyLimit > 0 && Number.isFinite(keyRemaining);
+
+          if (hasKeyReading) {
+            const keyUsed = Math.max(0, keyLimit - keyRemaining);
+            const keyPercent = Math.round((keyUsed / keyLimit) * 100);
+            byId("awKeyNum").textContent =
+              abbreviate(keyUsed) + " / " + abbreviate(keyLimit);
+            byId("awKeyNum").title =
+              keyRemaining.toLocaleString() + " calls left on the whole Etsy key";
+            setBar(
+              "awKeyBar",
+              keyPercent,
+              keyRemaining <= 100 ? "bad" : keyPercent >= 80 ? "warn" : ""
+            );
+          } else {
+            byId("awKeyNum").textContent = "—";
+            byId("awKeyNum").title =
+              "Waiting for Etsy's verified rate-limit headers from the next API response.";
+            setBar("awKeyBar", 0, "");
+          }
+
+          const now = Number(data.server_time || Date.now());
+          const counterAge = data.count_since
+            ? now - Number(data.count_since)
+            : null;
+          const headerAge = data.etsy_reported_at
+            ? now - Number(data.etsy_reported_at)
+            : null;
+          const counterIsPartial =
+            counterAge != null && counterAge >= 0 && counterAge < 20 * 3600000;
+          const headerIsStale =
+            headerAge != null && headerAge > 30 * 60000;
+
+          const base =
+            "App = this Listing Generator’s verified Etsy calls today, resets " +
+            "11:59 PM Toronto, capped at " + budget.toLocaleString() +
+            " (50% of Etsy’s " + (keyLimit || 5000).toLocaleString() + "/day).\n" +
+            "Key = Etsy’s own meter for the WHOLE API key (every app), reset at midnight UTC.\n" +
+            "QPS = highest calls-per-second observed across all server instances, " +
+            "hard-capped at " + qpsCap + ".";
+          const notes = [];
+          if (counterIsPartial) {
+            notes.push(
+              "⚠ App tracking began " + ageText(counterAge) +
+              " ago, so today’s app count may be partial."
+            );
+          }
+          if (headerAge != null) {
+            notes.push(
+              (headerIsStale ? "⚠ " : "") +
+              "Whole-key reading last verified from Etsy " + ageText(headerAge) + " ago."
+            );
+          } else {
+            notes.push("Whole-key reading will appear after Etsy returns its first rate-limit header.");
+          }
+
+          const info = byId("awInfo");
+          info.title = base + "\n\n" + notes.join("\n");
+          info.classList.toggle("warnDot", counterIsPartial || headerIsStale);
+          widget.classList.remove("awUnavailable");
+          widget.title = "";
+        } catch (error) {
+          widget.classList.add("awUnavailable");
+          widget.title = "Verified API statistics are temporarily unavailable: " + error.message;
+          byId("awAppNum").textContent = "Unavailable";
+          byId("awKeyNum").textContent = "—";
+          byId("awQps").textContent = "— QPS";
+          setBar("awAppBar", 0, "bad");
+          setBar("awKeyBar", 0, "");
+        } finally {
+          refreshInFlight = false;
+        }
+      }
+
+      window.refreshEtsyApiUsage = refreshApiUsage;
+      document.addEventListener("DOMContentLoaded", refreshApiUsage);
+      window.addEventListener("focus", refreshApiUsage);
+      document.addEventListener("visibilitychange", () => {
+        if (!document.hidden) refreshApiUsage();
+      });
+      setInterval(refreshApiUsage, 15000);
     })();
   </script>
 </body>
