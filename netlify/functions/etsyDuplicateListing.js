@@ -1,4 +1,4 @@
-const fetch = require("node-fetch");
+const { etsyFetch } = require("./etsyRateLimiter");
 
 exports.handler = async function (event, context) {
   try {
@@ -64,7 +64,7 @@ exports.handler = async function (event, context) {
 
     // Build GET request URL to fetch original listing details.
     const etsyGetUrl = `https://api.etsy.com/v3/application/listings/${listingId}`;
-    const getResponse = await fetch(etsyGetUrl, {
+    const getResponse = await etsyFetch(etsyGetUrl, {
       method: "GET",
       headers: {
         "Authorization": `Bearer ${token}`,
@@ -122,7 +122,7 @@ exports.handler = async function (event, context) {
     const etsyPostUrl = `https://api.etsy.com/v3/application/shops/${shopId}/listings`;
 
     // Make POST request to duplicate the listing.
-    const postResponse = await fetch(etsyPostUrl, {
+    const postResponse = await etsyFetch(etsyPostUrl, {
       method: "POST",
       headers: {
         "Content-Type": "application/json",

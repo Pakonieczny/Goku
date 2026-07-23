@@ -1,4 +1,4 @@
-const fetch = require('node-fetch');
+const { etsyFetch } = require("./etsyRateLimiter");
 
 exports.handler = async function(event) {
   try {
@@ -75,7 +75,7 @@ exports.handler = async function(event) {
       listingId
     )}${includes}`;
 
-    const response = await fetch(etsyUrl, {
+    const response = await etsyFetch(etsyUrl, {
       method: "GET",
       headers: {
         "Authorization": `Bearer ${accessToken}`, // Etsy expects the raw access_token here

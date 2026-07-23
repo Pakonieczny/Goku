@@ -1,5 +1,5 @@
 // netlify/functions/updateListing.js
-const fetch = require('node-fetch');
+const { etsyFetch } = require("./etsyRateLimiter");
 
 exports.handler = async function (event) { 
 const corsHeaders = {
@@ -105,7 +105,7 @@ const corsHeaders = {
     const touchesTagLike = ("tags" in payload) || ("materials" in payload);
     if (touchesTagLike && (isBlank(payload.title) || isBlank(payload.description))) {
       try {
-        const getResp = await fetch(
+        const getResp = await etsyFetch(
           `https://api.etsy.com/v3/application/listings/${encodeURIComponent(listingId)}`,
           {
             headers: {
@@ -162,7 +162,7 @@ const corsHeaders = {
 
     const updateUrl = `https://api.etsy.com/v3/application/shops/${shopId}/listings/${encodeURIComponent(listingId)}`;
 
-    const response = await fetch(updateUrl, {
+    const response = await etsyFetch(updateUrl, {
       method: "PATCH",
       headers: {
         "Content-Type": "application/x-www-form-urlencoded; charset=utf-8",

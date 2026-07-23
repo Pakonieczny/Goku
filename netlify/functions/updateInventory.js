@@ -1,4 +1,4 @@
-const fetch = require("node-fetch");
+const { etsyFetch } = require("./etsyRateLimiter");
 
 // Helper: Convert a price field into a float value
 function transformPrice(priceField) {
@@ -78,7 +78,7 @@ async function updateInventory(newListingId, inventoryData, token, xApiKey) {
   let response;
   while (attempt < maxRetries) {
     console.log(`Attempting PUT inventory update, attempt ${attempt + 1}...`);
-    response = await fetch(inventoryUrl, {
+    response = await etsyFetch(inventoryUrl, {
       method: "PUT",
       headers,
       body: JSON.stringify(transformedInventory),
@@ -102,7 +102,7 @@ async function updateInventory(newListingId, inventoryData, token, xApiKey) {
 
   // Attempt POST inventory creation if PUT did not succeed.
   console.log("Attempting POST inventory creation...");
-  response = await fetch(inventoryUrl, {
+  response = await etsyFetch(inventoryUrl, {
     method: "POST",
     headers,
     body: JSON.stringify(transformedInventory),
@@ -184,7 +184,7 @@ exports.handler = async function (event, context) {
     // Fetch original inventory data from Etsy using the original listing ID.
     const etsyInventoryUrl = `https://api.etsy.com/v3/application/listings/${originalListingId}/inventory`;
     console.log("Fetching original inventory data from:", etsyInventoryUrl);
-    const inventoryResponse = await fetch(etsyInventoryUrl, {
+    const inventoryResponse = await etsyFetch(etsyInventoryUrl, {
       method: "GET",
       headers: {
         "Authorization": `Bearer ${token}`,

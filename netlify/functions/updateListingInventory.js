@@ -1,5 +1,5 @@
 // netlify/functions/updateListingInventory.js
-const fetch = require("node-fetch");
+const { etsyFetch } = require("./etsyRateLimiter");
 
 exports.handler = async (event) => {
   // --- CORS (needed for browser PUT + preflight) ---
@@ -67,7 +67,7 @@ exports.handler = async (event) => {
       "x-api-key": xApiKey
     };
 
-    const invRes = await fetch(invUrl, { method: "GET", headers: commonHeaders });
+    const invRes = await etsyFetch(invUrl, { method: "GET", headers: commonHeaders });
 
     // If Etsy rejects auth here, fail fast with clear hints.
     if (!invRes.ok && (invRes.status === 401 || invRes.status === 403)) {
@@ -275,7 +275,7 @@ exports.handler = async (event) => {
     }
 
     // 3) PUT updated inventory (this is where the SKU actually gets stored)
-    const putRes = await fetch(invUrl, {
+    const putRes = await etsyFetch(invUrl, {
       method: "PUT",
       headers: { ...commonHeaders, "Content-Type": "application/json" },
       body: JSON.stringify(payload)

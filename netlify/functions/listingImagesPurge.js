@@ -39,7 +39,7 @@
 //     failures: [{ imgId, status, detail }, ...]
 //   }
 
-const fetch = require("node-fetch");
+const { etsyFetch } = require("./etsyRateLimiter");
 
 const API_BASE = "https://api.etsy.com/v3/application";
 
@@ -132,7 +132,7 @@ exports.handler = async function (event) {
       // proved the divergence live: purge saw 0, includes=Images saw 4.
       // List through the endpoint that actually sees them.
       const listUrl = `${API_BASE}/listings/${encodeURIComponent(listingId)}?includes=Images`;
-      const listResp = await fetch(listUrl, { method: "GET", headers: baseHeaders });
+      const listResp = await etsyFetch(listUrl, { method: "GET", headers: baseHeaders });
 
       if (listResp.status === 401) {
         const t = await safeText(listResp);
@@ -172,7 +172,7 @@ exports.handler = async function (event) {
       for (let attempt = 0; attempt < 2 && !done; attempt++) {
         if (attempt > 0) await new Promise(r => setTimeout(r, 1200));
         try {
-          const delResp = await fetch(delUrl, { method: "DELETE", headers: baseHeaders });
+          const delResp = await etsyFetch(delUrl, { method: "DELETE", headers: baseHeaders });
           if (delResp.ok || delResp.status === 204 || delResp.status === 404) {
             removed++; done = true;
           } else {

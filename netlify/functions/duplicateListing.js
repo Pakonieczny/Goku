@@ -1,6 +1,7 @@
 // netlify/functions/duplicateListing.js
 const fetch = require("node-fetch");
 const FormData = require("form-data");
+const { etsyFetch } = require("./etsyRateLimiter");
 
 const API_BASE = "https://openapi.etsy.com/v3/application";
 
@@ -134,14 +135,14 @@ function sanitizePropertyValues(arr) {
 }
 
 async function jget(url, token, xApiKey) {
-  const r = await fetch(url, { headers: baseHeaders(token, xApiKey) });
+  const r = await etsyFetch(url, { headers: baseHeaders(token, xApiKey) });
   const t = await r.text();
   let data; try { data = t ? JSON.parse(t) : null; } catch { data = { raw: t }; }
   if (!r.ok) throw new Error(`[GET ${url}] ${r.status} — ${data?.error || data?.message || t}`);
   return data;
 }
 async function jpost(url, token, xApiKey, body) {
-  const r = await fetch(url, {
+  const r = await etsyFetch(url, {
     method: "POST",
     headers: baseHeaders(token, xApiKey, { "Content-Type": "application/json" }),
     body: JSON.stringify(body || {})
@@ -152,7 +153,7 @@ async function jpost(url, token, xApiKey, body) {
   return data;
 }
 async function jpatch(url, token, xApiKey, body) {
-  const r = await fetch(url, {
+  const r = await etsyFetch(url, {
     method: "PATCH",
     headers: baseHeaders(token, xApiKey, { "Content-Type": "application/json" }),
     body: JSON.stringify(body || {})
@@ -163,7 +164,7 @@ async function jpatch(url, token, xApiKey, body) {
   return data;
 }
 async function jput(url, token, xApiKey, body) {
-  const r = await fetch(url, {
+  const r = await etsyFetch(url, {
     method: "PUT",
     headers: baseHeaders(token, xApiKey, { "Content-Type": "application/json" }),
     body: JSON.stringify(body || {})
@@ -180,7 +181,7 @@ async function formPost(url, token, xApiKey, data) {
   Object.entries(data || {}).forEach(([k, v]) => {
     if (v !== undefined && v !== null) enc.append(k, String(v));
   });
-  const r = await fetch(url, {
+  const r = await etsyFetch(url, {
     method: "POST",
     headers: baseHeaders(token, xApiKey, { "Content-Type": "application/x-www-form-urlencoded" }),
     body: enc.toString()
@@ -200,7 +201,7 @@ async function uploadImageFromUrl(imageUrl, token, xApiKey, shop_id, listing_id,
   fd.append("image", buf, { filename: `clone_${listing_id}_${rank}.jpg` });
   fd.append("rank", String(rank));
 
-  const up = await fetch(`${API_BASE}/shops/${shop_id}/listings/${listing_id}/images`, {
+  const up = await etsyFetch(`${API_BASE}/shops/${shop_id}/listings/${listing_id}/images`, {
     method: "POST",
     headers: { ...baseHeaders(token, xApiKey), ...fd.getHeaders() },
     body: fd
@@ -220,7 +221,7 @@ async function uploadDigitalFileFromUrl(fileUrl, token, xApiKey, shop_id, listin
   fd.append("name", nameHint || "download");
   fd.append("file", buf, { filename: nameHint || "download.bin" });
 
-  const up = await fetch(`${API_BASE}/shops/${shop_id}/listings/${listing_id}/files`, {
+  const up = await etsyFetch(`${API_BASE}/shops/${shop_id}/listings/${listing_id}/files`, {
     method: "POST",
     headers: { ...baseHeaders(token, xApiKey), ...fd.getHeaders() },
     body: fd

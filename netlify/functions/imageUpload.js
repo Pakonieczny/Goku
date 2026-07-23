@@ -3,7 +3,7 @@
 const formidable = require("formidable");
 const { Readable } = require("stream");
 const FormData = require("form-data");
-const fetch = require("node-fetch");
+const { etsyFetch } = require("./etsyRateLimiter");
 const fs = require("fs");
 
 exports.handler = async function (event, context) {
@@ -153,7 +153,7 @@ exports.handler = async function (event, context) {
     console.log("Image Upload URL:", imageUploadUrl);
 
     // POST to Etsy
-    const response = await fetch(imageUploadUrl, {
+    const response = await etsyFetch(imageUploadUrl, {
       method: "POST",
       headers: {
         Authorization: `Bearer ${token}`,
