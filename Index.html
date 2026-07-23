@@ -2238,6 +2238,7 @@ ANTI-REPETITION (TITLE)
       // Live stats feed.
       let allRows = [];
       const retryingRows = new Set(); // row ids currently mid-retry — survives re-renders
+      const refreshingRows = new Set(); // row ids currently mid-refresh — survives re-renders
       const body = document.getElementById("dStatsBody");
       const render = () => {
         if (!body) return;
@@ -2258,6 +2259,14 @@ ANTI-REPETITION (TITLE)
           const when = dt ? `${r.day || ""} <span class="mono">${dt.toLocaleTimeString([], {hour:"2-digit",minute:"2-digit"})}</span>` : (r.day || "—");
           const sp = r.shopify;
           const retrying = retryingRows.has(r.id);
+          const refreshing = refreshingRows.has(r.id);
+          // Refresh = read-only status check (no requeue/drain) — for a row
+          // that may have ALREADY gone LIVE server-side (the background
+          // drain-cron keeps working a job independent of any browser tab,
+          // and the client-side poll that watches a job for its outcome
+          // gives up after ~6 minutes) but the stats doc never got the
+          // final write. Retry actively requeues; Refresh just looks.
+          const refreshBtn = ` <button type="button" class="dretry-btn drefresh-btn" data-row-id="${escAttr(r.id)}" data-job-id="${escAttr((sp && sp.jobId) || "")}" title="Check whether this already finished on Shopify, without requeuing it"${refreshing ? " disabled" : ""}>${refreshing ? "Checking…" : "Refresh"}</button>`;
           const spCell = sp
             ? (sp.url
                 ? `<a href="${escAttr(sp.url)}" target="_blank" rel="noopener">Open ↗</a> <span class="dchip live">LIVE</span>`
@@ -2265,7 +2274,7 @@ ANTI-REPETITION (TITLE)
                   ? `<span class="dchip pend" title="Waiting its turn — Shopify sends run one at a time">Pending</span>`
                   : `<span class="dchip ${sp.status === "FAILED" ? "fail" : "pend"}">${escHtml(sp.status || "QUEUED")}</span>` +
                     (sp.status === "FAILED" || sp.status === "QUEUED"
-                      ? ` <button type="button" class="dretry-btn" data-row-id="${escAttr(r.id)}" data-job-id="${escAttr(sp.jobId || "")}" title="Requeue this listing's Shopify upload"${retrying ? " disabled" : ""}>${retrying ? "Retrying…" : "Retry"}</button>`
+                      ? ` <button type="button" class="dretry-btn" data-row-id="${escAttr(r.id)}" data-job-id="${escAttr(sp.jobId || "")}" title="Requeue this listing's Shopify upload"${retrying ? " disabled" : ""}>${retrying ? "Retrying…" : "Retry"}</button>` + refreshBtn
                       : ""))
             : `<span class="dchip pend" title="Shopify mode was off for this listing">—</span>`;
           return `<tr>
@@ -2392,7 +2401,7 @@ ANTI-REPETITION (TITLE)
       // for those the requeue still happens, but the row itself won't
       // auto-update since there's nothing to poll against.
       if (body) body.addEventListener("click", async (e) => {
-        const btn = e.target.closest(".dretry-btn");
+        const btn = e.target.closest(".dretry-btn:not(.drefresh-btn)");
         if (!btn || btn.disabled) return;
         const rowId = btn.dataset.rowId;
         let jobId = btn.dataset.jobId || "";
@@ -2459,6 +2468,74 @@ ANTI-REPETITION (TITLE)
           }
         } finally {
           retryingRows.delete(rowId);
+          render();
+        }
+      });
+
+      // Refresh: a read-only status check — no retryFailed, no drain. For
+      // a listing that may have ALREADY gone LIVE (or actually failed)
+      // server-side — the background drain-cron keeps working the queue
+      // whether or not a browser tab is open, and the Retry/live-pipeline
+      // poll only watches a job for up to ~6 minutes — but the stats doc
+      // still shows the old status because nothing ever wrote the update.
+      if (body) body.addEventListener("click", async (e) => {
+        const btn = e.target.closest(".drefresh-btn");
+        if (!btn || btn.disabled) return;
+        const rowId = btn.dataset.rowId;
+        let jobId = btn.dataset.jobId || "";
+        refreshingRows.add(rowId);
+        render();
+        const SP_FN = "/.netlify/functions/shopifyListingUpload";
+        try {
+          if (!jobId) {
+            // No jobId on file — same best-effort title(+category) match
+            // used by Retry's fallback, but read-only: one lookup, no
+            // requeue attempted.
+            const row = allRows.find(x => x.id === rowId);
+            const wantTitle = row && row.shopify && row.shopify.title;
+            if (!wantTitle) {
+              window.M?.toast?.({ html: "Nothing to check yet — this row has no recorded Shopify title." });
+              return;
+            }
+            try {
+              const sr = await fetch(SP_FN + "?op=status&recent=150");
+              const sj = await sr.json();
+              const candidates = (sj.recent || []).filter(x =>
+                x.title === wantTitle && (!row.category || !x.category || x.category === row.category)
+              );
+              candidates.sort((a, b) => (b.createdAtMs || 0) - (a.createdAtMs || 0));
+              if (candidates.length) jobId = candidates[0].id;
+            } catch (_) {}
+            if (!jobId) {
+              window.M?.toast?.({ html: "No matching job found to check yet." });
+              return;
+            }
+          }
+          const sr = await fetch(SP_FN + "?op=status&recent=150");
+          const sj = await sr.json();
+          const job = (sj.recent || []).find(x => x.id === jobId);
+          if (!job) {
+            window.M?.toast?.({ html: "Job not found in the recent list — it may be older than the last 150 jobs." });
+            return;
+          }
+          if (job.status === "DONE" || job.status === "FAILED") {
+            await window.ListingStats?.updateShopify(rowId, {
+              status: job.status === "DONE" ? "LIVE" : "FAILED",
+              title: job.title || "",
+              url: job.handle ? ("https://britesjewelry.com/products/" + job.handle) : "",
+              jobId
+            });
+            window.M?.toast?.({ html: job.status === "DONE" ? "It was already LIVE — updated." : "Confirmed: still failed." });
+          } else {
+            // Still genuinely queued/uploading — nothing to correct, but
+            // still worth attaching the jobId if this row didn't have one.
+            if (!btn.dataset.jobId) {
+              try { await window.ListingStats?.updateShopify(rowId, { status: "QUEUED", title: job.title || "", url: "", jobId }); } catch (_) {}
+            }
+            window.M?.toast?.({ html: "Still processing on Shopify's side — check again shortly." });
+          }
+        } finally {
+          refreshingRows.delete(rowId);
           render();
         }
       });
