@@ -5,6 +5,16 @@ const { Readable } = require("stream");
 const FormData = require("form-data");
 const { etsyFetch } = require("./etsyRateLimiter");
 const fs = require("fs");
+const crypto = require("crypto");
+
+const SNAPSHOT_COLLECTION = "EtsyListingSnapshots";
+const IDEMPOTENCY_TTL_MS = 24 * 60 * 60 * 1000;
+let db = null;
+try {
+  db = require("./firebaseAdmin").firestore();
+} catch (error) {
+  console.warn("imageUpload: idempotency cache unavailable.", error.message);
+}
 
 exports.handler = async function (event, context) {
   try {
@@ -106,12 +116,44 @@ exports.handler = async function (event, context) {
     const token = (fields.token || "").toString().trim();
     const rank = (fields.rank ?? "").toString().trim();
     let altText = (fields.alt_text || "").toString();
+    const operationKey = (fields.operationKey || "").toString().trim().slice(0, 240);
 
     if (!listingId) {
       return { statusCode: 400, body: JSON.stringify({ error: "Missing listingId" }) };
     }
     if (!token) {
       return { statusCode: 401, body: JSON.stringify({ error: "Missing access token" }) };
+    }
+
+    // Browser/network retries reuse this key. If the first Netlify invocation
+    // reached Etsy but its response was lost, return the recorded success
+    // instead of posting the same image a second time.
+    let snapshotRef = null;
+    let operationHash = "";
+    if (db && operationKey) {
+      try {
+        operationHash = crypto
+          .createHash("sha256")
+          .update(`${listingId}|${operationKey}`)
+          .digest("hex");
+        snapshotRef = db.collection(SNAPSHOT_COLLECTION).doc(listingId);
+        const snap = await snapshotRef.get();
+        const cached = snap.exists ? (snap.data() || {}) : {};
+        const completed = cached.uploadOps && cached.uploadOps[operationHash];
+        if (completed?.status === "DONE" &&
+            Date.now() - Number(completed.completedAt || 0) <= IDEMPOTENCY_TTL_MS &&
+            typeof completed.responseBody === "string") {
+          return {
+            statusCode: 200,
+            headers: { "Content-Type": "application/json", "X-Etsy-Idempotent-Replay": "1" },
+            body: completed.responseBody,
+          };
+        }
+      } catch (error) {
+        console.warn("imageUpload: idempotency lookup failed.", error.message);
+        snapshotRef = null;
+        operationHash = "";
+      }
     }
 
     // Prepare FormData with only Etsy-supported fields
@@ -161,7 +203,7 @@ exports.handler = async function (event, context) {
         ...formData.getHeaders(),
       },
       body: formData,
-    });
+    }, { retries: 1 });
 
     const responseText = await response.text();
     console.log("Image upload response status:", response.status);
@@ -175,8 +217,30 @@ exports.handler = async function (event, context) {
       };
     }
 
+    if (db) {
+      try {
+        snapshotRef = snapshotRef || db.collection(SNAPSHOT_COLLECTION).doc(listingId);
+        const patch = { imagesCapturedAt: 0, updatedAt: Date.now() };
+        if (operationHash) {
+          patch.uploadOps = {
+            [operationHash]: {
+              status: "DONE",
+              completedAt: Date.now(),
+              responseBody: responseText,
+            }
+          };
+        }
+        // One bounded document per listing (rather than one document per
+        // photo) keeps the idempotency ledger compact.
+        await snapshotRef.set(patch, { merge: true });
+      } catch (error) {
+        console.warn("imageUpload: cache persistence failed.", error.message);
+      }
+    }
+
     return {
       statusCode: 200,
+      headers: { "Content-Type": "application/json" },
       body: responseText,
     };
   } catch (error) {

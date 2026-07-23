@@ -1,6 +1,6 @@
 // /netlify/functions/listingImagesPurge.js
 //
-// Deletes ALL existing images from a draft Etsy listing.
+// Reconciles existing images on a draft Etsy listing.
 //
 // Called by runEtsyJob() in Index.html BEFORE uploading the new slot
 // images, so each listing starts from a clean slate. Without this step
@@ -31,17 +31,33 @@
 //   listingId — the Etsy draft listing ID
 //   token     — the user's OAuth access token
 //
+// preserveAltTexts may contain the stable alt text of generic brand images.
+// One matching image per value is retained instead of being deleted and then
+// uploaded again. The next main-image uploads push those retained records to
+// the reserved ranks, saving two DELETEs plus two POSTs on prepared drafts.
+//
 // Response (200):
 //   {
 //     ok: true,
 //     removed: <int>,        // how many DELETE calls succeeded
 //     totalSeen: <int>,      // how many images the listing had before purge
+//     deleteRequested: <int>,
+//     keptImages: [...],
 //     failures: [{ imgId, status, detail }, ...]
 //   }
 
 const { etsyFetch } = require("./etsyRateLimiter");
 
 const API_BASE = "https://api.etsy.com/v3/application";
+const SNAPSHOT_COLLECTION = "EtsyListingSnapshots";
+const SNAPSHOT_TTL_MS = 30 * 60 * 1000;
+
+let db = null;
+try {
+  db = require("./firebaseAdmin").firestore();
+} catch (error) {
+  console.warn("listingImagesPurge: snapshot cache unavailable.", error.message);
+}
 
 exports.handler = async function (event) {
   try {
@@ -117,12 +133,35 @@ exports.handler = async function (event) {
     const selective = (Array.isArray(onlyRaw) ? onlyRaw : String(onlyRaw).split(","))
       .map(s => String(s || "").trim())
       .filter(Boolean);
+    const preserveRaw = body.preserveAltTexts || qs.preserveAltTexts || [];
+    const preserveAltTexts = (Array.isArray(preserveRaw) ? preserveRaw : String(preserveRaw).split("|"))
+      .map(normalizeAlt)
+      .filter(Boolean);
 
     // ---- 1) List current images on the listing ----------------------
     let imageIds = [];
+    let imageRecords = [];
+    let source = "selective";
     if (selective.length) {
       imageIds = selective;
     } else {
+      // The batch-prime function normally populated this seconds ago. Reading
+      // the Firestore snapshot costs no Etsy quota. If it is missing/stale,
+      // fall back to Etsy so correctness never depends on the optimization.
+      if (db) {
+        try {
+          const snap = await db.collection(SNAPSHOT_COLLECTION).doc(listingId).get();
+          const data = snap.exists ? (snap.data() || {}) : {};
+          if (Array.isArray(data.images) &&
+              Date.now() - Number(data.imagesCapturedAt || 0) <= SNAPSHOT_TTL_MS) {
+            imageRecords = data.images;
+            source = "batch-cache";
+          }
+        } catch (error) {
+          console.warn("listingImagesPurge: cache read failed; using Etsy.", error.message);
+        }
+      }
+
       // ENDPOINT FIX: the shop-scoped images route
       // (/shops/{shop}/listings/{id}/images) does NOT return dormant image
       // associations on DRAFT listings — drafts that inherited images
@@ -131,27 +170,56 @@ exports.handler = async function (event) {
       // published storefront) showed the very same records. Diagnostics
       // proved the divergence live: purge saw 0, includes=Images saw 4.
       // List through the endpoint that actually sees them.
-      const listUrl = `${API_BASE}/listings/${encodeURIComponent(listingId)}?includes=Images`;
-      const listResp = await etsyFetch(listUrl, { method: "GET", headers: baseHeaders });
+      if (!imageRecords.length && source !== "batch-cache") {
+        const listUrl = `${API_BASE}/listings/${encodeURIComponent(listingId)}?includes=Images`;
+        const listResp = await etsyFetch(listUrl, { method: "GET", headers: baseHeaders });
 
-      if (listResp.status === 401) {
-        const t = await safeText(listResp);
-        return resp(401, { ok: false, error: "unauthorized", detail: t });
+        if (listResp.status === 401) {
+          const t = await safeText(listResp);
+          return resp(401, { ok: false, error: "unauthorized", detail: t });
+        }
+        if (!listResp.ok) {
+          const t = await safeText(listResp);
+          return resp(listResp.status, { ok: false, error: "list_failed", detail: t });
+        }
+        let json;
+        try { json = await listResp.json(); } catch { json = {}; }
+        imageRecords = Array.isArray(json && json.images) ? json.images
+                     : Array.isArray(json && json.Images) ? json.Images
+                     : Array.isArray(json && json.results) ? json.results : [];
+        source = "etsy";
       }
-      if (!listResp.ok) {
-        const t = await safeText(listResp);
-        return resp(listResp.status, { ok: false, error: "list_failed", detail: t });
+
+      // Retain at most one exact match for each requested brand-image alt.
+      // Everything else remains subject to the clean-gallery purge.
+      const unmatched = new Set(preserveAltTexts);
+      const keptImages = [];
+      const deleteRecords = [];
+      for (const image of imageRecords) {
+        const alt = normalizeAlt(image?.alt_text);
+        if (alt && unmatched.has(alt)) {
+          unmatched.delete(alt);
+          keptImages.push(compactImage(image));
+        } else {
+          deleteRecords.push(image);
+        }
       }
-      let json;
-      try { json = await listResp.json(); } catch { json = {}; }
-      const results = Array.isArray(json && json.images) ? json.images
-                    : Array.isArray(json && json.Images) ? json.Images
-                    : Array.isArray(json && json.results) ? json.results : [];
-      imageIds = results.map(r => r && r.listing_image_id).filter(Boolean);
+      imageIds = deleteRecords.map(r => r && r.listing_image_id).filter(Boolean);
+      body.__keptImages = keptImages.filter(Boolean);
+      body.__totalSeen = imageRecords.length;
     }
 
     if (imageIds.length === 0) {
-      return resp(200, { ok: true, removed: 0, totalSeen: 0, failures: [] });
+      if (db && !selective.length) await invalidateImageSnapshot(listingId);
+      return resp(200, {
+        ok: true,
+        removed: 0,
+        totalSeen: selective.length ? 0 : Number(body.__totalSeen || 0),
+        deleteRequested: 0,
+        keptImages: body.__keptImages || [],
+        source,
+        failures: []
+      });
     }
 
     // ---- 2) Delete each image (sequential, well below rate limit) ---
@@ -165,9 +233,8 @@ exports.handler = async function (event) {
         `/listings/${encodeURIComponent(listingId)}` +
         `/images/${encodeURIComponent(imgId)}`;
       // DELETE is idempotent: a 404 means the record is already gone, which
-      // IS the goal — count it as removed. Transient Etsy errors (5xx/409)
-      // get exactly one retry after a short pause; a repeat 404 on retry is
-      // likewise success.
+      // IS the goal. Retry only statuses that can genuinely recover; retrying
+      // deterministic 4xx responses wastes quota.
       let done = false, lastStatus = 0, lastDetail = "";
       for (let attempt = 0; attempt < 2 && !done; attempt++) {
         if (attempt > 0) await new Promise(r => setTimeout(r, 1200));
@@ -178,7 +245,9 @@ exports.handler = async function (event) {
           } else {
             lastStatus = delResp.status;
             lastDetail = await safeText(delResp);
-            if (delResp.status === 401 || delResp.status === 403) break; // auth/scope: retry won't help
+            const retryable =
+              [408, 409, 425, 500, 502, 503, 504].includes(delResp.status);
+            if (!retryable) break;
           }
         } catch (e) {
           lastStatus = 0; lastDetail = String((e && e.message) || e);
@@ -187,10 +256,14 @@ exports.handler = async function (event) {
       if (!done) failures.push({ imgId, status: lastStatus, detail: String(lastDetail).slice(0, 200) });
     }
 
+    if (db && !selective.length) await invalidateImageSnapshot(listingId);
     return resp(200, {
       ok: true,
       removed,
-      totalSeen: imageIds.length,
+      totalSeen: selective.length ? imageIds.length : Number(body.__totalSeen || imageIds.length),
+      deleteRequested: imageIds.length,
+      keptImages: body.__keptImages || [],
+      source,
       selective: selective.length > 0,
       failures,
     });
@@ -210,4 +283,29 @@ function resp(statusCode, payload) {
 
 async function safeText(r) {
   try { return await r.text(); } catch { return ""; }
+}
+
+function normalizeAlt(value) {
+  return String(value || "").trim().replace(/\s+/g, " ").toLowerCase();
+}
+
+function compactImage(image) {
+  if (!image?.listing_image_id) return null;
+  return {
+    listing_image_id: image.listing_image_id,
+    rank: Number(image.rank) || 0,
+    alt: String(image.alt_text || "").slice(0, 250),
+    src: image.url_fullxfull || image.url_570xN || image.url || null,
+  };
+}
+
+async function invalidateImageSnapshot(listingId) {
+  try {
+    await db.collection(SNAPSHOT_COLLECTION).doc(String(listingId)).set(
+      { imagesCapturedAt: 0, updatedAt: Date.now() },
+      { merge: true }
+    );
+  } catch (error) {
+    console.warn("listingImagesPurge: cache invalidation failed.", error.message);
+  }
 }

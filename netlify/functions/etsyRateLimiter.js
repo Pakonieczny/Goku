@@ -14,7 +14,11 @@ const INTERNAL_FRACTION = 0.5;
 const RATE_PER_SEC = ETSY_QPS_LIMIT * INTERNAL_FRACTION; // 2.5/s
 const DAILY_BUDGET = Math.floor(ETSY_DAILY_LIMIT * INTERNAL_FRACTION); // 2,500/day
 const BURST = 2;
-const MAX_RETRIES = 5;
+const STATE_RETRIES = 5;
+// The distributed gate already keeps traffic below Etsy's per-second limit.
+// One retry is enough for a genuine edge-window 429; five attempts multiplied
+// a single request into five quota charges during outages.
+const ETSY_429_MAX_ATTEMPTS = 2;
 const JITTER_MS = 50;
 const USAGE_COLLECTION = "ListingGenerator_ApiUsage";
 const RATE_BUCKET = "etsy-listing-generator-global";
@@ -91,7 +95,7 @@ async function takeToken(bucket = RATE_BUCKET) {
       if (error && error.message === "rate-limit-wait") {
         await sleep(error.waitMs);
       } else {
-        if (attempt >= MAX_RETRIES) throw error;
+        if (attempt >= STATE_RETRIES) throw error;
         await sleep(backoff(attempt));
       }
     }
@@ -198,7 +202,7 @@ async function captureEtsyHeaders(response) {
 
 async function etsyFetch(url, init = {}, options = {}) {
   const bucket = options.bucket || RATE_BUCKET;
-  const retries = options.retries == null ? MAX_RETRIES : Number(options.retries);
+  const retries = options.retries == null ? ETSY_429_MAX_ATTEMPTS : Number(options.retries);
 
   for (let attempt = 1; ; attempt++) {
     await takeToken(bucket);
@@ -208,6 +212,13 @@ async function etsyFetch(url, init = {}, options = {}) {
     await captureEtsyHeaders(response);
 
     if (response.status !== 429 || attempt >= retries) return response;
+
+    // A daily-limit 429 cannot recover before reset. Never spend another call
+    // retrying it. clone() preserves the original body for the caller.
+    try {
+      const detail = await response.clone().text();
+      if (/exceeded daily rate limit|daily rate limit/i.test(detail)) return response;
+    } catch (_) {}
 
     const retryAfter = parseRetryAfter(response.headers.get("retry-after"));
     await sleep(retryAfter != null ? retryAfter + jitter() : backoff(attempt));
