@@ -2096,7 +2096,7 @@ ANTI-REPETITION (TITLE)
     // authenticated read/write on these two):
     //   ListingGen_Stats          one doc per published listing:
     //     { setName, category, listingId, etsyUrl, seedDescription,
-    //       variantOf|null, shopify:{status,title,url}|null, ts, day }
+    //       variantOf|null, shopify:{status:PENDING|QUEUED|LIVE|FAILED,title,url,jobId}|null, ts, day }
     //   ListingGen_Config/queues  the 5 "Etsy Shop Listings" ID boxes —
     //     synced live so every terminal shows identical, accurate queues.
     // ══════════════════════════════════════════════════════════════════
@@ -2261,11 +2261,13 @@ ANTI-REPETITION (TITLE)
           const spCell = sp
             ? (sp.url
                 ? `<a href="${escAttr(sp.url)}" target="_blank" rel="noopener">Open ↗</a> <span class="dchip live">LIVE</span>`
-                : `<span class="dchip ${sp.status === "FAILED" ? "fail" : "pend"}">${escHtml(sp.status || "QUEUED")}</span>` +
-                  (sp.status === "FAILED" || sp.status === "QUEUED"
-                    ? ` <button type="button" class="dretry-btn" data-row-id="${escAttr(r.id)}" data-job-id="${escAttr(sp.jobId || "")}" title="Requeue this listing's Shopify upload"${retrying ? " disabled" : ""}>${retrying ? "Retrying…" : "Retry"}</button>`
-                    : ""))
-            : `<span class="dchip pend">—</span>`;
+                : sp.status === "PENDING"
+                  ? `<span class="dchip pend" title="Waiting its turn — Shopify sends run one at a time">Pending</span>`
+                  : `<span class="dchip ${sp.status === "FAILED" ? "fail" : "pend"}">${escHtml(sp.status || "QUEUED")}</span>` +
+                    (sp.status === "FAILED" || sp.status === "QUEUED"
+                      ? ` <button type="button" class="dretry-btn" data-row-id="${escAttr(r.id)}" data-job-id="${escAttr(sp.jobId || "")}" title="Requeue this listing's Shopify upload"${retrying ? " disabled" : ""}>${retrying ? "Retrying…" : "Retry"}</button>`
+                      : ""))
+            : `<span class="dchip pend" title="Shopify mode was off for this listing">—</span>`;
           return `<tr>
             <td>${when}</td>
             <td>${escHtml(r.setName || "—")}${r.variantOf ? ' <span class="dchip cat">variant</span>' : ""}</td>
@@ -9962,6 +9964,13 @@ RULES:
             } catch (_) {}
             return j;
           };
+          // PENDING marker: sends run ONE AT A TIME through __spSendChain
+          // (serialized so Shopify never gets hit concurrently), so a
+          // listing can sit waiting its turn for several minutes with
+          // nothing written yet. Without this, the table shows a bare "—"
+          // indistinguishable from "Shopify mode was off, never attempted"
+          // — this makes the waiting state visible and honest.
+          try { window.ListingStats?.updateShopify(statsDocId, { status: "PENDING", title: fields.title, url: "", jobId: null }); } catch (_) {}
           window.__spSendChain = (window.__spSendChain || Promise.resolve()).then(send);
           return { queued: true, title: fields.title };
         } finally { busy = false; }
