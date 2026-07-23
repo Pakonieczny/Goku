@@ -6052,8 +6052,49 @@ https://www.etsy.com/your/shops/me/listing-editor/edit/1822973998
       return tags.slice(0, 13);
     }
 
+    // PRIME THE NEXT QUEUE SLICE IN TWO ETSY CALLS TOTAL. Etsy's batch
+    // listing endpoint supplies Images and its dedicated batch-inventory
+    // endpoint supplies Inventory for up to 100 IDs. We prime a conservative
+    // 25 at a time (small Netlify payload, large quota win); the purge and
+    // inventory functions consume the server-side snapshots and fall back to
+    // individual reads if this best-effort optimization is unavailable.
+    async function primeEtsyListingSnapshots(listingId, queueId, token) {
+      try {
+        const ids = [String(listingId)];
+        const qEl = queueId ? document.getElementById(queueId) : null;
+        if (qEl) ids.push(...parseListingNumbers(qEl.value));
+        const listingIds = Array.from(new Set(ids.filter(Boolean))).slice(0, 25);
+        if (!listingIds.length || !token) return;
+
+        const response = await etsyFetchWithTimeout(
+          "/.netlify/functions/etsyListingBatchSnapshot",
+          {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ listingIds, token })
+          },
+          60000,
+          "Queued-listing batch snapshot"
+        );
+        const result = await response.json().catch(() => ({}));
+        window.__DIAG.log("etsy-batch-snapshot", {
+          requested: listingIds.length,
+          ok: response.ok && result.ok !== false,
+          etsyCalls: Number(result.etsyCalls || 0),
+          refreshedImages: Number(result.refreshedImages || 0),
+          refreshedInventory: Number(result.refreshedInventory || 0),
+          errors: (result.errors || []).slice(0, 2)
+        });
+        if (!response.ok) {
+          console.warn("Queued-listing batch snapshot unavailable; per-listing reads remain enabled.", result);
+        }
+      } catch (error) {
+        console.warn("Queued-listing batch snapshot failed; per-listing reads remain enabled.", error.message);
+      }
+    }
+
     // ---- Snapshot the current UI to a durable Job (LS manifest + IDB blobs) ----
-    async function queueListingUploadFromUI(listingId) {
+    async function queueListingUploadFromUI(listingId, queueId) {
       const jobId = `etsyJob_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`;
       const title = (document.getElementById("listingTitle")?.value || "").trim();
       const userDescription = document.getElementById("listingDescription")?.value || "";
@@ -6061,6 +6102,14 @@ https://www.etsy.com/your/shops/me/listing-editor/edit/1822973998
       const finalDescription = userDescription + appended;
       const tags = buildEtsyTagsFromOverlay(document.getElementById("searchKeyPhrases")?.value || "");
       const sku = buildSkuFromTitle(title);
+      // Run the quota-saving batch reads in parallel with local image
+      // normalization. By the time the daemon reaches Stage 0, its snapshot
+      // is normally ready without adding wall-clock latency.
+      const batchPrimePromise = primeEtsyListingSnapshots(
+        listingId,
+        queueId,
+        String(window.accessToken || localStorage.getItem("etsyAccessToken") || "")
+      );
 
       // Photos (0–7) from previewImages / names / meta
       // -----------------------------------------------------------------
@@ -6212,6 +6261,7 @@ https://www.etsy.com/your/shops/me/listing-editor/edit/1822973998
         try { await idbPut(key, dataURL); } catch (e) { console.warn("Reserved IDB save failed", i, e); }
         return key;
       }));
+      await batchPrimePromise;
 
       const job = {
         jobId,
@@ -6272,14 +6322,14 @@ https://www.etsy.com/your/shops/me/listing-editor/edit/1822973998
     // 408/network drop) currently fail an entire job even when 7 of 10
     // photos already uploaded — the retry then re-pays every API call. One
     // request-level retry with backoff absorbs those blips. This is
-    // BOUNDED (max 2 extra attempts per request) and per-request, so it
+    // BOUNDED (max 1 extra attempt per request) and per-request, so it
     // cannot recreate the old job-level endless-retry loop. Deliberately
     // NOT retried: 429 (the daily-quota halt logic downstream must see it
     // untouched) and every other 4xx (deterministic — a retry is a wasted
     // quota call).
     async function etsyFetchWithTransientRetry(url, opts = {}, timeoutMs = 90000, label = "request") {
       const RETRY_STATUSES = [408, 502, 503, 504];
-      const BACKOFF_MS = [2500, 5000];
+      const BACKOFF_MS = [2500];
       let lastErr = null;
       for (let attempt = 0; attempt <= BACKOFF_MS.length; attempt++) {
         if (attempt > 0) {
@@ -6383,17 +6433,52 @@ https://www.etsy.com/your/shops/me/listing-editor/edit/1822973998
         // and continue — better to upload (and accept potential
         // duplicates this run) than to abort the entire job.
         let purgeLeftovers = [];
+        const preservedReservedAlts = new Set();
+        const uploadedImageHarvest = [];
         try {
           const purgeResp = await etsyFetchWithTransientRetry(
-            `/.netlify/functions/listingImagesPurge?listingId=${encodeURIComponent(listingId)}&token=${encodeURIComponent(token)}`,
-            { method: "POST" }, 60000, "Image purge"
+            "/.netlify/functions/listingImagesPurge",
+            {
+              method: "POST",
+              headers: { "Content-Type": "application/json" },
+              body: JSON.stringify({
+                listingId,
+                token,
+                preserveAltTexts: job.reservedMeta || []
+              })
+            }, 60000, "Image purge"
           );
           if (purgeResp.ok) {
             const purgeJson = await purgeResp.json().catch(() => ({}));
             const totalSeen = Number(purgeJson && purgeJson.totalSeen) || 0;
             const removed = Number(purgeJson && purgeJson.removed) || 0;
-            window.__DIAG.log("purge", { listingId, totalSeen, removed, failures: ((purgeJson && purgeJson.failures) || []).slice(0, 3) });
-            if (totalSeen > 0 && removed < totalSeen) {
+            const deleteRequested = Number(purgeJson && purgeJson.deleteRequested);
+            const deleteTarget = Number.isFinite(deleteRequested)
+              ? deleteRequested
+              : Math.max(0, totalSeen - ((purgeJson && purgeJson.keptImages) || []).length);
+            const keptImages = Array.isArray(purgeJson && purgeJson.keptImages)
+              ? purgeJson.keptImages
+              : [];
+            for (const image of keptImages) {
+              const alt = String(image.alt || image.alt_text || "").trim().replace(/\s+/g, " ");
+              const idx = (job.reservedMeta || []).findIndex(
+                value => String(value || "").trim().replace(/\s+/g, " ").toLowerCase() === alt.toLowerCase()
+              );
+              if (idx < 0) continue;
+              preservedReservedAlts.add(alt.toLowerCase());
+              uploadedImageHarvest.push({
+                listing_image_id: image.listing_image_id,
+                rank: 9 + idx,
+                src: image.src || image.url_fullxfull || image.url_570xN || image.url || null,
+                alt
+              });
+            }
+            window.__DIAG.log("purge", {
+              listingId, totalSeen, deleteTarget, removed,
+              kept: keptImages.length, source: purgeJson && purgeJson.source,
+              failures: ((purgeJson && purgeJson.failures) || []).slice(0, 3)
+            });
+            if (deleteTarget > 0 && removed < deleteTarget) {
               const fails = (purgeJson && purgeJson.failures) || [];
               const firstFail = fails[0] || {};
               if (String(firstFail.status) === "403") {
@@ -6419,7 +6504,7 @@ https://www.etsy.com/your/shops/me/listing-editor/edit/1822973998
               purgeLeftovers = fails.map(f => f && f.imgId).filter(Boolean);
               console.warn(`Purge left ${purgeLeftovers.length} image(s) on ${listingId} — will remove right after uploads:`, purgeLeftovers.join(","));
             }
-            console.log(`Purge: removed ${removed}/${totalSeen} existing image(s) from listing ${listingId}.`);
+            console.log(`Purge: removed ${removed}/${deleteTarget}; preserved ${keptImages.length} reusable brand image(s) on listing ${listingId}.`);
           } else if (purgeResp.status === 401) {
             // Token expired right at the start — treat the same as any
             // other 401 below: pause the job and trigger reconnect.
@@ -6429,12 +6514,36 @@ https://www.etsy.com/your/shops/me/listing-editor/edit/1822973998
               token = window.accessToken;
               save({ accessToken: token });
               const retryResp = await etsyFetchWithTimeout(
-                `/.netlify/functions/listingImagesPurge?listingId=${encodeURIComponent(listingId)}&token=${encodeURIComponent(token)}`,
-                { method: "POST" }, 60000, "Image purge (retry)"
+                "/.netlify/functions/listingImagesPurge",
+                {
+                  method: "POST",
+                  headers: { "Content-Type": "application/json" },
+                  body: JSON.stringify({
+                    listingId,
+                    token,
+                    preserveAltTexts: job.reservedMeta || []
+                  })
+                }, 60000, "Image purge (retry)"
               );
               if (retryResp.ok) {
                 const rj = await retryResp.json().catch(() => ({}));
-                console.log(`Purge (after refresh): removed ${rj.removed}/${rj.totalSeen}.`);
+                const kept = Array.isArray(rj.keptImages) ? rj.keptImages : [];
+                for (const image of kept) {
+                  const alt = String(image.alt || image.alt_text || "").trim().replace(/\s+/g, " ");
+                  const idx = (job.reservedMeta || []).findIndex(
+                    value => String(value || "").trim().replace(/\s+/g, " ").toLowerCase() === alt.toLowerCase()
+                  );
+                  if (idx < 0) continue;
+                  preservedReservedAlts.add(alt.toLowerCase());
+                  uploadedImageHarvest.push({
+                    listing_image_id: image.listing_image_id,
+                    rank: 9 + idx,
+                    src: image.src || image.url_fullxfull || image.url_570xN || image.url || null,
+                    alt
+                  });
+                }
+                purgeLeftovers = (rj.failures || []).map(f => f && f.imgId).filter(Boolean);
+                console.log(`Purge (after refresh): removed ${rj.removed}/${rj.deleteRequested}; preserved ${kept.length}.`);
               } else {
                 save({ status: "AUTH_NEEDED", error: "token_expired" });
                 window.M?.toast?.({ html: 'Etsy session expired — click "Connect to Etsy", then re-run this listing.' });
@@ -6491,7 +6600,6 @@ https://www.etsy.com/your/shops/me/listing-editor/edit/1822973998
         // (2 API calls per listing) with data we already have. altSent is
         // carried alongside because the response's alt_text field may lag —
         // we KNOW what we sent, so ours is authoritative for Shopify.
-        const uploadedImageHarvest = [];
         // Leftover image ids the pre-upload purge could not delete (e.g.
         // Etsy's last-image-of-active-listing rule); removed post-upload.
         // (Populated inside the purge block above via outer scope.)
@@ -6548,6 +6656,7 @@ https://www.etsy.com/your/shops/me/listing-editor/edit/1822973998
           fd.append("fileName", job.photoNames[i] || `uploaded_photo_${i}.jpg`);
           fd.append("rank", i + 1);
           fd.append("alt_text", job.photoMeta[i] || "");
+          fd.append("operationKey", `${job.jobId}:main:${i}`);
           fd.append("file", blob, job.photoNames[i] || `uploaded_photo_${i}.jpg`);
           mainAttempted++;
           const up = await uploadImage(fd, `Photo ${i + 1}`);
@@ -6579,6 +6688,12 @@ https://www.etsy.com/your/shops/me/listing-editor/edit/1822973998
         }
         // --- Stage 1b: Reserved (8–9)
         for (let i = 0; i < job.reservedCount; i++) {
+          const reservedAltKey = String(job.reservedMeta[i] || "").trim().replace(/\s+/g, " ").toLowerCase();
+          if (reservedAltKey && preservedReservedAlts.has(reservedAltKey)) {
+            console.log(`Reserved ${9 + i}: retained existing matching brand image (0 Etsy calls).`);
+            if (typeof bumpCreateProgressPerImage === "function") bumpCreateProgressPerImage();
+            continue;
+          }
           // Skip override: stop uploading this listing immediately if requested.
           if (window.__skipListingRequested) return;
           const blob = job.storage?.reserved === "idb"
@@ -6591,6 +6706,7 @@ https://www.etsy.com/your/shops/me/listing-editor/edit/1822973998
           fd.append("fileName", job.reservedNames[i] || `reserved_photo_${i}.jpg`);
           fd.append("rank", 9 + i);
           fd.append("alt_text", job.reservedMeta[i] || "");
+          fd.append("operationKey", `${job.jobId}:reserved:${i}`);
           fd.append("file", blob, job.reservedNames[i] || `reserved_photo_${i}.jpg`);
           const up = await uploadImage(fd, `Reserved ${9 + i}`);
           if (up.authExpired) {
@@ -6682,11 +6798,26 @@ https://www.etsy.com/your/shops/me/listing-editor/edit/1822973998
 
         // Inventory SKU (same as your current flow)
         save({ lastActivityAt: Date.now() });
-        await etsyFetchWithTransientRetry(
+        const inventoryResp = await etsyFetchWithTransientRetry(
           `/.netlify/functions/updateListingInventory?listingId=${encodeURIComponent(listingId)}&token=${encodeURIComponent(token)}`,
           { method: "PUT", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ sku: job.sku }) },
           60000, "Inventory SKU update"
-        ).catch(e => console.warn("Inventory SKU update error:", e));
+        );
+        const inventoryJson = await inventoryResp.json().catch(() => ({}));
+        if (!inventoryResp.ok) {
+          const detail = JSON.stringify(inventoryJson || {});
+          if (inventoryResp.status === 401 && /invalid_token|expired/i.test(detail)) {
+            save({ status: "AUTH_NEEDED", error: "token_expired" });
+            window.M?.toast?.({ html: 'Etsy session expired — click "Connect to Etsy", then re-run this listing.' });
+            return;
+          }
+          if (isDailyQuotaError(inventoryResp.status, detail)) {
+            const quotaErr = new Error("Etsy daily API quota exceeded.");
+            quotaErr.quotaExceeded = true;
+            throw quotaErr;
+          }
+          throw new Error(`Inventory SKU update failed ${inventoryResp.status} — ${detail}`);
+        }
 
         if (typeof setCreateProgress === "function") setCreateProgress(100);
         save({ status: "DONE", progress: 100, completedAt: nowIso() });
@@ -7345,7 +7476,7 @@ https://www.etsy.com/your/shops/me/listing-editor/edit/1822973998
 
         // 2) Snapshot EVERYTHING immediately to localStorage (so Clear won’t affect it)
         //    (Requires PATCH 1 functions: queueListingUploadFromUI, processEtsyJobs)
-        const jobId = await queueListingUploadFromUI(listingId);
+        const jobId = await queueListingUploadFromUI(listingId, targetInputId);
         if (window.__lastConsumedListing && window.__lastConsumedListing.listingId === String(listingId)) {
           window.__lastConsumedListing.jobId = jobId;
         }
@@ -10142,6 +10273,7 @@ RULES:
       let refreshInFlight = false;
       let probeInFlight = false;
       let lastProbeAt = 0;
+      let lastUsageSnapshot = null;
 
       const byId = (id) => document.getElementById(id);
       const abbreviate = (n) => {
@@ -10164,7 +10296,7 @@ RULES:
       };
 
       async function refreshApiUsage() {
-        if (refreshInFlight) return;
+        if (refreshInFlight) return lastUsageSnapshot;
         refreshInFlight = true;
         const widget = byId("apiWidget");
         try {
@@ -10177,6 +10309,7 @@ RULES:
           if (!response.ok || data.ok === false || data.verified !== true) {
             throw new Error(data.error || "API statistics unavailable");
           }
+          lastUsageSnapshot = data;
 
           const used = Number(data.count || 0);
           const budget = Number(data.budget || 2500);
@@ -10258,6 +10391,7 @@ RULES:
           info.classList.toggle("warnDot", counterIsPartial || headerIsStale);
           widget.classList.remove("awUnavailable");
           widget.title = "";
+          return data;
         } catch (error) {
           widget.classList.add("awUnavailable");
           widget.title = "Verified API statistics are temporarily unavailable: " + error.message;
@@ -10266,6 +10400,7 @@ RULES:
           byId("awQps").textContent = "— QPS";
           setBar("awAppBar", 0, "bad");
           setBar("awKeyBar", 0, "");
+          return lastUsageSnapshot;
         } finally {
           refreshInFlight = false;
         }
@@ -10273,11 +10408,21 @@ RULES:
 
       async function primeEtsyApiUsage(force = false) {
         if (probeInFlight) return;
+        // Every real Etsy request already captures authoritative rate headers.
+        // Read those free Firestore-backed statistics first and only spend a
+        // probe call when the shared-key reading is actually stale/missing.
+        const snapshot = await refreshApiUsage();
+        const headerAge = snapshot?.etsy_reported_at
+          ? Date.now() - Number(snapshot.etsy_reported_at)
+          : Infinity;
+        if (Number.isFinite(headerAge) && headerAge >= 0 && headerAge < 5 * 60 * 1000) {
+          return;
+        }
         if (!force && lastProbeAt && Date.now() - lastProbeAt < 60000) {
-          await refreshApiUsage();
           return;
         }
         probeInFlight = true;
+        lastProbeAt = Date.now(); // throttle failures too; never probe-loop
         try {
           const response = await fetch(
             "/.netlify/functions/etsyApiProbe?t=" + Date.now(),
