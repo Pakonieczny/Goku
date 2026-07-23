@@ -8909,6 +8909,12 @@ https://www.etsy.com/your/shops/me/listing-editor/edit/1822973998
               }
             }
           } catch {}
+          // Initialize the verified API widget immediately. OAuth token
+          // exchange itself is not an Etsy application API call and carries
+          // no quota headers, so make one lightweight authenticated probe.
+          if (typeof window.primeEtsyApiUsage === "function") {
+            await window.primeEtsyApiUsage(true);
+          }
           // AUTO-RESUME REMOVED. Previously, returning from the Etsy OAuth
           // redirect automatically re-launched processEtsyJobs() to "resume
           // pending uploads". That resume-on-interruption behaviour is what
@@ -10134,6 +10140,7 @@ RULES:
     // from Etsy's own x-limit-per-day / x-remaining-today response headers.
     (() => {
       let refreshInFlight = false;
+      let probeInFlight = false;
 
       const byId = (id) => document.getElementById(id);
       const abbreviate = (n) => {
@@ -10263,8 +10270,66 @@ RULES:
         }
       }
 
+      async function primeEtsyApiUsage(force = false) {
+        if (probeInFlight) return;
+        probeInFlight = true;
+        try {
+          let token = String(
+            window.accessToken ||
+            localStorage.getItem("etsyAccessToken") ||
+            ""
+          ).trim();
+
+          if (!token) {
+            await refreshApiUsage();
+            return;
+          }
+
+          // Use the app's existing silent-renewal path before probing when the
+          // saved one-hour Etsy access token is near expiry.
+          const issuedAt = Number(localStorage.getItem("etsyTokenIssuedAt") || 0);
+          if (
+            (!issuedAt || Date.now() - issuedAt > 50 * 60 * 1000) &&
+            typeof window.ensureFreshEtsyToken === "function"
+          ) {
+            await window.ensureFreshEtsyToken().catch(() => false);
+            token = String(
+              window.accessToken ||
+              localStorage.getItem("etsyAccessToken") ||
+              token
+            ).trim();
+          }
+
+          const response = await fetch(
+            "/.netlify/functions/etsyApiProbe?t=" + Date.now(),
+            {
+              method: "GET",
+              cache: "no-store",
+              headers: {
+                Accept: "application/json",
+                "access-token": token,
+              },
+            }
+          );
+          const result = await response.json().catch(() => ({}));
+          if (!response.ok || result.verified !== true) {
+            console.warn(
+              "Etsy API statistics verification did not complete:",
+              response.status,
+              result
+            );
+          }
+        } catch (error) {
+          console.warn("Etsy API statistics verification failed:", error);
+        } finally {
+          probeInFlight = false;
+          await refreshApiUsage();
+        }
+      }
+
       window.refreshEtsyApiUsage = refreshApiUsage;
-      document.addEventListener("DOMContentLoaded", refreshApiUsage);
+      window.primeEtsyApiUsage = primeEtsyApiUsage;
+      document.addEventListener("DOMContentLoaded", primeEtsyApiUsage);
       window.addEventListener("focus", refreshApiUsage);
       document.addEventListener("visibilitychange", () => {
         if (!document.hidden) refreshApiUsage();
