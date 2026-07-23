@@ -10141,6 +10141,7 @@ RULES:
     (() => {
       let refreshInFlight = false;
       let probeInFlight = false;
+      let lastProbeAt = 0;
 
       const byId = (id) => document.getElementById(id);
       const abbreviate = (n) => {
@@ -10272,43 +10273,18 @@ RULES:
 
       async function primeEtsyApiUsage(force = false) {
         if (probeInFlight) return;
+        if (!force && lastProbeAt && Date.now() - lastProbeAt < 60000) {
+          await refreshApiUsage();
+          return;
+        }
         probeInFlight = true;
         try {
-          let token = String(
-            window.accessToken ||
-            localStorage.getItem("etsyAccessToken") ||
-            ""
-          ).trim();
-
-          if (!token) {
-            await refreshApiUsage();
-            return;
-          }
-
-          // Use the app's existing silent-renewal path before probing when the
-          // saved one-hour Etsy access token is near expiry.
-          const issuedAt = Number(localStorage.getItem("etsyTokenIssuedAt") || 0);
-          if (
-            (!issuedAt || Date.now() - issuedAt > 50 * 60 * 1000) &&
-            typeof window.ensureFreshEtsyToken === "function"
-          ) {
-            await window.ensureFreshEtsyToken().catch(() => false);
-            token = String(
-              window.accessToken ||
-              localStorage.getItem("etsyAccessToken") ||
-              token
-            ).trim();
-          }
-
           const response = await fetch(
             "/.netlify/functions/etsyApiProbe?t=" + Date.now(),
             {
               method: "GET",
               cache: "no-store",
-              headers: {
-                Accept: "application/json",
-                "access-token": token,
-              },
+              headers: { Accept: "application/json" },
             }
           );
           const result = await response.json().catch(() => ({}));
@@ -10318,6 +10294,8 @@ RULES:
               response.status,
               result
             );
+          } else {
+            lastProbeAt = Date.now();
           }
         } catch (error) {
           console.warn("Etsy API statistics verification failed:", error);
@@ -10330,11 +10308,14 @@ RULES:
       window.refreshEtsyApiUsage = refreshApiUsage;
       window.primeEtsyApiUsage = primeEtsyApiUsage;
       document.addEventListener("DOMContentLoaded", primeEtsyApiUsage);
-      window.addEventListener("focus", refreshApiUsage);
+      window.addEventListener("focus", primeEtsyApiUsage);
       document.addEventListener("visibilitychange", () => {
-        if (!document.hidden) refreshApiUsage();
+        if (!document.hidden) primeEtsyApiUsage();
       });
       setInterval(refreshApiUsage, 15000);
+      setInterval(() => {
+        if (!document.hidden) primeEtsyApiUsage();
+      }, 5 * 60 * 1000);
     })();
   </script>
 </body>
