@@ -26,15 +26,14 @@
 // spent; the remainder uploads automatically on subsequent days' drains.
 //
 // HTTP API (called by Index.html):
-//   POST {op:"enqueue", payload:{...}}   -> queue job + immediate drain pass
+//   POST {op:"enqueue", requestId, payload:{...}} -> durable idempotent job + drain
 //   GET  ?op=drain                       -> drain queue within today's budget
-//   GET  ?op=status                      -> queue + budget snapshot
+//   GET  ?op=status&jobId=...            -> queue + budget + exact job snapshot
 //   POST {op:"retryFailed"}              -> requeue all FAILED jobs
 //
 // SCHEDULING: every enqueue self-drains, the app pings ?op=drain on load and
-// every 30 min while open, and the day rolls over automatically (dateKey in
-// America/Toronto). For fully unattended multi-day drains, point any external
-// cron (e.g. cron-job.org) at ?op=drain hourly.
+// while queued work exists, and the day rolls over automatically (dateKey in
+// America/Toronto). shopifyDrainCron remains the unattended safety net.
 //
 // ENV (this Netlify site): SHOPIFY_STORE=brites-jewelry.myshopify.com,
 // SHOPIFY_CLIENT_ID, SHOPIFY_CLIENT_SECRET, SHOPIFY_API_VERSION? (2025-10)
@@ -48,7 +47,12 @@ const db = admin.firestore();
 const API_VERSION = process.env.SHOPIFY_API_VERSION || "2025-10";
 const DAILY_VARIANT_LIMIT = 1000;   // Shopify hard limit (50K+ variant stores)
 const DAILY_SAFETY_CEILING = 950;   // leave headroom for manual admin work
-const DRAIN_TIME_BUDGET_MS = 18000; // stay under Netlify's 26s cap
+// All drains execute in shopifyDrain-background (15-minute Netlify budget).
+// Leave enough time for the current job to finish and for a continuation
+// invocation to be accepted before that hard deadline.
+const DRAIN_TIME_BUDGET_MS = 12 * 60 * 1000;
+const DRAIN_LEASE_MS = 17 * 60 * 1000;
+const STALE_UPLOAD_MS = 18 * 60 * 1000;
 const QCOL = "Shopify_Upload_Queue";
 const META = "Shopify_Upload_Meta";
 const VENDOR = "Brites Jewelry";
@@ -286,27 +290,60 @@ function torontoDateKey() {
   return new Intl.DateTimeFormat("en-CA", { timeZone: "America/Toronto", year: "numeric", month: "2-digit", day: "2-digit" }).format(new Date());
 }
 
-// Reserve `n` variants from today's budget atomically. Returns true if granted.
-async function reserveBudget(n) {
-  const ref = db.collection(META).doc("budget");
+// Reserve a job's variants exactly once. The reservation marker and the
+// aggregate budget counter are written in the same transaction, so a killed
+// worker can resume without charging the same job twice.
+async function reserveBudgetForJob(jobRef, n) {
+  const budgetRef = db.collection(META).doc("budget");
   return db.runTransaction(async (tx) => {
-    const snap = await tx.get(ref);
+    const [jobSnap, budgetSnap] = await Promise.all([tx.get(jobRef), tx.get(budgetRef)]);
+    if (!jobSnap.exists) return { granted: false, missing: true };
+    const job = jobSnap.data();
     const key = torontoDateKey();
+
+    // A created product already consumed Shopify's variant allowance, even
+    // when the job is resuming on a later day. Never reserve it again.
+    if (job.productId || job.budgetReservedDay === key) {
+      return { granted: true, alreadyReserved: true, dateKey: job.budgetReservedDay || key };
+    }
+
     let used = 0;
-    if (snap.exists && snap.data().dateKey === key) used = snap.data().used || 0;
-    if (used + n > DAILY_SAFETY_CEILING) return false;
-    tx.set(ref, { dateKey: key, used: used + n, limit: DAILY_VARIANT_LIMIT, ceiling: DAILY_SAFETY_CEILING }, { merge: true });
-    return true;
+    if (budgetSnap.exists && budgetSnap.data().dateKey === key) used = budgetSnap.data().used || 0;
+    if (used + n > DAILY_SAFETY_CEILING) return { granted: false, budget: true, dateKey: key };
+
+    tx.set(budgetRef, {
+      dateKey: key, used: used + n,
+      limit: DAILY_VARIANT_LIMIT, ceiling: DAILY_SAFETY_CEILING
+    }, { merge: true });
+    tx.set(jobRef, {
+      budgetReservedDay: key,
+      budgetReservedVariants: n,
+      budgetReservedAtMs: Date.now()
+    }, { merge: true });
+    return { granted: true, alreadyReserved: false, dateKey: key };
   });
 }
-async function refundBudget(n) { // on failed create, give the variants back
-  const ref = db.collection(META).doc("budget");
+
+// Refund only jobs that failed before Shopify created a product. Later-stage
+// failures still consumed the real Shopify variant allowance.
+async function refundBudgetForJob(jobRef) {
+  const budgetRef = db.collection(META).doc("budget");
   await db.runTransaction(async (tx) => {
-    const snap = await tx.get(ref);
+    const [jobSnap, budgetSnap] = await Promise.all([tx.get(jobRef), tx.get(budgetRef)]);
+    if (!jobSnap.exists) return;
+    const job = jobSnap.data();
+    if (job.productId || !job.budgetReservedDay) return;
     const key = torontoDateKey();
-    if (snap.exists && snap.data().dateKey === key) {
-      tx.set(ref, { used: Math.max(0, (snap.data().used || 0) - n) }, { merge: true });
+    if (budgetSnap.exists && budgetSnap.data().dateKey === key && job.budgetReservedDay === key) {
+      tx.set(budgetRef, {
+        used: Math.max(0, (budgetSnap.data().used || 0) - (job.budgetReservedVariants || job.variantCount || 0))
+      }, { merge: true });
     }
+    tx.set(jobRef, {
+      budgetReservedDay: null,
+      budgetReservedVariants: null,
+      budgetReservedAtMs: null
+    }, { merge: true });
   });
 }
 async function budgetSnapshot() {
@@ -573,6 +610,7 @@ Only include collection titles copied verbatim from the list. Do not force weak 
 async function createShopifyProduct(job) {
   const p = job.payload;
   const matrix = job.matrix; // computed at enqueue
+  const queueMarker = `lg-job-${String(job.id || "").replace(/[^a-zA-Z0-9_-]/g, "").slice(0, 80)}`;
 
   // Semantic expansion first, so meanings land in tags (smart collections
   // with Tag/Title rules then match on their own) and AI-picked collections
@@ -642,6 +680,7 @@ async function createShopifyProduct(job) {
   const categoryTag = String(p.category || "").replace(/_/g, " ").toLowerCase().trim();
 
   const tags = Array.from(new Set([
+    queueMarker,                  // must survive the 60-tag cap for recovery
     ...smartPlan.extraTags,       // rule-satisfying tags — never trimmed
     categoryTag,
     ...(p.tags || []),
@@ -668,9 +707,36 @@ async function createShopifyProduct(job) {
   // copy. A retried job that already carries a productId now SKIPS creation
   // and media (both would duplicate) and resumes at publish + collections
   // (both safe to repeat).
+  // If a worker died in the tiny interval after Shopify accepted productSet
+  // but before Firestore saved productId, recover by the unique marker tag.
+  // This closes the last duplicate-product window on stale-job recovery.
+  let recoveredProduct = null;
+  if (!job.productId && (Number(job.recoveryCount || 0) > 0 || Number(job.attempts || 0) > 0)) {
+    try {
+      const found = await gql(`query($q: String!) {
+        products(first: 2, query: $q) {
+          nodes { id handle title variantsCount { count } media(first: 1) { nodes { id } } }
+        }
+      }`, { q: `tag:${queueMarker}` });
+      recoveredProduct = (((found.products || {}).nodes) || [])[0] || null;
+      if (recoveredProduct) {
+        job.productId = recoveredProduct.id;
+        job.handle = recoveredProduct.handle;
+        await db.collection(QCOL).doc(job.id).set({
+          productId: recoveredProduct.id,
+          handle: recoveredProduct.handle,
+          recoveredProductAtMs: Date.now()
+        }, { merge: true });
+        console.warn(`Recovered job ${job.id} from Shopify marker ${queueMarker}; product creation will not repeat.`);
+      }
+    } catch (e) {
+      console.warn(`Shopify marker lookup failed for job ${job.id}; continuing with Firestore state:`, e && e.message);
+    }
+  }
+
   let product;
   if (job.productId) {
-    product = { id: job.productId, handle: job.handle || null, variantsCount: null };
+    product = recoveredProduct || { id: job.productId, handle: job.handle || null, variantsCount: null };
     console.log(`Resuming job ${job.id}: product ${job.productId} already created — skipping productSet/media.`);
   } else {
     const setRes = await gql(`mutation($input: ProductSetInput!) {
@@ -800,12 +866,21 @@ function normalizeHandle(x) {
 // Full relink for one existing product — shared by the synchronous op and
 // the background function.
 async function triggerBackgroundDrain() {
-  const base = process.env.URL || process.env.DEPLOY_PRIME_URL || "";
-  if (!base) { console.warn("no site URL for background drain"); return; }
+  const base = (process.env.URL || process.env.DEPLOY_PRIME_URL || process.env.DEPLOY_URL || "").replace(/\/$/, "");
+  if (!base) { console.warn("no site URL for background drain"); return false; }
   try {
     // -background functions return 202 immediately; this await is instant.
-    await fetch(base + "/.netlify/functions/shopifyDrain-background", { method: "POST" });
-  } catch (e) { console.warn("background drain trigger failed:", e && e.message); }
+    const res = await fetch(base + "/.netlify/functions/shopifyDrain-background", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ source: "shopifyListingUpload" })
+    });
+    if (!res.ok) throw new Error("HTTP " + res.status);
+    return true;
+  } catch (e) {
+    console.warn("background drain trigger failed:", e && e.message);
+    return false;
+  }
 }
 
 async function runRelink(handle) {
@@ -1401,9 +1476,16 @@ function validatePayload(p) {
   return errors;
 }
 
-async function enqueue(payload) {
+function cleanRequestId(requestId) {
+  const id = String(requestId || "").trim();
+  return /^[a-zA-Z0-9_-]{16,120}$/.test(id) ? id : null;
+}
+
+async function enqueue(payload, requestId) {
   const errors = validatePayload(payload);
   if (errors.length) return { ok: false, errors };
+  const stableId = cleanRequestId(requestId);
+  const ref = stableId ? db.collection(QCOL).doc(stableId) : db.collection(QCOL).doc();
   const tier = 1 + Math.floor(Math.random() * 3); // random tier per scheme
   const matrix = buildMatrix(payload.category, tier, (payload.sku || "").trim().toUpperCase() || null);
   const prices = matrix.variants.map(v => v.price);
@@ -1429,96 +1511,244 @@ async function enqueue(payload) {
       source: payload.source || "index-app"
     }
   };
-  const ref = await db.collection(QCOL).add(doc);
-  return { ok: true, jobId: ref.id, tier, variantCount: matrix.variants.length };
+
+  // requestId is generated once in the browser and reused for its one
+  // network retry. A lost HTTP response therefore returns the original job
+  // instead of adding a second product to the queue.
+  const saved = await db.runTransaction(async (tx) => {
+    const snap = await tx.get(ref);
+    if (snap.exists) {
+      const prior = snap.data();
+      return {
+        deduped: true,
+        tier: prior.tier,
+        variantCount: prior.variantCount,
+        status: prior.status
+      };
+    }
+    tx.set(ref, doc);
+    return {
+      deduped: false,
+      tier,
+      variantCount: matrix.variants.length,
+      status: "QUEUED"
+    };
+  });
+  return { ok: true, jobId: ref.id, ...saved };
+}
+
+function drainWorkerId() {
+  return `w-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 10)}`;
+}
+
+async function acquireDrainLease(owner) {
+  const ref = db.collection(META).doc("drainLease");
+  const now = Date.now();
+  return db.runTransaction(async (tx) => {
+    const snap = await tx.get(ref);
+    const cur = snap.exists ? snap.data() : {};
+    if (cur.owner && cur.owner !== owner && Number(cur.leaseUntilMs || 0) > now) return false;
+    tx.set(ref, {
+      owner,
+      leaseUntilMs: now + DRAIN_LEASE_MS,
+      heartbeatAtMs: now
+    }, { merge: true });
+    return true;
+  });
+}
+
+async function renewDrainLease(owner) {
+  const ref = db.collection(META).doc("drainLease");
+  const now = Date.now();
+  return db.runTransaction(async (tx) => {
+    const snap = await tx.get(ref);
+    if (!snap.exists || snap.data().owner !== owner) return false;
+    tx.set(ref, { leaseUntilMs: now + DRAIN_LEASE_MS, heartbeatAtMs: now }, { merge: true });
+    return true;
+  });
+}
+
+async function releaseDrainLease(owner) {
+  const ref = db.collection(META).doc("drainLease");
+  await db.runTransaction(async (tx) => {
+    const snap = await tx.get(ref);
+    if (!snap.exists || snap.data().owner !== owner) return;
+    tx.set(ref, {
+      owner: null,
+      leaseUntilMs: 0,
+      releasedAtMs: Date.now()
+    }, { merge: true });
+  });
+}
+
+// A background invocation can be killed by the platform. Requeue only after
+// both the worker lease and the 15-minute execution window have safely
+// elapsed. Product creation remains idempotent via productId + queueMarker.
+async function recoverStaleUploads() {
+  const now = Date.now();
+  const snap = await db.collection(QCOL).where("status", "==", "UPLOADING").limit(100).get();
+  let recovered = 0;
+  for (const docSnap of snap.docs) {
+    const current = docSnap.data();
+    if (!current.startedAtMs || now - Number(current.startedAtMs) < STALE_UPLOAD_MS) continue;
+    const didRecover = await db.runTransaction(async (tx) => {
+      const fresh = await tx.get(docSnap.ref);
+      if (!fresh.exists) return false;
+      const data = fresh.data();
+      if (data.status !== "UPLOADING" || !data.startedAtMs ||
+          now - Number(data.startedAtMs) < STALE_UPLOAD_MS) return false;
+      tx.set(docSnap.ref, {
+        status: "QUEUED",
+        startedAtMs: null,
+        workerId: null,
+        recoveredAtMs: now,
+        recoveryCount: Number(data.recoveryCount || 0) + 1,
+        error: null
+      }, { merge: true });
+      return true;
+    });
+    if (didRecover) recovered++;
+  }
+  return recovered;
 }
 
 async function drain() {
   const t0 = Date.now();
-  const out = { uploaded: [], skipped: 0, failed: [], stoppedFor: null };
-  // FIX: `where("status","==") + orderBy("createdAtMs")` requires a Firestore
-  // COMPOSITE index (equality filter + order on a different field), which
-  // doesn't exist in this project — every drain died with
-  // "9 FAILED_PRECONDITION: The query requires an index". A single-field
-  // filter needs no composite index, so fetch a generous batch and FIFO-sort
-  // in memory instead. The queue is small (daily budget caps it), so up to
-  // 150 tiny docs per drain is negligible read cost — and zero console setup.
-  const snap = await db.collection(QCOL).where("status", "==", "QUEUED").limit(150).get();
-  const queuedDocs = snap.docs
-    .slice()
-    .sort((a, b) => (a.data().createdAtMs || 0) - (b.data().createdAtMs || 0))
-    .slice(0, 30);
-  for (const docSnap of queuedDocs) {
-    if (Date.now() - t0 > DRAIN_TIME_BUDGET_MS) { out.stoppedFor = "time"; break; }
-    const job = { id: docSnap.id, ...docSnap.data() };
-
-    // CONCURRENCY GUARD: drains fire from four triggers (enqueue, the
-    // 30-min in-app timer, the Drain button, retryFailed) and possibly
-    // multiple open tabs. Two overlapping drains could both read this doc
-    // as QUEUED and both create the product. Claim it QUEUED→UPLOADING in
-    // a transaction; whoever loses the race skips the job entirely.
-    const claimed = await db.runTransaction(async (tx) => {
-      const fresh = await tx.get(docSnap.ref);
-      if (!fresh.exists || fresh.data().status !== "QUEUED") return false;
-      tx.set(docSnap.ref, { status: "UPLOADING", startedAtMs: Date.now() }, { merge: true });
-      return true;
-    });
-    if (!claimed) { out.skipped++; continue; }
-
-    const granted = await reserveBudget(job.variantCount);
-    if (!granted) {
-      // Give the job back to the queue — budget denial isn't a failure.
-      await docSnap.ref.set({ status: "QUEUED", startedAtMs: null }, { merge: true });
-      out.stoppedFor = "budget"; break;
-    }
-    try {
-      const result = await createShopifyProduct(job);
-      await docSnap.ref.set({
-        status: "DONE", completedAtMs: Date.now(),
-        productId: result.productId, handle: result.handle,
-        variantsCreated: result.variantsCreated, addedCollections: result.addedCollections,
-        collectionsActual: result.collectionsActual || [],
-        expectedSmartCollections: result.expectedSmartCollections || [],
-        expandedMeanings: job.expandedMeanings || null, aiPickedCollections: job.aiPickedCollections || null,
-        mediaWarnings: job.mediaWarnings || null, publishWarnings: job.publishWarnings || null,
-        collectionWarnings: job.collectionWarnings || null,
-        setLinks: result.setLinks || null, setLinkWarnings: job.setLinkWarnings || null
-      }, { merge: true });
-      out.uploaded.push({ jobId: job.id, handle: result.handle, variants: result.variantsCreated,
-        setLinks: result.setLinks || null });
-    } catch (e) {
-      await refundBudget(job.variantCount);
-      await docSnap.ref.set({
-        status: "FAILED", attempts: (job.attempts || 0) + 1,
-        error: String(e && e.message || e).slice(0, 800), failedAtMs: Date.now()
-      }, { merge: true });
-      out.failed.push({ jobId: job.id, error: String(e && e.message || e).slice(0, 200) });
-    }
+  const owner = drainWorkerId();
+  const out = {
+    uploaded: [], skipped: 0, failed: [], recovered: 0,
+    stoppedFor: null, locked: false, moreQueued: false
+  };
+  if (!await acquireDrainLease(owner)) {
+    out.locked = true;
+    out.stoppedFor = "active-worker";
+    return out;
   }
-  return out;
+
+  try {
+    out.recovered = await recoverStaleUploads();
+
+    // Re-read the queue after every job. New jobs that arrive while this
+    // worker is busy are picked up in the same invocation instead of waiting
+    // for a later 30-minute cron pass.
+    while (Date.now() - t0 <= DRAIN_TIME_BUDGET_MS) {
+      const snap = await db.collection(QCOL).where("status", "==", "QUEUED").limit(150).get();
+      const docSnap = snap.docs
+        .slice()
+        .sort((a, b) => (a.data().createdAtMs || 0) - (b.data().createdAtMs || 0))[0];
+      if (!docSnap) break;
+
+      // The lease serializes workers globally; the per-job transaction is a
+      // second guard against an expired lease or an old deployed worker.
+      const claimed = await db.runTransaction(async (tx) => {
+        const fresh = await tx.get(docSnap.ref);
+        if (!fresh.exists || fresh.data().status !== "QUEUED") return null;
+        const startedAtMs = Date.now();
+        tx.set(docSnap.ref, {
+          status: "UPLOADING",
+          startedAtMs,
+          workerId: owner,
+          error: null
+        }, { merge: true });
+        return { id: docSnap.id, ...fresh.data(), startedAtMs, workerId: owner };
+      });
+      if (!claimed) { out.skipped++; continue; }
+
+      const job = claimed;
+      const reservation = await reserveBudgetForJob(docSnap.ref, job.variantCount);
+      if (!reservation.granted) {
+        await docSnap.ref.set({
+          status: "QUEUED",
+          startedAtMs: null,
+          workerId: null
+        }, { merge: true });
+        out.stoppedFor = reservation.missing ? "missing-job" : "budget";
+        break;
+      }
+
+      try {
+        const result = await createShopifyProduct(job);
+        await docSnap.ref.set({
+          status: "DONE", completedAtMs: Date.now(),
+          startedAtMs: null, workerId: null,
+          productId: result.productId, handle: result.handle,
+          variantsCreated: result.variantsCreated, addedCollections: result.addedCollections,
+          collectionsActual: result.collectionsActual || [],
+          expectedSmartCollections: result.expectedSmartCollections || [],
+          expandedMeanings: job.expandedMeanings || null, aiPickedCollections: job.aiPickedCollections || null,
+          mediaWarnings: job.mediaWarnings || null, publishWarnings: job.publishWarnings || null,
+          collectionWarnings: job.collectionWarnings || null,
+          setLinks: result.setLinks || null, setLinkWarnings: job.setLinkWarnings || null
+        }, { merge: true });
+        out.uploaded.push({
+          jobId: job.id, handle: result.handle, variants: result.variantsCreated,
+          setLinks: result.setLinks || null
+        });
+      } catch (e) {
+        // createShopifyProduct updates the in-memory job.productId as soon as
+        // Shopify creates it. Only pre-create failures get budget refunded.
+        if (!job.productId) await refundBudgetForJob(docSnap.ref);
+        await docSnap.ref.set({
+          status: "FAILED", attempts: (job.attempts || 0) + 1,
+          startedAtMs: null, workerId: null,
+          error: String(e && e.message || e).slice(0, 800),
+          failedAtMs: Date.now()
+        }, { merge: true });
+        out.failed.push({ jobId: job.id, error: String(e && e.message || e).slice(0, 200) });
+      }
+
+      if (!await renewDrainLease(owner)) {
+        out.stoppedFor = "lease-lost";
+        break;
+      }
+    }
+
+    if (!out.stoppedFor && Date.now() - t0 > DRAIN_TIME_BUDGET_MS) out.stoppedFor = "time";
+    const remains = await db.collection(QCOL).where("status", "==", "QUEUED").limit(1).get();
+    out.moreQueued = !remains.empty;
+    if (out.moreQueued && !out.stoppedFor) out.stoppedFor = "time";
+    return out;
+  } finally {
+    await releaseDrainLease(owner).catch(e => console.warn("drain lease release failed:", e && e.message));
+  }
+}
+
+function publicJob(id, j) {
+  return {
+    id, status: j.status,
+    title: (j.payload || {}).title || "",
+    category: (j.payload || {}).category || "",
+    tier: j.tier, variantCount: j.variantCount,
+    priceMin: j.priceMin || null, priceMax: j.priceMax || null,
+    handle: j.handle || null,
+    addedCollections: j.addedCollections || [],
+    aiPickedCollections: j.aiPickedCollections || [],
+    collectionsActual: j.collectionsActual || [],
+    expandedMeanings: (j.expandedMeanings || []).slice(0, 8),
+    setLinks: j.setLinks || null,
+    setLinkWarnings: j.setLinkWarnings || null,
+    error: j.error || null,
+    createdAtMs: j.createdAtMs || null,
+    startedAtMs: j.startedAtMs || null,
+    completedAtMs: j.completedAtMs || null,
+    failedAtMs: j.failedAtMs || null,
+    recoveredAtMs: j.recoveredAtMs || null,
+    recoveryCount: j.recoveryCount || 0
+  };
 }
 
 // Last N jobs, newest first — everything the UI panel shows per listing:
 // title, tier, variant count, price range, collections, live handle, error.
 async function recentJobs(n) {
   const snap = await db.collection(QCOL).orderBy("createdAtMs", "desc").limit(n || 12).get();
-  return snap.docs.map(d => {
-    const j = d.data();
-    return {
-      id: d.id, status: j.status,
-      title: (j.payload || {}).title || "",
-      category: (j.payload || {}).category || "",
-      tier: j.tier, variantCount: j.variantCount,
-      priceMin: j.priceMin || null, priceMax: j.priceMax || null,
-      handle: j.handle || null,
-      addedCollections: j.addedCollections || [],
-      aiPickedCollections: j.aiPickedCollections || [],
-      collectionsActual: j.collectionsActual || [],
-      expandedMeanings: (j.expandedMeanings || []).slice(0, 8),
-      error: j.error || null,
-      createdAtMs: j.createdAtMs || null, completedAtMs: j.completedAtMs || null
-    };
-  });
+  return snap.docs.map(d => publicJob(d.id, d.data()));
+}
+
+async function exactJob(jobId) {
+  const id = cleanRequestId(jobId);
+  if (!id) return null;
+  const snap = await db.collection(QCOL).doc(id).get();
+  return snap.exists ? publicJob(snap.id, snap.data()) : null;
 }
 
 async function status() {
@@ -1538,8 +1768,32 @@ async function status() {
 async function retryFailed() {
   const snap = await db.collection(QCOL).where("status", "==", "FAILED").limit(100).get();
   let n = 0;
-  for (const s of snap.docs) { await s.ref.set({ status: "QUEUED", error: null }, { merge: true }); n++; }
+  for (const s of snap.docs) {
+    await s.ref.set({
+      status: "QUEUED", error: null,
+      startedAtMs: null, workerId: null
+    }, { merge: true });
+    n++;
+  }
   return { requeued: n };
+}
+
+async function retryJob(jobId) {
+  const id = cleanRequestId(jobId);
+  if (!id) return { ok: false, error: "Invalid jobId" };
+  const ref = db.collection(QCOL).doc(id);
+  return db.runTransaction(async (tx) => {
+    const snap = await tx.get(ref);
+    if (!snap.exists) return { ok: false, error: "Job not found" };
+    const status = snap.data().status;
+    if (status === "DONE") return { ok: true, requeued: 0, alreadyDone: true };
+    tx.set(ref, {
+      status: "QUEUED", error: null,
+      startedAtMs: null, workerId: null,
+      retriedAtMs: Date.now()
+    }, { merge: true });
+    return { ok: true, requeued: 1 };
+  });
 }
 
 /* ------------------------------ handler ------------------------------ */
@@ -1561,27 +1815,34 @@ exports.handler = async (event) => {
     const op = body.op || q.op || "status";
 
     if (op === "enqueue") {
-      const res = await enqueue(body.payload);
+      const res = await enqueue(body.payload, body.requestId);
       if (!res.ok) return out(400, res);
       // Draining (product create + media + collections + vision set-match)
       // exceeds the sync limit — hand it to the background drain (15-min
       // budget) and return immediately. The client polls job status.
-      await triggerBackgroundDrain();
-      return out(200, { ...res, background: true, budget: await budgetSnapshot() });
+      const background = await triggerBackgroundDrain();
+      return out(200, { ...res, background, budget: await budgetSnapshot() });
     }
     if (op === "drain") {
-      await triggerBackgroundDrain();
-      return out(200, { ok: true, background: true, budget: await budgetSnapshot() });
+      const background = await triggerBackgroundDrain();
+      return out(200, { ok: true, background, budget: await budgetSnapshot() });
     }
     if (op === "status") {
       const res = await status();
       if (q.recent) res.recent = await recentJobs(Number(q.recent) || 12);
+      if (q.jobId) res.job = await exactJob(q.jobId);
       return out(200, res);
     }
     if (op === "retryFailed") {
       const r = await retryFailed();
-      await triggerBackgroundDrain();
-      return out(200, { ...r, background: true, budget: await budgetSnapshot() });
+      const background = await triggerBackgroundDrain();
+      return out(200, { ...r, background, budget: await budgetSnapshot() });
+    }
+    if (op === "retryJob") {
+      const r = await retryJob(body.jobId);
+      if (!r.ok) return out(r.error === "Job not found" ? 404 : 400, r);
+      const background = r.alreadyDone ? false : await triggerBackgroundDrain();
+      return out(200, { ...r, background, budget: await budgetSnapshot() });
     }
     if (op === "resetSetLinks") {
       // Fully clear one product's set AND its backlink on every partner —
