@@ -2934,10 +2934,6 @@ ANTI-REPETITION (TITLE)
                 const approvedRes = await storage.ref('listing-generator-1/Generated_Listing_Sets/Approved_Listing_Sets').listAll();
                 approvedRes.prefixes.forEach(p => processedNames.push(p.name.replace(/\/$/, "")));
             } catch (_) {}
-            try {
-                const legacyRes = await storage.ref('listing-generator-1/Listed_Sets').listAll();
-                legacyRes.prefixes.forEach(p => { const n = p.name.replace(/\/$/, ""); if (!processedNames.includes(n)) processedNames.push(n); });
-            } catch (_) {}
 
             const res = await storage.ref('listing-generator-1/Generated_Listing_Sets/Completed_Listing_Sets').listAll();
             const newSets = res.prefixes.filter(p => !processedNames.includes(p.name.replace(/\/$/, "")));
@@ -3506,28 +3502,20 @@ ANTI-REPETITION (TITLE)
             //       listing-generator-1/Generated_Listing_Sets/Approved_Listing_Sets/{SetName}
             //     This is our done pile, also visible in the Listing Generator's
             //     read-only "Approved Sets" tab.
-            //   * The legacy Listed_Sets folder is also kept up to date as a
-            //     backwards-compatible alias (writes go to BOTH so anything
-            //     that already references Listed_Sets keeps working).
+            // Approved_Listing_Sets is the active source of truth. The legacy
+            // Listed_Sets path is intentionally not polled here because its
+            // current Storage rules reject browser reads (403).
             const approvedRef = storage.ref('listing-generator-1/Generated_Listing_Sets/Approved_Listing_Sets');
-            const legacyListedRef = storage.ref('listing-generator-1/Listed_Sets');
             let processedNames = [];
             try {
                 const approvedRes = await approvedRef.listAll();
                 processedNames = approvedRes.prefixes.map(p => p.name.replace(/\/$/, ""));
             } catch(e) { }
-            try {
-                const legacyRes = await legacyListedRef.listAll();
-                for (const p of legacyRes.prefixes) {
-                    const n = p.name.replace(/\/$/, "");
-                    if (!processedNames.includes(n)) processedNames.push(n);
-                }
-            } catch(e) { }
 
             const listRef = storage.ref('listing-generator-1/Generated_Listing_Sets/Completed_Listing_Sets');
             const res = await listRef.listAll();
             
-            // 2. Filter folders (prefixes): Skip if it's already in Listed_Sets
+            // 2. Filter folders (prefixes): skip anything already approved.
             const newSets = res.prefixes.filter(p => {
                 const name = p.name.replace(/\/$/, ""); 
                 return !processedNames.includes(name);
@@ -4063,13 +4051,15 @@ ANTI-REPETITION (TITLE)
         try { q = JSON.parse(localStorage.getItem("etsyUploadJobs") || "[]"); } catch (_) {}
         if (!q.length) return true;
         let last = 0;
+        let stage = "unknown";
         try {
           const job = JSON.parse(localStorage.getItem(`etsyJob:${jobId}`) || "null");
           last = Number(job && (job.lastActivityAt || 0)) || 0;
+          stage = String(job && (job.stage || job.status) || "unknown");
         } catch (_) {}
         const sinceActivity = Date.now() - (last || t0);
         if (sinceActivity > idleMs) {
-          console.warn(`waitForQueueDrain: no upload activity for ${Math.round(sinceActivity / 1000)}s — giving up.`);
+          console.warn(`waitForQueueDrain: stage "${stage}" had no activity for ${Math.round(sinceActivity / 1000)}s — giving up.`);
           return false;
         }
         await wait(2000);
@@ -4090,7 +4080,34 @@ ANTI-REPETITION (TITLE)
         if (st === "DONE" || st === "FAILED" || st === "AUTH_NEEDED" || st === "QUOTA_HALT") return st;
         await wait(2000);
       }
+      try {
+        const job = JSON.parse(localStorage.getItem(`etsyJob:${jobId}`) || "null");
+        console.warn("awaitJobOutcome timed out:", {
+          jobId,
+          status: job && job.status,
+          stage: job && job.stage,
+          error: job && job.error
+        });
+      } catch (_) {}
       return "TIMEOUT";
+    }
+
+    // The Create Listing button performs asynchronous image normalization
+    // before it can assign a jobId. Auto-Pilot must await that enqueue result
+    // instead of sampling __lastConsumedListing immediately and accidentally
+    // capturing an undefined/stale jobId.
+    async function awaitEtsyEnqueue(timeoutMs = 90000) {
+      const promise = window.__etsyEnqueuePromise;
+      if (!promise || typeof promise.then !== "function") {
+        return { ok: false, error: "Etsy enqueue did not start" };
+      }
+      return await Promise.race([
+        promise,
+        new Promise(resolve => setTimeout(
+          () => resolve({ ok: false, error: "Etsy enqueue timed out" }),
+          timeoutMs
+        ))
+      ]);
     }
 
     async function runFullAutomationSequence(setRef, setName) {
@@ -4329,9 +4346,15 @@ ANTI-REPETITION (TITLE)
             }
             
             document.getElementById("createListingBtn").click();
+            const originalEnqueue = await awaitEtsyEnqueue();
+            if (!originalEnqueue.ok || !originalEnqueue.jobId) {
+                console.warn(`Original enqueue for ${setName} failed:`, originalEnqueue.error || "unknown error");
+                updateFirebaseStatus(`Upload enqueue failed: ${setName} kept for retry`, "");
+                return;
+            }
             
             // Wait for queue to process. The daemon removes jobs from localStorage "etsyUploadJobs".
-            await waitForQueueDrain((window.__lastConsumedListing || {}).jobId);
+            await waitForQueueDrain(originalEnqueue.jobId);
             
             await wait(3000);
 
@@ -4347,7 +4370,7 @@ ANTI-REPETITION (TITLE)
             // the ID, keep the folder (retry later; 2 strikes = skip), stop.
             {
                 const consumed = window.__lastConsumedListing || {};
-                const outcome = await awaitJobOutcome(consumed.jobId, 120000);
+                const outcome = await awaitJobOutcome(originalEnqueue.jobId, 120000);
                 if (outcome !== "DONE") {
                     // CROSS-CONTAMINATION GUARD: if the job's stored status is
                     // still RUNNING, the daemon may yet write images/info to
@@ -4449,11 +4472,17 @@ ANTI-REPETITION (TITLE)
                      console.warn("Ran out of Listing IDs for variant.");
                 } else {
                      document.getElementById("createListingBtn").click();
-                     await waitForQueueDrain((window.__lastConsumedListing || {}).jobId);
+                     const variantEnqueue = await awaitEtsyEnqueue();
+                     if (!variantEnqueue.ok || !variantEnqueue.jobId) {
+                         console.warn(`Variant enqueue for ${setName} failed:`, variantEnqueue.error || "unknown error");
+                         updateFirebaseStatus(`Variant enqueue failed: ${setName} kept`, "");
+                         return;
+                     }
+                     await waitForQueueDrain(variantEnqueue.jobId);
                     // Variant verify: original already succeeded so the set is
                     // still archived, but a failed variant must give its ID back.
                     const consumed2 = window.__lastConsumedListing || {};
-                    const outcome2 = await awaitJobOutcome(consumed2.jobId, 120000);
+                    const outcome2 = await awaitJobOutcome(variantEnqueue.jobId, 120000);
                     if (outcome2 !== "DONE" && consumed2.queueId && consumed2.listingId) {
                         // Same cross-contamination guard as the original pass.
                         let liveStatus2 = null;
@@ -6110,6 +6139,8 @@ https://www.etsy.com/your/shops/me/listing-editor/edit/1822973998
         queueId,
         String(window.accessToken || localStorage.getItem("etsyAccessToken") || "")
       );
+      window.__etsyBatchPrimePromises = window.__etsyBatchPrimePromises || new Map();
+      window.__etsyBatchPrimePromises.set(jobId, batchPrimePromise);
 
       // Photos (0–7) from previewImages / names / meta
       // -----------------------------------------------------------------
@@ -6261,7 +6292,6 @@ https://www.etsy.com/your/shops/me/listing-editor/edit/1822973998
         try { await idbPut(key, dataURL); } catch (e) { console.warn("Reserved IDB save failed", i, e); }
         return key;
       }));
-      await batchPrimePromise;
 
       const job = {
         jobId,
@@ -6333,6 +6363,12 @@ https://www.etsy.com/your/shops/me/listing-editor/edit/1822973998
       let lastErr = null;
       for (let attempt = 0; attempt <= BACKOFF_MS.length; attempt++) {
         if (attempt > 0) {
+          // Image uploads mark only the retry attempt for a bounded
+          // idempotency lookup. The normal first attempt avoids a Firestore
+          // round-trip inside the time-sensitive Netlify image function.
+          if (opts.body && typeof opts.body.set === "function") {
+            try { opts.body.set("retryCheck", "1"); } catch (_) {}
+          }
           window.__DIAG.log("transient-retry", { label, attempt, waitMs: BACKOFF_MS[attempt - 1] });
           await new Promise(r => setTimeout(r, BACKOFF_MS[attempt - 1]));
         }
@@ -6396,7 +6432,7 @@ https://www.etsy.com/your/shops/me/listing-editor/edit/1822973998
       if (token && token !== job.accessToken) save({ accessToken: token });
       const listingId = job.listingId;
       window.__DIAG.log("job-start", { jobId, listingId, photoCount: job.photoCount, reservedCount: job.reservedCount });
-      save({ status: "RUNNING", lastActivityAt: Date.now() });
+      save({ status: "RUNNING", stage: "STARTING", lastActivityAt: Date.now() });
       // Show the progress bar from the RUNNER itself (idempotent) so it is
       // visible no matter who started the job — the button handler, the
       // automation, or the daemon draining a queued job after reload.
@@ -6404,6 +6440,19 @@ https://www.etsy.com/your/shops/me/listing-editor/edit/1822973998
       if (typeof resetCreateProgress === "function") resetCreateProgress();
 
       try {
+        // The batch snapshot is an optimization, never a prerequisite.
+        // Give it a short head start so Stage 0 normally gets cache hits, but
+        // never hold the Etsy job (or Auto-Pilot) hostage to a slow function.
+        const primePromise = window.__etsyBatchPrimePromises?.get(jobId);
+        if (primePromise) {
+          save({ stage: "BATCH_SNAPSHOT", lastActivityAt: Date.now() });
+          await Promise.race([
+            Promise.resolve(primePromise),
+            new Promise(resolve => setTimeout(resolve, 12000))
+          ]).catch(() => {});
+          window.__etsyBatchPrimePromises.delete(jobId);
+        }
+
         // --- Stage 0: Purge existing images on the draft listing -------
         //
         // Why: Etsy's uploadListingImage endpoint APPENDS images to the
@@ -6435,6 +6484,7 @@ https://www.etsy.com/your/shops/me/listing-editor/edit/1822973998
         let purgeLeftovers = [];
         const preservedReservedAlts = new Set();
         const uploadedImageHarvest = [];
+        save({ stage: "IMAGE_RECONCILIATION", lastActivityAt: Date.now() });
         try {
           const purgeResp = await etsyFetchWithTransientRetry(
             "/.netlify/functions/listingImagesPurge",
@@ -6604,7 +6654,7 @@ https://www.etsy.com/your/shops/me/listing-editor/edit/1822973998
         // Etsy's last-image-of-active-listing rule); removed post-upload.
         // (Populated inside the purge block above via outer scope.)
         const uploadImage = async (fd, label) => {
-          save({ lastActivityAt: Date.now() });
+          save({ stage: label.toUpperCase().replace(/\s+/g, "_"), lastActivityAt: Date.now() });
           window.__DIAG.log("upload-request", { label, listingId, rank: fd.get ? String(fd.get("rank")) : "?", name: fd.get ? String(fd.get("fileName")) : "?" });
           let r;
           try {
@@ -6778,7 +6828,7 @@ https://www.etsy.com/your/shops/me/listing-editor/edit/1822973998
           skus: [job.sku],
           sku: job.sku
         };
-        save({ lastActivityAt: Date.now() });
+        save({ stage: "LISTING_INFO", lastActivityAt: Date.now() });
         const infoResp = await etsyFetchWithTransientRetry(`/.netlify/functions/updateListing?listingId=${encodeURIComponent(listingId)}`, {
           method: "PUT",
           headers: { "Content-Type": "application/json", Authorization: "Bearer " + token },
@@ -6797,7 +6847,7 @@ https://www.etsy.com/your/shops/me/listing-editor/edit/1822973998
         }
 
         // Inventory SKU (same as your current flow)
-        save({ lastActivityAt: Date.now() });
+        save({ stage: "INVENTORY", lastActivityAt: Date.now() });
         const inventoryResp = await etsyFetchWithTransientRetry(
           `/.netlify/functions/updateListingInventory?listingId=${encodeURIComponent(listingId)}&token=${encodeURIComponent(token)}`,
           { method: "PUT", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ sku: job.sku }) },
@@ -6820,7 +6870,7 @@ https://www.etsy.com/your/shops/me/listing-editor/edit/1822973998
         }
 
         if (typeof setCreateProgress === "function") setCreateProgress(100);
-        save({ status: "DONE", progress: 100, completedAt: nowIso() });
+        save({ status: "DONE", stage: "DONE", progress: 100, completedAt: nowIso() });
         window.__DIAG.log("job-done", { jobId, listingId });
         window.__DIAG.report();
         // --- NEW: Increment tracker ---
@@ -6850,7 +6900,7 @@ https://www.etsy.com/your/shops/me/listing-editor/edit/1822973998
           haltAutomationForQuota();
           return;
         }
-        save({ status: "FAILED", error: String(err && err.message || err) });
+        save({ status: "FAILED", stage: "FAILED", error: String(err && err.message || err) });
         window.__DIAG.log("job-failed", { jobId, listingId, error: String(err && err.message || err) });
         window.__DIAG.report();
         window.M?.toast?.({ html: "Create Listing error (queued): " + (err?.message || err) });
@@ -7372,6 +7422,14 @@ https://www.etsy.com/your/shops/me/listing-editor/edit/1822973998
 
     // --- Create Listing (LS snapshot + background queue; decoupled from UI)
     document.getElementById("createListingBtn").addEventListener("click", async () => {
+      let enqueueSettled = false;
+      let resolveEnqueue;
+      window.__etsyEnqueuePromise = new Promise(resolve => { resolveEnqueue = resolve; });
+      const settleEnqueue = (result) => {
+        if (enqueueSettled) return;
+        enqueueSettled = true;
+        resolveEnqueue(result);
+      };
       try {
         // Clear the one-shot Skip flag for genuine MANUAL uploads so a leftover
         // skip request from a previous action can't immediately abort this one.
@@ -7480,6 +7538,12 @@ https://www.etsy.com/your/shops/me/listing-editor/edit/1822973998
         if (window.__lastConsumedListing && window.__lastConsumedListing.listingId === String(listingId)) {
           window.__lastConsumedListing.jobId = jobId;
         }
+        settleEnqueue({
+          ok: true,
+          jobId,
+          listingId: String(listingId),
+          queueId: targetInputId
+        });
          const short = String(jobId).slice(-6);
          window.M?.toast?.({ html: `Queued Etsy push (${short}). You can start your next listing.` });
         // 3) Kick the background processor; show progress but DO NOT block UI
@@ -7491,7 +7555,23 @@ https://www.etsy.com/your/shops/me/listing-editor/edit/1822973998
         processEtsyJobs();
       } catch (err) {
         console.error(err);
+        const consumed = window.__lastConsumedListing || {};
+        // A queue-snapshot failure happened after the ID was consumed but
+        // before a runnable job existed. Put that ID back immediately.
+        if (!consumed.jobId && consumed.queueId && consumed.listingId) {
+          restoreListingId(consumed.queueId, consumed.listingId);
+        }
+        settleEnqueue({ ok: false, error: String(err?.message || err) });
         M.toast({ html: "Create Listing enqueue error: " + (err?.message || err) });
+      } finally {
+        // Also resolves every validation/empty-queue early return.
+        if (!enqueueSettled) {
+          const consumed = window.__lastConsumedListing || {};
+          if (!consumed.jobId && consumed.queueId && consumed.listingId) {
+            restoreListingId(consumed.queueId, consumed.listingId);
+          }
+        }
+        settleEnqueue({ ok: false, error: "Create Listing was blocked before enqueue" });
       }
     });
 
@@ -8316,7 +8396,7 @@ https://www.etsy.com/your/shops/me/listing-editor/edit/1822973998
           { role: "system", content: "Generate concise, varied Etsy tags. No duplicates. Each tag ≤ 20 chars." },
           { role: "user", content: prompt }
         ],
-        max_output_tokens: 800,   // was 120 — reasoning tokens count against this cap
+        max_output_tokens: 1600,  // prevents reasoning-only exhaustion before the 13 visible tags
         reasoning: { effort: "low" },   // low reasoning on GPT-5.5
         text: { verbosity: "medium" }
       };
