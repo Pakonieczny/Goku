@@ -2326,16 +2326,15 @@ ANTI-REPETITION (TITLE)
           const refreshing = refreshingRows.has(r.id);
           // Refresh = read-only status check (no requeue/drain) — for a row
           // that may have ALREADY gone LIVE server-side (the background
-          // drain-cron keeps working a job independent of any browser tab,
-          // and the client-side poll that watches a job for its outcome
-          // gives up after ~6 minutes) but the stats doc never got the
-          // final write. Retry actively requeues; Refresh just looks.
+          // drain keeps working independent of any browser tab) but whose
+          // stats write was missed during an older deployment. Retry
+          // actively requeues; Refresh just looks.
           const refreshBtn = ` <button type="button" class="dretry-btn drefresh-btn" data-row-id="${escAttr(r.id)}" data-job-id="${escAttr((sp && sp.jobId) || "")}" title="Check whether this already finished on Shopify, without requeuing it"${refreshing ? " disabled" : ""}>${refreshing ? "Checking…" : "Refresh"}</button>`;
           const spCell = sp
             ? (sp.url
                 ? `<a href="${escAttr(sp.url)}" target="_blank" rel="noopener">Open ↗</a> <span class="dchip live">LIVE</span>`
                 : sp.status === "PENDING"
-                  ? `<span class="dchip pend" title="Waiting its turn — Shopify sends run one at a time">Pending</span>`
+                  ? `<span class="dchip pend" title="Preparing and durably saving the Shopify queue job">Pending</span>`
                   : `<span class="dchip ${sp.status === "FAILED" ? "fail" : "pend"}">${escHtml(sp.status || "QUEUED")}</span>` +
                     (sp.status === "FAILED" || sp.status === "QUEUED"
                       ? ` <button type="button" class="dretry-btn" data-row-id="${escAttr(r.id)}" data-job-id="${escAttr(sp.jobId || "")}" title="Requeue this listing's Shopify upload"${retrying ? " disabled" : ""}>${retrying ? "Retrying…" : "Retry"}</button>` + refreshBtn
@@ -2406,6 +2405,13 @@ ANTI-REPETITION (TITLE)
         // a published record must never be consumed from a queue box again.
         // (limit(600) above caps this window — see auditOverwrites note.)
         window.__usedListingIds = new Set(allRows.map(r => String(r.listingId || "")).filter(Boolean));
+        // Let the Shopify module resume independent job watchers after a
+        // reload. Server-side uploads continue without this tab; this only
+        // keeps the Statistics rows synchronized to their final outcome.
+        window.__listingStatsRows = allRows;
+        if (typeof window.resumeShopifyWatchers === "function") {
+          window.resumeShopifyWatchers(allRows);
+        }
         // AUTO-CORRECT: scrub already-published IDs out of the queue boxes
         // right now (not just lazily at consume time) — see the function
         // definition below; also invoked after every remote queue sync so
@@ -2458,12 +2464,7 @@ ANTI-REPETITION (TITLE)
       // Retry button (FAILED/QUEUED Shopify cells) — delegated so it keeps
       // working across re-renders. Requeues + drains server-side (the same
       // mechanism the old Shopify Uploads panel's Retry/Drain buttons used),
-      // then — when the row carries a jobId — polls that ONE job for its
-      // outcome and writes it back via ListingStats.updateShopify(), which
-      // the live onSnapshot listener above turns into an instant table
-      // refresh. Rows recorded before this feature shipped have no jobId;
-      // for those the requeue still happens, but the row itself won't
-      // auto-update since there's nothing to poll against.
+      // then hands the job to the module's shared independent watcher.
       if (body) body.addEventListener("click", async (e) => {
         const btn = e.target.closest(".dretry-btn:not(.drefresh-btn)");
         if (!btn || btn.disabled) return;
@@ -2478,7 +2479,8 @@ ANTI-REPETITION (TITLE)
           // A FAILED job needs requeuing first, then a drain to move now
           // rather than waiting for the next scheduled cron pass.
           if (!wasQueued) {
-            await fetch(SP_FN, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ op: "retryFailed" }) }).catch(() => {});
+            const retryOp = jobId ? { op: "retryJob", jobId } : { op: "retryFailed" };
+            await fetch(SP_FN, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(retryOp) }).catch(() => {});
           }
           await fetch(SP_FN, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ op: "drain" }) }).catch(() => {});
           if (typeof window.refreshShopifyStatus === "function") window.refreshShopifyStatus();
@@ -2506,29 +2508,29 @@ ANTI-REPETITION (TITLE)
               window.M?.toast?.({ html: "Requeued — couldn't find a matching job to track live, so watch the Shopify chip/Statistics for the result." });
               return;
             }
-            // Found it — attach the id now so future retries of this row
-            // track properly even if this poll doesn't catch the finish.
-            try { await window.ListingStats?.updateShopify(rowId, { status: row.shopify.status, title: wantTitle, url: row.shopify.url || "", jobId }); } catch (_) {}
+            // Found it — attach the id now so every later update can track
+            // the exact durable job.
+            try { await window.ListingStats?.updateShopify(rowId, { status: "QUEUED", title: wantTitle, url: "", jobId }); } catch (_) {}
             window.M?.toast?.({ html: "Found the matching job — now tracking it live." });
           } else {
             window.M?.toast?.({ html: "Retrying — watching for the result…" });
           }
-          for (let t = 0; t < 60; t++) {
-            await new Promise(res => setTimeout(res, 6000));
-            try {
-              const sr = await fetch(SP_FN + "?op=status&recent=60");
-              const sj = await sr.json();
-              const job = (sj.recent || []).find(x => x.id === jobId);
-              if (job && (job.status === "DONE" || job.status === "FAILED")) {
-                await window.ListingStats?.updateShopify(rowId, {
-                  status: job.status === "DONE" ? "LIVE" : "FAILED",
-                  title: job.title || "",
-                  url: job.handle ? ("https://britesjewelry.com/products/" + job.handle) : "",
-                  jobId
-                });
-                break;
-              }
-            } catch (_) {}
+          const row = allRows.find(x => x.id === rowId);
+          const title = (row && row.shopify && row.shopify.title) || "";
+          await window.ListingStats?.updateShopify(rowId, {
+            status: "QUEUED", title, url: "", jobId
+          });
+          if (typeof window.trackShopifyJob === "function") {
+            window.trackShopifyJob({
+              jobId,
+              statsDocId: rowId,
+              title,
+              createdAtMs: row && row.tsMs,
+              lastStatus: "QUEUED"
+            });
+          }
+          if (typeof window.kickShopifyDrain === "function") {
+            window.kickShopifyDrain("statistics-retry", true);
           }
         } finally {
           retryingRows.delete(rowId);
@@ -2539,9 +2541,9 @@ ANTI-REPETITION (TITLE)
       // Refresh: a read-only status check — no retryFailed, no drain. For
       // a listing that may have ALREADY gone LIVE (or actually failed)
       // server-side — the background drain-cron keeps working the queue
-      // whether or not a browser tab is open, and the Retry/live-pipeline
-      // poll only watches a job for up to ~6 minutes — but the stats doc
-      // still shows the old status because nothing ever wrote the update.
+      // whether or not a browser tab is open. This also repairs rows from
+      // older deployments whose short-lived browser poll missed the final
+      // stats write.
       if (body) body.addEventListener("click", async (e) => {
         const btn = e.target.closest(".drefresh-btn");
         if (!btn || btn.disabled) return;
@@ -9985,6 +9987,7 @@ async function callOpenAI(payload, opts = {}) {
         ensurePanel();
         try {
           const r = await fetch(FN + "?op=status&recent=60");
+          if (!r.ok) throw new Error("HTTP " + r.status);
           const j = await r.json();
           const b = j.budget || {};
           if (el) {
@@ -10005,9 +10008,221 @@ async function callOpenAI(payload, opts = {}) {
             kf.classList.toggle("kpi-bad", (j.failed ?? 0) > 0);
           }
           renderRecent(j.recent);
-        } catch (e) { if (el) el.textContent = "Shopify: offline"; }
+          return j;
+        } catch (e) {
+          if (el) el.textContent = "Shopify: offline";
+          return null;
+        }
       }
       window.refreshShopifyStatus = refreshShopifyStatus;
+
+      // One rate-limited server nudge shared by startup recovery, queued-job
+      // monitoring, and the two-minute safety check. Calling the background
+      // endpoint directly also covers a missing Netlify URL environment
+      // variable in the synchronous enqueue function.
+      let drainKickInFlight = null;
+      let lastDrainKickAt = 0;
+      async function kickShopifyDrain(reason, force) {
+        if (drainKickInFlight) return drainKickInFlight;
+        if (!force && Date.now() - lastDrainKickAt < 45 * 1000) return false;
+        lastDrainKickAt = Date.now();
+        drainKickInFlight = (async () => {
+          try {
+            let r = await fetch("/.netlify/functions/shopifyDrain-background", {
+              method: "POST",
+              headers: { "Content-Type": "application/json" },
+              body: JSON.stringify({ source: reason || "index-app" })
+            });
+            if (!r.ok) {
+              r = await fetch(FN, {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({ op: "drain" })
+              });
+            }
+            return !!r.ok;
+          } catch (_) {
+            try {
+              const r = await fetch(FN + "?op=drain");
+              return !!r.ok;
+            } catch (_) { return false; }
+          }
+        })();
+        try { return await drainKickInFlight; }
+        finally { drainKickInFlight = null; }
+      }
+      window.kickShopifyDrain = kickShopifyDrain;
+
+      // All job completion checks share one poll, regardless of how many
+      // listings were enqueued. The browser never serializes product
+      // completion: Firestore already owns every payload before Auto-Pilot
+      // advances, and this map only mirrors server truth into Statistics.
+      const shopifyWatchers = new Map();
+      let watcherPollInFlight = false;
+      let legacyPendingReconcileAt = 0;
+      let legacyPendingReconcileInFlight = false;
+
+      function trackShopifyJob(meta) {
+        if (!meta || !meta.jobId || !meta.statsDocId) return;
+        const old = shopifyWatchers.get(String(meta.jobId)) || {};
+        shopifyWatchers.set(String(meta.jobId), {
+          ...old,
+          ...meta,
+          jobId: String(meta.jobId),
+          createdAtMs: Number(meta.createdAtMs || old.createdAtMs || Date.now()),
+          lastStatus: meta.lastStatus || old.lastStatus || ""
+        });
+      }
+      window.trackShopifyJob = trackShopifyJob;
+
+      async function mirrorShopifyJob(watcher, job) {
+        const nextStatus = job.status === "DONE" ? "LIVE" : String(job.status || "QUEUED");
+        if (nextStatus === watcher.lastStatus && job.status !== "DONE" && job.status !== "FAILED") return;
+        watcher.lastStatus = nextStatus;
+        const title = job.title || watcher.title || "";
+        const url = job.handle ? ("https://britesjewelry.com/products/" + job.handle) : "";
+        await window.ListingStats?.updateShopify(watcher.statsDocId, {
+          status: nextStatus,
+          title,
+          url,
+          jobId: watcher.jobId
+        });
+
+        if (job.status === "DONE") {
+          const setTxt = job.setLinks && job.setLinks.partners && job.setLinks.partners.length
+            ? ` · set: ${job.setLinks.partners.length} partner${job.setLinks.partners.length > 1 ? "s" : ""} linked`
+            : "";
+          setShopifyStage(100, `LIVE: “${title}”${setTxt}.`);
+          window.M?.toast?.({ html: `Shopify: LIVE — “${title}”${setTxt}.` });
+          shopifyWatchers.delete(watcher.jobId);
+        } else if (job.status === "FAILED") {
+          setShopifyStage(100, `Shopify upload failed: “${title}” — ${job.error || "see Shopify Uploads"}`, true);
+          window.M?.toast?.({ html: `Shopify upload failed: “${title}”.` });
+          shopifyWatchers.delete(watcher.jobId);
+        } else if (job.status === "UPLOADING") {
+          setShopifyStage(88, `Uploading “${title}” — product, images, collections, and set matching are running in background…`);
+        }
+      }
+
+      async function reconcileLegacyPendingRows(rows, recent) {
+        const pending = (rows || []).filter(r =>
+          r && r.shopify && r.shopify.status === "PENDING" &&
+          !r.shopify.jobId && r.shopify.title
+        );
+        if (!pending.length || legacyPendingReconcileInFlight ||
+            Date.now() - legacyPendingReconcileAt < 30 * 1000) return;
+        legacyPendingReconcileAt = Date.now();
+        legacyPendingReconcileInFlight = true;
+        try {
+          let jobs = recent;
+          if (!Array.isArray(jobs)) {
+            const r = await fetch(FN + "?op=status&recent=150");
+            const j = await r.json();
+            jobs = j.recent || [];
+          }
+          const claimed = new Set((rows || []).map(r => r.shopify && r.shopify.jobId).filter(Boolean));
+          for (const row of pending) {
+            const candidates = jobs.filter(job =>
+              !claimed.has(job.id) &&
+              job.title === row.shopify.title &&
+              (!row.category || !job.category || row.category === job.category)
+            ).sort((a, b) => {
+              const at = Number(row.tsMs || 0);
+              return Math.abs(Number(a.createdAtMs || 0) - at) - Math.abs(Number(b.createdAtMs || 0) - at);
+            });
+            const job = candidates[0];
+            if (!job) continue;
+            // Only adopt a plausible time-neighbour; repeated product titles
+            // from another day must never be attached to this Statistics row.
+            if (row.tsMs && Math.abs(Number(job.createdAtMs || 0) - Number(row.tsMs)) > 2 * 60 * 60 * 1000) continue;
+            claimed.add(job.id);
+            const nextStatus = job.status === "DONE" ? "LIVE" : String(job.status || "QUEUED");
+            await window.ListingStats?.updateShopify(row.id, {
+              status: nextStatus,
+              title: job.title || row.shopify.title,
+              url: job.handle ? ("https://britesjewelry.com/products/" + job.handle) : "",
+              jobId: job.id
+            });
+            if (job.status !== "DONE" && job.status !== "FAILED") {
+              trackShopifyJob({
+                jobId: job.id,
+                statsDocId: row.id,
+                title: job.title || row.shopify.title,
+                createdAtMs: job.createdAtMs,
+                lastStatus: nextStatus
+              });
+            }
+          }
+        } catch (_) {
+          // Legacy rows remain visible as Pending and will be retried by the
+          // next shared poll; current-version jobs never depend on matching.
+        } finally {
+          legacyPendingReconcileInFlight = false;
+        }
+      }
+
+      window.resumeShopifyWatchers = function resumeShopifyWatchers(rows) {
+        (rows || []).forEach(row => {
+          const sp = row && row.shopify;
+          if (!sp || !sp.jobId || sp.url || sp.status === "LIVE" || sp.status === "FAILED") return;
+          trackShopifyJob({
+            jobId: sp.jobId,
+            statsDocId: row.id,
+            title: sp.title || "",
+            createdAtMs: row.tsMs || Date.now(),
+            lastStatus: sp.status || ""
+          });
+        });
+        reconcileLegacyPendingRows(rows || []);
+      };
+
+      async function pollShopifyWatchers() {
+        if (watcherPollInFlight) return;
+        const rows = window.__listingStatsRows || [];
+        if (!shopifyWatchers.size && !rows.some(r => r.shopify && r.shopify.status === "PENDING" && !r.shopify.jobId)) return;
+        watcherPollInFlight = true;
+        try {
+          const r = await fetch(FN + "?op=status&recent=150");
+          if (!r.ok) throw new Error("HTTP " + r.status);
+          const j = await r.json();
+          const jobs = j.recent || [];
+          const byId = new Map(jobs.map(job => [String(job.id), job]));
+          for (const watcher of Array.from(shopifyWatchers.values())) {
+            let job = byId.get(watcher.jobId);
+            // Exact lookup is a scale-safe fallback when the job is older
+            // than the recent-150 panel window.
+            if (!job && Date.now() - Number(watcher.lastExactAt || 0) > 60 * 1000) {
+              watcher.lastExactAt = Date.now();
+              try {
+                const er = await fetch(FN + "?op=status&jobId=" + encodeURIComponent(watcher.jobId));
+                const ej = await er.json();
+                job = ej.job || null;
+              } catch (_) {}
+            }
+            if (!job) continue;
+            await mirrorShopifyJob(watcher, job);
+            if (job.status === "QUEUED" &&
+                Date.now() - Number(job.createdAtMs || watcher.createdAtMs) > 30 * 1000) {
+              kickShopifyDrain("queued-job-watchdog");
+            } else if (job.status === "UPLOADING" && job.startedAtMs &&
+                Date.now() - Number(job.startedAtMs) > 18 * 60 * 1000) {
+              kickShopifyDrain("stale-upload-watchdog");
+            }
+          }
+          await reconcileLegacyPendingRows(rows, jobs);
+        } catch (_) {
+          // The next shared tick retries; Shopify processing is server-side.
+        } finally {
+          watcherPollInFlight = false;
+        }
+      }
+
+      setInterval(pollShopifyWatchers, 6000);
+      setTimeout(() => {
+        window.resumeShopifyWatchers(window.__listingStatsRows || []);
+        pollShopifyWatchers();
+      }, 3000);
+
       document.getElementById("shopifyQueueStatus")?.addEventListener("click", async () => {
         try {
           const r = await fetch(FN, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ op: "retryFailed" }) });
@@ -10016,11 +10231,26 @@ async function callOpenAI(payload, opts = {}) {
         } catch (e) {}
         refreshShopifyStatus();
       });
-      setTimeout(refreshShopifyStatus, 2500);
+      setTimeout(async () => {
+        const j = await refreshShopifyStatus();
+        const staleUploading = j && (j.recent || []).some(job =>
+          job.status === "UPLOADING" && job.startedAtMs &&
+          Date.now() - Number(job.startedAtMs) > 18 * 60 * 1000
+        );
+        if (j && (j.queued > 0 || staleUploading)) kickShopifyDrain("startup-queue-recovery", true);
+      }, 2500);
       setInterval(refreshShopifyStatus, 60 * 1000);
-      // Self-drain while the app is open: picks up queued jobs after the
-      // Toronto-midnight budget reset without any external cron.
-      setInterval(() => { fetch(FN + "?op=drain").then(refreshShopifyStatus).catch(() => {}); }, 30 * 60 * 1000);
+      // Two-minute safety net only when work is actually queued. The server
+      // lease makes this safe across tabs and the background worker normally
+      // drains new arrivals immediately.
+      setInterval(async () => {
+        const j = await refreshShopifyStatus();
+        const staleUploading = j && (j.recent || []).some(job =>
+          job.status === "UPLOADING" && job.startedAtMs &&
+          Date.now() - Number(job.startedAtMs) > 18 * 60 * 1000
+        );
+        if (j && (j.queued > 0 || staleUploading)) kickShopifyDrain("two-minute-queue-safety");
+      }, 2 * 60 * 1000);
 
       // ---- category inference ----
       function inferCategory() {
@@ -10204,15 +10434,33 @@ RULES:
 
       // ---- main entry: build payload + enqueue ----
       let busy = false;
-      // PIPELINED: the CAPTURE phase (AI fields + image collection) reads the
-      // page for the CURRENT set and must finish before the auto pilot moves
-      // on. The SEND phase (enqueue + server-side create: product, variants,
-      // media, collections, vision set-matching) is pure network — it runs
-      // detached on a serialized chain, so the next set's Etsy work overlaps
-      // the previous set's Shopify server work. Guardrails: capture is
-      // awaited (no cross-set DOM reads), sends are chained one-at-a-time
-      // (no interleaved drains), and set archiving/retry semantics are
-      // unchanged (a Shopify failure never re-queued the set before either).
+      // DURABLE PIPELINE: capture reads the CURRENT set, then waits only until
+      // the complete payload has a Firestore jobId. Auto-Pilot may advance as
+      // soon as that short durable enqueue succeeds. Product creation and
+      // completion monitoring are fully detached and never block the next
+      // listing from reaching the server queue.
+      function newShopifyRequestId() {
+        if (window.crypto && typeof window.crypto.randomUUID === "function") {
+          return "sp_" + window.crypto.randomUUID();
+        }
+        return "sp_" + Date.now().toString(36) + "_" +
+          Math.random().toString(36).slice(2, 12) + "_" +
+          Math.random().toString(36).slice(2, 12);
+      }
+
+      async function enqueueShopifyPayload(payload, requestId) {
+        const r = await fetch(FN, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ op: "enqueue", requestId, payload })
+        });
+        const j = await r.json().catch(() => ({}));
+        if (!r.ok || j.ok === false || !j.jobId) {
+          throw new Error((j.errors && j.errors.join("; ")) || j.error || ("HTTP " + r.status));
+        }
+        return j;
+      }
+
       async function queueShopifyUpload(category) {
         if (busy) { window.M?.toast?.({ html: "Shopify capture already in progress…" }); return; }
         busy = true;
@@ -10238,99 +10486,61 @@ RULES:
             images,
             source: "index-app"
           };
-          // Detached, serialized send — the caller (auto pilot) is free as
-          // soon as capture is done. One automatic retry on failure (network
-          // blip, non-ok response, or an explicit FAILED job) — the enqueue
-          // + poll logic lives in attemptSend() so the retry re-runs the
-          // exact same steps. Note: if a "failed" enqueue actually reached
-          // the server (rare — most network-level failures never do), the
-          // retry could create a second Shopify product for the same set;
-          // this wasn't guarded against since it mirrors what you asked for.
-          const attemptSend = async () => {
-            setShopifyStage(70, `Uploading “${fields.title}” — product, variants, collections, set matching (vision)…`);
-            const r = await fetch(FN, {
-              method: "POST",
-              headers: { "Content-Type": "application/json" },
-              body: JSON.stringify({ op: "enqueue", payload })
-            });
-            const j = await r.json();
-            if (!r.ok || j.ok === false) throw new Error((j.errors && j.errors.join("; ")) || j.error || ("HTTP " + r.status));
-            // The server drains in the BACKGROUND now (product creation +
-            // vision set-matching exceed the sync limit) — poll the job's
-            // status for the real outcome (up to ~6 min).
-            setShopifyStage(85, `Uploading “${fields.title}” in background — product, variants, collections, set matching (vision)…`);
-            let mine = null;
-            for (let t = 0; t < 60; t++) {
-              await new Promise(res => setTimeout(res, 6000));
-              try {
-                const sr = await fetch(FN + "?op=status&recent=20");
-                const sj = await sr.json();
-                const job = (sj.recent || []).find(x => x.id === j.jobId);
-                if (job && (job.status === "DONE" || job.status === "FAILED")) { mine = job; break; }
-              } catch (_) {}
-            }
-            if (mine && mine.status === "FAILED") {
-              // We do have a jobId at this point (the enqueue succeeded;
-              // the job itself later failed) — attach it so a Retry click
-              // from the Statistics table later can find this exact job.
-              const err = new Error(mine.error || "upload failed (see panel)");
-              err.jobId = j.jobId;
-              throw err;
-            }
-            return { j, mine };
-          };
-          const send = async () => {
-            let result;
+
+          // PENDING now means only "saving the durable queue job" and should
+          // normally last seconds, never another listing's full upload time.
+          await window.ListingStats?.updateShopify(statsDocId, {
+            status: "PENDING", title: fields.title, url: "", jobId: null
+          });
+          setShopifyStage(65, `Saving “${fields.title}” to the Shopify queue…`);
+
+          const requestId = newShopifyRequestId();
+          let j;
+          try {
+            j = await enqueueShopifyPayload(payload, requestId);
+          } catch (e1) {
+            // The same requestId makes a lost-response retry idempotent:
+            // the server returns the original Firestore job instead of
+            // creating a duplicate queue entry or Shopify product.
+            console.warn("Shopify enqueue failed; retrying the same idempotent request once:", e1);
+            setShopifyStage(68, `Retrying queue save for “${fields.title}”…`);
+            await new Promise(res => setTimeout(res, 1500));
             try {
-              result = await attemptSend();
-            } catch (e1) {
-              console.warn("Shopify send failed, retrying once:", e1);
-              setShopifyStage(70, `Retrying Shopify upload for “${fields.title}”…`);
-              await new Promise(res => setTimeout(res, 5000));
-              try {
-                result = await attemptSend();
-              } catch (e2) {
-                setShopifyStage(100, `Shopify upload failed: “${fields.title}” — ${(e2 && e2.message) || e2}`, true);
-                window.M?.toast?.({ html: "Shopify upload failed: " + ((e2 && e2.message) || e2) });
-                console.error("Shopify send failed after 1 retry (Etsy pipeline unaffected):", e2);
-                // jobId (when the failure happened after enqueue) lets the
-                // Statistics table's Retry button requeue this exact job.
-                try { window.ListingStats?.updateShopify(statsDocId, { status: "FAILED", title: fields.title, url: "", jobId: (e2 && e2.jobId) || null }); } catch (_) {}
-                return;
-              }
-            }
-            const { j, mine } = result;
-            const setTxt = mine && mine.setLinks && mine.setLinks.partners && mine.setLinks.partners.length
-              ? ` · set: ${mine.setLinks.partners.length} partner${mine.setLinks.partners.length > 1 ? "s" : ""} linked`
-              : "";
-            setShopifyStage(100, mine
-              ? `LIVE: “${fields.title}” — ${j.variantCount} variants, tier ${j.tier}${setTxt}.`
-              : `Queued: “${fields.title}” (${j.variantCount} variants) — uploads in background; panel shows LIVE when done.`);
-            window.M?.toast?.({
-              html: mine
-                ? `Shopify: LIVE — ${j.variantCount} variants${setTxt}.`
-                : `Shopify: queued (${j.variantCount} variants) — background upload in progress.`
-            });
-            if (typeof refreshShopifyStatus === "function") refreshShopifyStatus();
-            try {
-              window.ListingStats?.updateShopify(statsDocId, {
-                status: mine ? "LIVE" : "QUEUED",
-                title: fields.title,
-                url: (mine && mine.handle) ? ("https://britesjewelry.com/products/" + mine.handle) : "",
-                jobId: j.jobId
+              j = await enqueueShopifyPayload(payload, requestId);
+            } catch (e2) {
+              await window.ListingStats?.updateShopify(statsDocId, {
+                status: "FAILED", title: fields.title, url: "", jobId: null
               });
-            } catch (_) {}
-            return j;
-          };
-          // PENDING marker: sends run ONE AT A TIME through __spSendChain
-          // (serialized so Shopify never gets hit concurrently), so a
-          // listing can sit waiting its turn for several minutes with
-          // nothing written yet. Without this, the table shows a bare "—"
-          // indistinguishable from "Shopify mode was off, never attempted"
-          // — this makes the waiting state visible and honest.
-          try { window.ListingStats?.updateShopify(statsDocId, { status: "PENDING", title: fields.title, url: "", jobId: null }); } catch (_) {}
-          window.__spSendChain = (window.__spSendChain || Promise.resolve()).then(send);
-          return { queued: true, title: fields.title };
+              setShopifyStage(100, `Shopify queue save failed: “${fields.title}” — ${(e2 && e2.message) || e2}`, true);
+              throw e2;
+            }
+          }
+
+          // This is the critical boundary: the payload is now server-owned.
+          // Auto-Pilot can safely archive the source set and start the next
+          // listing; completion monitoring is shared and independent.
+          await window.ListingStats?.updateShopify(statsDocId, {
+            status: "QUEUED", title: fields.title, url: "", jobId: j.jobId
+          });
+          trackShopifyJob({
+            jobId: j.jobId,
+            statsDocId,
+            title: fields.title,
+            createdAtMs: Date.now(),
+            lastStatus: "QUEUED",
+            tier: j.tier,
+            variantCount: j.variantCount
+          });
+          setShopifyStage(82, `Queued: “${fields.title}” — ${j.variantCount} variants; Shopify upload is running in background.`);
+          window.M?.toast?.({ html: `Shopify: queued immediately (${j.variantCount} variants).` });
+
+          // The enqueue function normally started a background drain. If it
+          // could not resolve its own site URL, the browser starts it
+          // directly; otherwise the shared watchdog remains a cheap backup.
+          if (j.background === false) kickShopifyDrain("post-enqueue-fallback", true);
+          pollShopifyWatchers();
+          refreshShopifyStatus();
+          return { queued: true, jobId: j.jobId, title: fields.title };
         } finally { busy = false; }
       }
       window.queueShopifyUpload = queueShopifyUpload;
