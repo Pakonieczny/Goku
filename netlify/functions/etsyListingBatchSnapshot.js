@@ -99,17 +99,23 @@ exports.handler = async function (event) {
       return patches.get(id);
     };
 
+    // These are independent reads. Run them concurrently; the distributed
+    // limiter still controls Etsy QPS, while the Netlify invocation avoids
+    // paying two full network latencies sequentially.
+    const reads = [];
     if (missingImages.length) {
       etsyCalls++;
-      const url =
-        `${API_BASE}/listings/batch?listing_ids=${encodeURIComponent(missingImages.join(","))}` +
-        "&includes=Images";
-      const response = await etsyFetch(url, { method: "GET", headers: commonHeaders });
-      const text = await response.text();
-      let json; try { json = JSON.parse(text); } catch { json = {}; }
-      if (!response.ok) {
-        errors.push({ kind: "images", status: response.status, detail: text.slice(0, 300) });
-      } else {
+      reads.push((async () => {
+        const url =
+          `${API_BASE}/listings/batch?listing_ids=${encodeURIComponent(missingImages.join(","))}` +
+          "&includes=Images";
+        const response = await etsyFetch(url, { method: "GET", headers: commonHeaders });
+        const text = await response.text();
+        let json; try { json = JSON.parse(text); } catch { json = {}; }
+        if (!response.ok) {
+          errors.push({ kind: "images", status: response.status, detail: text.slice(0, 300) });
+          return;
+        }
         for (const listing of extractResults(json)) {
           const id = String(listing?.listing_id || listing?.listingId || "").trim();
           if (!missingImages.includes(id)) continue;
@@ -121,20 +127,22 @@ exports.handler = async function (event) {
             imagesCapturedAt: now,
           });
         }
-      }
+      })());
     }
 
     if (missingInventory.length) {
       etsyCalls++;
-      const url =
-        `${API_BASE}/listings/batch/inventory?listing_ids=` +
-        encodeURIComponent(missingInventory.join(","));
-      const response = await etsyFetch(url, { method: "GET", headers: commonHeaders });
-      const text = await response.text();
-      let json; try { json = JSON.parse(text); } catch { json = {}; }
-      if (!response.ok) {
-        errors.push({ kind: "inventory", status: response.status, detail: text.slice(0, 300) });
-      } else {
+      reads.push((async () => {
+        const url =
+          `${API_BASE}/listings/batch/inventory?listing_ids=` +
+          encodeURIComponent(missingInventory.join(","));
+        const response = await etsyFetch(url, { method: "GET", headers: commonHeaders });
+        const text = await response.text();
+        let json; try { json = JSON.parse(text); } catch { json = {}; }
+        if (!response.ok) {
+          errors.push({ kind: "inventory", status: response.status, detail: text.slice(0, 300) });
+          return;
+        }
         for (const listing of extractResults(json)) {
           const id = String(listing?.listing_id || listing?.listingId || "").trim();
           if (!missingInventory.includes(id)) continue;
@@ -144,8 +152,9 @@ exports.handler = async function (event) {
               : (listing?.products ? listing : null);
           Object.assign(patchFor(id), { inventory, inventoryCapturedAt: now });
         }
-      }
+      })());
     }
+    await Promise.all(reads);
 
     if (patches.size) {
       const batch = db.batch();

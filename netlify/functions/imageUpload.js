@@ -9,11 +9,22 @@ const crypto = require("crypto");
 
 const SNAPSHOT_COLLECTION = "EtsyListingSnapshots";
 const IDEMPOTENCY_TTL_MS = 24 * 60 * 60 * 1000;
-let db = null;
-try {
-  db = require("./firebaseAdmin").firestore();
-} catch (error) {
-  console.warn("imageUpload: idempotency cache unavailable.", error.message);
+let db;
+function getDb() {
+  if (db !== undefined) return db;
+  try {
+    db = require("./firebaseAdmin").firestore();
+  } catch (error) {
+    db = null;
+    console.warn("imageUpload: idempotency cache unavailable.", error.message);
+  }
+  return db;
+}
+function withDeadline(promise, ms, fallback) {
+  return Promise.race([
+    promise,
+    new Promise(resolve => setTimeout(() => resolve(fallback), ms))
+  ]);
 }
 
 exports.handler = async function (event, context) {
@@ -117,6 +128,7 @@ exports.handler = async function (event, context) {
     const rank = (fields.rank ?? "").toString().trim();
     let altText = (fields.alt_text || "").toString();
     const operationKey = (fields.operationKey || "").toString().trim().slice(0, 240);
+    const retryCheck = /^(1|true)$/i.test((fields.retryCheck || "").toString().trim());
 
     if (!listingId) {
       return { statusCode: 400, body: JSON.stringify({ error: "Missing listingId" }) };
@@ -130,14 +142,17 @@ exports.handler = async function (event, context) {
     // instead of posting the same image a second time.
     let snapshotRef = null;
     let operationHash = "";
-    if (db && operationKey) {
+    if (operationKey) {
+      operationHash = crypto
+        .createHash("sha256")
+        .update(`${listingId}|${operationKey}`)
+        .digest("hex");
+    }
+    if (retryCheck && operationHash && getDb()) {
       try {
-        operationHash = crypto
-          .createHash("sha256")
-          .update(`${listingId}|${operationKey}`)
-          .digest("hex");
         snapshotRef = db.collection(SNAPSHOT_COLLECTION).doc(listingId);
-        const snap = await snapshotRef.get();
+        const snap = await withDeadline(snapshotRef.get(), 1000, null);
+        if (!snap) throw new Error("idempotency lookup deadline exceeded");
         const cached = snap.exists ? (snap.data() || {}) : {};
         const completed = cached.uploadOps && cached.uploadOps[operationHash];
         if (completed?.status === "DONE" &&
@@ -217,7 +232,7 @@ exports.handler = async function (event, context) {
       };
     }
 
-    if (db) {
+    if (operationHash && getDb()) {
       try {
         snapshotRef = snapshotRef || db.collection(SNAPSHOT_COLLECTION).doc(listingId);
         const patch = { imagesCapturedAt: 0, updatedAt: Date.now() };
@@ -232,7 +247,10 @@ exports.handler = async function (event, context) {
         }
         // One bounded document per listing (rather than one document per
         // photo) keeps the idempotency ledger compact.
-        await snapshotRef.set(patch, { merge: true });
+        const saved = await withDeadline(snapshotRef.set(patch, { merge: true }), 1200, null);
+        if (saved === null) {
+          console.warn("imageUpload: idempotency persistence exceeded its deadline; returning Etsy success.");
+        }
       } catch (error) {
         console.warn("imageUpload: cache persistence failed.", error.message);
       }

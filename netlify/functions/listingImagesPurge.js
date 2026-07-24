@@ -58,6 +58,12 @@ try {
 } catch (error) {
   console.warn("listingImagesPurge: snapshot cache unavailable.", error.message);
 }
+function withDeadline(promise, ms, fallback) {
+  return Promise.race([
+    promise,
+    new Promise(resolve => setTimeout(() => resolve(fallback), ms))
+  ]);
+}
 
 exports.handler = async function (event) {
   try {
@@ -150,7 +156,12 @@ exports.handler = async function (event) {
       // fall back to Etsy so correctness never depends on the optimization.
       if (db) {
         try {
-          const snap = await db.collection(SNAPSHOT_COLLECTION).doc(listingId).get();
+          const snap = await withDeadline(
+            db.collection(SNAPSHOT_COLLECTION).doc(listingId).get(),
+            1000,
+            null
+          );
+          if (!snap) throw new Error("snapshot read deadline exceeded");
           const data = snap.exists ? (snap.data() || {}) : {};
           if (Array.isArray(data.images) &&
               Date.now() - Number(data.imagesCapturedAt || 0) <= SNAPSHOT_TTL_MS) {
@@ -301,9 +312,13 @@ function compactImage(image) {
 
 async function invalidateImageSnapshot(listingId) {
   try {
-    await db.collection(SNAPSHOT_COLLECTION).doc(String(listingId)).set(
-      { imagesCapturedAt: 0, updatedAt: Date.now() },
-      { merge: true }
+    await withDeadline(
+      db.collection(SNAPSHOT_COLLECTION).doc(String(listingId)).set(
+        { imagesCapturedAt: 0, updatedAt: Date.now() },
+        { merge: true }
+      ),
+      1000,
+      null
     );
   } catch (error) {
     console.warn("listingImagesPurge: cache invalidation failed.", error.message);

@@ -1,6 +1,21 @@
 // netlify/functions/updateListingInventory.js
 const { etsyFetch } = require("./etsyRateLimiter");
 
+const SNAPSHOT_COLLECTION = "EtsyListingSnapshots";
+const SNAPSHOT_TTL_MS = 30 * 60 * 1000;
+let db = null;
+try {
+  db = require("./firebaseAdmin").firestore();
+} catch (error) {
+  console.warn("updateListingInventory: snapshot cache unavailable.", error.message);
+}
+function withDeadline(promise, ms, fallback) {
+  return Promise.race([
+    promise,
+    new Promise(resolve => setTimeout(() => resolve(fallback), ms))
+  ]);
+}
+
 exports.handler = async (event) => {
   // --- CORS (needed for browser PUT + preflight) ---
   const origin = event.headers?.origin || event.headers?.Origin || "*";
@@ -58,7 +73,10 @@ exports.handler = async (event) => {
     try { body = event.body ? JSON.parse(event.body) : {}; } catch {}
     const desiredSku = String(body.sku || "").trim();
 
-    // 1) GET current inventory (so we can send the full, sanitized products array back)
+    // 1) Read the current inventory. The normal path is the Firestore copy
+    // populated by etsyListingBatchSnapshot for up to 25 queued drafts in
+    // one Etsy call. A missing/stale cache falls back to the individual Etsy
+    // endpoint, so optimization can never compromise inventory correctness.
     const invUrl = `https://api.etsy.com/v3/application/listings/${encodeURIComponent(listingId)}/inventory`;
 
     const commonHeaders = {
@@ -67,28 +85,49 @@ exports.handler = async (event) => {
       "x-api-key": xApiKey
     };
 
-    const invRes = await etsyFetch(invUrl, { method: "GET", headers: commonHeaders });
+    let inv;
+    let inventorySource = "etsy";
+    if (db) {
+      try {
+        const snap = await withDeadline(
+          db.collection(SNAPSHOT_COLLECTION).doc(String(listingId)).get(),
+          1000,
+          null
+        );
+        if (!snap) throw new Error("snapshot read deadline exceeded");
+        const cached = snap.exists ? (snap.data() || {}) : {};
+        if (Object.prototype.hasOwnProperty.call(cached, "inventory") &&
+            Date.now() - Number(cached.inventoryCapturedAt || 0) <= SNAPSHOT_TTL_MS) {
+          inv = cached.inventory;
+          inventorySource = "batch-cache";
+        }
+      } catch (error) {
+        console.warn("updateListingInventory: cache read failed; using Etsy.", error.message);
+      }
+    }
 
-    // If Etsy rejects auth here, fail fast with clear hints.
-    if (!invRes.ok && (invRes.status === 401 || invRes.status === 403)) {
-      const t = await invRes.text();
-      let d; try { d = JSON.parse(t); } catch { d = { raw: t }; }
-      const reqId =
-        invRes.headers.get("x-etsy-request-id") ||
-        invRes.headers.get("x-request-id") ||
-        undefined;
-
-      return {
-        statusCode: invRes.status,
-        headers: CORS,
-        body: JSON.stringify({
-          error: "Etsy inventory GET rejected (auth/scopes).",
-          etsy_status: invRes.status,
-          etsy_request_id: reqId,
-          hint: "Verify CLIENT_ID/CLIENT_SECRET are correct and the OAuth token has listings_r + listings_w scopes.",
-          details: d
-        })
-      };
+    if (inventorySource !== "batch-cache") {
+      const invRes = await etsyFetch(invUrl, { method: "GET", headers: commonHeaders });
+      if (!invRes.ok) {
+        const t = await invRes.text();
+        let d; try { d = JSON.parse(t); } catch { d = { raw: t }; }
+        const reqId =
+          invRes.headers.get("x-etsy-request-id") ||
+          invRes.headers.get("x-request-id") ||
+          undefined;
+        return {
+          statusCode: invRes.status,
+          headers: CORS,
+          body: JSON.stringify({
+            error: "Etsy inventory GET failed.",
+            etsy_status: invRes.status,
+            etsy_request_id: reqId,
+            hint: "Verify the token has listings_r + listings_w scopes.",
+            details: d
+          })
+        };
+      }
+      inv = await invRes.json();
     }
 
     // Hoist on_property arrays so they exist even if GET fails (avoids ReferenceError)
@@ -105,8 +144,7 @@ exports.handler = async (event) => {
     let skuMode = "keep";     // "uniform" | "vary" | "none" | "keep"
     let uniformSku;           // set when skuMode === "uniform"
 
-    if (invRes.ok) {
-      const inv = await invRes.json();
+    if (inv && typeof inv === "object") {
       const srcProducts = inv?.products || inv?.results?.products || [];
 
       // Preserve on_property arrays (v3 returns them at top level or under results)
@@ -303,7 +341,26 @@ exports.handler = async (event) => {
       };
     }
 
-    return { statusCode: 200, headers: CORS, body: JSON.stringify({ ok: true, inventory: data }) };
+    if (db) {
+      try {
+        await withDeadline(
+          db.collection(SNAPSHOT_COLLECTION).doc(String(listingId)).set(
+            { inventoryCapturedAt: 0, updatedAt: Date.now() },
+            { merge: true }
+          ),
+          1000,
+          null
+        );
+      } catch (error) {
+        console.warn("updateListingInventory: cache invalidation failed.", error.message);
+      }
+    }
+
+    return {
+      statusCode: 200,
+      headers: CORS,
+      body: JSON.stringify({ ok: true, inventory: data, source: inventorySource })
+    };
   } catch (err) {
     return { statusCode: 500, headers: CORS, body: JSON.stringify({ error: err.message }) };
   }
