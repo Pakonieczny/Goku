@@ -1,0 +1,1431 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<title>Brites · Etsy Pricing Console</title>
+<link rel="icon" href="data:,">
+<style>
+:root{
+  --paper:#f3f0ea;--paper2:#ebe5d9;--card:#fffefb;--card2:#faf7f1;
+  --ink:#1c1a17;--ink70:#5b554c;--ink45:#938c80;--ink25:#c4bdb0;
+  --line:#e4ddd0;--line2:#efe9dd;--velvet:#221f1b;--velvet2:#2d2924;--velvetLine:#3b362f;
+  --gold:#a9823f;--gold2:#caa861;--goldSoft:#f0e6cd;--goldLine:#e3d3a6;
+  --sage:#5f7a5b;--sageSoft:#e7eddf;--clay:#b0563f;--claySoft:#f4e3dc;
+  --slate:#4a6b78;--slateSoft:#e1ebee;--serif:'Hoefler Text','Iowan Old Style',Georgia,serif;
+  --sans:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,system-ui,sans-serif;
+  --mono:ui-monospace,'SF Mono',Menlo,Consolas,monospace;--r:14px;--rsm:9px;
+  --sh:0 1px 2px rgba(30,26,20,.04),0 9px 28px rgba(30,26,20,.06)
+}
+*{box-sizing:border-box}html,body{margin:0;min-height:100%}body{background:var(--paper);color:var(--ink);font:14px/1.45 var(--sans);-webkit-font-smoothing:antialiased}
+button,input,select{font:inherit}button{cursor:pointer}.mono{font-family:var(--mono);font-variant-numeric:tabular-nums}.serif{font-family:var(--serif)}
+.hidden{display:none!important}:focus-visible{outline:2px solid var(--gold);outline-offset:2px}
+.app{display:grid;grid-template-columns:270px minmax(0,1fr);min-height:100vh}.rail{position:sticky;top:0;height:100vh;background:var(--velvet);color:#e9e3d7;display:flex;flex-direction:column;overflow:hidden}
+.brand{padding:22px;border-bottom:1px solid var(--velvetLine)}.brand .logo{font:20px var(--serif);color:#fff}.brand .logo b{color:var(--gold2);font-weight:400}.brand .tag{margin-top:4px;font-size:10px;letter-spacing:.2em;text-transform:uppercase;color:#9a9183}
+.railStatus{margin:14px 14px 0;padding:11px 12px;border:1px solid var(--velvetLine);border-radius:11px;background:var(--velvet2);display:flex;align-items:center;gap:9px;font-size:12px;color:#cfc7b8}.dot{width:8px;height:8px;border-radius:50%;background:var(--ink45);flex:0 0 auto}.dot.ok{background:var(--sage)}.dot.bad{background:var(--clay)}
+.railActions{display:grid;grid-template-columns:1fr 1fr;gap:8px;padding:12px 14px}.railActions .btn{width:100%}.railActions .wide{grid-column:1/-1}.filterTabs{display:grid;grid-template-columns:repeat(3,1fr);gap:5px;padding:0 14px 10px}.filterTabs button{border:1px solid var(--velvetLine);background:transparent;color:#bdb4a5;border-radius:8px;padding:7px 4px;font-size:11px}.filterTabs button.on{background:#3a342d;color:#fff;border-color:#544b40}
+.searchPanel{padding:0 14px 10px}.searchBox{position:relative;display:flex;align-items:center}.searchIcon{position:absolute;left:10px;width:16px;height:16px;color:#8f8779;pointer-events:none}.searchBox input{width:100%;height:42px;background:#302c27;border:1px solid var(--velvetLine);color:#fff;border-radius:11px;padding:9px 58px 9px 34px;outline:none;transition:border-color .15s,box-shadow .15s}.searchBox input:focus{border-color:var(--gold2);box-shadow:0 0 0 3px rgba(202,168,97,.12)}.searchBox input::placeholder{color:#80786c}.searchClear{position:absolute;right:7px;width:28px;height:28px;border:0;background:transparent;color:#aaa193;border-radius:7px;font-size:18px;display:grid;place-items:center}.searchClear:hover{background:#3c3731;color:#fff}.searchSpinner{position:absolute;right:40px;width:14px;height:14px;border:2px solid #5c5449;border-top-color:var(--gold2);border-radius:50%;animation:spin .7s linear infinite;display:none}.searchSpinner.show{display:block}.searchMeta{display:flex;justify-content:space-between;gap:8px;margin:6px 2px 7px;color:#8f8779;font-size:10px;line-height:1.3}.searchMeta .live{color:#bdab7d}.searchControls{display:grid;grid-template-columns:1fr 1fr;gap:6px}.searchControls select{width:100%;min-width:0;background:#302c27;color:#cfc7b8;border:1px solid var(--velvetLine);border-radius:8px;padding:6px 7px;font-size:10.5px;outline:none}.categoryFilter{padding:0 14px 12px;border-top:1px solid var(--velvetLine)}.categoryFilter label{display:block;margin:10px 2px 7px;color:#a59c8d;font-size:10px;font-weight:750;letter-spacing:.13em;text-transform:uppercase}.categorySelectWrap{position:relative}.categorySelectWrap select{appearance:none;-webkit-appearance:none;width:100%;height:44px;border:1px solid #50483e;border-radius:11px;background:linear-gradient(180deg,#35302a,#2d2924);color:#fff;padding:8px 38px 8px 12px;font-size:12.5px;font-weight:650;outline:none;box-shadow:0 1px 0 rgba(255,255,255,.03) inset;cursor:pointer}.categorySelectWrap select:focus{border-color:var(--gold2);box-shadow:0 0 0 3px rgba(202,168,97,.12)}.categorySelectWrap:after{content:'⌄';position:absolute;right:13px;top:50%;transform:translateY(-56%);color:var(--gold2);font-size:18px;pointer-events:none}.categoryFilterMeta{display:flex;align-items:center;justify-content:space-between;gap:8px;margin:7px 2px 0;color:#8f8779;font-size:10px}.categoryFilterMeta .liveState{display:flex;align-items:center;gap:6px;min-width:0}.categoryFilterMeta .liveDot{width:6px;height:6px;border-radius:50%;background:var(--sage);box-shadow:0 0 0 3px rgba(95,122,91,.14);flex:0 0 auto}.categoryFilterMeta #filterLiveText{overflow:hidden;text-overflow:ellipsis;white-space:nowrap}.categoryFilterMeta #storeFilterTotal{font-family:var(--mono);white-space:nowrap}
+.queueHead{padding:8px 16px;display:flex;justify-content:space-between;align-items:center;color:#8f8779;font-size:10px;letter-spacing:.12em;text-transform:uppercase;border-top:1px solid var(--velvetLine)}.queue{overflow:auto;flex:1;padding:0 8px 12px}.qitem{width:100%;border:0;background:transparent;color:#cfc7b8;display:grid;grid-template-columns:42px minmax(0,1fr) auto;gap:10px;align-items:center;text-align:left;padding:8px;border-radius:10px}.qitem:hover{background:var(--velvet2)}.qitem.on{background:#34302a;box-shadow:inset 2px 0 0 var(--gold2);color:#fff}.qimg{width:42px;height:42px;border-radius:8px;object-fit:cover;background:#3b362f}.qtitle{font-size:12px;line-height:1.25;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden}.qmeta{font:10px var(--mono);color:#8e8577;margin-top:3px}.qbadge{min-width:22px;height:22px;border-radius:20px;display:grid;place-items:center;font:10px var(--mono);background:#3e3932;color:#bfb6a7}.qbadge.bad{background:#59352d;color:#ffd9cf}.qbadge.ok{background:#30412f;color:#d8ecd4}.qbadge.approved{background:#65522e;color:#ffe8a8}
+.railFoot{padding:12px 16px;border-top:1px solid var(--velvetLine);font-size:10.5px;color:#827a6e}
+.main{min-width:0}.topbar{position:sticky;top:0;z-index:30;background:rgba(243,240,234,.9);backdrop-filter:blur(12px);border-bottom:1px solid var(--line);padding:12px 24px;display:flex;align-items:center;gap:10px;flex-wrap:wrap;row-gap:8px}.navBtn{width:38px;height:38px;border:1px solid var(--line);border-radius:10px;background:var(--card);color:var(--ink);font-size:20px}.navBtn:disabled{opacity:.4;cursor:default}.topTitle{min-width:0;flex:0 1 auto}.topTitle h1{font:20px var(--serif);font-weight:500;margin:0;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:600px}.topTitle .sub{font-size:11.5px;color:var(--ink45);margin-top:1px}.spacer{flex:1}
+.pill{font-size:11px;font-weight:700;padding:5px 10px;border-radius:30px;display:inline-flex;align-items:center;gap:6px;white-space:nowrap}.pill.neutral{background:var(--paper2);color:var(--ink70)}.pill.ok{background:var(--sageSoft);color:#3c5a39}.pill.warn{background:var(--goldSoft);color:#7a5a1d}.pill.bad{background:var(--claySoft);color:#8a3a26}.pill.info{background:var(--slateSoft);color:#33525d}
+.btn{border:1px solid var(--ink);background:var(--ink);color:#fff;border-radius:9px;padding:8px 13px;font-weight:650;transition:opacity .15s,transform .08s}.btn:hover{opacity:.9}.btn:active{transform:translateY(1px)}.btn:disabled{opacity:.45;cursor:default}.btn.ghost{background:transparent;color:var(--ink);border-color:var(--line)}.btn.gold{background:var(--gold);border-color:var(--gold);color:#2a2013}.btn.sage{background:var(--sage);border-color:var(--sage)}.btn.danger{background:var(--clay);border-color:var(--clay)}.btn.sm{padding:6px 10px;font-size:12px}.btn.xs{padding:4px 8px;font-size:11px}
+.view{padding:22px 24px 90px;max-width:1500px}.notice{border:1px solid var(--goldLine);background:var(--goldSoft);border-radius:12px;padding:10px 13px;font-size:12px;color:#6f551f;margin-bottom:14px}.activity{display:none;align-items:center;gap:11px;background:linear-gradient(95deg,#262019,#332a20);color:#f4ecdc;border-radius:12px;padding:11px 14px;margin-bottom:14px}.activity.show{display:flex}.spin{width:16px;height:16px;border:2px solid #5a5040;border-top-color:var(--gold2);border-radius:50%;animation:spin .7s linear infinite}@keyframes spin{to{transform:rotate(360deg)}}.activity .progress{margin-left:auto;width:180px;height:6px;background:#4b4338;border-radius:9px;overflow:hidden}.activity .progress i{height:100%;display:block;background:var(--gold2);width:0}
+.empty{min-height:68vh;display:grid;place-items:center;text-align:center;color:var(--ink45)}.empty .ring{width:58px;height:58px;border:2px dashed var(--ink25);border-radius:50%;margin:0 auto 14px}.empty h2{font:25px var(--serif);color:var(--ink);margin:0 0 6px;font-weight:500}.empty p{max-width:500px;margin:0 auto 16px}
+.grid{display:grid;gap:15px}.hero{grid-template-columns:260px minmax(0,1fr)}.card{background:var(--card);border:1px solid var(--line);border-radius:var(--r);box-shadow:var(--sh)}.pad{padding:17px}.listingImage{width:100%;aspect-ratio:1/1;border-radius:12px;object-fit:cover;background:var(--paper2)}.imgActions{display:flex;gap:7px;margin-top:10px}.heroTitle{display:flex;gap:12px;align-items:flex-start}.heroTitle h2{font:26px/1.2 var(--serif);font-weight:500;margin:0}.heroTitle .badges{margin-left:auto;display:flex;gap:7px;flex-wrap:wrap;justify-content:flex-end}.metaGrid{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:10px;margin-top:14px}.metaBox{border:1px solid var(--line2);background:var(--card2);border-radius:10px;padding:10px}.metaBox .lab{text-transform:uppercase;letter-spacing:.07em;color:var(--ink45);font-size:9.5px;font-weight:750}.metaBox .val{font:15px var(--mono);margin-top:4px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.health{margin-top:14px}.healthHead{display:flex;align-items:center;gap:10px;margin-bottom:8px}.healthHead h3{margin:0;font-size:13px}.issueList{display:flex;flex-wrap:wrap;gap:7px}.issue{font-size:11.5px;border-radius:8px;padding:6px 9px;border:1px solid}.issue.error{background:var(--claySoft);border-color:#e5c0b4;color:#8a3a26}.issue.warning{background:var(--goldSoft);border-color:var(--goldLine);color:#74591f}.issue.info{background:var(--slateSoft);border-color:#c7dde4;color:#33525d}.issue.good{background:var(--sageSoft);border-color:#cad9c5;color:#3c5a39}
+.sectionHead{display:flex;align-items:center;gap:10px;margin:22px 0 10px}.sectionHead h3{font:20px var(--serif);font-weight:500;margin:0}.sectionHead .sub{font-size:12px;color:var(--ink45)}.sectionHead .right{margin-left:auto;display:flex;gap:8px;align-items:center}
+.variationGrid{grid-template-columns:repeat(2,minmax(0,1fr))}.vcard{padding:14px}.vhead{display:flex;align-items:center;gap:8px}.vname{font-weight:700}.vid{font:10px var(--mono);color:var(--ink45)}.vhead .actions{margin-left:auto;display:flex;gap:5px}.tiers{display:flex;flex-wrap:wrap;gap:7px;margin-top:12px}.tier{display:inline-flex;align-items:center;gap:6px;border:1px solid var(--line);background:var(--card2);border-radius:20px;padding:5px 8px 5px 10px;font-size:12px}.tier button{border:0;background:transparent;color:var(--ink45);padding:0 2px;font-size:14px}.addCard{min-height:118px;border:1px dashed var(--ink25);border-radius:var(--r);display:grid;place-items:center;background:rgba(255,255,255,.35)}
+.depCard{margin-top:12px;padding:13px}.depTop{display:flex;align-items:center;gap:10px}.switch{width:43px;height:24px;border-radius:30px;background:var(--ink25);position:relative;border:0}.switch i{position:absolute;width:18px;height:18px;border-radius:50%;background:white;top:3px;left:3px;transition:left .16s}.switch.on{background:var(--sage)}.switch.on i{left:22px}.deps{display:flex;gap:8px;flex-wrap:wrap;margin-top:10px}.dep{font-size:11.5px;border:1px solid var(--line);background:var(--card2);border-radius:8px;padding:6px 8px}.manualMap{margin-top:12px;border-top:1px solid var(--line2);padding-top:10px}.mapTable{width:100%;border-collapse:collapse}.mapTable th,.mapTable td{padding:7px;border-bottom:1px solid var(--line2);font-size:12px;text-align:center}.mapTable th:first-child,.mapTable td:first-child{text-align:left}
+.bulk{display:flex;align-items:center;gap:8px;padding:11px 12px;position:sticky;top:63px;z-index:20}.bulk select,.bulk input{border:1px solid var(--line);border-radius:8px;background:var(--card);padding:7px 9px}.bulk select{min-width:160px}.bulk input{width:150px}.bulk .count{font:11px var(--mono);color:var(--ink45);margin-left:auto}
+.tableCard{overflow:hidden}.tableScroll{overflow:auto;max-height:58vh}.priceTable{width:100%;border-collapse:separate;border-spacing:0;font-size:12.5px}.priceTable th{position:sticky;top:0;background:var(--card2);z-index:4;text-align:left;padding:9px 8px;border-bottom:1px solid var(--line);font-size:10px;letter-spacing:.06em;text-transform:uppercase;color:var(--ink45);white-space:nowrap}.priceTable td{padding:7px 8px;border-bottom:1px solid var(--line2);vertical-align:middle}.priceTable tr:hover td{background:#fdfaf4}.priceTable tr.changed td{background:#fff9e9}.priceTable th:first-child,.priceTable td:first-child{position:sticky;left:0;z-index:3;background:var(--card)}.priceTable th:first-child{z-index:6;background:var(--card2)}.priceTable input[type=text],.priceTable input[type=number]{width:100%;min-width:95px;border:1px solid var(--line);background:#fff;border-radius:7px;padding:7px 8px}.priceTable input.sku{min-width:150px}.priceTable .varVal{white-space:nowrap;font-weight:600}.moneyField{position:relative}.moneyField span{position:absolute;left:9px;top:7px;color:var(--ink45)}.moneyField input{padding-left:20px!important}.toggleCell button{width:38px;height:22px;border:0;border-radius:20px;background:var(--ink25);position:relative}.toggleCell button:after{content:"";position:absolute;width:16px;height:16px;border-radius:50%;background:white;top:3px;left:3px}.toggleCell button.on{background:var(--sage)}.toggleCell button.on:after{left:19px}.rowNum{font:10px var(--mono);color:var(--ink45);margin-left:5px}
+.stickyActions{position:fixed;left:270px;right:0;bottom:0;z-index:40;background:rgba(255,254,251,.94);backdrop-filter:blur(12px);border-top:1px solid var(--line);padding:11px 24px;display:flex;align-items:center;gap:9px}.stickyActions .dirty{font-size:12px;color:var(--ink45)}.stickyActions .right{margin-left:auto;display:flex;gap:8px}.verifiedText{font-size:12px;color:var(--sage);font-weight:700}
+.toasts{position:fixed;right:20px;bottom:78px;z-index:100;display:flex;flex-direction:column;gap:8px}.toast{background:var(--velvet);color:#f4ecdc;border:1px solid var(--velvetLine);border-radius:11px;padding:11px 14px;box-shadow:0 10px 30px rgba(0,0,0,.2);max-width:380px;display:flex;gap:9px;align-items:flex-start}.toast .d{width:8px;height:8px;border-radius:50%;background:var(--gold2);margin-top:5px}.toast.ok .d{background:#8ab083}.toast.bad .d{background:#d6755d}
+dialog{border:0;padding:0;border-radius:15px;box-shadow:0 24px 80px rgba(0,0,0,.32);width:min(480px,92vw);max-height:min(86vh,900px);overflow:hidden;background:var(--card);color:var(--ink)}dialog::backdrop{background:rgba(20,18,15,.52)}#dialogForm{display:flex;flex-direction:column;max-height:min(86vh,900px)}.dlgHead{padding:17px 19px;border-bottom:1px solid var(--line);flex:0 0 auto}.dlgHead h3{margin:0;font:21px var(--serif);font-weight:500}.dlgBody{padding:18px 19px;overflow:auto}.dlgBody label{display:block;font-size:11px;text-transform:uppercase;letter-spacing:.06em;color:var(--ink45);font-weight:700;margin:10px 0 6px}.dlgBody input,.dlgBody textarea{width:100%;border:1px solid var(--line);border-radius:9px;padding:9px 10px;background:white}.dlgBody textarea{min-height:85px;resize:vertical}.dlgFoot{padding:12px 19px;border-top:1px solid var(--line);display:flex;justify-content:flex-end;gap:8px;background:var(--card2);flex:0 0 auto}
+@media(max-width:1050px){.app{grid-template-columns:1fr}.rail{position:fixed;left:0;top:0;width:min(85vw,310px);z-index:80;transform:translateX(-102%);transition:transform .2s}.rail.open{transform:none}.stickyActions{left:0}.hero{grid-template-columns:210px minmax(0,1fr)}.metaGrid{grid-template-columns:repeat(2,1fr)}}
+@media(max-width:720px){.view{padding:12px 8px 100px}.topbar{padding:9px 8px;flex-wrap:wrap}.topTitle{order:3;width:100%}.topTitle h1{font-size:18px}.hero,.variationGrid{grid-template-columns:1fr}.hero .card:first-child{max-width:280px}.metaGrid{grid-template-columns:1fr 1fr}.bulk{top:100px;overflow:auto}.stickyActions{padding:9px 8px;flex-wrap:wrap}.stickyActions .right{width:100%;margin-left:0}.stickyActions .right .btn{flex:1}.pill.apiMode{display:none}}
+@media(prefers-reduced-motion:reduce){*{animation:none!important;transition:none!important}}
+
+/* ---------------- Results workspace ---------------- */
+.tabCtl{display:flex;border:1px solid var(--line);border-radius:999px;background:var(--card2);padding:3px;gap:2px}
+.tabCtl button{border:0;background:transparent;border-radius:999px;padding:6px 14px;font-size:12.5px;color:var(--ink70)}
+.tabCtl button.on{background:var(--velvet);color:#fff}
+.tabCtl button b{font-weight:600;color:var(--gold);margin-left:4px}
+.tabCtl button.on b{color:var(--gold2)}
+.tabCtl.sm button{padding:5px 10px;font-size:11.5px}
+.modeBar{display:flex;align-items:center;gap:12px;flex-wrap:wrap;margin:10px 0 14px;padding:8px 12px;border:1.5px solid var(--gold);border-left:4px solid var(--gold);border-radius:var(--rsm);background:linear-gradient(90deg,var(--goldSoft),var(--card) 55%)}
+.modeBar .mlabel{font-size:10px;font-weight:800;letter-spacing:.12em;text-transform:uppercase;color:var(--clay);white-space:nowrap}
+.modeBar .mhint{margin-left:auto;font-size:11px;color:var(--ink45);white-space:nowrap}
+.modeBar .tabCtl{border:1.5px solid var(--velvet);background:var(--card);padding:2px;flex-wrap:nowrap}
+.modeBar .tabCtl button{font-weight:700;font-size:12px;padding:6px 12px;color:var(--ink70);white-space:nowrap;line-height:1.2}
+.modeBar .tabCtl button.on{background:var(--velvet);color:var(--gold2);box-shadow:inset 0 0 0 1.5px var(--gold)}
+.modeBar .tabCtl#engraveToggle button.on[data-eg="on"]{background:var(--sage);color:#fff}
+.modeBar .tabCtl#engraveToggle button.on[data-eg="off"]{background:var(--clay);color:#fff}
+@media (max-width:860px){.modeBar .mhint{display:none}}
+.modeBar #prepBadge{font-size:10.5px}
+.batchCluster{display:flex;align-items:center;gap:6px;flex-shrink:0}
+.batchCluster #batchBtn b{color:var(--gold2);margin-left:6px}
+#batchPanel{margin:0 0 14px;padding:12px 14px;border:1.5px solid var(--velvetLine,var(--line));border-left:4px solid var(--velvet);border-radius:var(--rsm);background:var(--card);box-shadow:var(--sh)}
+#batchPanel .bhead{display:flex;align-items:center;gap:10px;flex-wrap:wrap;margin-bottom:8px}
+#batchPanel .bhead h4{margin:0;font:15px var(--serif)}
+#batchPanel .bstats{display:flex;gap:14px;flex-wrap:wrap;font-size:12px;color:var(--ink70);margin-bottom:8px}
+#batchPanel .bstats b{font-size:14px;color:var(--ink)}
+#batchPanel .bbar{height:8px;border-radius:999px;background:var(--paper2);overflow:hidden;margin-bottom:8px}
+#batchPanel .bbar i{display:block;height:100%;width:0;background:linear-gradient(90deg,var(--gold),var(--sage));transition:width .25s}
+#batchPanel .bcur{font-size:11.5px;color:var(--ink45);margin-bottom:6px}
+#batchPanel .berrs{max-height:110px;overflow:auto;font-size:11.5px;color:var(--clay);display:flex;flex-direction:column;gap:3px}
+.schedBar{display:flex;align-items:center;gap:10px;flex-wrap:wrap;padding:8px 12px;margin-bottom:10px;border:1.5px dashed var(--velvet);border-radius:var(--rsm);background:var(--card)}
+.schedBar .mlabel{font-size:10px;font-weight:800;letter-spacing:.12em;text-transform:uppercase;color:var(--clay)}
+.apiWidget{display:flex;flex-direction:column;gap:7px;padding:10px 40px 10px 16px;border:1px solid var(--line);border-radius:12px;background:var(--card);min-width:320px;max-width:380px;position:relative;flex:0 1 auto}
+.apiWidget .awRow{display:flex;align-items:center;gap:14px;font-size:12.5px;line-height:1.1}
+.apiWidget .awLabel{width:30px;flex:0 0 auto;font-weight:700;color:var(--ink45);text-transform:uppercase;font-size:10px;letter-spacing:.05em}
+.apiWidget .awNum{font-variant-numeric:tabular-nums;font-weight:700;color:var(--ink);white-space:nowrap;min-width:78px;flex:0 0 auto}
+.apiWidget .awBar{flex:1;height:6px;border-radius:999px;background:var(--paper2);overflow:hidden;min-width:70px}
+.apiWidget .awBar i{display:block;height:100%;width:0%;background:var(--sage);transition:width .3s}
+.apiWidget .awBar.warn i{background:var(--gold)}
+.apiWidget .awBar.bad i{background:var(--clay)}
+.apiWidget .awQps{font-size:11px;color:var(--ink45);white-space:nowrap;flex:0 0 auto;min-width:62px;text-align:right}
+.apiWidget .awUpdate{min-width:62px;height:20px;flex:0 0 auto;border:1px solid var(--goldLine);border-radius:999px;background:var(--goldSoft);color:var(--gold);font:700 9.5px var(--sans);letter-spacing:.02em;cursor:pointer;padding:0 8px;transition:background .12s,border-color .12s,color .12s}
+.apiWidget .awUpdate:hover{background:#f0e2bb;border-color:var(--gold);color:var(--ink)}
+.apiWidget .awUpdate:disabled{cursor:wait;opacity:.65}
+.apiWidget.awUnavailable{border-color:var(--clay);background:var(--claySoft)}
+.apiWidget .awInfo{position:absolute;top:50%;right:12px;transform:translateY(-50%);border:none;background:none;color:var(--ink45);font-size:15px;cursor:help;padding:0;line-height:1}
+.apiWidget .awInfo:hover{color:var(--ink)}
+.apiWidget .awInfo.warnDot{color:var(--gold)}
+@media (max-width:1400px){.apiWidget{display:none}}
+#diagModal{position:fixed;inset:0;background:rgba(30,26,20,.45);backdrop-filter:blur(3px);z-index:200;display:flex;align-items:center;justify-content:center;padding:24px}
+#diagModal.hidden{display:none}
+.diagShell{background:var(--paper);border:1px solid var(--line);border-radius:18px;box-shadow:0 24px 80px rgba(0,0,0,.35);width:min(980px,100%);height:min(84vh,900px);display:flex;flex-direction:column;overflow:hidden}
+.diagHead{display:flex;align-items:center;justify-content:space-between;gap:12px;padding:16px 20px;border-bottom:1px solid var(--line)}
+.diagHead h2{margin:0;font:22px var(--serif)}
+.diagHead .diagSub{font:12px var(--sans);color:var(--ink45);margin-left:10px}
+.diagToolbar{display:flex;gap:8px;flex-wrap:wrap;padding:12px 20px;border-bottom:1px solid var(--line);background:var(--card)}
+.diagToolbar #diagSearch{flex:2;min-width:220px}
+.diagFocus{padding:10px 20px;background:var(--goldSoft);border-bottom:1px solid var(--gold);font-size:12.5px;display:flex;align-items:center;gap:10px}
+.diagSummary{padding:8px 20px;font-size:11.5px;color:var(--ink45);border-bottom:1px solid var(--line)}
+.diagBody{flex:1;overflow:auto}
+.diagFoot{padding:10px 20px;border-top:1px solid var(--line);text-align:center}
+.diagRow{padding:12px 20px;border-bottom:1px solid var(--line)}
+.diagRow .dactions{margin-left:auto;display:flex;gap:6px}
+.diagRow.bad{border-left:3px solid var(--clay)}
+.diagRow .dtop{display:flex;align-items:center;gap:8px;margin-bottom:2px}
+.diagRow .dtime{font-size:10.5px;color:var(--ink45)}
+.diagRow .dtitle{font-weight:600;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.diagRow .dtitle .dim{color:var(--ink45);font-weight:400}
+.diagRow .ddetail{color:var(--ink70);margin-top:2px;word-break:break-word}
+#resultsView .rhead{display:flex;align-items:center;gap:12px;flex-wrap:wrap;margin-bottom:12px}
+#resultsView .rhead h2{font:22px var(--serif);margin:0}
+#resultsView .rhead .rsub{font-size:12px;color:var(--ink45)}
+#resultsView .rtools{display:flex;align-items:center;gap:8px;margin-left:auto;flex-wrap:wrap}
+#resultsView .rtools select{border:1px solid var(--line);background:var(--card);border-radius:8px;padding:7px 9px;font-size:12px}
+.chipRow{display:flex;gap:6px;flex-wrap:wrap;margin-bottom:12px}
+.chipRow button{border:1px solid var(--line);background:var(--card);border-radius:999px;padding:6px 12px;font-size:12px;color:var(--ink70);display:inline-flex;gap:6px;align-items:center}
+.chipRow button b{font-weight:600;color:var(--ink45)}
+.chipRow button.on{background:var(--velvet);border-color:var(--velvet);color:#fff}.chipRow button.on b{color:var(--gold2)}
+.rbulk{position:sticky;top:0;z-index:5;display:flex;align-items:center;gap:10px;padding:9px 12px;margin-bottom:10px;background:var(--card);border:1px solid var(--line);border-radius:var(--rsm);box-shadow:var(--sh);flex-wrap:wrap}
+.rbulk .cnt{font-size:12px;color:var(--ink45)}
+.rbulk .sp{flex:1}
+.rlist{display:flex;flex-direction:column;gap:8px}
+.rrow{display:grid;grid-template-columns:64px minmax(0,1fr) auto;gap:12px;align-items:center;padding:10px 12px;background:var(--card);border:1px solid var(--line);border-radius:var(--r);cursor:pointer;transition:border-color .12s,box-shadow .12s;text-align:left}
+.rrow:hover{border-color:var(--goldLine);box-shadow:var(--sh)}
+.rrow.sel{border-color:var(--gold);box-shadow:0 0 0 1px var(--gold)}
+.rrow.current{background:var(--card2)}
+.rrow img{width:64px;height:64px;border-radius:9px;object-fit:cover;background:var(--paper2)}
+.rrow .rmain{min-width:0}
+.rrow .rtitle{font-weight:600;font-size:13.5px;line-height:1.35;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden}
+.rrow .rmeta{margin-top:4px;font-size:11.5px;color:var(--ink45);display:flex;gap:8px;flex-wrap:wrap;align-items:center}
+.rrow .rstatus{display:flex;gap:6px;flex-wrap:wrap;margin-top:6px}
+.schip{display:inline-flex;align-items:center;gap:5px;font-size:10.5px;padding:3px 8px;border-radius:999px;border:1px solid var(--line);color:var(--ink70);background:var(--card2)}
+.schip.ok{background:var(--sageSoft);border-color:#cfdcc6;color:var(--sage)}
+.schip.bad{background:var(--claySoft);border-color:#e5c4b8;color:var(--clay)}
+.schip.warn{background:var(--goldSoft);border-color:var(--goldLine);color:var(--gold)}
+.schip.dim{color:var(--ink45)}
+.schip .miniSpin{width:9px;height:9px;border:1.5px solid var(--ink25);border-top-color:var(--gold);border-radius:50%;animation:rspin .7s linear infinite}
+@keyframes rspin{to{transform:rotate(360deg)}}
+.rrow .ract{display:flex;flex-direction:column;gap:5px;align-items:flex-end}
+.rrow .ract .btns{display:flex;gap:5px}
+.rrow .rprice{font-weight:600;font-size:13px;white-space:nowrap}
+.rlist.compact .rrow{padding:6px 10px;grid-template-columns:40px minmax(0,1fr) auto}
+.rlist.compact .rrow img{width:40px;height:40px}
+.rlist.compact .rtitle{-webkit-line-clamp:1;font-size:12.5px}
+.rlist.compact .rstatus{margin-top:3px}
+.rempty{padding:40px 20px;text-align:center;color:var(--ink45);font-size:13px;background:var(--card);border:1px dashed var(--line);border-radius:var(--r)}
+@media (max-width:760px){.rrow{grid-template-columns:48px minmax(0,1fr)}.rrow .ract{grid-column:1/-1;flex-direction:row;justify-content:space-between;align-items:center}}
+</style>
+</head>
+<body>
+<div class="app">
+  <aside class="rail" id="rail">
+    <div class="brand"><div class="logo">Brites <b>Etsy Pricing</b></div><div class="tag">Live store pricing control</div></div>
+    <div class="railStatus"><span class="dot" id="connDot"></span><span id="connText">Not connected</span></div>
+    <div class="railActions"><button class="btn gold sm" id="connectBtn">Connect Etsy</button><button class="btn sm" id="loadBtn">Reload store</button><button class="btn ghost sm wide" id="diagOpenBtn">&#x1FA7A; Diagnostics &#183; change history</button></div>
+    <div class="searchPanel">
+      <div class="searchBox">
+        <svg class="searchIcon" viewBox="0 0 24 24" fill="none" aria-hidden="true"><circle cx="11" cy="11" r="7" stroke="currentColor" stroke-width="2"/><path d="m16.5 16.5 4 4" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></svg>
+        <input id="searchInput" type="search" autocomplete="off" spellcheck="false" placeholder="Search live Etsy titles…" aria-label="Search Etsy listing titles">
+        <span class="searchSpinner" id="searchSpinner" aria-hidden="true"></span>
+        <button class="searchClear hidden" id="clearSearchBtn" aria-label="Clear title search">×</button>
+      </div>
+      <div class="searchMeta"><span id="searchStatus" class="live">Live Etsy title search</span><span id="searchLatency"></span></div>
+      <div class="searchControls">
+        <select id="matchMode" aria-label="Title matching mode"><option value="all">All title words</option><option value="phrase">Exact phrase</option></select>
+        <select id="sortMode" aria-label="Search sorting"><option value="score">Best match</option><option value="title_asc">Title A–Z</option><option value="title_desc">Title Z–A</option><option value="created_desc">Date added · newest</option><option value="created_asc">Date added · oldest</option><option value="updated_desc">Recently updated</option><option value="status_att">Status · needs attention first</option><option value="status_done">Status · completed first</option><option value="price_asc">Price low–high</option><option value="price_desc">Price high–low</option></select>
+      </div>
+    </div>
+    <div class="categoryFilter">
+      <label for="storeFilterSelect">Listing category</label>
+      <div class="categorySelectWrap"><select id="storeFilterSelect" aria-label="Filter Etsy listings by store category"></select></div>
+      <div class="categoryFilterMeta"><span class="liveState"><i class="liveDot"></i><span id="filterLiveText">Live Etsy catalog</span></span><span id="storeFilterTotal">0 listings</span></div>
+    </div>
+    <div class="queueHead"><span>Listings</span><span id="queueCount">0</span></div>
+    <div class="queue" id="queue"></div>
+    <div class="railFoot">Live title search is verified against Etsy; local results appear instantly while Etsy responds.</div>
+  </aside>
+
+  <main class="main">
+    <header class="topbar">
+      <button class="navBtn" id="menuBtn" aria-label="Open listing queue">☰</button>
+      <button class="navBtn" id="prevBtn" aria-label="Previous listing">‹</button>
+      <button class="navBtn" id="nextBtn" aria-label="Next listing">›</button>
+      <div class="topTitle"><h1 id="topTitle">Brites Etsy Pricing Console</h1><div class="sub" id="topSub">Load the live Etsy catalog to begin.</div></div>
+      <div class="spacer"></div>
+      <div class="apiWidget" id="apiWidget">
+        <div class="awRow" data-row="app">
+          <span class="awLabel">App</span>
+          <span class="awNum" id="awAppNum">…</span>
+          <span class="awBar"><i id="awAppBar"></i></span>
+          <span class="awQps" id="awQps">— QPS</span>
+        </div>
+        <div class="awRow" data-row="key">
+          <span class="awLabel">Key</span>
+          <span class="awNum" id="awKeyNum">…</span>
+          <span class="awBar"><i id="awKeyBar"></i></span>
+          <button class="awUpdate" id="awUpdateBtn" type="button" aria-label="Update API usage information" title="Update only the API usage information">Update</button>
+        </div>
+        <button class="awInfo" id="awInfo" aria-label="What do these numbers mean?" title="App = this console’s own Etsy calls today, resets 11:59 PM Toronto, capped at 2,500 (50% of Etsy’s 5,000/day).&#10;Key = Etsy’s own meter for the WHOLE API key (every app, incl. EtsyMail), resets midnight UTC (8 PM Toronto).&#10;QPS = highest calls-per-second observed, hard-capped at 2.5.">ⓘ</button>
+      </div>
+      <div class="tabCtl" role="tablist" aria-label="View">
+        <button id="tabEditor" role="tab" class="on">Listing</button>
+        <button id="tabResults" role="tab">Results<b id="tabResultsCount">0</b></button>
+        <button id="tabBatch" role="tab">Batch<b id="tabBatchCount">0</b></button>
+      </div>
+      <div class="batchCluster">
+        <button class="btn velvet sm" id="batchBtn" title="Run all prepared listings on the server">▶ Start Batch<b id="batchCount">0</b></button>
+        <button class="btn ghost sm hidden" id="batchStopBtn">Stop</button>
+      </div>
+      <button class="btn ghost sm" id="refreshBtn">Refresh</button>
+    </header>
+
+    <div class="view">
+      <div class="notice">Choose any Etsy shop category from the dropdown. Only that live category is shown in the queue and Previous/Next navigation. Title searches are sent to Etsy in real time and then verified against listing titles only.</div>
+        <div id="batchPanel" class="hidden">
+          <div class="bhead"><h4>Batch run</h4><span class="pill info" id="batchState">Idle</span><span style="flex:1"></span></div>
+          <div class="bstats"><span>To batch <b id="bTotal">0</b></span><span>Succeeded <b id="bOk" style="color:var(--sage)">0</b></span><span>Failed <b id="bFail" style="color:var(--clay)">0</b></span><span>Remaining <b id="bLeft">0</b></span></div>
+          <div class="bbar"><i id="bBar"></i></div>
+          <div class="bcur" id="bCur"></div>
+          <div class="berrs" id="bErrs"></div>
+        </div>
+
+      <div class="activity" id="activity"><span class="spin"></span><span id="activityText">Loading…</span><span class="progress"><i id="activityBar"></i></span><button class="btn ghost xs" id="stopScanBtn">Stop</button></div>
+
+      <section id="resultsView" class="hidden">
+        <div class="rhead">
+          <div><h2 id="rTitle">Results</h2><div class="rsub" id="rSummary">—</div></div>
+        </div>
+        <div class="schedBar hidden" id="schedBar">
+          <span class="mlabel">Auto-run</span>
+          <input type="datetime-local" class="input sm" id="schedAt" aria-label="Scheduled date and time">
+          <select class="input sm" id="schedRepeat"><option value="once">Once</option><option value="daily">Daily</option><option value="weekly">Weekly</option></select>
+          <button class="btn velvet sm" id="schedArmBtn">Schedule batch</button>
+          <button class="btn ghost sm hidden" id="schedCancelBtn">Cancel schedule</button>
+          <span class="pill neutral" id="schedStatus">Not scheduled</span>
+        </div>
+        <div class="rtools"><select class="input sm" id="rSort" aria-label="Sort results"><option value="score">Best match</option><option value="title_asc">Title A–Z</option><option value="title_desc">Title Z–A</option><option value="created_desc">Date added · newest</option><option value="created_asc">Date added · oldest</option><option value="updated_desc">Recently updated</option><option value="status_att">Status · needs attention first</option><option value="status_done">Status · completed first</option><option value="price_asc">Price low–high</option><option value="price_desc">Price high–low</option></select>
+            <select id="rDensity" aria-label="Result density"><option value="comfortable">Comfortable</option><option value="compact">Compact</option></select>
+          </div>
+        <div class="chipRow" id="rChips"></div>
+        <div class="rlist" id="rList"></div>
+      </section>
+
+      <section class="empty" id="emptyState"><div><div class="ring"></div><h2>Manage pricing across the entire Etsy store</h2><p>Select any store category, search live listing titles, inspect the complete pricing matrix and verify every update directly against Etsy.</p><button class="btn gold" id="emptyLoadBtn">Load Store Listings</button></div></section>
+
+      <section id="editor" class="hidden">
+        <div class="grid hero">
+          <div class="card pad"><img class="listingImage" id="listingImage" alt="Primary listing image"><div class="imgActions"><button class="btn ghost sm" id="openEtsyBtn">Open on Etsy</button><button class="btn ghost sm" id="copyIdBtn">Copy ID</button><button class="btn ghost sm" id="copyInvBtn">Copy inventory JSON</button></div></div>
+          <div class="card pad">
+            <div class="heroTitle"><div><div class="mono" id="listingIdText" style="font-size:11px;color:var(--ink45);margin-bottom:6px"></div><h2 id="listingTitle"></h2></div><div class="badges" id="listingBadges"></div></div>
+            <div class="metaGrid">
+              <div class="metaBox"><div class="lab">Price range</div><div class="val" id="priceRange">—</div></div>
+              <div class="metaBox"><div class="lab">Combinations</div><div class="val" id="comboCount">—</div></div>
+              <div class="metaBox"><div class="lab">Enabled</div><div class="val" id="enabledCount">—</div></div>
+              <div class="metaBox"><div class="lab">Section</div><div class="val" id="sectionName">—</div></div>
+            </div>
+            <div class="health"><div class="healthHead"><h3>Pricing health</h3><span class="pill neutral" id="healthCount">Not scanned</span></div><div class="issueList" id="issueList"></div></div>
+          </div>
+        </div>
+
+        <div class="sectionHead"><div><h3>Variation menus</h3><div class="sub">Add tiers, rename custom menus or remove options. New combinations inherit their source tier values.</div></div><div class="right"><button class="btn ghost sm" id="charmOnlyBtn">✦ Charm Only setup</button><button class="btn ghost sm" id="addMenuBtn">+ Add dropdown</button></div></div>
+        <div class="modeBar hidden" id="modeBar"><span class="mlabel">Required — set per listing</span><div class="tabCtl sm" id="chainTypeToggle" role="tablist" aria-label="Necklace chain type"><button data-ct="regular" class="on">Regular</button><button data-ct="beady">Beady</button></div><div class="tabCtl sm" id="engraveToggle" role="tablist" aria-label="Back engraving"><button data-eg="on" class="on">Engraving ON</button><button data-eg="off">Engraving OFF</button></div><span class="pill neutral" id="prepBadge">Not prepared</span><button class="btn sage sm" id="approvePrepBtn" title="Queue this listing for the batch using the toggle positions shown">✓ Approve</button><button class="btn ghost sm hidden" id="unprepBtn" title="Remove this listing from the batch queue">✕ Remove from batch</button></div>
+        <div class="grid variationGrid" id="variationGrid"></div>
+        <div class="card depCard" id="dependencyCard"></div>
+
+        <div class="sectionHead"><div><h3>Detailed pricing matrix</h3><div class="sub">Every row is one buyer-selectable Etsy product combination.</div></div><div class="right"><button class="btn ghost sm" id="selectAllBtn">Select all</button><button class="btn ghost sm" id="clearSelectionBtn">Clear</button></div></div>
+        <div class="card bulk">
+          <select id="bulkAction">
+            <option value="set_price">Set exact price</option><option value="add_amount">Add / subtract amount</option><option value="add_percent">Increase / decrease percent</option><option value="round_95">Round up to .95</option><option value="set_quantity">Set quantity</option><option value="set_sku">Set exact SKU</option><option value="append_sku">Append to SKU</option><option value="enable">Enable offerings</option><option value="disable">Disable offerings</option>
+          </select>
+          <input id="bulkValue" type="text" placeholder="Value">
+          <button class="btn gold sm" id="applyBulkBtn">Apply shortcut</button>
+          <span class="count" id="selectionCount">0 selected · applies to all when none selected</span>
+        </div>
+        <div class="card tableCard"><div class="tableScroll"><table class="priceTable"><thead id="priceHead"></thead><tbody id="priceBody"></tbody></table></div></div>
+      </section>
+    </div>
+
+    <div class="stickyActions hidden" id="stickyActions"><span class="dirty" id="dirtyText">No unsaved changes</span><span class="verifiedText" id="verifiedText"></span><div class="right"><button class="btn ghost" id="resetBtn">Reset</button><button class="btn sage" id="approveBtn">Approve current pricing</button><button class="btn gold" id="saveBtn">Save, update Etsy & verify</button></div></div>
+  </main>
+</div>
+
+<div class="toasts" id="toasts"></div>
+<dialog id="formDialog" aria-labelledby="dlgTitle">
+  <form method="dialog" id="dialogForm">
+    <div class="dlgHead"><h3 id="dlgTitle">Confirm action</h3></div>
+    <div class="dlgBody" id="dlgBody"></div>
+    <div class="dlgFoot">
+      <button class="btn ghost" type="button" id="dlgCancelBtn">Cancel</button>
+      <button class="btn gold" type="submit" value="ok" id="dlgConfirmBtn">Continue</button>
+    </div>
+  </form>
+</dialog>
+<div id="diagModal" class="hidden" role="dialog" aria-modal="true" aria-label="Diagnostics">
+  <div class="diagShell">
+    <div class="diagHead">
+      <h2>Diagnostics <span class="diagSub">every change made to every listing — saved permanently</span></h2>
+      <button class="btn ghost sm" id="diagCloseBtn">✕ Close</button>
+    </div>
+    <div class="diagToolbar">
+      <input id="diagSearch" type="search" class="input sm" placeholder="Search title, #listing id, or error text…" aria-label="Search diagnostics">
+      <select id="diagType" class="input sm" aria-label="Event type filter"><option value="all">All events</option><option value="save">Manual saves</option><option value="batch">Batch runs</option><option value="fail">Failures only</option><option value="queue">Queue changes</option><option value="schedule">Schedule</option></select>
+      <input type="date" id="diagFrom" class="input sm" aria-label="From date">
+      <input type="date" id="diagTo" class="input sm" aria-label="To date">
+      <button class="btn ghost sm" id="diagRefreshBtn">Refresh</button>
+    </div>
+    <div class="diagFocus hidden" id="diagFocusBar">Viewing full history for <b id="diagFocusTitle"></b> <button class="btn ghost xs" id="diagFocusClear">✕ show all</button> <button class="btn sage xs" id="diagFocusOpen">Open listing in console</button></div>
+    <div class="diagSummary" id="diagSummary">History</div>
+    <div class="diagBody" id="diagList"></div>
+    <div class="diagFoot"><button class="btn ghost sm" id="diagMoreBtn">Load older events</button></div>
+  </div>
+</div>
+
+<script>
+'use strict';
+
+/* Deployment callback must be registered exactly in Etsy Your Apps. */
+const APP_REDIRECT_URI = 'https://etsy-pricing.goldenspike.app';
+const REDIRECT_DOMAIN_KEY = 'etsy-pricing';
+const FUNCTIONS_BASE = location.protocol === 'file:' ? 'https://goldenspike.app/.netlify/functions' : location.origin + '/.netlify/functions';
+const FALLBACK_CLIENT_ID = 'k75zdspz4r99txpqdji7i2em';
+const TOKEN_KEYS = { access:'access_token', refresh:'refresh_token', expires:'token_expires_at' };
+const APPROVAL_KEY = 'brites_etsy_pricing_approvals_v2';
+const LEGACY_APPROVAL_KEY = 'brites_necklace_pricing_approvals_v1';
+const CUSTOM_PROPERTY_IDS = [513,514];
+const STORE_FILTERS = [
+  {key:'all',label:'All',type:'all'},
+  {key:'sale',label:'On sale',type:'sale'},
+  {key:'necklaces',label:'NECKLACES',aliases:['necklaces']},
+  {key:'earrings',label:'EARRINGS',aliases:['earrings']},
+  {key:'charms',label:'CHARMS',aliases:['charms']},
+  {key:'bracelets',label:'BRACELETS',aliases:['bracelets']},
+  {key:'rings',label:'RINGS',aliases:['rings']},
+  {key:'zodiac-birth-flower',label:'Zodiac / Birth Flower',aliases:['zodiac birth flower','zodiac / birth flower']},
+  {key:'handwriting-jewelry',label:'Handwriting Jewelry',aliases:['handwriting jewelry']},
+  {key:'evil-eye-jewelry',label:'Evil Eye Jewelry',aliases:['evil eye jewelry']},
+  {key:'gemstone-jewelry',label:'Gemstone Jewelry',aliases:['gemstone jewelry']},
+  {key:'accessories',label:'Accessories',aliases:['accessories']},
+  {key:'custom-add-ons',label:'Custom, Add Ons',aliases:['custom add ons','custom, add ons']},
+  {key:'shipping',label:'Shipping',aliases:['shipping']}
+];
+
+const S = {
+  listings:[], sections:[], sectionMap:new Map(), sectionFilterMap:new Map(), filtered:[], filter:'all', storeFilter:'all', search:'', searchResults:null,
+  searchPending:false, searchSeq:0, searchTimer:null, searchAbort:null, searchCache:new Map(), matchMode:'all', sortMode:'score', currentId:null,
+  cache:new Map(), original:null, draft:null, originalHash:null, selected:new Set(), dirty:false,
+  approvals:readApprovals(), scanning:false, stopScan:false, refreshPromise:null, clientId:null,
+  view:'editor', rSel:new Set(), rFilter:'all', rDensity:'comfortable', rBusy:new Set(), chainType:'regular', engraving:true,
+  prep:new Map(), currentRunId:null,
+  batch:{status:'idle',running:false,stop:false,total:0,done:0,ok:0,fail:0,remaining:0,remainingIds:null}
+};
+
+const $ = s => document.querySelector(s);
+const $$ = s => [...document.querySelectorAll(s)];
+const deep = v => JSON.parse(JSON.stringify(v));
+const esc = s => String(s == null ? '' : s).replace(/[&<>"']/g,m=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#039;'}[m]));
+const money = n => Number.isFinite(Number(n)) ? '$' + Number(n).toFixed(2) : '—';
+const sleep = ms => new Promise(r=>setTimeout(r,ms));
+
+function toast(message, type=''){
+  const el=document.createElement('div');el.className='toast '+type;el.innerHTML='<span class="d"></span><span>'+esc(message)+'</span>';$('#toasts').appendChild(el);setTimeout(()=>el.remove(),4200);
+}
+function setActivity(text, pct=null, stoppable=false){
+  $('#activity').classList.add('show');$('#activityText').textContent=text;$('#activityBar').style.width=(pct==null?0:Math.max(0,Math.min(100,pct)))+'%';$('#stopScanBtn').style.display=stoppable?'':'none';
+}
+function clearActivity(){ $('#activity').classList.remove('show'); }
+function readApprovals(){try{const current=localStorage.getItem(APPROVAL_KEY);if(current)return JSON.parse(current);const legacy=localStorage.getItem(LEGACY_APPROVAL_KEY);const parsed=legacy?JSON.parse(legacy):{};if(legacy)localStorage.setItem(APPROVAL_KEY,JSON.stringify(parsed));return parsed}catch{return{}}}
+function writeApprovals(){localStorage.setItem(APPROVAL_KEY,JSON.stringify(S.approvals))}
+function imageUrl(l){const i=(l.images||[])[0]||{};return i.url_570xN||i.url_fullxfull||i.url_340x270||i.url_170x135||''}
+function sectionTitle(l){return S.sectionMap.get(String(l.shop_section_id||''))||'Unsectioned'}
+function normText(v){return String(v||'').normalize('NFKD').replace(/[\u0300-\u036f]/g,'').toLowerCase().replace(/[^\p{L}\p{N}]+/gu,' ').replace(/\s+/g,' ').trim()}
+function moneyObject(v){if(!v||v.amount==null)return null;const d=Number(v.divisor||100),a=Number(v.amount);return Number.isFinite(a)&&d? a/d:null}
+function listingPrice(l){const bp=l?.buyer_price||{};const discounted=moneyObject(bp.discounted_price),base=moneyObject(bp.base_price);const raw=l?.price;const direct=raw&&typeof raw==='object'?moneyObject(raw):Number(raw);return discounted??base??(Number.isFinite(direct)?direct:null)}
+function isOnSale(l){const bp=l?.buyer_price||{};if(bp.has_discount===true||Number(bp.discount_percentage)>0)return true;const original=moneyObject(bp.original_price),discounted=moneyObject(bp.discounted_price);return original!=null&&discounted!=null&&discounted<original}
+function titleMatchesLocal(l,query=S.search,mode=S.matchMode){const title=normText(l?.title),needle=normText(query);if(!needle)return true;if(mode==='phrase')return title.includes(needle);return [...new Set(needle.split(' ').filter(Boolean))].every(w=>title.includes(w))}
+function filterDef(key=S.storeFilter){return STORE_FILTERS.find(f=>f.key===key)||STORE_FILTERS[0]}
+function filterSectionId(key=S.storeFilter){return S.sectionFilterMap.get(key)||null}
+function matchesStoreFilter(l,key=S.storeFilter){if(key==='all')return true;if(key==='sale')return isOnSale(l);const id=filterSectionId(key);if(id)return String(l.shop_section_id||'')===String(id);const def=filterDef(key),name=normText(sectionTitle(l));return (def.aliases||[]).some(a=>name===normText(a))}
+function currentScopeListings(){const base=(S.search.trim()? (S.searchResults||S.listings.filter(l=>titleMatchesLocal(l))) : S.listings);return base.filter(l=>matchesStoreFilter(l))}
+function statusRank(l){const id=String(l.listing_id),h=l._health||{},a=S.approvals[id];
+  if(l._scanned&&(h.error_count||0)>0)return 0;
+  if(l._scanned&&(h.warning_count||0)>0)return 1;
+  if(!l._scanned)return 2;
+  if(!a)return 3;
+  return a.mode==='approved'?4:5}
+function createdTs(l){return Number(l.original_creation_timestamp||l.creation_timestamp||l.created_timestamp||0)}
+function sortListings(rows){const out=[...rows];if(S.sortMode==='title_asc')out.sort((a,b)=>String(a.title||'').localeCompare(String(b.title||'')));else if(S.sortMode==='title_desc')out.sort((a,b)=>String(b.title||'').localeCompare(String(a.title||'')));else if(S.sortMode==='updated_desc')out.sort((a,b)=>Number(b.updated_timestamp||b.last_modified_timestamp||0)-Number(a.updated_timestamp||a.last_modified_timestamp||0));else if(S.sortMode==='price_asc')out.sort((a,b)=>(listingPrice(a)??Infinity)-(listingPrice(b)??Infinity));else if(S.sortMode==='price_desc')out.sort((a,b)=>(listingPrice(b)??-Infinity)-(listingPrice(a)??-Infinity));else if(S.sortMode==='created_desc')out.sort((a,b)=>createdTs(b)-createdTs(a));else if(S.sortMode==='created_asc')out.sort((a,b)=>createdTs(a)-createdTs(b));else if(S.sortMode==='status_att')out.sort((a,b)=>statusRank(a)-statusRank(b)||String(a.title||'').localeCompare(String(b.title||'')));else if(S.sortMode==='status_done')out.sort((a,b)=>statusRank(b)-statusRank(a)||String(a.title||'').localeCompare(String(b.title||'')));else if(!S.search.trim())out.sort((a,b)=>String(a.title||'').localeCompare(String(b.title||'')));return out}
+function firstOffering(p){return (p.offerings||[])[0]||{price:null,quantity:0,is_enabled:true}}
+function propKey(p){return (p.property_values||[]).map(v=>Number(v.property_id)+':'+(v.values||[]).join('/')).sort().join('|')}
+function getProperties(inv=S.draft){
+  const map=new Map();
+  for(const p of (inv?.products||[]))for(const v of (p.property_values||[])){
+    const id=Number(v.property_id);if(!map.has(id))map.set(id,{property_id:id,property_name:v.property_name||'Variation',scale_id:v.scale_id??null,values:[]});
+    for(const value of (v.values||[]))if(!map.get(id).values.includes(value))map.get(id).values.push(value);
+  }
+  return [...map.values()];
+}
+function propValue(p,id){const v=(p.property_values||[]).find(x=>Number(x.property_id)===Number(id));return v?(v.values||[]).join('/'):''}
+function healthFor(inv){
+  const issues=[],products=inv?.products||[],seen=new Set(),prices=[];let enabled=0,disabled=0,missingSku=0;
+  if(!products.length)issues.push({severity:'error',message:'Listing has no inventory products.'});
+  for(const p of products){const k=propKey(p);if(seen.has(k))issues.push({severity:'error',message:'Duplicate combination: '+(k||'base product')});seen.add(k);if(!String(p.sku||'').trim())missingSku++;
+    const o=firstOffering(p);const pr=Number(o.price);if(o.is_enabled!==false)enabled++;else disabled++;if(!Number.isFinite(pr)||pr<=0)issues.push({severity:'error',message:'Invalid price on '+(k||'base product')});else prices.push(pr);if(!Number.isInteger(Number(o.quantity))||Number(o.quantity)<0)issues.push({severity:'error',message:'Invalid quantity on '+(k||'base product')});}
+  if(products.length&&enabled===0)issues.push({severity:'error',message:'Every offering is disabled.'});if(disabled)issues.push({severity:'warning',message:disabled+' offering'+(disabled===1?' is':'s are')+' disabled.'});if(missingSku)issues.push({severity:'info',message:missingSku+' combination'+(missingSku===1?' has':'s have')+' no SKU.'});
+  return {issues,error_count:issues.filter(x=>x.severity==='error').length,warning_count:issues.filter(x=>x.severity==='warning').length,enabled_count:enabled,disabled_count:disabled,product_count:products.length,min_price:prices.length?Math.min(...prices):null,max_price:prices.length?Math.max(...prices):null};
+}
+
+/* ---------------- OAuth / API ---------------- */
+function setTokens(t){
+  if(t.access_token)localStorage.setItem(TOKEN_KEYS.access,t.access_token);if(t.refresh_token)localStorage.setItem(TOKEN_KEYS.refresh,t.refresh_token);
+  const now=Math.floor(Date.now()/1000),exp=Number(t.issued_at||now)+Number(t.expires_in||3600);localStorage.setItem(TOKEN_KEYS.expires,String(exp));
+  if(t.refresh_token){try{fetch(FUNCTIONS_BASE+'/etsyPricingStore',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({action:'saveServerToken',token:{access_token:t.access_token||'',refresh_token:t.refresh_token,expires_at:exp*1000}})}).catch(()=>{})}catch(e){}}
+  scheduleRefresh();renderConnection();
+}
+function scheduleRefresh(){clearTimeout(window.__etsyRefreshTimer);const exp=Number(localStorage.getItem(TOKEN_KEYS.expires)||0);if(!exp)return;window.__etsyRefreshTimer=setTimeout(refreshAccessToken,Math.max(5000,(exp-Math.floor(Date.now()/1000)-120)*1000))}
+async function refreshAccessToken(){
+  if(S.refreshPromise)return S.refreshPromise;const rt=localStorage.getItem(TOKEN_KEYS.refresh);if(!rt)throw new Error('No Etsy refresh token.');
+  S.refreshPromise=(async()=>{const r=await fetch(FUNCTIONS_BASE+'/refreshEtsyToken',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({refresh_token:rt})});const d=await r.json();if(!r.ok)throw new Error(d.error||'Token refresh failed');setTokens({access_token:d.access_token,refresh_token:d.refresh_token||rt,expires_in:d.expires_in,issued_at:d.issued_at});return true})().finally(()=>S.refreshPromise=null);return S.refreshPromise;
+}
+async function ensureToken(){const exp=Number(localStorage.getItem(TOKEN_KEYS.expires)||0);if(exp&&exp-Math.floor(Date.now()/1000)<=120)await refreshAccessToken()}
+async function apiFetch(path,init={}){
+  await ensureToken();let token=localStorage.getItem(TOKEN_KEYS.access)||'';let r=await fetch(FUNCTIONS_BASE+path,{...init,headers:{...(init.headers||{}),'access-token':token}});
+  if(r.status===401){await refreshAccessToken();token=localStorage.getItem(TOKEN_KEYS.access)||'';r=await fetch(FUNCTIONS_BASE+path,{...init,headers:{...(init.headers||{}),'access-token':token}})}
+  let data={};const text=await r.text();try{data=text?JSON.parse(text):{}}catch{data={error:text}}
+  if(!r.ok){const e=new Error(data.error||('HTTP '+r.status));e.status=r.status;e.data=data;throw e}return data;
+}
+function randomUrlSafe(bytes=32){const a=new Uint8Array(bytes);crypto.getRandomValues(a);return btoa(String.fromCharCode(...a)).replace(/\+/g,'-').replace(/\//g,'_').replace(/=+$/,'')}
+async function challenge(verifier){const d=await crypto.subtle.digest('SHA-256',new TextEncoder().encode(verifier));return btoa(String.fromCharCode(...new Uint8Array(d))).replace(/\+/g,'-').replace(/\//g,'_').replace(/=+$/,'')}
+async function getClientId(){if(S.clientId)return S.clientId;try{const r=await fetch(FUNCTIONS_BASE+'/getEtsyCredentials');const d=await r.json();S.clientId=d.CLIENT_ID||FALLBACK_CLIENT_ID}catch{S.clientId=FALLBACK_CLIENT_ID}return S.clientId}
+async function startOAuth(){
+  if(location.origin!==APP_REDIRECT_URI){toast('Deploy this page at '+APP_REDIRECT_URI+' and register that exact Etsy callback URL.','bad');return}
+  const verifier=randomUrlSafe(48),state=randomUrlSafe(24),clientId=await getClientId();localStorage.setItem('etsy_code_verifier',verifier);localStorage.setItem('etsy_oauth_state',state);
+  const url='https://www.etsy.com/oauth/connect?'+new URLSearchParams({response_type:'code',client_id:clientId,redirect_uri:APP_REDIRECT_URI,scope:'listings_w listings_r transactions_r transactions_w',state,code_challenge:await challenge(verifier),code_challenge_method:'S256'});location.href=url;
+}
+async function handleOAuthCallback(){
+  const q=new URLSearchParams(location.search);
+  if(q.get('error')){toast('Etsy authorization failed: '+(q.get('error_description')||q.get('error')),'bad');history.replaceState({},document.title,location.pathname);return}
+  if(q.get('access_token')){setTokens({access_token:q.get('access_token'),refresh_token:q.get('refresh_token'),expires_in:q.get('expires_in'),issued_at:q.get('issued_at')});history.replaceState({},document.title,location.pathname);toast('Etsy connected.','ok');return}
+  if(q.get('code')){const expected=localStorage.getItem('etsy_oauth_state');if(!expected||q.get('state')!==expected){toast('OAuth state validation failed.','bad');return}const verifier=localStorage.getItem('etsy_code_verifier');if(!verifier){toast('OAuth verifier is missing.','bad');return}location.href=FUNCTIONS_BASE+'/exchangeToken?'+new URLSearchParams({code:q.get('code'),code_verifier:verifier,redirect_domain:REDIRECT_DOMAIN_KEY});}
+}
+function renderConnection(){const ok=!!localStorage.getItem(TOKEN_KEYS.access);$('#connDot').className='dot '+(ok?'ok':'');$('#connText').textContent=ok?'Etsy connected':'Not connected';$('#connectBtn').textContent=ok?'Reconnect':'Connect Etsy'}
+
+/* ---------------- Catalog, live title search and queue ---------------- */
+function buildSectionFilterMap(){
+  S.sectionFilterMap=new Map();
+  for(const def of STORE_FILTERS){
+    if(!def.aliases)continue;
+    const aliases=def.aliases.map(normText);
+    const sec=S.sections.find(x=>aliases.includes(normText(x.title)));
+    if(sec)S.sectionFilterMap.set(def.key,String(sec.shop_section_id));
+  }
+}
+function renderStoreFilters(){
+  const counts=new Map();
+  for(const def of STORE_FILTERS){
+    let n=0;if(def.key==='all')n=S.listings.length;else if(def.key==='sale')n=S.listings.filter(isOnSale).length;else n=S.listings.filter(l=>matchesStoreFilter(l,def.key)).length;counts.set(def.key,n)
+  }
+  const select=$('#storeFilterSelect');
+  if(select){
+    select.innerHTML=STORE_FILTERS.map(def=>'<option value="'+esc(def.key)+'">'+esc(def.label)+'  ·  '+(counts.get(def.key)||0)+'</option>').join('');
+    select.value=S.storeFilter;
+  }
+  const selectedCount=counts.get(S.storeFilter)||0;
+  $('#storeFilterTotal').textContent=selectedCount+' listing'+(selectedCount===1?'':'s');
+  $('#filterLiveText').textContent='Live Etsy · '+filterDef().label;
+}
+function updateSearchUi(status,latency=''){
+  const has=!!S.search.trim();$('#clearSearchBtn').classList.toggle('hidden',!has);$('#searchSpinner').classList.toggle('show',S.searchPending);$('#searchStatus').textContent=status||'Live Etsy title search';$('#searchLatency').textContent=latency||'';
+}
+function mergeLiveSearchRows(rows){
+  const byId=new Map(S.listings.map(l=>[String(l.listing_id),l])),out=[];
+  for(const remote of (rows||[])){
+    const id=String(remote.listing_id||'');if(!id)continue;let target=byId.get(id);
+    if(target){const images=target.images,buyer=target.buyer_price,health=target._health,scanned=target._scanned;Object.assign(target,remote);if(!target.images&&images)target.images=images;if(!target.buyer_price&&buyer)target.buyer_price=buyer;target._health=health;target._scanned=scanned}
+    else{target={...remote,_health:null,_scanned:false,_approved:!!S.approvals[id]};S.listings.push(target);byId.set(id,target)}out.push(target)
+  }
+  return out;
+}
+function searchSortParams(){
+  if(S.sortMode==='updated_desc')return {sort_on:'updated',sort_order:'desc'};
+  if(S.sortMode==='price_asc')return {sort_on:'price',sort_order:'asc'};
+  if(S.sortMode==='price_desc')return {sort_on:'price',sort_order:'desc'};
+  return {sort_on:'score',sort_order:'desc'};
+}
+async function runLiveSearch(){
+  clearTimeout(S.searchTimer);const query=S.search.trim();
+  if(query.length<2){S.searchResults=null;S.searchPending=false;applyFilter();updateSearchUi(query?'Type one more character to search Etsy.':'Live Etsy title search');return}
+  const seq=++S.searchSeq,sectionId=filterSectionId(),sort=searchSortParams();
+  S.searchPending=true;updateSearchUi('Searching live Etsy titles…');
+  if(S.searchAbort)S.searchAbort.abort();S.searchAbort=new AbortController();
+  try{
+    const params=new URLSearchParams({mode:'search',query,match:S.matchMode,limit:'200',max_pages:'2',sort_on:sort.sort_on,sort_order:sort.sort_order});if(sectionId)params.set('shop_section_id',sectionId);
+    const data=await apiFetch('/etsyShopListingsProxy?'+params.toString(),{signal:S.searchAbort.signal});if(seq!==S.searchSeq)return;
+    const remoteRows=mergeLiveSearchRows(data.results||[]),localRows=S.listings.filter(l=>titleMatchesLocal(l,query,S.matchMode)),seen=new Set(),rows=[];
+    for(const l of [...remoteRows,...localRows]){const id=String(l.listing_id||'');if(id&&!seen.has(id)){seen.add(id);rows.push(l)}}
+    S.searchResults=rows;S.searchPending=false;renderStoreFilters();applyFilter();
+    const titleCount=currentScopeListings().length,limited=Number(data?._meta?.etsy_candidate_count||0)>Number(data?.results?.length||0)&&Number(data?.results?.length||0)>=200;updateSearchUi((limited?'Etsy synced · API result cap reached':'Etsy synced')+' · '+titleCount+' title match'+(titleCount===1?'':'es'),data?._meta?.elapsed_ms!=null?data._meta.elapsed_ms+' ms':'');
+  }catch(e){if(e.name==='AbortError'||seq!==S.searchSeq)return;S.searchPending=false;S.searchResults=S.listings.filter(l=>titleMatchesLocal(l));applyFilter();updateSearchUi('Etsy search unavailable · showing local title matches');toast(e.message,'bad')}
+}
+function scheduleLiveSearch(delay=550){clearTimeout(S.searchTimer);S.searchTimer=setTimeout(runLiveSearch,delay)}
+function clearSearch(){clearTimeout(S.searchTimer);if(S.searchAbort)S.searchAbort.abort();S.search='';S.searchResults=null;S.searchPending=false;$('#searchInput').value='';applyFilter();updateSearchUi('Live Etsy title search')}
+async function setStoreFilter(key){
+  if(!STORE_FILTERS.some(f=>f.key===key)||key===S.storeFilter)return;
+  const active=currentListing();
+  if(S.dirty&&active.listing_id&&!matchesStoreFilter(active,key)){
+    const ok=await confirmDialog('Change category and discard changes?','The current listing is outside the selected category and contains unsaved edits.');
+    if(!ok){$('#storeFilterSelect').value=S.storeFilter;return}
+    S.draft=deep(S.original);S.dirty=false;S.selected.clear();
+  }
+  S.stopScan=true;S.storeFilter=key;S.searchResults=null;renderStoreFilters();applyFilter();renderChainToggle();
+  if(S.search.trim().length>=2)await runLiveSearch();
+  setView('results');renderNav();
+  if(!S.filtered.length)toast('No active listings are currently available in '+filterDef().label+'.','bad');
+}
+async function loadCatalog(){
+  if(!localStorage.getItem(TOKEN_KEYS.access)){await startOAuth();return}
+  setActivity('Loading Etsy shop sections…',2,false);S.listings=[];S.searchResults=null;S.cache.clear();S.currentId=null;S.draft=null;S.selected.clear();S.stopScan=true;
+  try{
+    const sec=await apiFetch('/etsyShopListingsProxy?mode=sections');S.sections=sec.results||[];S.sectionMap=new Map(S.sections.map(x=>[String(x.shop_section_id),x.title||'Section']));buildSectionFilterMap();
+    let offset=0,total=Infinity,all=[];
+    while(offset<total){const p=await apiFetch('/etsyShopListingsProxy?'+new URLSearchParams({state:'active',limit:'100',offset:String(offset),includes:'Images,BuyerPrice'}));total=Number(p.count||0);all.push(...(p.results||[]));offset+=100;setActivity('Reading active Etsy listings… '+Math.min(offset,total)+' / '+total,total?Math.min(92,5+(offset/total)*87):10,false);if(!(p.results||[]).length)break}
+    S.listings=all.sort((a,b)=>String(a.title||'').localeCompare(String(b.title||'')));
+    for(const l of S.listings){const a=S.approvals[String(l.listing_id)];l._approved=!!a;l._health=null;l._scanned=false}
+    renderStoreFilters();applyFilter();clearActivity();updateSearchUi('Live Etsy title search');if(!S.listings.length){toast('No active Etsy listings were found.','bad');return}
+    hydrateFromStore();
+    setView('results');toast('Live Etsy catalog loaded. Browse results, pick a category, or search by title — click any listing to open its pricing matrix.','ok');
+  }catch(e){clearActivity();toast(e.message,'bad')}
+}
+function applyFilter(){
+  let rows=currentScopeListings();
+  rows=rows.filter(l=>{if(S.filter==='needs')return l._scanned&&((l._health?.error_count||0)+(l._health?.warning_count||0)>0);if(S.filter==='approved')return !!S.approvals[String(l.listing_id)];return true});
+  S.filtered=sortListings(rows);renderQueue();renderNav();
+}
+function renderQueue(){
+  renderResults();
+  $('#queueCount').textContent=S.filtered.length;
+  if(!S.filtered.length){$('#queue').innerHTML='<div style="padding:18px 12px;color:#8f8779;font-size:12px;text-align:center">No listing titles match this search and filter.</div>';return}
+  $('#queue').innerHTML=S.filtered.map(l=>{const id=String(l.listing_id),health=l._health,a=S.approvals[id];let badge='<span class="qbadge">…</span>';if(a)badge='<span class="qbadge approved">✓</span>';else if(l._scanned&&health){const n=(health.error_count||0)+(health.warning_count||0);badge='<span class="qbadge '+(n?'bad':'ok')+'">'+(n||'✓')+'</span>'}
+    const meta=sectionTitle(l)+(isOnSale(l)?' · On sale':'');return '<button class="qitem '+(id===String(S.currentId)?'on':'')+'" data-id="'+id+'"><img class="qimg" src="'+esc(imageUrl(l))+'" alt=""><span><span class="qtitle">'+esc(l.title)+'</span><span class="qmeta">'+esc(meta)+' · #'+id+'</span></span>'+badge+'</button>'}).join('');
+}
+async function scanAllInventories(){
+  const targets=currentScopeListings();if(S.scanning||!targets.length)return;
+  if(targets.length>250){const ok=await confirmDialog('Scan '+targets.length+' live Etsy listings?','This performs one inventory request per listing and may consume a substantial portion of the Etsy API quota. Narrow the category or title search for a smaller scan.');if(!ok)return}
+  S.scanning=true;S.stopScan=false;let done=0;const label=S.search.trim()?'search results':filterDef().label;
+  for(const l of targets){if(S.stopScan)break;const id=String(l.listing_id);if(S.cache.has(id)){done++;continue}setActivity('Scanning '+label+' pricing… '+(done+1)+' / '+targets.length,(done/targets.length)*100,true);
+    try{const d=await apiFetch('/etsyListingInventoryDetailProxy?listingId='+encodeURIComponent(id)+'&inventory_only=1');S.cache.set(id,d);l._health=d.pricing_health;l._scanned=true;if(id===String(S.currentId)&&!S.dirty)hydrateDetail(d)}catch(e){l._health={error_count:1,warning_count:0,issues:[{severity:'error',message:e.message}]};l._scanned=true}
+    done++;if(done%5===0){applyFilter();await sleep(30)}
+  }
+  S.scanning=false;clearActivity();applyFilter();toast(S.stopScan?'Pricing scan stopped.':'Current filter scan completed.','ok');
+}
+function renderNav(){
+  const idx=S.filtered.findIndex(l=>String(l.listing_id)===String(S.currentId));$('#prevBtn').disabled=idx<=0;$('#nextBtn').disabled=idx<0||idx>=S.filtered.length-1;
+  const scope=S.search.trim()?'title search':filterDef().label;$('#topSub').textContent=idx>=0?(idx+1)+' of '+S.filtered.length+' · '+scope:'No listing selected in '+scope;
+}
+async function navigate(delta){if(S.view==='results')return;const i=S.filtered.findIndex(l=>String(l.listing_id)===String(S.currentId));const n=S.filtered[i+delta];if(n)await focusListing(n.listing_id)}
+async function focusListing(id){
+  if(S.dirty){const ok=await confirmDialog('Leave unsaved changes?','Your edits to this listing have not been sent to Etsy.');if(!ok)return}
+  S.currentId=String(id);S.selected.clear();setView('editor');{const d=S.prep.get(String(id));if(d){if(d.chain_set)S.chainType=d.chain_type==='beady'?'beady':'regular';if(d.engrave_set)S.engraving=d.engraving!==false}renderChainToggle()}renderQueue();renderNav();setActivity('Loading complete pricing matrix…',null,false);
+  try{let d=S.cache.get(S.currentId);if(!d)d=await apiFetch('/etsyListingInventoryDetailProxy?listingId='+encodeURIComponent(S.currentId)+'&inventory_only=1');S.cache.set(S.currentId,d);const l=S.listings.find(x=>String(x.listing_id)===S.currentId);if(l){l._health=d.pricing_health;l._scanned=true}hydrateDetail(d);clearActivity()}catch(e){clearActivity();toast(e.message,'bad')}
+}
+function hydrateDetail(d){S.original=deep(d.inventory);S.draft=deep(d.inventory);S.originalHash=d.snapshot_hash;S.dirty=false;S.selected.clear();renderEditor()}
+
+/* ---------------- Editor rendering ---------------- */
+function currentListing(){return S.listings.find(x=>String(x.listing_id)===String(S.currentId))||{}}
+function renderEditor(){
+  const l=currentListing(),h=healthFor(S.draft);$('#emptyState').classList.add('hidden');$('#editor').classList.remove('hidden');$('#stickyActions').classList.remove('hidden');$('#topTitle').textContent=l.title||'Untitled listing';$('#listingTitle').textContent=l.title||'Untitled listing';$('#listingIdText').textContent='Etsy listing #'+S.currentId;$('#listingImage').src=imageUrl(l);$('#listingImage').alt=l.title||'Listing image';
+  $('#priceRange').textContent=h.min_price==null?'—':money(h.min_price)+(h.max_price!==h.min_price?' – '+money(h.max_price):'');$('#comboCount').textContent=h.product_count;$('#enabledCount').textContent=h.enabled_count+' / '+h.product_count;$('#sectionName').textContent=sectionTitle(l);$('#listingBadges').innerHTML='<span class="pill neutral">'+esc(l.state||'active')+'</span>'+(isOnSale(l)?'<span class="pill warn">On sale</span>':'')+'<span class="pill info">'+getProperties().length+' dropdown'+(getProperties().length===1?'':'s')+'</span>';
+  renderHealth(h);renderVariations();renderDependencies();renderTable();renderDirty();renderApproval();renderQueue();renderNav();renderChainToggle();
+}
+function renderHealth(h){const n=h.error_count+h.warning_count;$('#healthCount').className='pill '+(h.error_count?'bad':h.warning_count?'warn':'ok');$('#healthCount').textContent=n?n+' item'+(n===1?'':'s'):'Healthy';$('#issueList').innerHTML=h.issues.length?h.issues.map(x=>'<span class="issue '+x.severity+'">'+esc(x.message)+'</span>').join(''):'<span class="issue good">No structural pricing problems detected.</span>'}
+function renderVariations(){
+  const props=getProperties();let html=props.map(p=>'<div class="card vcard"><div class="vhead"><span class="vname">'+esc(p.property_name)+'</span><span class="vid">ID '+p.property_id+'</span><span class="actions">'+(CUSTOM_PROPERTY_IDS.includes(p.property_id)?'<button class="btn ghost xs" data-vact="rename" data-pid="'+p.property_id+'">Rename</button>':'')+'<button class="btn ghost xs" data-vact="remove-menu" data-pid="'+p.property_id+'">Remove menu</button></span></div><div class="tiers">'+p.values.map(v=>'<span class="tier">'+esc(v)+'<button title="Remove tier" data-vact="remove-tier" data-pid="'+p.property_id+'" data-value="'+encodeURIComponent(v)+'">×</button></span>').join('')+'<button class="btn ghost xs" data-vact="add-tier" data-pid="'+p.property_id+'">+ Add tier</button></div></div>').join('');
+  if(props.length<2)html+='<div class="addCard"><button class="btn ghost" id="inlineAddMenu">+ Add custom dropdown</button></div>';$('#variationGrid').innerHTML=html||'<div class="addCard"><button class="btn ghost" id="inlineAddMenu">+ Add first dropdown</button></div>';$('#addMenuBtn').disabled=props.length>=2;
+}
+function deriveOn(field){const props=getProperties(),ids=props.map(p=>p.property_id),out=[];for(const id of ids){const groups=new Map();for(const p of S.draft.products){const key=ids.filter(x=>x!==id).map(x=>x+':'+propValue(p,x)).join('|');if(!groups.has(key))groups.set(key,[]);groups.get(key).push(p)}let changed=false;for(const rows of groups.values()){const vals=new Set(rows.map(p=>field==='price'?Number(firstOffering(p).price).toFixed(2):field==='quantity'?String(firstOffering(p).quantity):String(p.sku||'')));if(vals.size>1){changed=true;break}}if(changed)out.push(id)}return out}
+function autoMapOn(){return S.draft._auto_on_property!==false}
+function renderDependencies(){
+  const props=getProperties(),auto=autoMapOn(),pids=auto?deriveOn('price'):(S.draft.price_on_property||[]),qids=auto?deriveOn('quantity'):(S.draft.quantity_on_property||[]),sids=auto?deriveOn('sku'):(S.draft.sku_on_property||[]),name=id=>(props.find(p=>p.property_id===id)||{}).property_name||id;
+  let html='<div class="depTop"><button class="switch '+(auto?'on':'')+'" id="autoMapSwitch" aria-label="Toggle automatic dependency mapping"><i></i></button><div><b>Automatically map Etsy dropdown dependencies</b><div style="font-size:11.5px;color:var(--ink45)">Recommended. The console derives which menu controls price, quantity and SKU from the matrix.</div></div></div><div class="deps"><span class="dep"><b>Price:</b> '+(pids.map(name).join(', ')||'Same across menus')+'</span><span class="dep"><b>Quantity:</b> '+(qids.map(name).join(', ')||'Same across menus')+'</span><span class="dep"><b>SKU:</b> '+(sids.map(name).join(', ')||'Same across menus')+'</span></div>';
+  if(!auto&&props.length)html+='<div class="manualMap"><table class="mapTable"><thead><tr><th>Dropdown</th><th>Price varies</th><th>Quantity varies</th><th>SKU varies</th></tr></thead><tbody>'+props.map(p=>'<tr><td>'+esc(p.property_name)+'</td>'+['price_on_property','quantity_on_property','sku_on_property'].map(f=>'<td><input type="checkbox" data-mapfield="'+f+'" data-pid="'+p.property_id+'" '+((S.draft[f]||[]).includes(p.property_id)?'checked':'')+'></td>').join('')+'</tr>').join('')+'</tbody></table></div>';$('#dependencyCard').innerHTML=html;
+}
+function renderTable(){
+  const props=getProperties();$('#priceHead').innerHTML='<tr><th><input id="masterCheck" type="checkbox"></th>'+props.map(p=>'<th>'+esc(p.property_name)+'</th>').join('')+'<th>Price</th><th>Quantity</th><th>SKU</th><th>Enabled</th></tr>';
+  const origByKey=new Map((S.original?.products||[]).map(p=>{const o=firstOffering(p);return [propKey(p),[Number(o.price).toFixed(2),String(o.quantity),String(p.sku||'').trim(),o.is_enabled!==false].join('\u0001')]}));
+  $('#priceBody').innerHTML=(S.draft.products||[]).map((p,i)=>{const o=firstOffering(p),sig=[Number(o.price).toFixed(2),String(o.quantity),String(p.sku||'').trim(),o.is_enabled!==false].join('\u0001'),changed=!origByKey.has(propKey(p))||origByKey.get(propKey(p))!==sig;return '<tr class="'+(changed?'changed':'')+'"><td><input type="checkbox" class="rowCheck" data-row="'+i+'" '+(S.selected.has(i)?'checked':'')+'><span class="rowNum">'+(i+1)+'</span></td>'+props.map(pr=>'<td class="varVal">'+esc(propValue(p,pr.property_id))+'</td>').join('')+'<td><div class="moneyField"><span>$</span><input type="number" min="0.01" step="0.01" data-row="'+i+'" data-field="price" value="'+esc(Number(o.price).toFixed(2))+'"></div></td><td><input type="number" min="0" step="1" data-row="'+i+'" data-field="quantity" value="'+esc(o.quantity)+'"></td><td><input class="sku" type="text" data-row="'+i+'" data-field="sku" value="'+esc(p.sku||'')+'"></td><td class="toggleCell"><button class="'+(o.is_enabled!==false?'on':'')+'" data-row="'+i+'" data-field="enabled" aria-label="Toggle offering"></button></td></tr>'}).join('');renderSelectionCount();
+}
+function renderSelectionCount(){$('#selectionCount').textContent=S.selected.size+' selected · applies to all when none selected'}
+function renderDirty(){$('#dirtyText').textContent=S.dirty?'Unsaved changes':'No unsaved changes';$('#saveBtn').disabled=!S.dirty;$('#resetBtn').disabled=!S.dirty}
+function renderApproval(){const a=S.approvals[S.currentId];$('#verifiedText').textContent=a?((a.mode==='updated'?'Etsy read-back verified · ':'Approved · ')+new Date(a.at).toLocaleString()):''}
+function markDirty(){S.dirty=true;delete S.approvals[S.currentId];writeApprovals();renderDirty();renderApproval();renderResults()}
+
+/* ---------------- Matrix actions ---------------- */
+function updateCell(row,field,value){const p=S.draft.products[row];if(!p)return;const o=firstOffering(p);if(field==='price')o.price=Math.round(Number(value)*100)/100;if(field==='quantity')o.quantity=Math.max(0,Math.floor(Number(value)||0));if(field==='sku')p.sku=value;if(field==='enabled')o.is_enabled=!o.is_enabled;markDirty();renderHealth(healthFor(S.draft));renderDependencies()}
+function targetRows(){return S.selected.size?[...S.selected]:S.draft.products.map((_,i)=>i)}
+function applyBulk(){const action=$('#bulkAction').value,raw=$('#bulkValue').value,rows=targetRows();for(const i of rows){const p=S.draft.products[i],o=firstOffering(p),n=Number(raw);if(action==='set_price'&&Number.isFinite(n))o.price=Math.max(.01,Math.round(n*100)/100);if(action==='add_amount'&&Number.isFinite(n))o.price=Math.max(.01,Math.round((Number(o.price)+n)*100)/100);if(action==='add_percent'&&Number.isFinite(n))o.price=Math.max(.01,Math.round(Number(o.price)*(1+n/100)*100)/100);if(action==='round_95'){const v=Number(o.price)||0,b=Math.floor(v),t=b+.95;o.price=Math.max(.01,Math.round((v<=t?t:b+1.95)*100)/100);}if(action==='set_quantity'&&Number.isFinite(n))o.quantity=Math.max(0,Math.floor(n));if(action==='set_sku')p.sku=raw.trim();if(action==='append_sku')p.sku=String(p.sku||'')+raw;if(action==='enable')o.is_enabled=true;if(action==='disable')o.is_enabled=false}markDirty();renderEditor();toast('Shortcut applied to '+rows.length+' row'+(rows.length===1?'':'s')+'.','ok')}
+async function addTier(pid){const prop=getProperties().find(p=>p.property_id===Number(pid));if(!prop)return;const val=await promptDialog('Add pricing tier','New option value','Example: 20 inches');if(!val)return;if(prop.values.some(x=>x.toLowerCase()===val.toLowerCase())){toast('That option already exists.','bad');return}
+  const other=getProperties().map(p=>p.property_id).filter(id=>id!==Number(pid)),groups=new Map();for(const p of S.draft.products){const key=other.map(id=>id+':'+propValue(p,id)).join('|');if(!groups.has(key))groups.set(key,p)}for(const source of groups.values()){const clone=deep(source);clone.product_id=null;if(clone.offerings?.[0])clone.offerings[0].offering_id=null;const pv=clone.property_values.find(v=>Number(v.property_id)===Number(pid));pv.values=[val];pv.value_ids=[];S.draft.products.push(clone)}sortProducts();markDirty();renderEditor()}
+async function removeTier(pid,value){const prop=getProperties().find(p=>p.property_id===Number(pid));if(!prop||prop.values.length<=1){toast('A dropdown must retain at least one option.','bad');return}if(!await confirmDialog('Remove “'+value+'”?','Every product combination containing this tier will be removed from the Etsy listing.'))return;S.draft.products=S.draft.products.filter(p=>propValue(p,pid)!==value);sortProducts();markDirty();renderEditor()}
+async function renameMenu(pid){const prop=getProperties().find(p=>p.property_id===Number(pid));const val=await promptDialog('Rename custom dropdown','Dropdown name',prop?.property_name||'');if(!val)return;for(const p of S.draft.products)for(const v of p.property_values)if(Number(v.property_id)===Number(pid))v.property_name=val;markDirty();renderEditor()}
+async function addMenu(){const props=getProperties();if(props.length>=2){toast('Live Etsy listings currently support two variation dropdowns.','bad');return}const unused=CUSTOM_PROPERTY_IDS.find(id=>!props.some(p=>p.property_id===id));if(!unused){toast('No unused custom Etsy variation slot is available.','bad');return}const data=await formDialog('Add custom dropdown',[{name:'name',label:'Dropdown name',placeholder:'Example: Chain length'},{name:'values',label:'Option values',placeholder:'Example: 14 inches, 16 inches, 18 inches'}]);if(!data)return;const name=(data.name||'').trim(),values=(data.values||'').split(',').map(x=>x.trim()).filter(Boolean);if(!name||values.length<1){toast('Enter a name and at least one option.','bad');return}
+  const out=[];for(const source of S.draft.products){for(const value of values){const clone=deep(source);clone.product_id=null;if(clone.offerings?.[0])clone.offerings[0].offering_id=null;clone.property_values.push({property_id:unused,property_name:name,scale_id:null,value_ids:[],values:[value]});out.push(clone)}}S.draft.products=out;sortProducts();markDirty();renderEditor()}
+async function removeMenu(pid){const prop=getProperties().find(p=>p.property_id===Number(pid));if(!prop)return;if(!await confirmDialog('Remove '+prop.property_name+' dropdown?','All tiers in this menu will collapse. When duplicates result, the first existing combination is retained.'))return;const map=new Map();for(const source of S.draft.products){const p=deep(source);p.property_values=p.property_values.filter(v=>Number(v.property_id)!==Number(pid));const k=propKey(p);if(!map.has(k))map.set(k,p)}S.draft.products=[...map.values()];for(const f of ['price_on_property','quantity_on_property','sku_on_property'])S.draft[f]=(S.draft[f]||[]).filter(x=>Number(x)!==Number(pid));sortProducts();markDirty();renderEditor()}
+function canonRankOfProduct(p){let r=Infinity;for(const v of (p.property_values||[]).flatMap(x=>x.values||[])){const c=canonFor(v);if(c){const i=CANON_ORDER.indexOf(c);if(i>=0&&i<r)r=i}}return r}
+function lengthSortKey(p){for(const v of (p.property_values||[]).flatMap(x=>x.values||[])){if(canonFor(v))continue;if(isNoChainVal(v))return [1,0];const n=parseLen(v);if(n!=null)return [0,n]}return [0,999]}
+function sortProducts(){const ids=getProperties().map(p=>p.property_id);S.draft.products.sort((a,b)=>{const ra=canonRankOfProduct(a),rb=canonRankOfProduct(b);if(ra!==rb)return ra-rb;const la=lengthSortKey(a),lb=lengthSortKey(b);if(la[0]!==lb[0])return la[0]-lb[0];if(la[1]!==lb[1])return la[1]-lb[1];return ids.map(id=>propValue(a,id)).join('|').localeCompare(ids.map(id=>propValue(b,id)).join('|'))})}
+function setAutoMap(on){S.draft._auto_on_property=on;if(!on){S.draft.price_on_property=deriveOn('price');S.draft.quantity_on_property=deriveOn('quantity');S.draft.sku_on_property=deriveOn('sku')}markDirty();renderDependencies()}
+function toggleMap(field,pid,on){const arr=new Set(S.draft[field]||[]);on?arr.add(Number(pid)):arr.delete(Number(pid));S.draft[field]=[...arr];markDirty();renderDependencies()}
+function validateDraft(){const h=healthFor(S.draft);if(h.error_count)throw new Error('Resolve the red pricing-health errors before saving.');const props=getProperties();if(props.length>2)throw new Error('Third-variation writing is not enabled for live Etsy listings yet.');if(!S.draft.products.length)throw new Error('At least one product combination is required.');return true}
+async function saveListing(){
+  try{validateDraft();if(!await confirmDialog('Update Etsy listing?','The complete pricing matrix will replace the current live Etsy inventory, then be read back and verified.'))return;$('#saveBtn').disabled=true;setActivity('Updating Etsy and verifying live inventory…',null,false);
+    const result=await apiFetch('/etsyUpdateListingInventoryProxy',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({listing_id:Number(S.currentId),expected_snapshot_hash:S.originalHash,inventory:S.draft,auto_on_property:autoMapOn(),
+      personalization:(S.storeFilter==='necklaces'&&S.engraving&&S.draft.products.some(p=>(p.property_values||[]).some(v=>(v.values||[]).some(val=>/engrave/i.test(String(val)))))?{enabled:true,required:true,max_chars:1000,instructions:'To include back engraving on your piece, choose the \u0022+ engrave\u0022 option and leave us your instructions here.'}:null)})});
+    if(!result.verified){
+      /* The write attempt (and any automatic corrective retry) may have
+         already changed Etsy's live inventory even though verification
+         failed. Adopt the server's post-attempt state as the new baseline
+         — the draft (this listing's edits) is left untouched — so the
+         next Save compares against what is actually live now instead of
+         dying on a stale-hash 409 caused by our own failed attempt. */
+      if(result.fresh){S.original=deep(result.fresh.inventory);S.originalHash=result.fresh.snapshot_hash;const l=currentListing();if(l){l._health=result.fresh.pricing_health;l._scanned=true}}
+      throw new Error((result.verification_error||'Etsy verification did not match.')+' The current live state has been reloaded as the baseline — review the matrix and press Save again.')
+    }
+    const fresh=result.fresh||await apiFetch('/etsyListingInventoryDetailProxy?listingId='+encodeURIComponent(S.currentId)+'&inventory_only=1');S.cache.set(S.currentId,fresh);const l=currentListing();l._health=fresh.pricing_health;l._scanned=true;S.approvals[S.currentId]={mode:'updated',at:Date.now(),hash:fresh.snapshot_hash};writeApprovals();{const d=S.prep.get(String(S.currentId))||{};const patch={health:compactHealth(fresh.pricing_health),scanned:true,approval:S.approvals[S.currentId],last_save:{at:Date.now(),verified:true},title:(currentListing()||{}).title||''};if(!d.original_saved&&result.previous_inventory){patch.original_inventory=result.previous_inventory;patch.original_snapshot_hash=result.previous_snapshot_hash||null;patch.original_saved=true}fbSet(S.currentId,patch);logEvent({listing_id:String(S.currentId),title:(currentListing()||{}).title||'',type:'save',detail:'Manual save verified on Etsy'+(result.auto_corrected?' (after automatic corrective retry)':'')+'.'})}hydrateDetail(fresh);clearActivity();
+    if(result.personalization&&result.personalization.applied&&!result.personalization.verified)
+      toast('Pricing verified. The Personalization field was sent to Etsy \u2014 please confirm it in the listing editor.','ok');
+    else toast('Etsy update verified successfully.','ok')
+  }catch(e){clearActivity();if(e.status===409&&e.data?.code==='STALE_INVENTORY'){toast('The live listing changed since it was loaded (possibly from a previous save attempt). Reloading the current state now \u2014 review it and Save again.','bad');S.cache.delete(S.currentId);await focusListing(S.currentId);return}else toast(e.message,'bad');renderDirty()}
+}
+async function approveListing(){
+  if(!S.currentId){toast('Open a listing first.','bad');return}if(S.dirty){toast('Save or reset your changes before approving.','bad');return}setActivity('Verifying current Etsy pricing…',null,false);try{const fresh=await apiFetch('/etsyListingInventoryDetailProxy?listingId='+encodeURIComponent(S.currentId)+'&inventory_only=1');if(fresh.snapshot_hash!==S.originalHash){S.cache.set(S.currentId,fresh);hydrateDetail(fresh);throw new Error('Etsy changed since this listing was loaded. The latest pricing is now displayed; review it again.')}S.approvals[S.currentId]={mode:'approved',at:Date.now(),hash:fresh.snapshot_hash};writeApprovals();currentListing()._approved=true;renderApproval();renderQueue();clearActivity();toast('Current live pricing approved.','ok')}catch(e){clearActivity();toast(e.message,'bad')}
+}
+function resetDraft(){S.draft=deep(S.original);S.dirty=false;S.selected.clear();renderEditor()}
+async function refreshCurrent(){if(!S.currentId){loadCatalog();return}if(S.dirty&&!await confirmDialog('Discard changes and refresh?','The latest live Etsy inventory will replace this draft.'))return;S.cache.delete(S.currentId);S.dirty=false;await focusListing(S.currentId)}
+
+
+/* ---------------- Unified results tab ---------------- */
+function setView(v){
+  S.view=v;const results=v==='results';
+  $('#resultsView').classList.toggle('hidden',!results);
+  $('#tabResults').classList.toggle('on',results&&S.rFilter!=='prepared');$('#tabBatch').classList.toggle('on',results&&S.rFilter==='prepared');$('#tabEditor').classList.toggle('on',!results);
+  if(results){$('#editor').classList.add('hidden');$('#emptyState').classList.add('hidden');$('#stickyActions').classList.add('hidden');renderResults()}
+  else{if(S.currentId&&S.draft){$('#editor').classList.remove('hidden');$('#stickyActions').classList.remove('hidden')}else{$('#emptyState').classList.remove('hidden')}}
+}
+function ago(ts){const m=Math.floor((Date.now()-ts)/60000);if(m<1)return 'just now';if(m<60)return m+'m ago';const h=Math.floor(m/60);if(h<24)return h+'h ago';return Math.floor(h/24)+'d ago'}
+const R_FILTERS=[
+  {key:'all',label:'All',test:()=>true},
+  {key:'needs',label:'Needs attention',test:l=>l._scanned&&((l._health?.error_count||0)+(l._health?.warning_count||0)>0)},
+  {key:'healthy',label:'Healthy',test:l=>l._scanned&&!((l._health?.error_count||0)+(l._health?.warning_count||0))},
+  {key:'unscanned',label:'Not scanned',test:l=>!l._scanned},
+  {key:'approved',label:'Reviewed',test:l=>!!S.approvals[String(l.listing_id)]},
+  {key:'prepared',label:'Queued',test:l=>{const id=String(l.listing_id);if(S.currentRunId&&S.batch.running&&S.batch.remainingIds instanceof Set)return S.batch.remainingIds.has(id);const d=S.prep.get(id);return isPrepared(d)&&!d.batched}},
+  {key:'batched',label:'Completed \u2713',test:l=>!!(S.prep.get(String(l.listing_id))||{}).batched},
+  {key:'bfailed',label:'Batch failed',test:l=>{const d=S.prep.get(String(l.listing_id))||{};return !!(d.last_batch&&d.last_batch.ok===false&&!d.batched)}},
+  {key:'unprepared',label:'Not set',test:l=>!isPrepared(S.prep.get(String(l.listing_id)))},
+  {key:'sale',label:'On sale',test:l=>isOnSale(l)}
+];
+function resultsBase(){return sortListings(currentScopeListings())}
+function resultsRows(){const def=R_FILTERS.find(f=>f.key===S.rFilter)||R_FILTERS[0];return resultsBase().filter(def.test)}
+function pricingChip(l){
+  const id=String(l.listing_id);
+  if(S.rBusy.has(id))return '<span class="schip"><span class="miniSpin"></span>Working…</span>';
+  if(!l._scanned)return '<span class="schip dim">Not scanned</span>';
+  const h=l._health||{},e=h.error_count||0,w=h.warning_count||0;
+  if(e)return '<span class="schip bad">'+e+' error'+(e===1?'':'s')+(w?' · '+w+' warn':'')+'</span>';
+  if(w)return '<span class="schip warn">'+w+' warning'+(w===1?'':'s')+'</span>';
+  return '<span class="schip ok">Healthy</span>';
+}
+function reviewChip(l){
+  const a=S.approvals[String(l.listing_id)];
+  if(!a)return '<span class="schip dim">Not reviewed</span>';
+  return '<span class="schip '+(a.mode==='updated'?'ok':'warn')+'">'+(a.mode==='updated'?'Verified live':'Approved')+' · '+ago(a.at)+'</span>';
+}
+function prepChip(l){
+  const d=S.prep.get(String(l.listing_id));
+  let out='';
+  if(isPrepared(d)){
+    if(d.batched)out+='<span class="schip ok" title="Processed and verified by a batch run">\u2713 Batched \u00b7 '+(d.last_batch?new Date(d.last_batch.at).toLocaleString():'')+'</span>';
+    else out+='<span class="schip ok" title="Queued for the next batch run">\u2713 Queued \u00b7 '+(d.chain_type==='beady'?'Beady':'Regular')+' \u00b7 Engr '+(d.engraving!==false?'ON':'OFF')+'</span>';
+  }
+  if(d&&d.last_batch&&d.last_batch.ok===false&&!d.batched){const err=String(d.last_batch.error||'');out+='<span class="schip bad" title="'+esc(err)+'">\u2717 '+new Date(d.last_batch.at).toLocaleDateString()+' failed: '+esc(err.slice(0,60))+'\u2026</span>'}
+  return out;
+}
+function comboChip(l){
+  if(!l._scanned||!l._health)return '';
+  const h=l._health,range=h.min_price==null?'':' · '+money(h.min_price)+(h.max_price!==h.min_price?'–'+money(h.max_price):'');
+  return '<span class="schip">'+h.product_count+' combos'+range+'</span>';
+}
+function renderResults(){renderSchedule();
+  const list=$('#rList');if(!list)return;
+  const rows=resultsRows(),base=resultsBase();
+  $('#tabResultsCount').textContent=base.length;
+  if(S.view!=='results'){return}
+  const scroll=list.scrollTop,q=S.search.trim();
+  $('#rTitle').textContent=q?('Results for \u201c'+q+'\u201d'):(filterDef().label+' listings');
+  $('#rSummary').textContent=rows.length+' of '+base.length+' listing'+(base.length===1?'':'s')+' · '+(q?'live title search · category: '+filterDef().label:filterDef().label)+(S.searchPending?' · syncing with Etsy…':'');
+  $('#rChips').innerHTML=R_FILTERS.map(f=>{const n=base.filter(f.test).length;return '<button data-rfilter="'+f.key+'" class="'+(S.rFilter===f.key?'on':'')+'">'+f.label+' <b>'+n+'</b></button>'}).join('');
+  if(!rows.length){list.innerHTML='<div class="rempty">'+(q?'No live Etsy titles match this search and status filter.':'No listings in this category and status filter.')+'</div>'}
+  else{
+    list.className='rlist'+(S.rDensity==='compact'?' compact':'');
+    list.innerHTML=rows.map(l=>{const id=String(l.listing_id),price=listingPrice(l);
+      return '<div class="rrow'+(id===String(S.currentId)?' current':'')+'" data-id="'+id+'" role="button" tabindex="0">'
+      +'<img src="'+esc(imageUrl(l))+'" alt="" loading="lazy">'
+      +'<div class="rmain"><div class="rtitle">'+esc(l.title||'Untitled')+'</div>'
+      +'<div class="rmeta"><span>#'+id+'</span><span>'+esc(sectionTitle(l))+'</span>'+(price!=null?'<span class="rprice">'+money(price)+'</span>':'')+(isOnSale(l)?'<span class="schip warn">On sale</span>':'')+'</div>'
+      +'<div class="rstatus">'+prepChip(l)+pricingChip(l)+reviewChip(l)+comboChip(l)+'</div></div>'
+      +'<div class="ract"><div class="btns">'
+      +'<button class="btn ghost xs" data-ract="open" data-id="'+id+'">Open</button>'
+      +'<button class="btn ghost xs" data-ract="scan" data-id="'+id+'">Scan</button>'
+      +'<button class="btn ghost xs" data-ract="approve" data-id="'+id+'">Approve</button>'
+      +'<button class="btn ghost xs" data-ract="etsy" data-id="'+id+'">Etsy \u2197</button>'
+      +(isPrepared(S.prep.get(id))&&!(S.prep.get(id)||{}).batched?'<button class="btn ghost xs" data-ract="unprep" data-id="'+id+'">\u2715 Unqueue</button>':'')
+      +((S.prep.get(id)||{}).last_batch&&(S.prep.get(id)||{}).last_batch.ok===false&&!(S.prep.get(id)||{}).batched?'<button class="btn sage xs" data-ract="retry" data-id="'+id+'">\u21bb Retry now</button>':'')
+      +'</div></div></div>'}).join('');
+    list.scrollTop=scroll;
+  }
+}
+async function scanIds(targets){
+  if(S.scanning||!targets.length)return;
+  if(targets.length>250&&!await confirmDialog('Scan '+targets.length+' live Etsy listings?','One inventory request per listing; this consumes Etsy API quota.'))return;
+  S.scanning=true;S.stopScan=false;let done=0;
+  for(const l of targets){if(S.stopScan)break;const id=String(l.listing_id);
+    if(S.cache.has(id)&&l._scanned){done++;continue}
+    S.rBusy.add(id);renderResults();setActivity('Scanning pricing… '+(done+1)+' / '+targets.length,(done/targets.length)*100,true);
+    try{const d=await apiFetch('/etsyListingInventoryDetailProxy?listingId='+encodeURIComponent(id)+'&inventory_only=1');S.cache.set(id,d);l._health=d.pricing_health;l._scanned=true;fbSet(id,{health:compactHealth(d.pricing_health),scanned:true,title:l.title||''});if(id===String(S.currentId)&&!S.dirty)hydrateDetail(d)}
+    catch(e){l._health={error_count:1,warning_count:0,issues:[{severity:'error',message:e.message}]};l._scanned=true;toast('Listing #'+id+': '+e.message,'bad')}
+    S.rBusy.delete(id);done++;applyFilter();
+  }
+  S.scanning=false;clearActivity();applyFilter();toast(S.stopScan?'Scan stopped.':'Scan completed for '+done+' listing'+(done===1?'':'s')+'.','ok');
+}
+async function approveIds(targets){
+  if(S.scanning||!targets.length)return;
+  if(!await confirmDialog('Approve current live pricing for '+targets.length+' listing'+(targets.length===1?'':'s')+'?','Each listing is re-read from Etsy first, so the approval always reflects the live pricing at this moment.'))return;
+  S.scanning=true;S.stopScan=false;let done=0,failed=0;
+  for(const l of targets){if(S.stopScan)break;const id=String(l.listing_id);
+    S.rBusy.add(id);renderResults();setActivity('Verifying & approving… '+(done+1)+' / '+targets.length,(done/targets.length)*100,true);
+    try{const d=await apiFetch('/etsyListingInventoryDetailProxy?listingId='+encodeURIComponent(id)+'&inventory_only=1');S.cache.set(id,d);l._health=d.pricing_health;l._scanned=true;l._approved=true;S.approvals[id]={mode:'approved',at:Date.now(),hash:d.snapshot_hash};fbSet(id,{health:compactHealth(d.pricing_health),scanned:true,approval:S.approvals[id],title:l.title||''});if(id===String(S.currentId)&&!S.dirty)hydrateDetail(d)}
+    catch(e){failed++;toast('Listing #'+id+': '+e.message,'bad')}
+    S.rBusy.delete(id);done++;applyFilter();
+  }
+  writeApprovals();S.scanning=false;clearActivity();applyFilter();renderApproval();
+  toast(S.stopScan?'Approval run stopped.':('Approved '+(done-failed)+' listing'+(done-failed===1?'':'s')+(failed?' · '+failed+' failed':'')+'.'),failed?'bad':'ok');
+}
+$('#tabResults').addEventListener('click',()=>{if(S.rFilter==='prepared')S.rFilter='all';setView('results');renderResults()});
+$('#tabBatch').addEventListener('click',()=>{S.rFilter='prepared';setView('results');renderResults();loadSchedule()});
+$('#tabEditor').addEventListener('click',()=>setView('editor'));
+$('#rDensity').addEventListener('change',e=>{S.rDensity=e.target.value;renderResults()});
+$('#rChips').addEventListener('click',e=>{const b=e.target.closest('button[data-rfilter]');if(!b)return;S.rFilter=b.dataset.rfilter;renderResults()});
+$('#rList').addEventListener('click',e=>{
+  const act=e.target.closest('button[data-ract]');
+  if(act){const id=act.dataset.id,l=S.listings.find(x=>String(x.listing_id)===id);
+    if(act.dataset.ract==='open')focusListing(id);
+    if(act.dataset.ract==='scan'&&l){S.cache.delete(id);l._scanned=false;scanIds([l])}
+    if(act.dataset.ract==='approve'&&l)approveIds([l]);
+    if(act.dataset.ract==='etsy')window.open((l&&l.url)||('https://www.etsy.com/listing/'+id),'_blank','noopener');
+    if(act.dataset.ract==='unprep')unprepare(id);
+    if(act.dataset.ract==='retry')retrySingle(id);
+    return}
+  const row=e.target.closest('.rrow');if(row)focusListing(row.dataset.id);
+});
+$('#rList').addEventListener('keydown',e=>{if(e.key==='Enter'){const row=e.target.closest('.rrow');if(row){e.preventDefault();focusListing(row.dataset.id)}}});
+
+
+/* ---------------- Necklace pricing setup (deterministic, draft-only) ---------------- */
+const CANON_ORDER=['Silver','Gold','Rose','Silver + Engrave','Gold + Engrave','Rose + Engrave','10k Solid Gold','10k Gold + Engrave','14k Solid Gold','14k Gold + Engrave','Gold-Charm Only','Silver-Charm Only','Rose-Charm Only','10k Solid-Charm Only','14k Solid-Charm Only'];
+const CHARM_ONLY_METALS=['Gold-Charm Only','Silver-Charm Only','Rose-Charm Only','10k Solid-Charm Only','14k Solid-Charm Only'];
+const NO_CHAIN_VALUE='Charm Only-No Chain'; // 19 chars
+const REGULAR_PRICES={'Silver':[39.69,40.00,40.31],'Gold':[46.56,46.88,47.19],'Rose':[49.69,50.00,50.31],'Silver + Engrave':[46.56,46.88,47.19],'Gold + Engrave':[51.56,51.88,52.19],'Rose + Engrave':[54.69,55.00,55.31],'10k Solid Gold':[252.81,253.13,253.44],'10k Gold + Engrave':[266.56,266.88,267.19],'14k Solid Gold':[315.94,316.56,316.88],'14k Gold + Engrave':[333.13,333.75,334.06]};
+const BEADY_FLAT_PRICES={'Silver':[56.56,56.88,57.19],'Gold':[65.94,66.25,66.56],'Silver + Engrave':[63.75,64.06,64.38],'Gold + Engrave':[73.13,73.44,73.75]};
+const BEADY_SOLID_BY_LENGTH={'10k Solid Gold':{14:[439.69,440.00,440.31],16:[470.63,470.94,471.25],18:[501.56,501.88,502.19]},'10k Gold + Engrave':{14:[467.81,468.13,468.44],16:[491.88,492.19,492.50],18:[515.63,515.94,516.25]},'14k Solid Gold':{14:[549.69,550.00,550.31],16:[588.44,588.75,589.06],18:[627.19,627.50,627.81]},'14k Gold + Engrave':{14:[584.69,585.00,585.31],16:[614.69,615.00,615.31],18:[644.69,645.00,645.31]}};
+const CHARM_ONLY_PRICE_POOLS={'Gold-Charm Only':[28.13,28.75,29.38],'Silver-Charm Only':[27.81,28.44,29.06],'Rose-Charm Only':[29.06,29.38,30.00],'10k Solid-Charm Only':[110.63,111.56,112.50],'14k Solid-Charm Only':[138.44,139.38,140.63]};
+const ENGRAVE_INSTRUCTIONS='To include back engraving on your piece, choose the "+ engrave" option and leave us your instructions here.';
+function normOpt(v){return String(v).toLowerCase().replace(/[\u2013\u2014]/g,'-').replace(/\s*-\s*/g,'-').replace(/\s*\+\s*/g,' + ').replace(/\s+/g,' ').trim()}
+const CANON_ALIASES=(()=>{const m=new Map();const add=(c,...alts)=>{m.set(normOpt(c),c);for(const a of alts)m.set(normOpt(a),c)};
+  add('Silver');add('Gold');add('Rose','rose gold');
+  add('Silver + Engrave');add('Gold + Engrave');add('Rose + Engrave','rose gold + engrave');
+  add('10k Solid Gold');add('10k Gold + Engrave');add('14k Solid Gold');add('14k Gold + Engrave');
+  add('Gold-Charm Only','charm only gold','gold charm only');
+  add('Silver-Charm Only','charm only silver','silver charm only');
+  add('Rose-Charm Only','charm only rose','rose charm only');
+  add('10k Solid-Charm Only','charm only 10k solid','10k solid charm only');
+  add('14k Solid-Charm Only','charm only 14k solid','14k solid charm only');
+  return m})();
+function canonFor(v){return CANON_ALIASES.get(normOpt(v))||null}
+function isCharmVal(v){const c=canonFor(v);return !!c&&CHARM_ONLY_METALS.includes(c)}
+function isNoChainVal(v){const c=String(v);return /^no\s*chain/i.test(c)||/charm\s*only.?no\s*chain/i.test(c)}
+function parseLen(v){const m=String(v).match(/(\d+)/);return m?parseInt(m[1],10):null}
+function titleCaseOpt(v){return String(v).split(/\s+/).map(w=>/^[a-z]/i.test(w)?w[0].toUpperCase()+w.slice(1).toLowerCase():w.toLowerCase()).join(' ')}
+function detectProp(patterns){const props=getProperties();for(const re of patterns){const hit=props.find(p=>re.test(String(p.property_name||'')));if(hit)return hit}return null}
+function effectiveChainType(){return S.storeFilter==='necklaces'?S.chainType:'regular'}
+function draftHasEngrave(products){return (products||[]).some(p=>(p.property_values||[]).some(v=>(v.values||[]).some(val=>/engrave/i.test(String(val)))))}
+function priceFor(opt,lengthValue,version,chainType){
+  if(CHARM_ONLY_PRICE_POOLS[opt])return CHARM_ONLY_PRICE_POOLS[opt][version];
+  if(chainType==='beady'){
+    if(BEADY_SOLID_BY_LENGTH[opt]){const len=parseLen(lengthValue);const col=BEADY_SOLID_BY_LENGTH[opt][len];
+      if(!col)throw new Error('No Beady '+opt+' price is defined for chain length \u201c'+lengthValue+'\u201d (only 14\u2033, 16\u2033 and 18\u2033 exist on the pricing sheet). Nothing was changed.');
+      return col[version]}
+    const flat=BEADY_FLAT_PRICES[opt];
+    if(!flat)throw new Error('No Beady price defined for \u201c'+opt+'\u201d. Nothing was changed.');
+    return flat[version];
+  }
+  const reg=REGULAR_PRICES[opt];
+  if(!reg)throw new Error('No Regular price defined for \u201c'+opt+'\u201d. Nothing was changed.');
+  return reg[version];
+}
+/* Pure planner: rebuild the full standardized matrix from a listing's current
+   products. Used by the interactive setup button AND the headless batch run,
+   so both are guaranteed identical behavior. Returns {error} or the plan. */
+function planStandardRebuild(products,chainType,engraving){
+  const propsMap=new Map();
+  for(const p of (products||[]))for(const v of (p.property_values||[])){const id=Number(v.property_id);
+    if(!propsMap.has(id))propsMap.set(id,{property_id:id,property_name:v.property_name||'Variation',values:[]});
+    for(const val of (v.values||[]))if(!propsMap.get(id).values.includes(val))propsMap.get(id).values.push(val)}
+  const props=[...propsMap.values()];
+  const find=res=>{for(const re of res){const h=props.find(p=>re.test(String(p.property_name||'')));if(h)return h}return null};
+  const metalProp=find([/metal/i,/material/i,/colou?r/i]);
+  if(!metalProp)return {error:'No metal dropdown found. Dropdowns: '+props.map(p=>'\u201c'+p.property_name+'\u201d').join(', ')+'.'};
+  const lengthProp=find([/chain\s*length/i,/length/i,/chain/i,/size/i]);
+  if(!lengthProp)return {error:'No chain-length dropdown found. Dropdowns: '+props.map(p=>'\u201c'+p.property_name+'\u201d').join(', ')+'.'};
+  if(metalProp.property_id===lengthProp.property_id)return {error:'Metal and chain-length detection matched the same dropdown (\u201c'+metalProp.property_name+'\u201d).'};
+  const skipRose=chainType==='beady';
+  const targetMetals=CANON_ORDER.filter(o=>!(skipRose&&/rose/i.test(o))&&!(!engraving&&/engrave/i.test(o)));
+  const twentyCount=lengthProp.values.filter(v=>parseLen(v)===20).length;
+  const realLengths=[...new Set(lengthProp.values.filter(v=>!isNoChainVal(v)&&parseLen(v)!==20).map(titleCaseOpt))];
+  if(!realLengths.length)return {error:'No usable chain lengths (only 20-inch or no-chain values).'};
+  if(chainType==='beady'){const bad=realLengths.filter(l=>![14,16,18].includes(parseLen(l)));
+    if(bad.length)return {error:'Beady pricing only covers 14\u2033, 16\u2033 and 18\u2033 chains; this listing also has: '+bad.join(', ')+'.'}}
+  const allLengths=[...realLengths,NO_CHAIN_VALUE];
+  const tmpl=(products||[])[0];
+  if(!tmpl)return {error:'This listing has no inventory products to rebuild from.'};
+  const enabledRow=products.find(p=>firstOffering(p).is_enabled!==false)||tmpl;
+  const baseSku=String(enabledRow.sku||'').trim();
+  const baseQty=Math.max(1,Number(firstOffering(enabledRow).quantity)||1);
+  const existingMetals=[...new Set(products.map(p=>propValue2(p,metalProp.property_id)))];
+  const removedOptions=existingMetals.filter(v=>{const c=canonFor(v);return !c||!targetMetals.includes(c)});
+  const plan=[];
+  try{
+    for(const opt of targetMetals){
+      const version=Math.floor(Math.random()*3);
+      const isCharm=CHARM_ONLY_METALS.includes(opt);
+      const priceBy={};let lo=Infinity,hi=-Infinity;
+      for(const len of allLengths){const isNC=isNoChainVal(len);
+        const price=priceFor(opt,isCharm?null:(isNC?realLengths[0]:len),version,chainType);
+        priceBy[len]=price;if(isCharm?isNC:!isNC){lo=Math.min(lo,price);hi=Math.max(hi,price)}}
+      plan.push({opt,version,priceBy,isCharm,lo,hi});
+    }
+  }catch(e){return {error:e.message}}
+  const rows=[];
+  for(const {opt,priceBy,isCharm} of plan){
+    const sku=isCharm?((baseSku?baseSku+'-CO':'CO-'+opt.replace(/[^A-Za-z0-9]+/g,'').slice(0,10)).slice(0,32)):baseSku;
+    for(const len of allLengths){const isNC=isNoChainVal(len);const enabled=isCharm?isNC:!isNC;
+      const c=deep(tmpl);c.product_id=null;
+      if(c.offerings?.[0]){c.offerings[0].offering_id=null;c.offerings[0].price=priceBy[len];c.offerings[0].is_enabled=enabled;c.offerings[0].quantity=enabled?baseQty:0}
+      c.sku=sku;
+      const mv=c.property_values.find(v=>Number(v.property_id)===Number(metalProp.property_id));mv.values=[opt];mv.value_ids=[];
+      const lv=c.property_values.find(v=>Number(v.property_id)===Number(lengthProp.property_id));lv.values=[len];lv.value_ids=[];
+      rows.push(c);
+    }
+  }
+  return {rows,plan,targetMetals,realLengths,removedOptions,twentyCount,metalName:metalProp.property_name};
+}
+function propValue2(p,id){const v=(p.property_values||[]).find(x=>Number(x.property_id)===Number(id));return v?(v.values||[]).join('/'):''}
+async function charmOnlySetup(){
+  try{
+    if(!S.draft){toast('Open a listing first.','bad');return}
+    const chainType=effectiveChainType(),modeName=chainType==='beady'?'Beady':'Regular';
+    const r=planStandardRebuild(S.draft.products,chainType,S.engraving);
+    if(r.error){toast(r.error,'bad');return}
+    const ok=await confirmDialog('Rebuild Metal Choice from scratch? ('+modeName+' Necklace pricing)',
+      'CLEAN RUN \u2014 the entire \u201c'+r.metalName+'\u201d option set is REPLACED with the standardized '+r.targetMetals.length+'-option list at fresh sheet pricing (Engraving '+(S.engraving?'ON':'OFF \u2014 all engraving options excluded')+'); any previous run or wrong chain-type selection is fully discarded. '
+      +(r.removedOptions.length?'REMOVED (not in the standardized set, prices included): '+r.removedOptions.join(', ')+'. ':'')
+      +(r.twentyCount?'All 20-inch chain combinations are removed. ':'')
+      +'Chain lengths kept: '+r.realLengths.join(', ')+' plus \u201c'+NO_CHAIN_VALUE+'\u201d. '
+      +'Pricing: '+r.plan.map(x=>x.opt+' v'+(x.version+1)+' '+(x.lo===x.hi?money(x.lo):money(x.lo)+'\u2013'+money(x.hi))).join(' \u00b7 ')
+      +'. Every combination exists; invalid pairings are disabled with zero stock. This is a DRAFT \u2014 nothing reaches Etsy until you press Save, and the save is verified.');
+    if(!ok)return;
+    S.draft.products=r.rows;sortProducts();markDirty();renderEditor();
+    toast('Clean rebuild ready ('+modeName+') \u2014 '+r.rows.length+' combinations ('+r.targetMetals.length+' options \u00d7 '+(r.realLengths.length+1)+' lengths)'+(r.removedOptions.length?' \u00b7 removed: '+r.removedOptions.join(', '):'')+'. Review the matrix, then Save to write & verify on Etsy.','ok');
+  }catch(e){clearActivity();toast(e.message,'bad')}
+}
+/* ---------------- Firebase-backed prep + batch ---------------- */
+async function fbCall(body){const r=await fetch(FUNCTIONS_BASE+'/etsyPricingStore',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(body)});const t=await r.text();let d;try{d=JSON.parse(t)}catch{throw new Error('Store returned non-JSON: '+t.slice(0,160))}if(!r.ok)throw new Error(d.error||('Store error HTTP '+r.status));return d}
+function fbSet(id,patch){const cur=S.prep.get(String(id))||{};S.prep.set(String(id),{...cur,...patch});renderPrepUi();renderResults();return fbCall({action:'set',id:String(id),patch}).catch(e=>toast('Cloud save failed for #'+id+': '+e.message,'bad'))}
+function compactHealth(h){return h?{error_count:h.error_count||0,warning_count:h.warning_count||0,product_count:h.product_count||0,min_price:h.min_price??null,max_price:h.max_price??null}:null}
+async function hydrateFromStore(skipResume){
+  try{
+    const {docs}=await fbCall({action:'getAll'});
+    S.prep=new Map(Object.entries(docs||{}));
+    let touched=false;
+    for(const [id,d] of S.prep){
+      const l=S.listings.find(x=>String(x.listing_id)===id);
+      if(l&&d.health){l._health=d.health;l._scanned=true;touched=true}
+      if(d.approval&&(!S.approvals[id]||Number(d.approval.at||0)>Number(S.approvals[id].at||0))){S.approvals[id]=d.approval;touched=true}
+    }
+    if(touched){writeApprovals();applyFilter()}
+    renderPrepUi();
+  }catch(e){toast('Cloud state could not be loaded: '+e.message,'bad')}
+  if(!skipResume){resumeActiveRun();loadSchedule();pushServerToken()}
+}
+function isPrepared(d){return !!(d&&d.chain_set&&d.engrave_set)}
+function preparedReadyIds(){return [...S.prep].filter(([,d])=>isPrepared(d)&&!d.batched).map(([id])=>id)}
+function normalizedRunCounts(run={}){
+  const total=Math.max(0,Math.floor(Number(run.total)||0));
+  const done=Math.max(0,Math.min(total,Math.floor(Number(run.done)||0)));
+  return {
+    total,done,
+    ok:Math.max(0,Math.min(total,Math.floor(Number(run.ok)||0))),
+    fail:Math.max(0,Math.min(total,Math.floor(Number(run.fail)||0))),
+    remaining:Math.max(0,total-done)
+  };
+}
+function batchDisplayCounts(){
+  if(S.currentRunId&&S.batch.status!=='idle')return {...S.batch,source:'run'};
+  const ready=preparedReadyIds().length;
+  return {status:'idle',running:false,total:ready,done:0,ok:0,fail:0,remaining:ready,remainingIds:null,source:'queue'};
+}
+function batchReadySummary(){
+  const c=batchDisplayCounts();
+  return c.source==='run'?(c.remaining+' remaining in the active batch; new approvals are queued for the next run'):(c.remaining+' ready');
+}
+function renderPrepUi(){
+  const ready=preparedReadyIds();
+  const counts=batchDisplayCounts();
+  const tb=$('#tabBatchCount');if(tb){tb.textContent=counts.remaining;tb.title=counts.source==='run'?'Live remaining count from the active batch run':'Listings ready for the next batch'}
+  const bb=$('#batchBtn');
+  if(bb&&!S.currentRunId){bb.dataset.mode='start';bb.disabled=!ready.length;bb.firstChild.textContent='\u25b6 Start Batch';const bc=$('#batchCount');if(bc)bc.textContent=ready.length}
+  $('#batchStopBtn')?.classList.toggle('hidden',!S.currentRunId);
+  const badge=$('#prepBadge');const dCur=S.prep.get(String(S.currentId));
+  if(badge){
+    if(!S.currentId){badge.textContent='No listing open';badge.className='pill neutral'}
+    else if(isPrepared(dCur)){badge.textContent='In batch \u2713 '+(dCur.chain_type==='beady'?'Beady':'Regular')+' \u00b7 Engr '+(dCur.engraving!==false?'ON':'OFF')+(dCur.batched?' \u00b7 batched':'');badge.className='pill ok'}
+    else{badge.textContent='Not in batch \u2014 press Approve to queue with the shown toggles';badge.className='pill neutral'}}
+  const un=$('#unprepBtn');if(un)un.classList.toggle('hidden',!isPrepared(dCur));
+  const ap=$('#approvePrepBtn');if(ap){ap.classList.toggle('hidden',isPrepared(dCur));ap.disabled=!S.currentId}
+}
+function persistToggle(kind){
+  if(!S.currentId)return; // toggles only persist against an open listing
+  const wasQueued=isPrepared(S.prep.get(String(S.currentId)));
+  const l=currentListing();
+  const patch=kind==='chain'?{chain_type:S.chainType}:{engraving:S.engraving};
+  if(wasQueued)patch.batched=false; // changed after queuing -> needs a fresh batch pass
+  patch.title=(l&&l.title)||'';
+  fbSet(S.currentId,patch);
+  if(wasQueued)toast('Updated for the queued batch: '+(kind==='chain'?(S.chainType==='beady'?'Beady':'Regular'):'Engraving '+(S.engraving?'ON':'OFF'))+'.','ok');
+}
+function approvePrep(){
+  if(!S.currentId){toast('Open a listing first.','bad');return}
+  const l=currentListing();
+  fbSet(S.currentId,{chain_type:S.chainType,engraving:S.engraving,chain_set:true,engrave_set:true,batched:false,title:(l&&l.title)||''});
+  logEvent({listing_id:S.currentId,title:(l&&l.title)||'',type:'queue',detail:'Approved for batch: '+(S.chainType==='beady'?'Beady':'Regular')+' \u00b7 Engraving '+(S.engraving?'ON':'OFF')});
+  toast('#'+S.currentId+' approved for the batch ('+(S.chainType==='beady'?'Beady':'Regular')+' \u00b7 Engraving '+(S.engraving?'ON':'OFF')+') \u2014 '+batchReadySummary()+'.','ok');
+}
+function unprepare(id){
+  if(!id)return;
+  if(S.currentRunId&&S.batch.running&&S.batch.remainingIds instanceof Set&&S.batch.remainingIds.has(String(id))){toast('#'+id+' is already in the active batch. Stop that run before removing it.','bad');return}
+  fbSet(String(id),{chain_set:false,engrave_set:false,batched:false});
+  logEvent({listing_id:String(id),title:(S.prep.get(String(id))||{}).title||'',type:'unqueue',detail:'Removed from batch queue.'});
+  toast('#'+id+' removed from the batch queue \u2014 '+batchReadySummary()+'.','ok');
+}
+function renderBatchUi(){
+  const b=batchDisplayCounts();
+  $('#batchState').textContent=b.running?'Running':'Idle';
+  $('#bTotal').textContent=b.total;$('#bOk').textContent=b.ok;$('#bFail').textContent=b.fail;$('#bLeft').textContent=b.remaining;
+  $('#bBar').style.width=(b.total?Math.round((b.done/b.total)*100):0)+'%';
+}
+let pollTimer=null;
+function showBatchPanel(){$('#batchPanel').classList.remove('hidden')}
+function applyRunToUi(run){
+  const counts=normalizedRunCounts(run);
+  S.batch={status:run.status||'idle',running:['queued','running','paused'].includes(run.status),stop:!!run.stop,...counts,remainingIds:Array.isArray(run.remaining_ids)?new Set(run.remaining_ids.map(String)):null};
+  renderBatchUi();renderPrepUi();
+  const stale=['queued','running'].includes(run.status)&&run.updated_at&&(Date.now()-Number(run.updated_at))>90000;
+  const staleMessage=stale?'\u26a0 No server progress for '+Math.round((Date.now()-Number(run.updated_at))/1000)+'s \u2014 the worker may have been interrupted. Press Re-launch to continue from listing '+(counts.done+1)+' of '+counts.total+'.':'';
+  const bb=$('#batchBtn'),bc=$('#batchCount');
+  if(bb&&S.currentRunId){
+    bb.disabled=false;
+    if(stale){bb.dataset.mode='relaunch';bb.firstChild.textContent='\u27f3 Re-launch';if(bc)bc.textContent=counts.done+' / '+counts.total}
+    else if(run.status==='paused'){bb.dataset.mode='resume';bb.firstChild.textContent='\u25b6 Resume';if(bc)bc.textContent=counts.done+' / '+counts.total}
+    else if(['queued','running'].includes(run.status)){bb.dataset.mode='pause';bb.firstChild.textContent='\u275a\u275a Pause';if(bc)bc.textContent=counts.done+' / '+counts.total}
+  }
+  $('#batchState').textContent=run.status==='running'?'Running on server':run.status==='queued'?'Queued':run.status==='paused'?'Paused':run.status==='stopped'?(run.stop_reason?'Auto-halted':'Stopped'):'Done';
+  if(run.stop_reason){const box=$('#bErrs');if(box&&!box.dataset.reasonShown){const div=document.createElement('div');div.style.fontWeight='700';div.textContent=run.stop_reason;box.prepend(div);box.dataset.reasonShown='1'}}
+
+  $('#bCur').textContent=staleMessage||(run.current||'');
+  const errs=run.errors||[];const box=$('#bErrs');box.innerHTML='';for(const e of errs.slice(-50)){const div=document.createElement('div');div.textContent=e;box.appendChild(div)}
+  if(run.fatal_error){const div=document.createElement('div');div.textContent='FATAL: '+run.fatal_error;box.appendChild(div)}
+}
+async function pollRun(runId){
+  clearTimeout(pollTimer);
+  try{
+    const {run}=await fbCall({action:'getRun',run_id:runId});
+    applyRunToUi(run);
+    S._pollN=(S._pollN||0)+1;
+    if(S._pollN%4===0&&['queued','running'].includes(run.status))hydrateFromStore(true);
+    if(['queued','running','paused'].includes(run.status)){pollTimer=setTimeout(()=>pollRun(runId),3500)}
+    else{
+      S.currentRunId=null;
+      await hydrateFromStore(true);applyFilter();
+      renderPrepUi();
+      toast(run.status==='stopped'?('Batch stopped on server \u2014 '+(run.ok||0)+' succeeded, '+(run.fail||0)+' failed.'):(run.fatal_error?('Batch could not run: '+run.fatal_error):('Server batch complete \u2014 '+(run.ok||0)+' succeeded, '+(run.fail||0)+' failed.')),(run.fail||run.fatal_error)?'bad':'ok');
+    }
+  }catch(e){pollTimer=setTimeout(()=>pollRun(runId),6000)}
+}
+async function launchBatchWorker(runId){
+  const r=await fetch(FUNCTIONS_BASE+'/etsyPricingBatch-background',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({run_id:runId})});
+  if(!r.ok){const detail=await r.text().catch(()=>'');throw new Error('Batch worker returned HTTP '+r.status+(detail?' \u00b7 '+detail.slice(0,160):''))}
+}
+async function batchRun(){
+  if(S.batch.running)return;
+  const ids=preparedReadyIds();
+  if(!ids.length){toast('No prepared listings are ready to batch. Set both toggles on a listing to prepare it.','bad');return}
+  const ok=await confirmDialog('Batch process '+ids.length+' prepared listing'+(ids.length===1?'':'s')+' on the server?',
+    'The batch runs on the server using the shop\u2019s stored Etsy credentials \u2014 you can close this tab and the run continues. Each listing is fully rebuilt with its stored Regular/Beady and Engraving toggles at fresh sheet pricing, then written with the standard staleness check and read-back verification (plus the required Personalization field where engraving is on). Progress is saved live; reopening the console re-attaches to the running batch. Stop takes effect after the current listing.');
+  if(!ok)return;
+  try{
+    const pushed=await pushServerToken();
+    if(!pushed&&!localStorage.getItem(TOKEN_KEYS.refresh)){toast('Connect to Etsy first \u2014 the server needs your Etsy authorization to run the batch.','bad');return}
+    const {run_id}=await fbCall({action:'startRun',ids});
+    S.currentRunId=run_id;
+    showBatchPanel();$('#bErrs').innerHTML='';delete $('#bErrs').dataset.reasonShown;
+    applyRunToUi({status:'queued',total:ids.length,done:0,ok:0,fail:0,remaining_ids:ids});
+    await launchBatchWorker(run_id);
+    pollRun(run_id);
+    toast('Server batch started \u2014 safe to close this tab. Progress is live here and saved in the cloud.','ok');
+  }catch(e){
+    if(S.currentRunId){
+      const bb=$('#batchBtn'),bc=$('#batchCount');bb.dataset.mode='relaunch';bb.disabled=false;bb.firstChild.textContent='\u27f3 Re-launch';if(bc)bc.textContent='';clearTimeout(pollTimer);pollTimer=setTimeout(()=>pollRun(S.currentRunId),90000);
+      toast('The batch run was created, but its worker did not launch: '+e.message+'. Press Re-launch to retry safely.','bad');
+    }else toast('Could not start batch: '+e.message,'bad')
+  }
+}
+/* ── Verified Etsy API usage ────────────────────────────────────────────
+   Identical integration to the Listing Generator (Index.html). Replaces
+   the older POST /etsyPricingStore {action:'apiUsage'} readout with the
+   shared verified endpoints:
+
+     GET /etsyApiUsage  — Firestore-backed counters. Rejected unless the
+                          server marks the payload verified:true, so a
+                          partial/unverified reading can never be shown
+                          as if it were authoritative.
+     GET /etsyApiProbe  — spends ONE real Etsy call to refresh the
+                          whole-key headers, and only when the existing
+                          reading is actually stale (>5 min) — never on a
+                          timer, and throttled to once a minute even on
+                          failure so it can't probe-loop.
+
+   The app row is this console's own transactional count; the key row is
+   derived only from Etsy's own x-limit-per-day / x-remaining-today
+   response headers. No browser-side estimation anywhere. Failures are
+   surfaced exactly (widget turns red, tooltip carries the real error)
+   rather than falling back to a stale or guessed number. */
+const ApiUsage=(()=>{
+  let refreshInFlight=false;
+  let probeInFlight=false;
+  let lastProbeAt=0;
+  let lastUsageSnapshot=null;
+
+  const byId=id=>document.getElementById(id);
+  const abbreviate=n=>{
+    const value=Number(n||0);
+    return value>=1000?(value/1000).toFixed(value%1000===0?0:1)+'k':String(value);
+  };
+  const ageText=ms=>{
+    if(!Number.isFinite(ms)||ms<0)return 'unknown';
+    if(ms<60000)return 'under a minute';
+    if(ms<3600000)return Math.round(ms/60000)+' min';
+    return Math.round(ms/3600000)+' hr';
+  };
+  const setBar=(id,percent,state)=>{
+    const bar=byId(id);
+    if(!bar)return;
+    bar.style.width=Math.max(0,Math.min(100,percent))+'%';
+    bar.parentElement.className='awBar'+(state?' '+state:'');
+  };
+
+  async function refreshApiUsage(){
+    if(refreshInFlight)return lastUsageSnapshot;
+    refreshInFlight=true;
+    const widget=byId('apiWidget');
+    try{
+      const response=await fetch(FUNCTIONS_BASE+'/etsyApiUsage?t='+Date.now(),{
+        method:'GET',
+        cache:'no-store',
+        headers:{Accept:'application/json'},
+      });
+      const data=await response.json().catch(()=>({}));
+      if(!response.ok||data.ok===false||data.verified!==true){
+        throw new Error(data.error||'API statistics unavailable');
+      }
+      lastUsageSnapshot=data;
+
+      const used=Number(data.count||0);
+      const budget=Number(data.budget||2500);
+      const appPercent=budget>0?Math.round((used/budget)*100):0;
+      byId('awAppNum').textContent=abbreviate(used)+' / '+abbreviate(budget);
+      setBar('awAppBar',appPercent,used>=budget?'bad':used>=budget*0.8?'warn':'');
+
+      const qps=Number(data.max_qps||0);
+      const qpsCap=Number(data.qps_cap||2.5);
+      byId('awQps').textContent=qps+'/'+qpsCap+' QPS';
+
+      const keyLimit=data.etsy_limit_per_day==null?null:Number(data.etsy_limit_per_day);
+      const keyRemaining=data.etsy_remaining_today==null?null:Number(data.etsy_remaining_today);
+      const hasKeyReading=Number.isFinite(keyLimit)&&keyLimit>0&&Number.isFinite(keyRemaining);
+
+      if(hasKeyReading){
+        const keyUsed=Math.max(0,keyLimit-keyRemaining);
+        const keyPercent=Math.round((keyUsed/keyLimit)*100);
+        byId('awKeyNum').textContent=abbreviate(keyUsed)+' / '+abbreviate(keyLimit);
+        byId('awKeyNum').title=keyRemaining.toLocaleString()+' calls left on the whole Etsy key';
+        setBar('awKeyBar',keyPercent,keyRemaining<=100?'bad':keyPercent>=80?'warn':'');
+      }else{
+        byId('awKeyNum').textContent='\u2014';
+        byId('awKeyNum').title='Waiting for Etsy\u2019s verified rate-limit headers from the next API response.';
+        setBar('awKeyBar',0,'');
+      }
+
+      const now=Number(data.server_time||Date.now());
+      const counterAge=data.count_since?now-Number(data.count_since):null;
+      const headerAge=data.etsy_reported_at?now-Number(data.etsy_reported_at):null;
+      const counterIsPartial=counterAge!=null&&counterAge>=0&&counterAge<20*3600000;
+      const headerIsStale=headerAge!=null&&headerAge>30*60000;
+
+      const base=
+        'App = this console\u2019s verified Etsy calls today, resets 11:59 PM Toronto, capped at '+
+        budget.toLocaleString()+' (50% of Etsy\u2019s '+(keyLimit||5000).toLocaleString()+'/day).\n'+
+        'Key = Etsy\u2019s own meter for the WHOLE API key (every app), reset at midnight UTC.\n'+
+        'QPS = highest calls-per-second observed across all server instances, hard-capped at '+qpsCap+'.';
+      const notes=[];
+      if(counterIsPartial){
+        notes.push('\u26a0 App tracking began '+ageText(counterAge)+' ago, so today\u2019s app count may be partial.');
+      }
+      if(headerAge!=null){
+        notes.push((headerIsStale?'\u26a0 ':'')+'Whole-key reading last verified from Etsy '+ageText(headerAge)+' ago.');
+      }else{
+        notes.push('Whole-key reading will appear after Etsy returns its first rate-limit header.');
+      }
+
+      const info=byId('awInfo');
+      info.title=base+'\n\n'+notes.join('\n');
+      info.classList.toggle('warnDot',counterIsPartial||headerIsStale);
+      widget.classList.remove('awUnavailable');
+      widget.title='';
+      return data;
+    }catch(error){
+      widget.classList.add('awUnavailable');
+      widget.title='Verified API statistics are temporarily unavailable: '+error.message;
+      byId('awAppNum').textContent='Unavailable';
+      byId('awKeyNum').textContent='\u2014';
+      byId('awQps').textContent='\u2014 QPS';
+      setBar('awAppBar',0,'bad');
+      setBar('awKeyBar',0,'');
+      throw error;
+    }finally{
+      refreshInFlight=false;
+    }
+  }
+
+  async function primeEtsyApiUsage(force=false){
+    if(probeInFlight)return;
+    // Every real Etsy request already captures authoritative rate headers.
+    // Read those free Firestore-backed statistics first and only spend a
+    // probe call when the shared-key reading is actually stale/missing.
+    const snapshot=await refreshApiUsage().catch(()=>null);
+    const headerAge=snapshot?.etsy_reported_at?Date.now()-Number(snapshot.etsy_reported_at):Infinity;
+    if(Number.isFinite(headerAge)&&headerAge>=0&&headerAge<5*60*1000){
+      return;
+    }
+    if(!force&&lastProbeAt&&Date.now()-lastProbeAt<60000){
+      return;
+    }
+    probeInFlight=true;
+    lastProbeAt=Date.now(); // throttle failures too; never probe-loop
+    try{
+      const response=await fetch(FUNCTIONS_BASE+'/etsyApiProbe?t='+Date.now(),{
+        method:'GET',
+        cache:'no-store',
+        headers:{Accept:'application/json'},
+      });
+      const result=await response.json().catch(()=>({}));
+      if(!response.ok||result.verified!==true){
+        console.warn('Etsy API statistics verification did not complete:',response.status,result);
+      }else{
+        lastProbeAt=Date.now();
+      }
+    }catch(error){
+      console.warn('Etsy API statistics verification failed:',error);
+    }finally{
+      probeInFlight=false;
+      await refreshApiUsage().catch(()=>null);
+    }
+  }
+
+  return {refreshApiUsage,primeEtsyApiUsage};
+})();
+
+// Silent variants for timers/init — a transient outage must not spam toasts.
+function refreshApiUsage(){return ApiUsage.refreshApiUsage().catch(()=>null)}
+function primeEtsyApiUsage(force){return ApiUsage.primeEtsyApiUsage(force)}
+window.refreshEtsyApiUsage=refreshApiUsage;
+window.primeEtsyApiUsage=primeEtsyApiUsage;
+
+// The console's manual Update button forces a probe (the only path that
+// deliberately spends an Etsy call) and reports the real outcome.
+async function manualApiUpdate(){
+  const btn=$('#awUpdateBtn');
+  if(btn){btn.disabled=true;btn.textContent='Updating'}
+  try{
+    await ApiUsage.primeEtsyApiUsage(true);
+    await ApiUsage.refreshApiUsage();
+    toast('API information updated.','ok');
+  }catch(e){
+    toast('Could not update API information: '+e.message,'bad');
+  }finally{
+    if(btn){btn.disabled=false;btn.textContent='Update'}
+  }
+}
+
+// Same wiring as Index.html: cheap verified read on a timer, and a
+// stale-only probe on the events that mean the operator is looking at it.
+document.addEventListener('DOMContentLoaded',()=>primeEtsyApiUsage());
+window.addEventListener('focus',()=>primeEtsyApiUsage());
+document.addEventListener('visibilitychange',()=>{if(!document.hidden)primeEtsyApiUsage()});
+setInterval(refreshApiUsage,15000);
+setInterval(()=>{if(!document.hidden)primeEtsyApiUsage()},5*60*1000);
+function pushServerToken(){
+  try{
+    const rt=localStorage.getItem(TOKEN_KEYS.refresh);
+    if(!rt)return Promise.resolve(false);
+    return fetch(FUNCTIONS_BASE+'/etsyPricingStore',{method:'POST',headers:{'Content-Type':'application/json'},
+      body:JSON.stringify({action:'saveServerToken',token:{access_token:localStorage.getItem(TOKEN_KEYS.access)||'',refresh_token:rt,expires_at:(Number(localStorage.getItem(TOKEN_KEYS.expires))||0)*1000}})})
+      .then(r=>r.ok).catch(()=>false);
+  }catch(e){return Promise.resolve(false)}
+}
+S.schedule=null;
+function renderSchedule(){
+  const bar=$('#schedBar');if(!bar)return;
+  bar.classList.toggle('hidden',!(S.view==='results'&&S.rFilter==='prepared'));
+  const sc=S.schedule;
+  const armed=!!(sc&&sc.enabled);
+  $('#schedArmBtn').classList.toggle('hidden',armed);
+  $('#schedCancelBtn').classList.toggle('hidden',!armed);
+  const tick=Number(sc&&sc.last_tick||0);
+  const cronOk=tick&&(Date.now()-tick)<11*60*1000;
+  if(armed){const dt=new Date(Number(sc.next_run_at));
+    $('#schedStatus').textContent='Scheduled \u00b7 '+dt.toLocaleString()+' \u00b7 '+(sc.repeat==='once'?'runs once':sc.repeat)
+      +(cronOk?' \u00b7 scheduler alive ('+Math.round((Date.now()-tick)/60000)+'m ago)':' \u00b7 \u26a0 SCHEDULER NOT RUNNING \u2014 add the etsyPricingScheduleCron entry to netlify.toml');
+    $('#schedStatus').className='pill '+(cronOk?'ok':'bad')}
+  else{$('#schedStatus').textContent=((sc&&sc.last_result)?sc.last_result+' ':'Not scheduled')+(tick?'':' \u00b7 \u26a0 scheduler has never ticked \u2014 netlify.toml entry missing');$('#schedStatus').className='pill '+(tick?'neutral':'warn')}
+}
+async function loadSchedule(){try{const {schedule}=await fbCall({action:'getSchedule'});S.schedule=schedule;renderSchedule()}catch(e){}}
+async function armSchedule(){
+  const v=$('#schedAt').value;
+  if(!v){toast('Pick a date and time first.','bad');return}
+  const at=new Date(v).getTime();
+  if(!(at>Date.now())){toast('The scheduled time must be in the future.','bad');return}
+  const repeat=$('#schedRepeat').value;
+  try{
+    await pushServerToken();
+    const {schedule}=await fbCall({action:'setSchedule',schedule:{enabled:true,next_run_at:at,repeat,label:new Date(at).toLocaleString()}});
+    S.schedule=schedule;renderSchedule();
+    logEvent({type:'schedule',detail:'Schedule armed for '+new Date(at).toLocaleString()+' ('+repeat+').'});
+    toast('Batch scheduled for '+new Date(at).toLocaleString()+' ('+repeat+'). The server runs it \u2014 no browser needed. It will process every listing queued at that moment.','ok');
+  }catch(e){toast('Could not schedule: '+e.message,'bad')}
+}
+async function cancelSchedule(){
+  try{const {schedule}=await fbCall({action:'setSchedule',schedule:{enabled:false,next_run_at:S.schedule?.next_run_at||0,repeat:S.schedule?.repeat||'once'}});
+    S.schedule=schedule;renderSchedule();toast('Schedule cancelled.','ok')}catch(e){toast(e.message,'bad')}
+}
+function logEvent(e){try{fbCall({action:'log',entry:e}).catch(()=>{})}catch(_){}}
+S.log={entries:[],q:'',type:'all',from:'',to:'',loading:false};S.railTab='listings';
+function diagTypeBadge(e){
+  const map={save:['Save','ok'],batch_ok:['Batch \u2713','ok'],batch_fail:['Batch \u2717','bad'],run_start:['Run','info'],run_end:['Run','info'],schedule:['Schedule','info'],queue:['Queued','ok'],unqueue:['Unqueued','neutral'],retry_ok:['Retry \u2713','ok'],retry_fail:['Retry \u2717','bad']};
+  const [label,cls]=map[e.type]||[e.type,e.ok===false?'bad':'neutral'];
+  return '<span class="pill '+(e.ok===false?'bad':cls)+'" style="font-size:10px">'+label+'</span>';
+}
+function diagFiltered(){
+  const q=S.log.q.trim().toLowerCase();
+  const fromTs=S.log.from?new Date(S.log.from+'T00:00:00').getTime():0;
+  const toTs=S.log.to?new Date(S.log.to+'T23:59:59').getTime():Infinity;
+  return S.log.entries.filter(e=>{
+    if(S.log.focusId&&String(e.listing_id)!==S.log.focusId)return false;
+    if(e.at<fromTs||e.at>toTs)return false;
+    if(S.log.type==='save'&&e.type!=='save')return false;
+    if(S.log.type==='batch'&&!/^batch|^run|^schedule/.test(e.type))return false;
+    if(S.log.type==='fail'&&e.ok!==false)return false;
+    if(S.log.type==='queue'&&!/queue/.test(e.type))return false;
+    if(S.log.type==='schedule'&&e.type!=='schedule')return false;
+    if(q&&!((e.title||'').toLowerCase().includes(q)||String(e.listing_id||'').includes(q)||(e.detail||'').toLowerCase().includes(q)))return false;
+    return true;
+  });
+}
+function renderDiag(){
+  const list=$('#diagList');if(!list)return;
+  const rows=diagFiltered();
+  const fails=rows.filter(e=>e.ok===false).length;
+  $('#diagSummary').textContent=rows.length+' event'+(rows.length===1?'':'s')+(fails?' \u00b7 '+fails+' failure'+(fails===1?'':'s'):'')+(S.log.entries.length>=300?' \u00b7 showing the latest '+S.log.entries.length+' loaded \u2014 use \u201cLoad older\u201d for more':'');
+  list.innerHTML=rows.map(e=>'<div class="diagRow'+(e.ok===false?' bad':'')+'">'
+    +'<div class="dtop">'+diagTypeBadge(e)
+    +'<span class="dtime">'+new Date(e.at).toLocaleString()+'</span>'
+    +(e.listing_id?'<span class="dactions"><button class="btn ghost xs" data-dact="focus" data-id="'+e.listing_id+'" data-title="'+esc(e.title||'').replace(/"/g,'&quot;')+'">History</button><button class="btn ghost xs" data-dact="open" data-id="'+e.listing_id+'">Open</button></span>':'')
+    +'</div>'
+    +(e.title||e.listing_id?'<div class="dtitle">'+(e.title?esc(e.title):'')+(e.listing_id?' <span class="dim">#'+e.listing_id+'</span>':'')+'</div>':'')
+    +(e.detail?'<div class="ddetail">'+esc(e.detail)+'</div>':'')
+    +'</div>').join('')||'<div class="qEmpty" style="padding:40px;text-align:center">No events match the current filters.</div>';
+}
+async function loadLog(older){
+  if(S.log.loading)return;S.log.loading=true;
+  try{
+    const body={action:'getLog',limit:300};
+    if(older&&S.log.entries.length)body.before=S.log.entries[S.log.entries.length-1].at;
+    const {entries}=await fbCall(body);
+    S.log.entries=older?S.log.entries.concat(entries):entries;
+    renderDiag();
+    if(older&&!entries.length)toast('No older history.','ok');
+  }catch(e){toast('History load failed: '+e.message,'bad')}
+  S.log.loading=false;
+}
+function openDiag(){$('#diagModal').classList.remove('hidden');document.body.style.overflow='hidden';if(!S.log.entries.length)loadLog(false);else renderDiag()}
+function closeDiag(){$('#diagModal').classList.add('hidden');document.body.style.overflow=''}
+function diagFocus(id,title){S.log.focusId=String(id);$('#diagFocusTitle').textContent=(title?title+' ':'')+'#'+id;$('#diagFocusBar').classList.remove('hidden');renderDiag()}
+function diagUnfocus(){S.log.focusId=null;$('#diagFocusBar').classList.add('hidden');renderDiag()}
+async function retrySingle(id){
+  const d=S.prep.get(String(id))||{};
+  if(S.rBusy.has(id))return;S.rBusy.add(id);renderResults();
+  try{
+    const detail=await apiFetch('/etsyListingInventoryDetailProxy?listingId='+encodeURIComponent(id)+'&inventory_only=1');
+    const r=planStandardRebuild(detail.inventory.products,d.chain_type==='beady'?'beady':'regular',d.engraving!==false);
+    if(r.error)throw new Error(r.error);
+    const pers=(d.engraving!==false)?{enabled:true,required:true,max_chars:1000,instructions:ENGRAVE_INSTRUCTIONS}:null;
+    const res=await apiFetch('/etsyUpdateListingInventoryProxy',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({listing_id:Number(id),expected_snapshot_hash:detail.snapshot_hash,inventory:{products:r.rows},auto_on_property:true,personalization:pers})});
+    if(!res.verified)throw new Error(res.verification_error||'Etsy verification did not match.');
+    fbSet(id,{batched:true,last_batch:{at:Date.now(),ok:true},last_save:{at:Date.now(),verified:true},health:compactHealth(res.fresh?.pricing_health),scanned:true,approval:{mode:'updated',at:Date.now(),hash:res.fresh?.snapshot_hash||null}});
+    const l=S.listings.find(x=>String(x.listing_id)===String(id));
+    if(l&&res.fresh){l._health=res.fresh.pricing_health;l._scanned=true;S.cache.set(String(id),res.fresh)}
+    S.approvals[id]={mode:'updated',at:Date.now(),hash:res.fresh?.snapshot_hash||null};writeApprovals();
+    logEvent({listing_id:id,title:d.title||'',type:'retry_ok',detail:'Manual retry rebuilt and verified on Etsy.'});
+    toast('#'+id+' retried and verified on Etsy.','ok');
+  }catch(e){
+    fbSet(id,{last_batch:{at:Date.now(),ok:false,error:String(e.message).slice(0,400)}});
+    logEvent({listing_id:id,title:d.title||'',type:'retry_fail',ok:false,detail:String(e.message).slice(0,400)});
+    toast('Retry #'+id+' failed: '+e.message,'bad');
+  }
+  S.rBusy.delete(id);renderResults();
+}
+async function resumeActiveRun(){
+  try{const {run,run_id}=await fbCall({action:'activeRun'});
+    if(run&&run_id){S.currentRunId=run_id;showBatchPanel();applyRunToUi(run);pollRun(run_id);toast('A server batch is in progress \u2014 re-attached to its live progress.','ok')}
+  }catch(e){}
+}
+function renderChainToggle(){const bar=$('#modeBar');if(!bar)return;bar.classList.toggle('hidden',S.storeFilter!=='necklaces');
+  [...document.querySelectorAll('#chainTypeToggle button')].forEach(b=>b.classList.toggle('on',b.dataset.ct===S.chainType));
+  [...document.querySelectorAll('#engraveToggle button')].forEach(b=>b.classList.toggle('on',(b.dataset.eg==='on')===S.engraving));
+  renderPrepUi()}
+function stripEngraveRows(){
+  if(!S.draft)return 0;
+  const before=S.draft.products.length;
+  S.draft.products=S.draft.products.filter(p=>!(p.property_values||[]).some(v=>(v.values||[]).some(val=>/engrave/i.test(String(val)))));
+  const removed=before-S.draft.products.length;
+  if(removed){sortProducts();markDirty();renderEditor()}
+  return removed;
+}
+$('#dlgCancelBtn').addEventListener('click',()=>$('#formDialog').close('cancel'));
+$('#chainTypeToggle').addEventListener('click',e=>{const b=e.target.closest('button[data-ct]');if(!b)return;S.chainType=b.dataset.ct;renderChainToggle();persistToggle('chain')});
+$('#engraveToggle').addEventListener('click',e=>{const b=e.target.closest('button[data-eg]');if(!b)return;const on=b.dataset.eg==='on';if(on===S.engraving){persistToggle('engrave');return}
+  S.engraving=on;renderChainToggle();persistToggle('engrave');
+  if(!on){const n=stripEngraveRows();toast(n?('Engraving OFF \u2014 '+n+' engraving combination'+(n===1?'':'s')+' removed from the draft. Save to apply, or Reset to undo.'):'Engraving OFF \u2014 engraving options will be excluded from the next rebuild.','ok')}
+  else toast('Engraving ON \u2014 run \u2726 Charm Only setup to rebuild the option set including engraving options.','ok')});
+$('#diagOpenBtn').addEventListener('click',openDiag);
+$('#diagCloseBtn').addEventListener('click',closeDiag);
+$('#diagModal').addEventListener('click',e=>{if(e.target.id==='diagModal')closeDiag()});
+$('#diagFocusClear').addEventListener('click',diagUnfocus);
+$('#diagFocusOpen').addEventListener('click',()=>{if(S.log.focusId){closeDiag();focusListing(S.log.focusId)}});
+$('#diagSearch').addEventListener('input',e=>{S.log.q=e.target.value;renderDiag()});
+$('#diagType').addEventListener('change',e=>{S.log.type=e.target.value;renderDiag()});
+$('#diagFrom').addEventListener('change',e=>{S.log.from=e.target.value;renderDiag()});
+$('#diagTo').addEventListener('change',e=>{S.log.to=e.target.value;renderDiag()});
+$('#diagRefreshBtn').addEventListener('click',()=>loadLog(false));
+$('#diagMoreBtn').addEventListener('click',()=>loadLog(true));
+$('#diagList').addEventListener('click',e=>{const b=e.target.closest('button[data-dact]');if(!b)return;if(b.dataset.dact==='focus')diagFocus(b.dataset.id,b.dataset.title);else if(b.dataset.dact==='open'){closeDiag();focusListing(b.dataset.id)}});
+$('#schedArmBtn').addEventListener('click',armSchedule);
+$('#schedCancelBtn').addEventListener('click',cancelSchedule);
+$('#approvePrepBtn').addEventListener('click',approvePrep);
+$('#unprepBtn').addEventListener('click',()=>unprepare(S.currentId));
+$('#batchBtn').addEventListener('click',async()=>{
+  const mode=$('#batchBtn').dataset.mode||'start';
+  if(mode==='start'){batchRun();return}
+  if(!S.currentRunId)return;
+  try{
+    if(mode==='pause'){await fbCall({action:'pauseRun',run_id:S.currentRunId});toast('Pause requested \u2014 the server finishes the current listing, then holds.','ok')}
+    else if(mode==='resume'){await fbCall({action:'resumeRun',run_id:S.currentRunId});await launchBatchWorker(S.currentRunId);toast('Batch resumed on the server.','ok')}
+    else if(mode==='relaunch'){await launchBatchWorker(S.currentRunId);toast('Worker re-launched \u2014 continuing from where the run left off.','ok')}
+    pollRun(S.currentRunId);
+  }catch(e){toast('Batch control failed: '+e.message,'bad')}
+});
+$('#batchStopBtn').addEventListener('click',async()=>{if(!S.currentRunId){toast('No server batch is running.','bad');return}try{await fbCall({action:'stopRun',run_id:S.currentRunId});toast('Stop requested \u2014 the server finishes the current listing then halts.','ok')}catch(e){toast('Could not stop the batch: '+e.message,'bad')}});
+$('#charmOnlyBtn').addEventListener('click',charmOnlySetup);
+
+/* ---------------- Dialogs ---------------- */
+function formDialog(title,fields){return new Promise(resolve=>{const dlg=$('#formDialog'),form=$('#dialogForm');if(dlg.open){resolve(null);return}dlg.returnValue='';$('#dlgTitle').textContent=title;$('#dlgConfirmBtn').textContent='Apply';$('#dlgBody').innerHTML=fields.map(f=>'<label>'+esc(f.label)+'</label><input name="'+esc(f.name)+'" placeholder="'+esc(f.placeholder||'')+'" value="'+esc(f.value||'')+'">').join('');dlg.showModal();dlg.addEventListener('close',function done(){if(dlg.returnValue!=='ok'){resolve(null);return}const fd=new FormData(form),out={};fields.forEach(f=>out[f.name]=fd.get(f.name)||'');resolve(out)},{once:true})})}
+async function promptDialog(title,label,placeholder){const d=await formDialog(title,[{name:'value',label,placeholder,value:placeholder&&placeholder.startsWith('Example:')?'':placeholder}]);return d?(d.value||'').trim():null}
+function confirmDialog(title,message){return new Promise(resolve=>{const dlg=$('#formDialog');if(dlg.open){resolve(false);return}dlg.returnValue='';$('#dlgTitle').textContent=title;$('#dlgConfirmBtn').textContent='Continue';$('#dlgBody').innerHTML='<p style="margin:0;line-height:1.6">'+esc(message)+'</p>';dlg.showModal();dlg.addEventListener('close',()=>resolve(dlg.returnValue==='ok'),{once:true})})}
+
+/* ---------------- Events ---------------- */
+$('#connectBtn').addEventListener('click',startOAuth);$('#loadBtn').addEventListener('click',loadCatalog);$('#emptyLoadBtn').addEventListener('click',loadCatalog);$('#refreshBtn').addEventListener('click',refreshCurrent);$('#awUpdateBtn').addEventListener('click',manualApiUpdate);$('#prevBtn').addEventListener('click',()=>navigate(-1));$('#nextBtn').addEventListener('click',()=>navigate(1));$('#menuBtn').addEventListener('click',()=>$('#rail').classList.toggle('open'));$('#stopScanBtn').addEventListener('click',()=>S.stopScan=true);
+$('#queue').addEventListener('click',e=>{const b=e.target.closest('.qitem');if(b){focusListing(b.dataset.id);$('#rail').classList.remove('open')}});$('#storeFilterSelect').addEventListener('change',e=>setStoreFilter(e.target.value));
+$('#searchInput').addEventListener('input',e=>{S.stopScan=true;S.search=e.target.value;if(S.search.trim().length>=2)setView('results');S.searchResults=null;applyFilter();updateSearchUi(S.search.trim()?'Waiting for Etsy…':'Live Etsy title search');scheduleLiveSearch()});
+$('#searchInput').addEventListener('keydown',e=>{if(e.key==='Enter'){e.preventDefault();runLiveSearch()}if(e.key==='Escape'){e.preventDefault();clearSearch()}});$('#clearSearchBtn').addEventListener('click',clearSearch);
+$('#matchMode').addEventListener('change',e=>{S.matchMode=e.target.value;S.searchResults=null;applyFilter();if(S.search.trim())runLiveSearch()});$('#sortMode').addEventListener('change',e=>{S.sortMode=e.target.value;const r=$('#rSort');if(r)r.value=S.sortMode;applyFilter();if(S.search.trim().length>=2)runLiveSearch()});
+$('#rSort').addEventListener('change',e=>{S.sortMode=e.target.value;$('#sortMode').value=S.sortMode;applyFilter();if(S.search.trim().length>=2)runLiveSearch()});
+$('#priceBody').addEventListener('input',e=>{const t=e.target;if(!t.dataset.field||t.dataset.field==='enabled')return;updateCell(Number(t.dataset.row),t.dataset.field,t.value)});$('#priceBody').addEventListener('change',e=>{if(e.target.classList.contains('rowCheck')){const i=Number(e.target.dataset.row);e.target.checked?S.selected.add(i):S.selected.delete(i);renderSelectionCount()}});$('#priceBody').addEventListener('click',e=>{const b=e.target.closest('button[data-field="enabled"]');if(b){updateCell(Number(b.dataset.row),'enabled');renderTable()}});
+$('#priceHead').addEventListener('change',e=>{if(e.target.id==='masterCheck'){S.selected=new Set(e.target.checked?S.draft.products.map((_,i)=>i):[]);renderTable()}});$('#selectAllBtn').addEventListener('click',()=>{S.selected=new Set(S.draft.products.map((_,i)=>i));renderTable()});$('#clearSelectionBtn').addEventListener('click',()=>{S.selected.clear();renderTable()});$('#applyBulkBtn').addEventListener('click',applyBulk);
+$('#variationGrid').addEventListener('click',e=>{const b=e.target.closest('[data-vact]');if(!b){if(e.target.id==='inlineAddMenu')addMenu();return}const pid=Number(b.dataset.pid),act=b.dataset.vact;if(act==='add-tier')addTier(pid);if(act==='remove-tier')removeTier(pid,decodeURIComponent(b.dataset.value));if(act==='rename')renameMenu(pid);if(act==='remove-menu')removeMenu(pid)});$('#addMenuBtn').addEventListener('click',addMenu);
+$('#dependencyCard').addEventListener('click',e=>{if(e.target.closest('#autoMapSwitch'))setAutoMap(!autoMapOn())});$('#dependencyCard').addEventListener('change',e=>{if(e.target.dataset.mapfield)toggleMap(e.target.dataset.mapfield,Number(e.target.dataset.pid),e.target.checked)});
+$('#saveBtn').addEventListener('click',saveListing);$('#approveBtn').addEventListener('click',approveListing);$('#resetBtn').addEventListener('click',resetDraft);$('#openEtsyBtn').addEventListener('click',()=>window.open(currentListing().url||('https://www.etsy.com/listing/'+S.currentId),'_blank','noopener'));$('#copyIdBtn').addEventListener('click',async()=>{await navigator.clipboard.writeText(S.currentId);toast('Listing ID copied.','ok')});
+$('#copyInvBtn').addEventListener('click',async()=>{if(!S.original){toast('Open a listing first.','bad');return}
+  const d=S.cache.get(S.currentId)||{};
+  const dump={listing_id:S.currentId,fetched_at:d.fetched_at||null,snapshot_hash:S.originalHash,inventory:S.original,
+    rows:(S.original.products||[]).map(p=>({combo:(p.property_values||[]).map(v=>v.property_name+'='+(v.values||[]).join('/')).join(' | '),price:(p.offerings||[])[0]?.price,quantity:(p.offerings||[])[0]?.quantity,enabled:(p.offerings||[])[0]?.is_enabled!==false,product_id:p.product_id,value_ids:(p.property_values||[]).map(v=>(v.value_ids||[]).join(','))}))};
+  await navigator.clipboard.writeText(JSON.stringify(dump,null,2));toast('Live inventory JSON copied to clipboard.','ok')});
+addEventListener('keydown',e=>{const typing=['INPUT','TEXTAREA','SELECT'].includes(document.activeElement.tagName);if(!typing&&e.key==='/'){e.preventDefault();$('#searchInput').focus();return}if(typing)return;if(e.key==='ArrowLeft')navigate(-1);if(e.key==='ArrowRight')navigate(1);if((e.metaKey||e.ctrlKey)&&e.key.toLowerCase()==='s'){e.preventDefault();if(S.dirty)saveListing()}if(e.key.toLowerCase()==='a'&&!e.metaKey&&!e.ctrlKey&&S.view==='editor')approveListing()});
+
+(async function init(){await handleOAuthCallback();renderConnection();renderStoreFilters();renderChainToggle();updateSearchUi('Live Etsy title search');scheduleRefresh();primeEtsyApiUsage();if(localStorage.getItem(TOKEN_KEYS.access))loadCatalog()})();
+</script>
+</body>
+</html>
