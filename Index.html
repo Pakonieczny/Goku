@@ -1471,6 +1471,48 @@
     .dtopbar #duplicateModeToggle, .dtopbar #shopifyModeToggle{height:36px; box-sizing:border-box}
     .dtopbar #duplicateModeToggle{background:transparent; border:0; box-shadow:none}
     .dtopbar .dsep{align-self:center; width:1px; height:24px; background:var(--line); flex:0 0 1px}
+    /* Verified Etsy API usage readout — same visual language and layout as
+       etsy-pricing.html. Values come from the server-side distributed gate,
+       never from browser-side estimates. */
+    .apiWidget{
+      display:flex; flex-direction:column; gap:7px; padding:10px 40px 10px 16px;
+      border:1px solid var(--line); border-radius:12px; background:var(--card);
+      min-width:320px; max-width:380px; position:relative; flex:0 1 360px;
+      box-sizing:border-box;
+    }
+    .apiWidget .awRow{display:flex; align-items:center; gap:14px; font-size:12.5px; line-height:1.1}
+    .apiWidget .awLabel{
+      width:30px; flex:0 0 auto; font-weight:700; color:var(--ink45);
+      text-transform:uppercase; font-size:10px; letter-spacing:.05em;
+    }
+    .apiWidget .awNum{
+      font-variant-numeric:tabular-nums; font-weight:700; color:var(--ink);
+      white-space:nowrap; min-width:78px; flex:0 0 auto;
+    }
+    .apiWidget .awBar{
+      flex:1; height:6px; border-radius:999px; background:var(--paper2);
+      overflow:hidden; min-width:70px;
+    }
+    .apiWidget .awBar i{
+      display:block; height:100%; width:0; background:var(--sage);
+      transition:width .3s;
+    }
+    .apiWidget .awBar.warn i{background:var(--gold)}
+    .apiWidget .awBar.bad i{background:var(--clay)}
+    .apiWidget .awQps{
+      font-size:11px; color:var(--ink45); white-space:nowrap;
+      flex:0 0 auto; min-width:62px; text-align:right;
+    }
+    .apiWidget .awInfo{
+      position:absolute; top:50%; right:12px; transform:translateY(-50%);
+      border:0; background:none; color:var(--ink45); font-size:15px;
+      cursor:help; padding:0; line-height:1; width:auto; height:auto;
+      box-shadow:none; text-transform:none;
+    }
+    .apiWidget .awInfo:hover{color:var(--ink); background:none}
+    .apiWidget .awInfo.warnDot{color:var(--gold)}
+    .apiWidget.awUnavailable{border-color:var(--clay); background:var(--claySoft)}
+    @media(max-width:1400px){.apiWidget{display:none}}
     /* the create-listing progress bar lives beside the status chip while
        a job runs; give it a sane inline size in the flex row */
     .dtopbar #createListingProgress{width:150px; flex:0 0 150px; align-self:center}
@@ -1538,6 +1580,28 @@
 <div id="firebaseStatus">
       <div class="status-dot" id="fbDot"></div>
       <span id="fbText">Waiting...</span>
+  </div>
+
+  <div class="apiWidget" id="apiWidget" aria-label="Verified Etsy API usage">
+    <div class="awRow" data-row="app">
+      <span class="awLabel">App</span>
+      <span class="awNum" id="awAppNum">…</span>
+      <span class="awBar"><i id="awAppBar"></i></span>
+      <span class="awQps" id="awQps">— QPS</span>
+    </div>
+    <div class="awRow" data-row="key">
+      <span class="awLabel">Key</span>
+      <span class="awNum" id="awKeyNum">…</span>
+      <span class="awBar"><i id="awKeyBar"></i></span>
+      <span class="awQps" aria-hidden="true"></span>
+    </div>
+    <button
+      class="awInfo"
+      id="awInfo"
+      type="button"
+      aria-label="What do these API statistics mean?"
+      title="App = this Listing Generator’s verified Etsy calls today. Key = Etsy’s authoritative whole-key meter. QPS = highest server-observed calls per second."
+    >ⓘ</button>
   </div>
 
 
@@ -2313,16 +2377,15 @@ ANTI-REPETITION (TITLE)
           const refreshing = refreshingRows.has(r.id);
           // Refresh = read-only status check (no requeue/drain) — for a row
           // that may have ALREADY gone LIVE server-side (the background
-          // drain-cron keeps working a job independent of any browser tab,
-          // and the client-side poll that watches a job for its outcome
-          // gives up after ~6 minutes) but the stats doc never got the
-          // final write. Retry actively requeues; Refresh just looks.
+          // drain keeps working independent of any browser tab) but whose
+          // stats write was missed during an older deployment. Retry
+          // actively requeues; Refresh just looks.
           const refreshBtn = ` <button type="button" class="dretry-btn drefresh-btn" data-row-id="${escAttr(r.id)}" data-job-id="${escAttr((sp && sp.jobId) || "")}" title="Check whether this already finished on Shopify, without requeuing it"${refreshing ? " disabled" : ""}>${refreshing ? "Checking…" : "Refresh"}</button>`;
           const spCell = sp
             ? (sp.url
                 ? `<a href="${escAttr(sp.url)}" target="_blank" rel="noopener">Open ↗</a> <span class="dchip live">LIVE</span>`
                 : sp.status === "PENDING"
-                  ? `<span class="dchip pend" title="Waiting its turn — Shopify sends run one at a time">Pending</span>`
+                  ? `<span class="dchip pend" title="Preparing and durably saving the Shopify queue job">Pending</span>`
                   : `<span class="dchip ${sp.status === "FAILED" ? "fail" : "pend"}">${escHtml(sp.status || "QUEUED")}</span>` +
                     (sp.status === "FAILED" || sp.status === "QUEUED"
                       ? ` <button type="button" class="dretry-btn" data-row-id="${escAttr(r.id)}" data-job-id="${escAttr(sp.jobId || "")}" title="Requeue this listing's Shopify upload"${retrying ? " disabled" : ""}>${retrying ? "Retrying…" : "Retry"}</button>` + refreshBtn
@@ -2393,6 +2456,13 @@ ANTI-REPETITION (TITLE)
         // a published record must never be consumed from a queue box again.
         // (limit(600) above caps this window — see auditOverwrites note.)
         window.__usedListingIds = new Set(allRows.map(r => String(r.listingId || "")).filter(Boolean));
+        // Let the Shopify module resume independent job watchers after a
+        // reload. Server-side uploads continue without this tab; this only
+        // keeps the Statistics rows synchronized to their final outcome.
+        window.__listingStatsRows = allRows;
+        if (typeof window.resumeShopifyWatchers === "function") {
+          window.resumeShopifyWatchers(allRows);
+        }
         // AUTO-CORRECT: scrub already-published IDs out of the queue boxes
         // right now (not just lazily at consume time) — see the function
         // definition below; also invoked after every remote queue sync so
@@ -2445,12 +2515,7 @@ ANTI-REPETITION (TITLE)
       // Retry button (FAILED/QUEUED Shopify cells) — delegated so it keeps
       // working across re-renders. Requeues + drains server-side (the same
       // mechanism the old Shopify Uploads panel's Retry/Drain buttons used),
-      // then — when the row carries a jobId — polls that ONE job for its
-      // outcome and writes it back via ListingStats.updateShopify(), which
-      // the live onSnapshot listener above turns into an instant table
-      // refresh. Rows recorded before this feature shipped have no jobId;
-      // for those the requeue still happens, but the row itself won't
-      // auto-update since there's nothing to poll against.
+      // then hands the job to the module's shared independent watcher.
       if (body) body.addEventListener("click", async (e) => {
         const btn = e.target.closest(".dretry-btn:not(.drefresh-btn)");
         if (!btn || btn.disabled) return;
@@ -2465,7 +2530,8 @@ ANTI-REPETITION (TITLE)
           // A FAILED job needs requeuing first, then a drain to move now
           // rather than waiting for the next scheduled cron pass.
           if (!wasQueued) {
-            await fetch(SP_FN, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ op: "retryFailed" }) }).catch(() => {});
+            const retryOp = jobId ? { op: "retryJob", jobId } : { op: "retryFailed" };
+            await fetch(SP_FN, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(retryOp) }).catch(() => {});
           }
           await fetch(SP_FN, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ op: "drain" }) }).catch(() => {});
           if (typeof window.refreshShopifyStatus === "function") window.refreshShopifyStatus();
@@ -2493,29 +2559,29 @@ ANTI-REPETITION (TITLE)
               window.M?.toast?.({ html: "Requeued — couldn't find a matching job to track live, so watch the Shopify chip/Statistics for the result." });
               return;
             }
-            // Found it — attach the id now so future retries of this row
-            // track properly even if this poll doesn't catch the finish.
-            try { await window.ListingStats?.updateShopify(rowId, { status: row.shopify.status, title: wantTitle, url: row.shopify.url || "", jobId }); } catch (_) {}
+            // Found it — attach the id now so every later update can track
+            // the exact durable job.
+            try { await window.ListingStats?.updateShopify(rowId, { status: "QUEUED", title: wantTitle, url: "", jobId }); } catch (_) {}
             window.M?.toast?.({ html: "Found the matching job — now tracking it live." });
           } else {
             window.M?.toast?.({ html: "Retrying — watching for the result…" });
           }
-          for (let t = 0; t < 60; t++) {
-            await new Promise(res => setTimeout(res, 6000));
-            try {
-              const sr = await fetch(SP_FN + "?op=status&recent=60");
-              const sj = await sr.json();
-              const job = (sj.recent || []).find(x => x.id === jobId);
-              if (job && (job.status === "DONE" || job.status === "FAILED")) {
-                await window.ListingStats?.updateShopify(rowId, {
-                  status: job.status === "DONE" ? "LIVE" : "FAILED",
-                  title: job.title || "",
-                  url: job.handle ? ("https://britesjewelry.com/products/" + job.handle) : "",
-                  jobId
-                });
-                break;
-              }
-            } catch (_) {}
+          const row = allRows.find(x => x.id === rowId);
+          const title = (row && row.shopify && row.shopify.title) || "";
+          await window.ListingStats?.updateShopify(rowId, {
+            status: "QUEUED", title, url: "", jobId
+          });
+          if (typeof window.trackShopifyJob === "function") {
+            window.trackShopifyJob({
+              jobId,
+              statsDocId: rowId,
+              title,
+              createdAtMs: row && row.tsMs,
+              lastStatus: "QUEUED"
+            });
+          }
+          if (typeof window.kickShopifyDrain === "function") {
+            window.kickShopifyDrain("statistics-retry", true);
           }
         } finally {
           retryingRows.delete(rowId);
@@ -2526,9 +2592,9 @@ ANTI-REPETITION (TITLE)
       // Refresh: a read-only status check — no retryFailed, no drain. For
       // a listing that may have ALREADY gone LIVE (or actually failed)
       // server-side — the background drain-cron keeps working the queue
-      // whether or not a browser tab is open, and the Retry/live-pipeline
-      // poll only watches a job for up to ~6 minutes — but the stats doc
-      // still shows the old status because nothing ever wrote the update.
+      // whether or not a browser tab is open. This also repairs rows from
+      // older deployments whose short-lived browser poll missed the final
+      // stats write.
       if (body) body.addEventListener("click", async (e) => {
         const btn = e.target.closest(".drefresh-btn");
         if (!btn || btn.disabled) return;
@@ -2920,10 +2986,6 @@ ANTI-REPETITION (TITLE)
             try {
                 const approvedRes = await storage.ref('listing-generator-1/Generated_Listing_Sets/Approved_Listing_Sets').listAll();
                 approvedRes.prefixes.forEach(p => processedNames.push(p.name.replace(/\/$/, "")));
-            } catch (_) {}
-            try {
-                const legacyRes = await storage.ref('listing-generator-1/Listed_Sets').listAll();
-                legacyRes.prefixes.forEach(p => { const n = p.name.replace(/\/$/, ""); if (!processedNames.includes(n)) processedNames.push(n); });
             } catch (_) {}
 
             const res = await storage.ref('listing-generator-1/Generated_Listing_Sets/Completed_Listing_Sets').listAll();
@@ -3693,28 +3755,20 @@ ANTI-REPETITION (TITLE)
             //       listing-generator-1/Generated_Listing_Sets/Approved_Listing_Sets/{SetName}
             //     This is our done pile, also visible in the Listing Generator's
             //     read-only "Approved Sets" tab.
-            //   * The legacy Listed_Sets folder is also kept up to date as a
-            //     backwards-compatible alias (writes go to BOTH so anything
-            //     that already references Listed_Sets keeps working).
+            // Approved_Listing_Sets is the active source of truth. The legacy
+            // Listed_Sets path is intentionally not polled here because its
+            // current Storage rules reject browser reads (403).
             const approvedRef = storage.ref('listing-generator-1/Generated_Listing_Sets/Approved_Listing_Sets');
-            const legacyListedRef = storage.ref('listing-generator-1/Listed_Sets');
             let processedNames = [];
             try {
                 const approvedRes = await approvedRef.listAll();
                 processedNames = approvedRes.prefixes.map(p => p.name.replace(/\/$/, ""));
             } catch(e) { }
-            try {
-                const legacyRes = await legacyListedRef.listAll();
-                for (const p of legacyRes.prefixes) {
-                    const n = p.name.replace(/\/$/, "");
-                    if (!processedNames.includes(n)) processedNames.push(n);
-                }
-            } catch(e) { }
 
             const listRef = storage.ref('listing-generator-1/Generated_Listing_Sets/Completed_Listing_Sets');
             const res = await listRef.listAll();
             
-            // 2. Filter folders (prefixes): Skip if it's already in Listed_Sets
+            // 2. Filter folders (prefixes): skip anything already approved.
             const newSets = res.prefixes.filter(p => {
                 const name = p.name.replace(/\/$/, ""); 
                 return !processedNames.includes(name);
@@ -3822,7 +3876,7 @@ ANTI-REPETITION (TITLE)
                         const bucket = setsByQueue[q] || [];
                         if (bucket.length === 0) { if (__scope) scopeStarved = true; continue; }  // no folders in this section
                         const qEl = document.getElementById(q);
-                        if (!qEl || !qEl.value.trim()) {          // no Listing IDs in this section
+                        if (!qEl || !qEl.value.trim()) {              // no Listing IDs in this section
                             skippedForMissingId = true;
                             continue;
                         }
@@ -4263,13 +4317,15 @@ ANTI-REPETITION (TITLE)
         try { q = JSON.parse(localStorage.getItem("etsyUploadJobs") || "[]"); } catch (_) {}
         if (!q.length) return true;
         let last = 0;
+        let stage = "unknown";
         try {
           const job = JSON.parse(localStorage.getItem(`etsyJob:${jobId}`) || "null");
           last = Number(job && (job.lastActivityAt || 0)) || 0;
+          stage = String(job && (job.stage || job.status) || "unknown");
         } catch (_) {}
         const sinceActivity = Date.now() - (last || t0);
         if (sinceActivity > idleMs) {
-          console.warn(`waitForQueueDrain: no upload activity for ${Math.round(sinceActivity / 1000)}s — giving up.`);
+          console.warn(`waitForQueueDrain: stage "${stage}" had no activity for ${Math.round(sinceActivity / 1000)}s — giving up.`);
           return false;
         }
         await wait(2000);
@@ -4290,7 +4346,34 @@ ANTI-REPETITION (TITLE)
         if (st === "DONE" || st === "FAILED" || st === "AUTH_NEEDED" || st === "QUOTA_HALT") return st;
         await wait(2000);
       }
+      try {
+        const job = JSON.parse(localStorage.getItem(`etsyJob:${jobId}`) || "null");
+        console.warn("awaitJobOutcome timed out:", {
+          jobId,
+          status: job && job.status,
+          stage: job && job.stage,
+          error: job && job.error
+        });
+      } catch (_) {}
       return "TIMEOUT";
+    }
+
+    // The Create Listing button performs asynchronous image normalization
+    // before it can assign a jobId. Auto-Pilot must await that enqueue result
+    // instead of sampling __lastConsumedListing immediately and accidentally
+    // capturing an undefined/stale jobId.
+    async function awaitEtsyEnqueue(timeoutMs = 90000) {
+      const promise = window.__etsyEnqueuePromise;
+      if (!promise || typeof promise.then !== "function") {
+        return { ok: false, error: "Etsy enqueue did not start" };
+      }
+      return await Promise.race([
+        promise,
+        new Promise(resolve => setTimeout(
+          () => resolve({ ok: false, error: "Etsy enqueue timed out" }),
+          timeoutMs
+        ))
+      ]);
     }
 
     async function runFullAutomationSequence(setRef, setName) {
@@ -4529,9 +4612,15 @@ ANTI-REPETITION (TITLE)
             }
             
             document.getElementById("createListingBtn").click();
+            const originalEnqueue = await awaitEtsyEnqueue();
+            if (!originalEnqueue.ok || !originalEnqueue.jobId) {
+                console.warn(`Original enqueue for ${setName} failed:`, originalEnqueue.error || "unknown error");
+                updateFirebaseStatus(`Upload enqueue failed: ${setName} kept for retry`, "");
+                return;
+            }
             
             // Wait for queue to process. The daemon removes jobs from localStorage "etsyUploadJobs".
-            await waitForQueueDrain((window.__lastConsumedListing || {}).jobId);
+            await waitForQueueDrain(originalEnqueue.jobId);
             
             await wait(3000);
 
@@ -4547,7 +4636,7 @@ ANTI-REPETITION (TITLE)
             // the ID, keep the folder (retry later; 2 strikes = skip), stop.
             {
                 const consumed = window.__lastConsumedListing || {};
-                const outcome = await awaitJobOutcome(consumed.jobId, 120000);
+                const outcome = await awaitJobOutcome(originalEnqueue.jobId, 120000);
                 if (outcome !== "DONE") {
                     // CROSS-CONTAMINATION GUARD: if the job's stored status is
                     // still RUNNING, the daemon may yet write images/info to
@@ -4649,11 +4738,17 @@ ANTI-REPETITION (TITLE)
                      console.warn("Ran out of Listing IDs for variant.");
                 } else {
                      document.getElementById("createListingBtn").click();
-                     await waitForQueueDrain((window.__lastConsumedListing || {}).jobId);
+                     const variantEnqueue = await awaitEtsyEnqueue();
+                     if (!variantEnqueue.ok || !variantEnqueue.jobId) {
+                         console.warn(`Variant enqueue for ${setName} failed:`, variantEnqueue.error || "unknown error");
+                         updateFirebaseStatus(`Variant enqueue failed: ${setName} kept`, "");
+                         return;
+                     }
+                     await waitForQueueDrain(variantEnqueue.jobId);
                     // Variant verify: original already succeeded so the set is
                     // still archived, but a failed variant must give its ID back.
                     const consumed2 = window.__lastConsumedListing || {};
-                    const outcome2 = await awaitJobOutcome(consumed2.jobId, 120000);
+                    const outcome2 = await awaitJobOutcome(variantEnqueue.jobId, 120000);
                     if (outcome2 !== "DONE" && consumed2.queueId && consumed2.listingId) {
                         // Same cross-contamination guard as the original pass.
                         let liveStatus2 = null;
@@ -5469,7 +5564,7 @@ ANTI-REPETITION (TITLE)
       tbHidden.style.display = "none";
       move(tbHidden, ["createListingBtn", "createListingCheck", "globalUploadCount", "expandUploadHistoryBtn", "uploadShopifyBtn"]);
       topbar.appendChild(tbHidden);
-      move(topbar, ["firebaseStatus", "createListingProgress"]);
+      move(topbar, ["firebaseStatus", "createListingProgress", "apiWidget"]);
       topbar.appendChild(mk("div", null, "dspacer"));
       move(topbar, ["shopifyQueueStatus", "connectEtsyBtn"]);
       sep(topbar);
@@ -6271,8 +6366,49 @@ https://www.etsy.com/your/shops/me/listing-editor/edit/1822973998
       return tags.slice(0, 13);
     }
 
+    // PRIME THE NEXT QUEUE SLICE IN TWO ETSY CALLS TOTAL. Etsy's batch
+    // listing endpoint supplies Images and its dedicated batch-inventory
+    // endpoint supplies Inventory for up to 100 IDs. We prime a conservative
+    // 25 at a time (small Netlify payload, large quota win); the purge and
+    // inventory functions consume the server-side snapshots and fall back to
+    // individual reads if this best-effort optimization is unavailable.
+    async function primeEtsyListingSnapshots(listingId, queueId, token) {
+      try {
+        const ids = [String(listingId)];
+        const qEl = queueId ? document.getElementById(queueId) : null;
+        if (qEl) ids.push(...parseListingNumbers(qEl.value));
+        const listingIds = Array.from(new Set(ids.filter(Boolean))).slice(0, 25);
+        if (!listingIds.length || !token) return;
+
+        const response = await etsyFetchWithTimeout(
+          "/.netlify/functions/etsyListingBatchSnapshot",
+          {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ listingIds, token })
+          },
+          60000,
+          "Queued-listing batch snapshot"
+        );
+        const result = await response.json().catch(() => ({}));
+        window.__DIAG.log("etsy-batch-snapshot", {
+          requested: listingIds.length,
+          ok: response.ok && result.ok !== false,
+          etsyCalls: Number(result.etsyCalls || 0),
+          refreshedImages: Number(result.refreshedImages || 0),
+          refreshedInventory: Number(result.refreshedInventory || 0),
+          errors: (result.errors || []).slice(0, 2)
+        });
+        if (!response.ok) {
+          console.warn("Queued-listing batch snapshot unavailable; per-listing reads remain enabled.", result);
+        }
+      } catch (error) {
+        console.warn("Queued-listing batch snapshot failed; per-listing reads remain enabled.", error.message);
+      }
+    }
+
     // ---- Snapshot the current UI to a durable Job (LS manifest + IDB blobs) ----
-    async function queueListingUploadFromUI(listingId) {
+    async function queueListingUploadFromUI(listingId, queueId) {
       const jobId = `etsyJob_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`;
       const title = (document.getElementById("listingTitle")?.value || "").trim();
       const userDescription = document.getElementById("listingDescription")?.value || "";
@@ -6280,6 +6416,16 @@ https://www.etsy.com/your/shops/me/listing-editor/edit/1822973998
       const finalDescription = userDescription + appended;
       const tags = buildEtsyTagsFromOverlay(document.getElementById("searchKeyPhrases")?.value || "");
       const sku = buildSkuFromTitle(title);
+      // Run the quota-saving batch reads in parallel with local image
+      // normalization. By the time the daemon reaches Stage 0, its snapshot
+      // is normally ready without adding wall-clock latency.
+      const batchPrimePromise = primeEtsyListingSnapshots(
+        listingId,
+        queueId,
+        String(window.accessToken || localStorage.getItem("etsyAccessToken") || "")
+      );
+      window.__etsyBatchPrimePromises = window.__etsyBatchPrimePromises || new Map();
+      window.__etsyBatchPrimePromises.set(jobId, batchPrimePromise);
 
       // Photos (0–7) from previewImages / names / meta
       // -----------------------------------------------------------------
@@ -6491,17 +6637,23 @@ https://www.etsy.com/your/shops/me/listing-editor/edit/1822973998
     // 408/network drop) currently fail an entire job even when 7 of 10
     // photos already uploaded — the retry then re-pays every API call. One
     // request-level retry with backoff absorbs those blips. This is
-    // BOUNDED (max 2 extra attempts per request) and per-request, so it
+    // BOUNDED (max 1 extra attempt per request) and per-request, so it
     // cannot recreate the old job-level endless-retry loop. Deliberately
     // NOT retried: 429 (the daily-quota halt logic downstream must see it
     // untouched) and every other 4xx (deterministic — a retry is a wasted
     // quota call).
     async function etsyFetchWithTransientRetry(url, opts = {}, timeoutMs = 90000, label = "request") {
       const RETRY_STATUSES = [408, 502, 503, 504];
-      const BACKOFF_MS = [2500, 5000];
+      const BACKOFF_MS = [2500];
       let lastErr = null;
       for (let attempt = 0; attempt <= BACKOFF_MS.length; attempt++) {
         if (attempt > 0) {
+          // Image uploads mark only the retry attempt for a bounded
+          // idempotency lookup. The normal first attempt avoids a Firestore
+          // round-trip inside the time-sensitive Netlify image function.
+          if (opts.body && typeof opts.body.set === "function") {
+            try { opts.body.set("retryCheck", "1"); } catch (_) {}
+          }
           window.__DIAG.log("transient-retry", { label, attempt, waitMs: BACKOFF_MS[attempt - 1] });
           await new Promise(r => setTimeout(r, BACKOFF_MS[attempt - 1]));
         }
@@ -6565,7 +6717,7 @@ https://www.etsy.com/your/shops/me/listing-editor/edit/1822973998
       if (token && token !== job.accessToken) save({ accessToken: token });
       const listingId = job.listingId;
       window.__DIAG.log("job-start", { jobId, listingId, photoCount: job.photoCount, reservedCount: job.reservedCount });
-      save({ status: "RUNNING", lastActivityAt: Date.now() });
+      save({ status: "RUNNING", stage: "STARTING", lastActivityAt: Date.now() });
       // Show the progress bar from the RUNNER itself (idempotent) so it is
       // visible no matter who started the job — the button handler, the
       // automation, or the daemon draining a queued job after reload.
@@ -6573,6 +6725,19 @@ https://www.etsy.com/your/shops/me/listing-editor/edit/1822973998
       if (typeof resetCreateProgress === "function") resetCreateProgress();
 
       try {
+        // The batch snapshot is an optimization, never a prerequisite.
+        // Give it a short head start so Stage 0 normally gets cache hits, but
+        // never hold the Etsy job (or Auto-Pilot) hostage to a slow function.
+        const primePromise = window.__etsyBatchPrimePromises?.get(jobId);
+        if (primePromise) {
+          save({ stage: "BATCH_SNAPSHOT", lastActivityAt: Date.now() });
+          await Promise.race([
+            Promise.resolve(primePromise),
+            new Promise(resolve => setTimeout(resolve, 12000))
+          ]).catch(() => {});
+          window.__etsyBatchPrimePromises.delete(jobId);
+        }
+
         // --- Stage 0: Purge existing images on the draft listing -------
         //
         // Why: Etsy's uploadListingImage endpoint APPENDS images to the
@@ -6602,17 +6767,53 @@ https://www.etsy.com/your/shops/me/listing-editor/edit/1822973998
         // and continue — better to upload (and accept potential
         // duplicates this run) than to abort the entire job.
         let purgeLeftovers = [];
+        const preservedReservedAlts = new Set();
+        const uploadedImageHarvest = [];
+        save({ stage: "IMAGE_RECONCILIATION", lastActivityAt: Date.now() });
         try {
           const purgeResp = await etsyFetchWithTransientRetry(
-            `/.netlify/functions/listingImagesPurge?listingId=${encodeURIComponent(listingId)}&token=${encodeURIComponent(token)}`,
-            { method: "POST" }, 60000, "Image purge"
+            "/.netlify/functions/listingImagesPurge",
+            {
+              method: "POST",
+              headers: { "Content-Type": "application/json" },
+              body: JSON.stringify({
+                listingId,
+                token,
+                preserveAltTexts: job.reservedMeta || []
+              })
+            }, 60000, "Image purge"
           );
           if (purgeResp.ok) {
             const purgeJson = await purgeResp.json().catch(() => ({}));
             const totalSeen = Number(purgeJson && purgeJson.totalSeen) || 0;
             const removed = Number(purgeJson && purgeJson.removed) || 0;
-            window.__DIAG.log("purge", { listingId, totalSeen, removed, failures: ((purgeJson && purgeJson.failures) || []).slice(0, 3) });
-            if (totalSeen > 0 && removed < totalSeen) {
+            const deleteRequested = Number(purgeJson && purgeJson.deleteRequested);
+            const deleteTarget = Number.isFinite(deleteRequested)
+              ? deleteRequested
+              : Math.max(0, totalSeen - ((purgeJson && purgeJson.keptImages) || []).length);
+            const keptImages = Array.isArray(purgeJson && purgeJson.keptImages)
+              ? purgeJson.keptImages
+              : [];
+            for (const image of keptImages) {
+              const alt = String(image.alt || image.alt_text || "").trim().replace(/\s+/g, " ");
+              const idx = (job.reservedMeta || []).findIndex(
+                value => String(value || "").trim().replace(/\s+/g, " ").toLowerCase() === alt.toLowerCase()
+              );
+              if (idx < 0) continue;
+              preservedReservedAlts.add(alt.toLowerCase());
+              uploadedImageHarvest.push({
+                listing_image_id: image.listing_image_id,
+                rank: 9 + idx,
+                src: image.src || image.url_fullxfull || image.url_570xN || image.url || null,
+                alt
+              });
+            }
+            window.__DIAG.log("purge", {
+              listingId, totalSeen, deleteTarget, removed,
+              kept: keptImages.length, source: purgeJson && purgeJson.source,
+              failures: ((purgeJson && purgeJson.failures) || []).slice(0, 3)
+            });
+            if (deleteTarget > 0 && removed < deleteTarget) {
               const fails = (purgeJson && purgeJson.failures) || [];
               const firstFail = fails[0] || {};
               if (String(firstFail.status) === "403") {
@@ -6638,7 +6839,7 @@ https://www.etsy.com/your/shops/me/listing-editor/edit/1822973998
               purgeLeftovers = fails.map(f => f && f.imgId).filter(Boolean);
               console.warn(`Purge left ${purgeLeftovers.length} image(s) on ${listingId} — will remove right after uploads:`, purgeLeftovers.join(","));
             }
-            console.log(`Purge: removed ${removed}/${totalSeen} existing image(s) from listing ${listingId}.`);
+            console.log(`Purge: removed ${removed}/${deleteTarget}; preserved ${keptImages.length} reusable brand image(s) on listing ${listingId}.`);
           } else if (purgeResp.status === 401) {
             // Token expired right at the start — treat the same as any
             // other 401 below: pause the job and trigger reconnect.
@@ -6648,12 +6849,36 @@ https://www.etsy.com/your/shops/me/listing-editor/edit/1822973998
               token = window.accessToken;
               save({ accessToken: token });
               const retryResp = await etsyFetchWithTimeout(
-                `/.netlify/functions/listingImagesPurge?listingId=${encodeURIComponent(listingId)}&token=${encodeURIComponent(token)}`,
-                { method: "POST" }, 60000, "Image purge (retry)"
+                "/.netlify/functions/listingImagesPurge",
+                {
+                  method: "POST",
+                  headers: { "Content-Type": "application/json" },
+                  body: JSON.stringify({
+                    listingId,
+                    token,
+                    preserveAltTexts: job.reservedMeta || []
+                  })
+                }, 60000, "Image purge (retry)"
               );
               if (retryResp.ok) {
                 const rj = await retryResp.json().catch(() => ({}));
-                console.log(`Purge (after refresh): removed ${rj.removed}/${rj.totalSeen}.`);
+                const kept = Array.isArray(rj.keptImages) ? rj.keptImages : [];
+                for (const image of kept) {
+                  const alt = String(image.alt || image.alt_text || "").trim().replace(/\s+/g, " ");
+                  const idx = (job.reservedMeta || []).findIndex(
+                    value => String(value || "").trim().replace(/\s+/g, " ").toLowerCase() === alt.toLowerCase()
+                  );
+                  if (idx < 0) continue;
+                  preservedReservedAlts.add(alt.toLowerCase());
+                  uploadedImageHarvest.push({
+                    listing_image_id: image.listing_image_id,
+                    rank: 9 + idx,
+                    src: image.src || image.url_fullxfull || image.url_570xN || image.url || null,
+                    alt
+                  });
+                }
+                purgeLeftovers = (rj.failures || []).map(f => f && f.imgId).filter(Boolean);
+                console.log(`Purge (after refresh): removed ${rj.removed}/${rj.deleteRequested}; preserved ${kept.length}.`);
               } else {
                 save({ status: "AUTH_NEEDED", error: "token_expired" });
                 window.M?.toast?.({ html: 'Etsy session expired — click "Connect to Etsy", then re-run this listing.' });
@@ -6710,12 +6935,11 @@ https://www.etsy.com/your/shops/me/listing-editor/edit/1822973998
         // (2 API calls per listing) with data we already have. altSent is
         // carried alongside because the response's alt_text field may lag —
         // we KNOW what we sent, so ours is authoritative for Shopify.
-        const uploadedImageHarvest = [];
         // Leftover image ids the pre-upload purge could not delete (e.g.
         // Etsy's last-image-of-active-listing rule); removed post-upload.
         // (Populated inside the purge block above via outer scope.)
         const uploadImage = async (fd, label) => {
-          save({ lastActivityAt: Date.now() });
+          save({ stage: label.toUpperCase().replace(/\s+/g, "_"), lastActivityAt: Date.now() });
           window.__DIAG.log("upload-request", { label, listingId, rank: fd.get ? String(fd.get("rank")) : "?", name: fd.get ? String(fd.get("fileName")) : "?" });
           let r;
           try {
@@ -6767,6 +6991,7 @@ https://www.etsy.com/your/shops/me/listing-editor/edit/1822973998
           fd.append("fileName", job.photoNames[i] || `uploaded_photo_${i}.jpg`);
           fd.append("rank", i + 1);
           fd.append("alt_text", job.photoMeta[i] || "");
+          fd.append("operationKey", `${job.jobId}:main:${i}`);
           fd.append("file", blob, job.photoNames[i] || `uploaded_photo_${i}.jpg`);
           mainAttempted++;
           const up = await uploadImage(fd, `Photo ${i + 1}`);
@@ -6798,6 +7023,12 @@ https://www.etsy.com/your/shops/me/listing-editor/edit/1822973998
         }
         // --- Stage 1b: Reserved (8–9)
         for (let i = 0; i < job.reservedCount; i++) {
+          const reservedAltKey = String(job.reservedMeta[i] || "").trim().replace(/\s+/g, " ").toLowerCase();
+          if (reservedAltKey && preservedReservedAlts.has(reservedAltKey)) {
+            console.log(`Reserved ${9 + i}: retained existing matching brand image (0 Etsy calls).`);
+            if (typeof bumpCreateProgressPerImage === "function") bumpCreateProgressPerImage();
+            continue;
+          }
           // Skip override: stop uploading this listing immediately if requested.
           if (window.__skipListingRequested) return;
           const blob = job.storage?.reserved === "idb"
@@ -6810,6 +7041,7 @@ https://www.etsy.com/your/shops/me/listing-editor/edit/1822973998
           fd.append("fileName", job.reservedNames[i] || `reserved_photo_${i}.jpg`);
           fd.append("rank", 9 + i);
           fd.append("alt_text", job.reservedMeta[i] || "");
+          fd.append("operationKey", `${job.jobId}:reserved:${i}`);
           fd.append("file", blob, job.reservedNames[i] || `reserved_photo_${i}.jpg`);
           const up = await uploadImage(fd, `Reserved ${9 + i}`);
           if (up.authExpired) {
@@ -6881,7 +7113,7 @@ https://www.etsy.com/your/shops/me/listing-editor/edit/1822973998
           skus: [job.sku],
           sku: job.sku
         };
-        save({ lastActivityAt: Date.now() });
+        save({ stage: "LISTING_INFO", lastActivityAt: Date.now() });
         const infoResp = await etsyFetchWithTransientRetry(`/.netlify/functions/updateListing?listingId=${encodeURIComponent(listingId)}`, {
           method: "PUT",
           headers: { "Content-Type": "application/json", Authorization: "Bearer " + token },
@@ -6900,15 +7132,30 @@ https://www.etsy.com/your/shops/me/listing-editor/edit/1822973998
         }
 
         // Inventory SKU (same as your current flow)
-        save({ lastActivityAt: Date.now() });
-        await etsyFetchWithTransientRetry(
+        save({ stage: "INVENTORY", lastActivityAt: Date.now() });
+        const inventoryResp = await etsyFetchWithTransientRetry(
           `/.netlify/functions/updateListingInventory?listingId=${encodeURIComponent(listingId)}&token=${encodeURIComponent(token)}`,
           { method: "PUT", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ sku: job.sku }) },
           60000, "Inventory SKU update"
-        ).catch(e => console.warn("Inventory SKU update error:", e));
+        );
+        const inventoryJson = await inventoryResp.json().catch(() => ({}));
+        if (!inventoryResp.ok) {
+          const detail = JSON.stringify(inventoryJson || {});
+          if (inventoryResp.status === 401 && /invalid_token|expired/i.test(detail)) {
+            save({ status: "AUTH_NEEDED", error: "token_expired" });
+            window.M?.toast?.({ html: 'Etsy session expired — click "Connect to Etsy", then re-run this listing.' });
+            return;
+          }
+          if (isDailyQuotaError(inventoryResp.status, detail)) {
+            const quotaErr = new Error("Etsy daily API quota exceeded.");
+            quotaErr.quotaExceeded = true;
+            throw quotaErr;
+          }
+          throw new Error(`Inventory SKU update failed ${inventoryResp.status} — ${detail}`);
+        }
 
         if (typeof setCreateProgress === "function") setCreateProgress(100);
-        save({ status: "DONE", progress: 100, completedAt: nowIso() });
+        save({ status: "DONE", stage: "DONE", progress: 100, completedAt: nowIso() });
         window.__DIAG.log("job-done", { jobId, listingId });
         window.__DIAG.report();
         // --- NEW: Increment tracker ---
@@ -6938,7 +7185,7 @@ https://www.etsy.com/your/shops/me/listing-editor/edit/1822973998
           haltAutomationForQuota();
           return;
         }
-        save({ status: "FAILED", error: String(err && err.message || err) });
+        save({ status: "FAILED", stage: "FAILED", error: String(err && err.message || err) });
         window.__DIAG.log("job-failed", { jobId, listingId, error: String(err && err.message || err) });
         window.__DIAG.report();
         window.M?.toast?.({ html: "Create Listing error (queued): " + (err?.message || err) });
@@ -7460,6 +7707,14 @@ https://www.etsy.com/your/shops/me/listing-editor/edit/1822973998
 
     // --- Create Listing (LS snapshot + background queue; decoupled from UI)
     document.getElementById("createListingBtn").addEventListener("click", async () => {
+      let enqueueSettled = false;
+      let resolveEnqueue;
+      window.__etsyEnqueuePromise = new Promise(resolve => { resolveEnqueue = resolve; });
+      const settleEnqueue = (result) => {
+        if (enqueueSettled) return;
+        enqueueSettled = true;
+        resolveEnqueue(result);
+      };
       try {
         // Clear the one-shot Skip flag for genuine MANUAL uploads so a leftover
         // skip request from a previous action can't immediately abort this one.
@@ -7564,10 +7819,16 @@ https://www.etsy.com/your/shops/me/listing-editor/edit/1822973998
 
         // 2) Snapshot EVERYTHING immediately to localStorage (so Clear won’t affect it)
         //    (Requires PATCH 1 functions: queueListingUploadFromUI, processEtsyJobs)
-        const jobId = await queueListingUploadFromUI(listingId);
+        const jobId = await queueListingUploadFromUI(listingId, targetInputId);
         if (window.__lastConsumedListing && window.__lastConsumedListing.listingId === String(listingId)) {
           window.__lastConsumedListing.jobId = jobId;
         }
+        settleEnqueue({
+          ok: true,
+          jobId,
+          listingId: String(listingId),
+          queueId: targetInputId
+        });
          const short = String(jobId).slice(-6);
          window.M?.toast?.({ html: `Queued Etsy push (${short}). You can start your next listing.` });
         // 3) Kick the background processor; show progress but DO NOT block UI
@@ -7579,7 +7840,23 @@ https://www.etsy.com/your/shops/me/listing-editor/edit/1822973998
         processEtsyJobs();
       } catch (err) {
         console.error(err);
+        const consumed = window.__lastConsumedListing || {};
+        // A queue-snapshot failure happened after the ID was consumed but
+        // before a runnable job existed. Put that ID back immediately.
+        if (!consumed.jobId && consumed.queueId && consumed.listingId) {
+          restoreListingId(consumed.queueId, consumed.listingId);
+        }
+        settleEnqueue({ ok: false, error: String(err?.message || err) });
         M.toast({ html: "Create Listing enqueue error: " + (err?.message || err) });
+      } finally {
+        // Also resolves every validation/empty-queue early return.
+        if (!enqueueSettled) {
+          const consumed = window.__lastConsumedListing || {};
+          if (!consumed.jobId && consumed.queueId && consumed.listingId) {
+            restoreListingId(consumed.queueId, consumed.listingId);
+          }
+        }
+        settleEnqueue({ ok: false, error: "Create Listing was blocked before enqueue" });
       }
     });
 
@@ -8404,7 +8681,7 @@ https://www.etsy.com/your/shops/me/listing-editor/edit/1822973998
           { role: "system", content: "Generate concise, varied Etsy tags. No duplicates. Each tag ≤ 20 chars." },
           { role: "user", content: prompt }
         ],
-        max_output_tokens: 800,   // was 120 — reasoning tokens count against this cap
+        max_output_tokens: 1600,  // prevents reasoning-only exhaustion before the 13 visible tags
         reasoning: { effort: "low" },   // low reasoning on GPT-5.5
         text: { verbosity: "medium" }
       };
@@ -9128,6 +9405,12 @@ https://www.etsy.com/your/shops/me/listing-editor/edit/1822973998
               }
             }
           } catch {}
+          // Initialize the verified API widget immediately. OAuth token
+          // exchange itself is not an Etsy application API call and carries
+          // no quota headers, so make one lightweight authenticated probe.
+          if (typeof window.primeEtsyApiUsage === "function") {
+            await window.primeEtsyApiUsage(true);
+          }
           // AUTO-RESUME REMOVED. Previously, returning from the Etsy OAuth
           // redirect automatically re-launched processEtsyJobs() to "resume
           // pending uploads". That resume-on-interruption behaviour is what
@@ -9987,6 +10270,7 @@ async function callOpenAI(payload, opts = {}) {
         ensurePanel();
         try {
           const r = await fetch(FN + "?op=status&recent=60");
+          if (!r.ok) throw new Error("HTTP " + r.status);
           const j = await r.json();
           const b = j.budget || {};
           if (el) {
@@ -10007,9 +10291,221 @@ async function callOpenAI(payload, opts = {}) {
             kf.classList.toggle("kpi-bad", (j.failed ?? 0) > 0);
           }
           renderRecent(j.recent);
-        } catch (e) { if (el) el.textContent = "Shopify: offline"; }
+          return j;
+        } catch (e) {
+          if (el) el.textContent = "Shopify: offline";
+          return null;
+        }
       }
       window.refreshShopifyStatus = refreshShopifyStatus;
+
+      // One rate-limited server nudge shared by startup recovery, queued-job
+      // monitoring, and the two-minute safety check. Calling the background
+      // endpoint directly also covers a missing Netlify URL environment
+      // variable in the synchronous enqueue function.
+      let drainKickInFlight = null;
+      let lastDrainKickAt = 0;
+      async function kickShopifyDrain(reason, force) {
+        if (drainKickInFlight) return drainKickInFlight;
+        if (!force && Date.now() - lastDrainKickAt < 45 * 1000) return false;
+        lastDrainKickAt = Date.now();
+        drainKickInFlight = (async () => {
+          try {
+            let r = await fetch("/.netlify/functions/shopifyDrain-background", {
+              method: "POST",
+              headers: { "Content-Type": "application/json" },
+              body: JSON.stringify({ source: reason || "index-app" })
+            });
+            if (!r.ok) {
+              r = await fetch(FN, {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({ op: "drain" })
+              });
+            }
+            return !!r.ok;
+          } catch (_) {
+            try {
+              const r = await fetch(FN + "?op=drain");
+              return !!r.ok;
+            } catch (_) { return false; }
+          }
+        })();
+        try { return await drainKickInFlight; }
+        finally { drainKickInFlight = null; }
+      }
+      window.kickShopifyDrain = kickShopifyDrain;
+
+      // All job completion checks share one poll, regardless of how many
+      // listings were enqueued. The browser never serializes product
+      // completion: Firestore already owns every payload before Auto-Pilot
+      // advances, and this map only mirrors server truth into Statistics.
+      const shopifyWatchers = new Map();
+      let watcherPollInFlight = false;
+      let legacyPendingReconcileAt = 0;
+      let legacyPendingReconcileInFlight = false;
+
+      function trackShopifyJob(meta) {
+        if (!meta || !meta.jobId || !meta.statsDocId) return;
+        const old = shopifyWatchers.get(String(meta.jobId)) || {};
+        shopifyWatchers.set(String(meta.jobId), {
+          ...old,
+          ...meta,
+          jobId: String(meta.jobId),
+          createdAtMs: Number(meta.createdAtMs || old.createdAtMs || Date.now()),
+          lastStatus: meta.lastStatus || old.lastStatus || ""
+        });
+      }
+      window.trackShopifyJob = trackShopifyJob;
+
+      async function mirrorShopifyJob(watcher, job) {
+        const nextStatus = job.status === "DONE" ? "LIVE" : String(job.status || "QUEUED");
+        if (nextStatus === watcher.lastStatus && job.status !== "DONE" && job.status !== "FAILED") return;
+        watcher.lastStatus = nextStatus;
+        const title = job.title || watcher.title || "";
+        const url = job.handle ? ("https://britesjewelry.com/products/" + job.handle) : "";
+        await window.ListingStats?.updateShopify(watcher.statsDocId, {
+          status: nextStatus,
+          title,
+          url,
+          jobId: watcher.jobId
+        });
+
+        if (job.status === "DONE") {
+          const setTxt = job.setLinks && job.setLinks.partners && job.setLinks.partners.length
+            ? ` · set: ${job.setLinks.partners.length} partner${job.setLinks.partners.length > 1 ? "s" : ""} linked`
+            : "";
+          setShopifyStage(100, `LIVE: “${title}”${setTxt}.`);
+          window.M?.toast?.({ html: `Shopify: LIVE — “${title}”${setTxt}.` });
+          shopifyWatchers.delete(watcher.jobId);
+        } else if (job.status === "FAILED") {
+          setShopifyStage(100, `Shopify upload failed: “${title}” — ${job.error || "see Shopify Uploads"}`, true);
+          window.M?.toast?.({ html: `Shopify upload failed: “${title}”.` });
+          shopifyWatchers.delete(watcher.jobId);
+        } else if (job.status === "UPLOADING") {
+          setShopifyStage(88, `Uploading “${title}” — product, images, collections, and set matching are running in background…`);
+        }
+      }
+
+      async function reconcileLegacyPendingRows(rows, recent) {
+        const pending = (rows || []).filter(r =>
+          r && r.shopify && r.shopify.status === "PENDING" &&
+          !r.shopify.jobId && r.shopify.title
+        );
+        if (!pending.length || legacyPendingReconcileInFlight ||
+            Date.now() - legacyPendingReconcileAt < 30 * 1000) return;
+        legacyPendingReconcileAt = Date.now();
+        legacyPendingReconcileInFlight = true;
+        try {
+          let jobs = recent;
+          if (!Array.isArray(jobs)) {
+            const r = await fetch(FN + "?op=status&recent=150");
+            const j = await r.json();
+            jobs = j.recent || [];
+          }
+          const claimed = new Set((rows || []).map(r => r.shopify && r.shopify.jobId).filter(Boolean));
+          for (const row of pending) {
+            const candidates = jobs.filter(job =>
+              !claimed.has(job.id) &&
+              job.title === row.shopify.title &&
+              (!row.category || !job.category || row.category === job.category)
+            ).sort((a, b) => {
+              const at = Number(row.tsMs || 0);
+              return Math.abs(Number(a.createdAtMs || 0) - at) - Math.abs(Number(b.createdAtMs || 0) - at);
+            });
+            const job = candidates[0];
+            if (!job) continue;
+            // Only adopt a plausible time-neighbour; repeated product titles
+            // from another day must never be attached to this Statistics row.
+            if (row.tsMs && Math.abs(Number(job.createdAtMs || 0) - Number(row.tsMs)) > 2 * 60 * 60 * 1000) continue;
+            claimed.add(job.id);
+            const nextStatus = job.status === "DONE" ? "LIVE" : String(job.status || "QUEUED");
+            await window.ListingStats?.updateShopify(row.id, {
+              status: nextStatus,
+              title: job.title || row.shopify.title,
+              url: job.handle ? ("https://britesjewelry.com/products/" + job.handle) : "",
+              jobId: job.id
+            });
+            if (job.status !== "DONE" && job.status !== "FAILED") {
+              trackShopifyJob({
+                jobId: job.id,
+                statsDocId: row.id,
+                title: job.title || row.shopify.title,
+                createdAtMs: job.createdAtMs,
+                lastStatus: nextStatus
+              });
+            }
+          }
+        } catch (_) {
+          // Legacy rows remain visible as Pending and will be retried by the
+          // next shared poll; current-version jobs never depend on matching.
+        } finally {
+          legacyPendingReconcileInFlight = false;
+        }
+      }
+
+      window.resumeShopifyWatchers = function resumeShopifyWatchers(rows) {
+        (rows || []).forEach(row => {
+          const sp = row && row.shopify;
+          if (!sp || !sp.jobId || sp.url || sp.status === "LIVE" || sp.status === "FAILED") return;
+          trackShopifyJob({
+            jobId: sp.jobId,
+            statsDocId: row.id,
+            title: sp.title || "",
+            createdAtMs: row.tsMs || Date.now(),
+            lastStatus: sp.status || ""
+          });
+        });
+        reconcileLegacyPendingRows(rows || []);
+      };
+
+      async function pollShopifyWatchers() {
+        if (watcherPollInFlight) return;
+        const rows = window.__listingStatsRows || [];
+        if (!shopifyWatchers.size && !rows.some(r => r.shopify && r.shopify.status === "PENDING" && !r.shopify.jobId)) return;
+        watcherPollInFlight = true;
+        try {
+          const r = await fetch(FN + "?op=status&recent=150");
+          if (!r.ok) throw new Error("HTTP " + r.status);
+          const j = await r.json();
+          const jobs = j.recent || [];
+          const byId = new Map(jobs.map(job => [String(job.id), job]));
+          for (const watcher of Array.from(shopifyWatchers.values())) {
+            let job = byId.get(watcher.jobId);
+            // Exact lookup is a scale-safe fallback when the job is older
+            // than the recent-150 panel window.
+            if (!job && Date.now() - Number(watcher.lastExactAt || 0) > 60 * 1000) {
+              watcher.lastExactAt = Date.now();
+              try {
+                const er = await fetch(FN + "?op=status&jobId=" + encodeURIComponent(watcher.jobId));
+                const ej = await er.json();
+                job = ej.job || null;
+              } catch (_) {}
+            }
+            if (!job) continue;
+            await mirrorShopifyJob(watcher, job);
+            if (job.status === "QUEUED" &&
+                Date.now() - Number(job.createdAtMs || watcher.createdAtMs) > 30 * 1000) {
+              kickShopifyDrain("queued-job-watchdog");
+            } else if (job.status === "UPLOADING" && job.startedAtMs &&
+                Date.now() - Number(job.startedAtMs) > 18 * 60 * 1000) {
+              kickShopifyDrain("stale-upload-watchdog");
+            }
+          }
+          await reconcileLegacyPendingRows(rows, jobs);
+        } catch (_) {
+          // The next shared tick retries; Shopify processing is server-side.
+        } finally {
+          watcherPollInFlight = false;
+        }
+      }
+
+      setInterval(pollShopifyWatchers, 6000);
+      setTimeout(() => {
+        window.resumeShopifyWatchers(window.__listingStatsRows || []);
+        pollShopifyWatchers();
+      }, 3000);
+
       document.getElementById("shopifyQueueStatus")?.addEventListener("click", async () => {
         try {
           const r = await fetch(FN, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ op: "retryFailed" }) });
@@ -10018,11 +10514,26 @@ async function callOpenAI(payload, opts = {}) {
         } catch (e) {}
         refreshShopifyStatus();
       });
-      setTimeout(refreshShopifyStatus, 2500);
+      setTimeout(async () => {
+        const j = await refreshShopifyStatus();
+        const staleUploading = j && (j.recent || []).some(job =>
+          job.status === "UPLOADING" && job.startedAtMs &&
+          Date.now() - Number(job.startedAtMs) > 18 * 60 * 1000
+        );
+        if (j && (j.queued > 0 || staleUploading)) kickShopifyDrain("startup-queue-recovery", true);
+      }, 2500);
       setInterval(refreshShopifyStatus, 60 * 1000);
-      // Self-drain while the app is open: picks up queued jobs after the
-      // Toronto-midnight budget reset without any external cron.
-      setInterval(() => { fetch(FN + "?op=drain").then(refreshShopifyStatus).catch(() => {}); }, 30 * 60 * 1000);
+      // Two-minute safety net only when work is actually queued. The server
+      // lease makes this safe across tabs and the background worker normally
+      // drains new arrivals immediately.
+      setInterval(async () => {
+        const j = await refreshShopifyStatus();
+        const staleUploading = j && (j.recent || []).some(job =>
+          job.status === "UPLOADING" && job.startedAtMs &&
+          Date.now() - Number(job.startedAtMs) > 18 * 60 * 1000
+        );
+        if (j && (j.queued > 0 || staleUploading)) kickShopifyDrain("two-minute-queue-safety");
+      }, 2 * 60 * 1000);
 
       // ---- category inference ----
       function inferCategory() {
@@ -10206,15 +10717,33 @@ RULES:
 
       // ---- main entry: build payload + enqueue ----
       let busy = false;
-      // PIPELINED: the CAPTURE phase (AI fields + image collection) reads the
-      // page for the CURRENT set and must finish before the auto pilot moves
-      // on. The SEND phase (enqueue + server-side create: product, variants,
-      // media, collections, vision set-matching) is pure network — it runs
-      // detached on a serialized chain, so the next set's Etsy work overlaps
-      // the previous set's Shopify server work. Guardrails: capture is
-      // awaited (no cross-set DOM reads), sends are chained one-at-a-time
-      // (no interleaved drains), and set archiving/retry semantics are
-      // unchanged (a Shopify failure never re-queued the set before either).
+      // DURABLE PIPELINE: capture reads the CURRENT set, then waits only until
+      // the complete payload has a Firestore jobId. Auto-Pilot may advance as
+      // soon as that short durable enqueue succeeds. Product creation and
+      // completion monitoring are fully detached and never block the next
+      // listing from reaching the server queue.
+      function newShopifyRequestId() {
+        if (window.crypto && typeof window.crypto.randomUUID === "function") {
+          return "sp_" + window.crypto.randomUUID();
+        }
+        return "sp_" + Date.now().toString(36) + "_" +
+          Math.random().toString(36).slice(2, 12) + "_" +
+          Math.random().toString(36).slice(2, 12);
+      }
+
+      async function enqueueShopifyPayload(payload, requestId) {
+        const r = await fetch(FN, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ op: "enqueue", requestId, payload })
+        });
+        const j = await r.json().catch(() => ({}));
+        if (!r.ok || j.ok === false || !j.jobId) {
+          throw new Error((j.errors && j.errors.join("; ")) || j.error || ("HTTP " + r.status));
+        }
+        return j;
+      }
+
       async function queueShopifyUpload(category) {
         if (busy) { window.M?.toast?.({ html: "Shopify capture already in progress…" }); return; }
         busy = true;
@@ -10240,99 +10769,61 @@ RULES:
             images,
             source: "index-app"
           };
-          // Detached, serialized send — the caller (auto pilot) is free as
-          // soon as capture is done. One automatic retry on failure (network
-          // blip, non-ok response, or an explicit FAILED job) — the enqueue
-          // + poll logic lives in attemptSend() so the retry re-runs the
-          // exact same steps. Note: if a "failed" enqueue actually reached
-          // the server (rare — most network-level failures never do), the
-          // retry could create a second Shopify product for the same set;
-          // this wasn't guarded against since it mirrors what you asked for.
-          const attemptSend = async () => {
-            setShopifyStage(70, `Uploading “${fields.title}” — product, variants, collections, set matching (vision)…`);
-            const r = await fetch(FN, {
-              method: "POST",
-              headers: { "Content-Type": "application/json" },
-              body: JSON.stringify({ op: "enqueue", payload })
-            });
-            const j = await r.json();
-            if (!r.ok || j.ok === false) throw new Error((j.errors && j.errors.join("; ")) || j.error || ("HTTP " + r.status));
-            // The server drains in the BACKGROUND now (product creation +
-            // vision set-matching exceed the sync limit) — poll the job's
-            // status for the real outcome (up to ~6 min).
-            setShopifyStage(85, `Uploading “${fields.title}” in background — product, variants, collections, set matching (vision)…`);
-            let mine = null;
-            for (let t = 0; t < 60; t++) {
-              await new Promise(res => setTimeout(res, 6000));
-              try {
-                const sr = await fetch(FN + "?op=status&recent=20");
-                const sj = await sr.json();
-                const job = (sj.recent || []).find(x => x.id === j.jobId);
-                if (job && (job.status === "DONE" || job.status === "FAILED")) { mine = job; break; }
-              } catch (_) {}
-            }
-            if (mine && mine.status === "FAILED") {
-              // We do have a jobId at this point (the enqueue succeeded;
-              // the job itself later failed) — attach it so a Retry click
-              // from the Statistics table later can find this exact job.
-              const err = new Error(mine.error || "upload failed (see panel)");
-              err.jobId = j.jobId;
-              throw err;
-            }
-            return { j, mine };
-          };
-          const send = async () => {
-            let result;
+
+          // PENDING now means only "saving the durable queue job" and should
+          // normally last seconds, never another listing's full upload time.
+          await window.ListingStats?.updateShopify(statsDocId, {
+            status: "PENDING", title: fields.title, url: "", jobId: null
+          });
+          setShopifyStage(65, `Saving “${fields.title}” to the Shopify queue…`);
+
+          const requestId = newShopifyRequestId();
+          let j;
+          try {
+            j = await enqueueShopifyPayload(payload, requestId);
+          } catch (e1) {
+            // The same requestId makes a lost-response retry idempotent:
+            // the server returns the original Firestore job instead of
+            // creating a duplicate queue entry or Shopify product.
+            console.warn("Shopify enqueue failed; retrying the same idempotent request once:", e1);
+            setShopifyStage(68, `Retrying queue save for “${fields.title}”…`);
+            await new Promise(res => setTimeout(res, 1500));
             try {
-              result = await attemptSend();
-            } catch (e1) {
-              console.warn("Shopify send failed, retrying once:", e1);
-              setShopifyStage(70, `Retrying Shopify upload for “${fields.title}”…`);
-              await new Promise(res => setTimeout(res, 5000));
-              try {
-                result = await attemptSend();
-              } catch (e2) {
-                setShopifyStage(100, `Shopify upload failed: “${fields.title}” — ${(e2 && e2.message) || e2}`, true);
-                window.M?.toast?.({ html: "Shopify upload failed: " + ((e2 && e2.message) || e2) });
-                console.error("Shopify send failed after 1 retry (Etsy pipeline unaffected):", e2);
-                // jobId (when the failure happened after enqueue) lets the
-                // Statistics table's Retry button requeue this exact job.
-                try { window.ListingStats?.updateShopify(statsDocId, { status: "FAILED", title: fields.title, url: "", jobId: (e2 && e2.jobId) || null }); } catch (_) {}
-                return;
-              }
-            }
-            const { j, mine } = result;
-            const setTxt = mine && mine.setLinks && mine.setLinks.partners && mine.setLinks.partners.length
-              ? ` · set: ${mine.setLinks.partners.length} partner${mine.setLinks.partners.length > 1 ? "s" : ""} linked`
-              : "";
-            setShopifyStage(100, mine
-              ? `LIVE: “${fields.title}” — ${j.variantCount} variants, tier ${j.tier}${setTxt}.`
-              : `Queued: “${fields.title}” (${j.variantCount} variants) — uploads in background; panel shows LIVE when done.`);
-            window.M?.toast?.({
-              html: mine
-                ? `Shopify: LIVE — ${j.variantCount} variants${setTxt}.`
-                : `Shopify: queued (${j.variantCount} variants) — background upload in progress.`
-            });
-            if (typeof refreshShopifyStatus === "function") refreshShopifyStatus();
-            try {
-              window.ListingStats?.updateShopify(statsDocId, {
-                status: mine ? "LIVE" : "QUEUED",
-                title: fields.title,
-                url: (mine && mine.handle) ? ("https://britesjewelry.com/products/" + mine.handle) : "",
-                jobId: j.jobId
+              j = await enqueueShopifyPayload(payload, requestId);
+            } catch (e2) {
+              await window.ListingStats?.updateShopify(statsDocId, {
+                status: "FAILED", title: fields.title, url: "", jobId: null
               });
-            } catch (_) {}
-            return j;
-          };
-          // PENDING marker: sends run ONE AT A TIME through __spSendChain
-          // (serialized so Shopify never gets hit concurrently), so a
-          // listing can sit waiting its turn for several minutes with
-          // nothing written yet. Without this, the table shows a bare "—"
-          // indistinguishable from "Shopify mode was off, never attempted"
-          // — this makes the waiting state visible and honest.
-          try { window.ListingStats?.updateShopify(statsDocId, { status: "PENDING", title: fields.title, url: "", jobId: null }); } catch (_) {}
-          window.__spSendChain = (window.__spSendChain || Promise.resolve()).then(send);
-          return { queued: true, title: fields.title };
+              setShopifyStage(100, `Shopify queue save failed: “${fields.title}” — ${(e2 && e2.message) || e2}`, true);
+              throw e2;
+            }
+          }
+
+          // This is the critical boundary: the payload is now server-owned.
+          // Auto-Pilot can safely archive the source set and start the next
+          // listing; completion monitoring is shared and independent.
+          await window.ListingStats?.updateShopify(statsDocId, {
+            status: "QUEUED", title: fields.title, url: "", jobId: j.jobId
+          });
+          trackShopifyJob({
+            jobId: j.jobId,
+            statsDocId,
+            title: fields.title,
+            createdAtMs: Date.now(),
+            lastStatus: "QUEUED",
+            tier: j.tier,
+            variantCount: j.variantCount
+          });
+          setShopifyStage(82, `Queued: “${fields.title}” — ${j.variantCount} variants; Shopify upload is running in background.`);
+          window.M?.toast?.({ html: `Shopify: queued immediately (${j.variantCount} variants).` });
+
+          // The enqueue function normally started a background drain. If it
+          // could not resolve its own site URL, the browser starts it
+          // directly; otherwise the shared watchdog remains a cheap backup.
+          if (j.background === false) kickShopifyDrain("post-enqueue-fallback", true);
+          pollShopifyWatchers();
+          refreshShopifyStatus();
+          return { queued: true, jobId: j.jobId, title: fields.title };
         } finally { busy = false; }
       }
       window.queueShopifyUpload = queueShopifyUpload;
@@ -10345,6 +10836,204 @@ RULES:
         catch (e) { setShopifyStage(100, "Shopify upload failed: " + ((e && e.message) || e), true); window.M?.toast?.({ html: "Shopify upload failed: " + ((e && e.message) || e) }); }
         finally { btn.disabled = false; }
       });
+    })();
+  </script>
+  <script>
+    // Verified Etsy API usage. The app row is the exact transactional count
+    // reserved by this Listing Generator. The key row is calculated only
+    // from Etsy's own x-limit-per-day / x-remaining-today response headers.
+    (() => {
+      let refreshInFlight = false;
+      let probeInFlight = false;
+      let lastProbeAt = 0;
+      let lastUsageSnapshot = null;
+
+      const byId = (id) => document.getElementById(id);
+      const abbreviate = (n) => {
+        const value = Number(n || 0);
+        return value >= 1000
+          ? (value / 1000).toFixed(value % 1000 === 0 ? 0 : 1) + "k"
+          : String(value);
+      };
+      const ageText = (ms) => {
+        if (!Number.isFinite(ms) || ms < 0) return "unknown";
+        if (ms < 60000) return "under a minute";
+        if (ms < 3600000) return Math.round(ms / 60000) + " min";
+        return Math.round(ms / 3600000) + " hr";
+      };
+      const setBar = (id, percent, state) => {
+        const bar = byId(id);
+        if (!bar) return;
+        bar.style.width = Math.max(0, Math.min(100, percent)) + "%";
+        bar.parentElement.className = "awBar" + (state ? " " + state : "");
+      };
+
+      async function refreshApiUsage() {
+        if (refreshInFlight) return lastUsageSnapshot;
+        refreshInFlight = true;
+        const widget = byId("apiWidget");
+        try {
+          const response = await fetch("/.netlify/functions/etsyApiUsage?t=" + Date.now(), {
+            method: "GET",
+            cache: "no-store",
+            headers: { Accept: "application/json" },
+          });
+          const data = await response.json().catch(() => ({}));
+          if (!response.ok || data.ok === false || data.verified !== true) {
+            throw new Error(data.error || "API statistics unavailable");
+          }
+          lastUsageSnapshot = data;
+
+          const used = Number(data.count || 0);
+          const budget = Number(data.budget || 2500);
+          const appPercent = budget > 0 ? Math.round((used / budget) * 100) : 0;
+          byId("awAppNum").textContent = abbreviate(used) + " / " + abbreviate(budget);
+          setBar(
+            "awAppBar",
+            appPercent,
+            used >= budget ? "bad" : used >= budget * 0.8 ? "warn" : ""
+          );
+
+          const qps = Number(data.max_qps || 0);
+          const qpsCap = Number(data.qps_cap || 2.5);
+          byId("awQps").textContent = qps + "/" + qpsCap + " QPS";
+
+          const keyLimit =
+            data.etsy_limit_per_day == null ? null : Number(data.etsy_limit_per_day);
+          const keyRemaining =
+            data.etsy_remaining_today == null ? null : Number(data.etsy_remaining_today);
+          const hasKeyReading =
+            Number.isFinite(keyLimit) && keyLimit > 0 && Number.isFinite(keyRemaining);
+
+          if (hasKeyReading) {
+            const keyUsed = Math.max(0, keyLimit - keyRemaining);
+            const keyPercent = Math.round((keyUsed / keyLimit) * 100);
+            byId("awKeyNum").textContent =
+              abbreviate(keyUsed) + " / " + abbreviate(keyLimit);
+            byId("awKeyNum").title =
+              keyRemaining.toLocaleString() + " calls left on the whole Etsy key";
+            setBar(
+              "awKeyBar",
+              keyPercent,
+              keyRemaining <= 100 ? "bad" : keyPercent >= 80 ? "warn" : ""
+            );
+          } else {
+            byId("awKeyNum").textContent = "—";
+            byId("awKeyNum").title =
+              "Waiting for Etsy's verified rate-limit headers from the next API response.";
+            setBar("awKeyBar", 0, "");
+          }
+
+          const now = Number(data.server_time || Date.now());
+          const counterAge = data.count_since
+            ? now - Number(data.count_since)
+            : null;
+          const headerAge = data.etsy_reported_at
+            ? now - Number(data.etsy_reported_at)
+            : null;
+          const counterIsPartial =
+            counterAge != null && counterAge >= 0 && counterAge < 20 * 3600000;
+          const headerIsStale =
+            headerAge != null && headerAge > 30 * 60000;
+
+          const base =
+            "App = this Listing Generator’s verified Etsy calls today, resets " +
+            "11:59 PM Toronto, capped at " + budget.toLocaleString() +
+            " (50% of Etsy’s " + (keyLimit || 5000).toLocaleString() + "/day).\n" +
+            "Key = Etsy’s own meter for the WHOLE API key (every app), reset at midnight UTC.\n" +
+            "QPS = highest calls-per-second observed across all server instances, " +
+            "hard-capped at " + qpsCap + ".";
+          const notes = [];
+          if (counterIsPartial) {
+            notes.push(
+              "⚠ App tracking began " + ageText(counterAge) +
+              " ago, so today’s app count may be partial."
+            );
+          }
+          if (headerAge != null) {
+            notes.push(
+              (headerIsStale ? "⚠ " : "") +
+              "Whole-key reading last verified from Etsy " + ageText(headerAge) + " ago."
+            );
+          } else {
+            notes.push("Whole-key reading will appear after Etsy returns its first rate-limit header.");
+          }
+
+          const info = byId("awInfo");
+          info.title = base + "\n\n" + notes.join("\n");
+          info.classList.toggle("warnDot", counterIsPartial || headerIsStale);
+          widget.classList.remove("awUnavailable");
+          widget.title = "";
+          return data;
+        } catch (error) {
+          widget.classList.add("awUnavailable");
+          widget.title = "Verified API statistics are temporarily unavailable: " + error.message;
+          byId("awAppNum").textContent = "Unavailable";
+          byId("awKeyNum").textContent = "—";
+          byId("awQps").textContent = "— QPS";
+          setBar("awAppBar", 0, "bad");
+          setBar("awKeyBar", 0, "");
+          return lastUsageSnapshot;
+        } finally {
+          refreshInFlight = false;
+        }
+      }
+
+      async function primeEtsyApiUsage(force = false) {
+        if (probeInFlight) return;
+        // Every real Etsy request already captures authoritative rate headers.
+        // Read those free Firestore-backed statistics first and only spend a
+        // probe call when the shared-key reading is actually stale/missing.
+        const snapshot = await refreshApiUsage();
+        const headerAge = snapshot?.etsy_reported_at
+          ? Date.now() - Number(snapshot.etsy_reported_at)
+          : Infinity;
+        if (Number.isFinite(headerAge) && headerAge >= 0 && headerAge < 5 * 60 * 1000) {
+          return;
+        }
+        if (!force && lastProbeAt && Date.now() - lastProbeAt < 60000) {
+          return;
+        }
+        probeInFlight = true;
+        lastProbeAt = Date.now(); // throttle failures too; never probe-loop
+        try {
+          const response = await fetch(
+            "/.netlify/functions/etsyApiProbe?t=" + Date.now(),
+            {
+              method: "GET",
+              cache: "no-store",
+              headers: { Accept: "application/json" },
+            }
+          );
+          const result = await response.json().catch(() => ({}));
+          if (!response.ok || result.verified !== true) {
+            console.warn(
+              "Etsy API statistics verification did not complete:",
+              response.status,
+              result
+            );
+          } else {
+            lastProbeAt = Date.now();
+          }
+        } catch (error) {
+          console.warn("Etsy API statistics verification failed:", error);
+        } finally {
+          probeInFlight = false;
+          await refreshApiUsage();
+        }
+      }
+
+      window.refreshEtsyApiUsage = refreshApiUsage;
+      window.primeEtsyApiUsage = primeEtsyApiUsage;
+      document.addEventListener("DOMContentLoaded", primeEtsyApiUsage);
+      window.addEventListener("focus", primeEtsyApiUsage);
+      document.addEventListener("visibilitychange", () => {
+        if (!document.hidden) primeEtsyApiUsage();
+      });
+      setInterval(refreshApiUsage, 15000);
+      setInterval(() => {
+        if (!document.hidden) primeEtsyApiUsage();
+      }, 5 * 60 * 1000);
     })();
   </script>
 </body>
