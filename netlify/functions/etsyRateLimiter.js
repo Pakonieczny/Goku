@@ -1,235 +1,207 @@
-// netlify/functions/etsyRateLimiter.js
-//
-// One distributed gate for every Etsy API request made by the Listing
-// Generator. Firestore provides cluster-wide pacing and accounting across
-// concurrent Netlify instances. The in-memory scheduler remains a safe
-// fallback when Firestore is temporarily unavailable.
+// netlify/functions/_shared/etsyRateLimiter.js
+// Distributed token-bucket limiter + resilient Etsy fetch with 429 handling.
+// Uses Firestore if FIREBASE_SERVICE_ACCOUNT is provided; otherwise falls back to in-memory
+// (in-memory helps single instance, Firestore makes it safe across many instances).
 
 const fetch = require("node-fetch");
 
-// Etsy app limits and the operator's 50% safety allocation.
-const ETSY_QPS_LIMIT = 5;
-const ETSY_DAILY_LIMIT = 5000;
-const INTERNAL_FRACTION = 0.5;
-const RATE_PER_SEC = ETSY_QPS_LIMIT * INTERNAL_FRACTION; // 2.5/s
-const DAILY_BUDGET = Math.floor(ETSY_DAILY_LIMIT * INTERNAL_FRACTION); // 2,500/day
-const BURST = 2;
-const STATE_RETRIES = 5;
-// The distributed gate already keeps traffic below Etsy's per-second limit.
-// One retry is enough for a genuine edge-window 429; five attempts multiplied
-// a single request into five quota charges during outages.
-const ETSY_429_MAX_ATTEMPTS = 2;
-const JITTER_MS = 50;
-const USAGE_COLLECTION = "ListingGenerator_ApiUsage";
-const RATE_BUCKET = "etsy-listing-generator-global";
+// ---- Config
+const RATE_PER_SEC = 5;      // Etsy hard cap
+const BURST        = 5;      // bucket capacity
+const MAX_RETRIES  = 5;      // on 429 / contention
+const JITTER_MS    = 50;     // random jitter to avoid thundering herd
 
-let db = null;
+// ---- Firestore (optional but recommended)
 let useFirestore = false;
-try {
-  const admin = require("./firebaseAdmin");
-  db = admin.firestore();
-  useFirestore = true;
-} catch (error) {
-  console.warn("etsyRateLimiter: Firestore unavailable; using per-instance pacing only.", error.message);
+let db = null;
+
+function buildSvcFromSplitEnv() {
+  const {
+    FIREBASE_PROJECT_ID,
+    FIREBASE_CLIENT_EMAIL,
+    FIREBASE_PRIVATE_KEY,
+  } = process.env;
+
+  // Minimum needed: project_id, client_email, private_key
+  if (!FIREBASE_PROJECT_ID || !FIREBASE_CLIENT_EMAIL || !FIREBASE_PRIVATE_KEY) return null;
+
+  // Fix escaped newlines in Netlify envs
+  const pk = FIREBASE_PRIVATE_KEY.includes("\\n")
+    ? FIREBASE_PRIVATE_KEY.replace(/\\n/g, "\n")
+    : FIREBASE_PRIVATE_KEY;
+
+  return {
+    type: "service_account",
+    project_id: FIREBASE_PROJECT_ID,
+    private_key: pk,
+    client_email: FIREBASE_CLIENT_EMAIL,
+  };
 }
 
-const memState = { nextFreeMs: 0 };
-const sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
+try {
+  let svc = null;
+
+  if (process.env.FIREBASE_SERVICE_ACCOUNT) {
+    // Option A: single JSON var
+    svc = JSON.parse(process.env.FIREBASE_SERVICE_ACCOUNT);
+  } else {
+    // Option B: split vars like in your screenshot
+    svc = buildSvcFromSplitEnv();
+  }
+
+  if (svc) {
+    const admin = require("firebase-admin");
+    if (!admin.apps.length) {
+      admin.initializeApp({ credential: admin.credential.cert(svc), projectId: svc.project_id });
+    }
+    db = admin.firestore();
+    useFirestore = true;
+  }
+} catch (_) {
+  useFirestore = false; // falls back to in-memory token-bucket
+}
+
+// ---- In-memory fallback (per instance)
+const memState = { tokens: BURST, lastMs: Date.now() };
+
+// Helpers
+const sleep = (ms) => new Promise(r => setTimeout(r, ms));
 const jitter = () => Math.floor(Math.random() * JITTER_MS);
 
 function backoff(attempt) {
-  return Math.min(2000, 250 * Math.pow(2, attempt)) + jitter();
+  // 200ms per token at 5 rps; exponential with cap
+  const base = 200;
+  const ms = Math.min(2000, base * Math.pow(2, attempt));
+  return ms + jitter();
 }
 
-function parseRetryAfter(value) {
-  if (!value) return null;
-  const seconds = Number(value);
-  if (Number.isFinite(seconds)) return Math.ceil(seconds * 1000);
-  const when = Date.parse(value);
+function parseRetryAfter(h) {
+  if (!h) return null;
+  const s = Number(h);
+  if (Number.isFinite(s)) return Math.ceil(s * 1000);
+  const when = Date.parse(h);
   return Number.isFinite(when) ? Math.max(0, when - Date.now()) : null;
 }
 
-// The app counter rolls into the next Toronto date one minute early, matching
-// the verified Etsy Pricing console supplied with this project.
-function torontoDayKey() {
-  return new Intl.DateTimeFormat("en-CA", {
-    timeZone: "America/Toronto",
-    year: "numeric",
-    month: "2-digit",
-    day: "2-digit",
-  }).format(new Date(Date.now() + 60000));
-}
+// ---- Token bucket (Firestore-backed if available)
+async function takeToken(bucket = "etsy-global") {
+  const now = Date.now();
 
-async function takeToken(bucket = RATE_BUCKET) {
   if (!useFirestore) {
-    const now = Date.now();
-    const slot = Math.max(now, memState.nextFreeMs);
-    memState.nextFreeMs = slot + 515; // strict 2/s fallback
-    if (slot > now) await sleep(slot - now);
+    // In-memory (per VM) — good safety net; Firestore is the robust path
+    const elapsed = now - memState.lastMs;
+    const refill  = (elapsed / 1000) * RATE_PER_SEC;
+    memState.tokens = Math.min(BURST, memState.tokens + refill);
+    memState.lastMs = now;
+
+    if (memState.tokens >= 1) {
+      memState.tokens -= 1;
+      return;
+    }
+    const need = 1 - memState.tokens;
+    const waitMs = Math.ceil((need / RATE_PER_SEC) * 1000) + jitter();
+    await sleep(waitMs);
     return;
   }
 
+  // Firestore transaction to make it safe across instances
   const ref = db.collection("rate_limits").doc(bucket);
-  for (let attempt = 1; ; attempt++) {
-    const now = Date.now();
+  let attempt = 0;
+
+  while (true) {
+    attempt++;
     try {
-      await db.runTransaction(async (tx) => {
+      await db.runTransaction(async tx => {
         const snap = await tx.get(ref);
         const data = snap.exists ? snap.data() : { tokens: BURST, lastMs: now };
         const last = Number(data.lastMs || now);
-        const stored = Number.isFinite(data.tokens) ? Number(data.tokens) : BURST;
-        const refill = (Math.max(0, now - last) / 1000) * RATE_PER_SEC;
-        let tokens = Math.min(BURST, stored + refill);
+        const tokensStored = Number.isFinite(data.tokens) ? data.tokens : BURST;
+
+        const elapsed = Math.max(0, now - last);
+        const refill  = (elapsed / 1000) * RATE_PER_SEC;
+        let tokens    = Math.min(BURST, tokensStored + refill);
 
         if (tokens < 1) {
-          const error = new Error("rate-limit-wait");
-          error.waitMs = Math.ceil(((1 - tokens) / RATE_PER_SEC) * 1000) + jitter();
-          throw error;
+          // Not enough tokens → throw with recommended retry delay
+          const need   = 1 - tokens;
+          const waitMs = Math.ceil((need / RATE_PER_SEC) * 1000) + jitter();
+          const err    = new Error("rate-limit-wait");
+          err.waitMs   = waitMs;
+          throw err;
         }
 
         tokens -= 1;
         tx.set(ref, { tokens, lastMs: now }, { merge: true });
       });
-      return;
-    } catch (error) {
-      if (error && error.message === "rate-limit-wait") {
-        await sleep(error.waitMs);
+      return; // success
+    } catch (e) {
+      if (e && e.message === "rate-limit-wait") {
+        await sleep(e.waitMs);
       } else {
-        if (attempt >= STATE_RETRIES) throw error;
+        // Transaction contention/backoff
+        if (attempt >= MAX_RETRIES) throw e;
         await sleep(backoff(attempt));
       }
     }
   }
 }
 
-// Etsy meters requests in one-second windows. A transactional epoch-second
-// counter makes the observed QPS and the hard cap accurate across all
-// concurrent function instances.
-const PER_SECOND_CAP = Math.floor(RATE_PER_SEC);
-async function chargeDailyBudget() {
-  if (!useFirestore) return;
+// ---- Public Etsy fetch with gating + 429 retry
+//
+// METERING (added for verified API-usage parity): every call through here is
+// recorded and every response has its Etsy rate-limit headers captured, so
+// etsyApiUsage can serve the App/Key/QPS widget without ever estimating.
+// This is deliberately fire-and-forget and fully guarded — a metering fault
+// must never break, delay, or alter an Etsy call. If the usage module can't
+// even be required (missing file, Firestore down at init), we degrade to a
+// no-op and Etsy traffic is completely unaffected.
+let _usage = null;
+try {
+  _usage = require("./_etsyApiUsage");
+} catch (_) {
+  _usage = null;
+}
+function _meter(appId, res) {
+  if (!_usage) return;
+  try { _usage.recordCall(appId, res); } catch (_) {}
+}
 
-  const ref = db.collection(USAGE_COLLECTION).doc(torontoDayKey());
-  for (let attempt = 0; attempt < 40; attempt++) {
-    let waitMs = 0;
-    await db.runTransaction(async (tx) => {
-      const snap = await tx.get(ref);
-      const data = snap.exists ? snap.data() : {};
-      const used = Number(data.count || 0);
+async function etsyFetch(url, init = {}, opts = {}) {
+  const {
+    bucket = "etsy-global",
+    retries = MAX_RETRIES,
+    // Which console to attribute this call to. Callers may override per
+    // request; the env default keeps existing call sites working untouched.
+    appId = process.env.ETSY_APP_ID || "pricing-console",
+  } = opts;
 
-      if (used >= DAILY_BUDGET) {
-        const error = new Error(
-          `DAILY_BUDGET_EXHAUSTED: this app has spent its ${DAILY_BUDGET}-call ` +
-          `daily allocation. Calls resume after the 11:59 PM Toronto reset.`
-        );
-        error.code = "DAILY_BUDGET_EXHAUSTED";
-        throw error;
-      }
+  let attempt = 0;
+  while (true) {
+    attempt++;
+    await takeToken(bucket);
 
-      const headerIsFresh =
-        data.etsy_reported_at &&
-        Date.now() - Number(data.etsy_reported_at) < 30 * 60 * 1000;
-      if (
-        headerIsFresh &&
-        data.etsy_remaining_today != null &&
-        Number(data.etsy_remaining_today) <= 100
-      ) {
-        const error = new Error(
-          `DAILY_BUDGET_EXHAUSTED: Etsy reports only ${data.etsy_remaining_today} ` +
-          "calls left on the whole API key. The final 100 calls are reserved."
-        );
-        error.code = "DAILY_BUDGET_EXHAUSTED";
-        throw error;
-      }
+    let res;
+    try {
+      res = await fetch(url, init);
+    } catch (err) {
+      // Network failure still consumed a token and may have reached Etsy —
+      // count the attempt so the budget can't silently under-report.
+      _meter(appId, null);
+      throw err;
+    }
 
-      const nowMs = Date.now();
-      const nowSec = Math.floor(nowMs / 1000);
-      const sameSecond = Number(data.sec_key) === nowSec;
-      const usedThisSecond = sameSecond ? Number(data.sec_count || 0) : 0;
+    // Count every attempt, and harvest the rate-limit headers from every
+    // response including 429s (those carry the most important reading).
+    _meter(appId, res);
 
-      if (usedThisSecond >= PER_SECOND_CAP) {
-        waitMs = 1000 - (nowMs % 1000) + 5 + jitter();
-        return;
-      }
+    if (res.status !== 429) return res;
 
-      tx.set(
-        ref,
-        {
-          count: used + 1,
-          count_since: data.count_since || nowMs,
-          sec_key: nowSec,
-          sec_count: usedThisSecond + 1,
-          max_qps: Math.max(Number(data.max_qps || 0), usedThisSecond + 1),
-          updated_at: nowMs,
-        },
-        { merge: true }
-      );
-    });
-
-    if (!waitMs) return;
+    // 429 → respect Retry-After if present, else exponential backoff
+    const ra = parseRetryAfter(res.headers.get("retry-after"));
+    const waitMs = ra != null ? ra + jitter() : backoff(attempt);
+    if (attempt >= retries) return res; // propagate the 429 payload to caller
     await sleep(waitMs);
   }
-
-  const error = new Error("Rate gate contention: Etsy call slot could not be reserved.");
-  error.code = "RATE_GATE_CONTENTION";
-  throw error;
 }
 
-// Etsy's response headers are the authoritative whole-key daily meter. Await
-// persistence so a serverless invocation cannot freeze before the reading is
-// recorded.
-async function captureEtsyHeaders(response) {
-  if (!useFirestore || !response || !response.headers) return;
-  try {
-    const limit = response.headers.get("x-limit-per-day");
-    const remaining = response.headers.get("x-remaining-today");
-    if (limit == null && remaining == null) return;
-
-    const patch = { etsy_reported_at: Date.now() };
-    const parsedLimit = Number(limit);
-    const parsedRemaining = Number(remaining);
-    if (limit != null && Number.isFinite(parsedLimit)) {
-      patch.etsy_limit_per_day = parsedLimit;
-    }
-    if (remaining != null && Number.isFinite(parsedRemaining)) {
-      patch.etsy_remaining_today = parsedRemaining;
-    }
-    await db.collection(USAGE_COLLECTION).doc(torontoDayKey()).set(patch, { merge: true });
-  } catch (error) {
-    console.warn("etsyRateLimiter: could not persist Etsy rate headers.", error.message);
-  }
-}
-
-async function etsyFetch(url, init = {}, options = {}) {
-  const bucket = options.bucket || RATE_BUCKET;
-  const retries = options.retries == null ? ETSY_429_MAX_ATTEMPTS : Number(options.retries);
-
-  for (let attempt = 1; ; attempt++) {
-    await takeToken(bucket);
-    await chargeDailyBudget(); // each real attempt, including a 429 retry
-
-    const response = await fetch(url, init);
-    await captureEtsyHeaders(response);
-
-    if (response.status !== 429 || attempt >= retries) return response;
-
-    // A daily-limit 429 cannot recover before reset. Never spend another call
-    // retrying it. clone() preserves the original body for the caller.
-    try {
-      const detail = await response.clone().text();
-      if (/exceeded daily rate limit|daily rate limit/i.test(detail)) return response;
-    } catch (_) {}
-
-    const retryAfter = parseRetryAfter(response.headers.get("retry-after"));
-    await sleep(retryAfter != null ? retryAfter + jitter() : backoff(attempt));
-  }
-}
-
-module.exports = {
-  etsyFetch,
-  takeToken,
-  torontoDayKey,
-  USAGE_COLLECTION,
-  DAILY_BUDGET,
-  RATE_PER_SEC,
-};
+module.exports = { etsyFetch, takeToken };
