@@ -353,13 +353,42 @@ function buildMatrix(category, tier, baseSku) {
     return { productType: "Necklace", typeTag: "be-ptype-necklace", optionOrder: [OPT.metal, OPT.engrave, OPT.length], variants: v };
   }
   if (cat.startsWith("charm")) {
+    /*  Engraving is its own Yes/No option here, exactly as it is on necklaces
+     *  and bracelets.
+     *
+     *  It used to be a THIRD Charm Type value ("Charm + Engrave"), which meant
+     *  the product had no option named "Engraving" — so the storefront never
+     *  rendered the Back Engraving text field and a buyer choosing the engraved
+     *  charm had nowhere to type what they wanted engraved. Splitting it out
+     *  fixes that and makes every engravable product on the store consistent.
+     *
+     *  Prices are UNCHANGED, just re-addressed:
+     *    Necklace Charm + Engraving No   -> P.charm[m]["Necklace Charm"]
+     *    Necklace Charm + Engraving Yes  -> P.charm[m]["Charm + Engrave"]
+     *    Huggie Charm   + Engraving No   -> P.charm[m]["Huggie Charm"]
+     *    Huggie Charm   + Engraving Yes  -> NOT OFFERED (a huggie charm cannot
+     *                                       be engraved). Shopify accepts a
+     *                                       partial matrix, so the combination
+     *                                       simply does not exist rather than
+     *                                       appearing and failing at checkout.
+     *
+     *  Variant count is 15, the same as before the split.
+     */
     const v = [];
     for (const m of [M.SS, M.GF, M.RG, M.TG, M.SG]) {
-      for (const ct of ["Necklace Charm", "Charm + Engrave", "Huggie Charm"]) {
-        v.push({ options: { [OPT.metal]: m, [OPT.ctype]: ct }, price: P.charm[m][ct][t], sku: sku(`${MSFX[m]}-${ct === "Necklace Charm" ? "NC" : ct === "Charm + Engrave" ? "CE" : "HC"}`) });
+      for (const ct of ["Necklace Charm", "Huggie Charm"]) {
+        for (const e of ["No", "Yes"]) {
+          if (ct === "Huggie Charm" && e === "Yes") continue;   // not engravable
+          const col = e === "Yes" ? "Charm + Engrave" : ct;
+          v.push({
+            options: { [OPT.metal]: m, [OPT.ctype]: ct, [OPT.engrave]: e },
+            price: P.charm[m][col][t],
+            sku: sku(`${MSFX[m]}-${ct === "Necklace Charm" ? "NC" : "HC"}-${e === "Yes" ? "E" : "N"}`)
+          });
+        }
       }
     }
-    return { productType: "Charm", typeTag: "be-ptype-charm", optionOrder: [OPT.metal, OPT.ctype], variants: v };
+    return { productType: "Charm", typeTag: "be-ptype-charm", optionOrder: [OPT.metal, OPT.ctype, OPT.engrave], variants: v };
   }
   // regular necklace + bracelets (fallback table)
   const isBracelet = cat.startsWith("bracelet");
