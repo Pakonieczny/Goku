@@ -4602,6 +4602,11 @@ ANTI-REPETITION (TITLE)
             
             // Lock in our queue choice globally so Create Listing knows where to look
             window.__activeAutomationQueueId = targetQueueId;
+            // The queue id above DEFAULTS to Reg Necklace for an unrouted folder, so
+            // it cannot be trusted to identify the product. The category is left
+            // EMPTY in that case on purpose: the pricing endpoint then skips the
+            // listing instead of pricing a possibly-Beady set off the Regular sheet.
+            window.__activeAutomationCategory = route ? route.category : "";
 
             const qEl = document.getElementById(targetQueueId);
             if(!qEl || !qEl.value.trim()) {
@@ -4829,6 +4834,15 @@ ANTI-REPETITION (TITLE)
         } finally {
             window.isProcessingSet = false;
             window.__currentProcessingSetName = null;
+            // Release the automation's queue/category locks. These used to persist
+            // after the run ended, so the NEXT manual "Create Listing" inherited
+            // them: a Regular necklace clicked after a Beady run was priced off the
+            // Beady sheet (Silver $56.56 instead of $39.69), and a manually pushed
+            // bracelet was sent to Shopify as a Necklace with 10k + Charm Only
+            // variants. Clearing here makes the locks last exactly as long as the
+            // automation that set them.
+            window.__activeAutomationQueueId = null;
+            window.__activeAutomationCategory = "";
             // If we reached here because the user pressed "Skip Listing",
             // finish the skip: clear the UI, hide progress, and reset the flag
             // so the next set starts clean. The set was already added to
@@ -6135,8 +6149,10 @@ Materials:
  •  Sterling Silver
  •  14k Gold Filled
  •  14K Rose Gold Filled 
+ •  10K Solid Gold
  •  14K Solid Gold
 
+• Necklaces are also available as a Charm Only option — the charm on its own, without a chain, plain or engraved.
 • We use the Highest Quality materials from the US and Italy.
 • Your purchase will come packaged in a lovely Jewelry Box
 
@@ -6585,6 +6601,14 @@ https://www.etsy.com/your/shops/me/listing-editor/edit/1822973998
         progress: 0,
         step: 0,
         listingId: String(listingId),
+        queueId: String(queueId || ""), // drives chain type at the pricing stage
+        // Folder category, sent alongside queueId. The queue is shared between
+        // Regular Necklaces and Bracelets, and the automation's "any non-empty
+        // box" fallback can hand over a queue that does not match the folder, so
+        // the category is the more trustworthy of the two signals. Empty when the
+        // folder did not route -- which the pricing endpoint treats as "skip",
+        // never as "assume regular".
+        category: String(window.__activeAutomationCategory || ""),
         accessToken: String(window.accessToken || ""), // capture now
         title,
         finalDescription,
@@ -6642,9 +6666,13 @@ https://www.etsy.com/your/shops/me/listing-editor/edit/1822973998
     // NOT retried: 429 (the daily-quota halt logic downstream must see it
     // untouched) and every other 4xx (deterministic — a retry is a wasted
     // quota call).
-    async function etsyFetchWithTransientRetry(url, opts = {}, timeoutMs = 90000, label = "request") {
-      const RETRY_STATUSES = [408, 502, 503, 504];
-      const BACKOFF_MS = [2500];
+    // `cfg.noRetry` opts a call OUT of transient retry entirely. Required for any
+    // request that is NOT idempotent — the pricing endpoint rebuilds a listing's
+    // whole variation matrix and draws its price tier at random, so a blind retry
+    // of a request that already landed rewrites the listing at DIFFERENT prices.
+    async function etsyFetchWithTransientRetry(url, opts = {}, timeoutMs = 90000, label = "request", cfg = {}) {
+      const RETRY_STATUSES = cfg.noRetry ? [] : [408, 502, 503, 504];
+      const BACKOFF_MS = cfg.noRetry ? [] : [2500];
       let lastErr = null;
       for (let attempt = 0; attempt <= BACKOFF_MS.length; attempt++) {
         if (attempt > 0) {
@@ -6659,7 +6687,7 @@ https://www.etsy.com/your/shops/me/listing-editor/edit/1822973998
         }
         try {
           const r = await etsyFetchWithTimeout(url, opts, timeoutMs, label);
-          if (!RETRY_STATUSES.includes(r.status) || attempt === BACKOFF_MS.length) return r;
+          if (!RETRY_STATUSES.length || !RETRY_STATUSES.includes(r.status) || attempt === BACKOFF_MS.length) return r;
           lastErr = null; // transient status — loop for another attempt
         } catch (e) {
           lastErr = e; // network drop / timeout — also transient
@@ -7152,6 +7180,145 @@ https://www.etsy.com/your/shops/me/listing-editor/edit/1822973998
             throw quotaErr;
           }
           throw new Error(`Inventory SKU update failed ${inventoryResp.status} — ${detail}`);
+        }
+
+        // --- Stage 4: Pricing (canonical Brites scheme)
+        // The two writes above never touch price: updateListingInventory reads
+        // each offering's existing price and writes the SAME value back, so
+        // without this step the listing would sit at whatever its pre-made
+        // template ID carried, and would not have the new variation options
+        // (10k Solid Gold, Charm Only, engraved Charm Only) at all.
+        //
+        // Server-side on purpose. etsyPricingApplyOne-background shares one
+        // scheme module with the batch runner, so the generator, a manual
+        // console run and a scheduled batch cannot price the same listing
+        // differently. Nothing about the price sheet lives in this file.
+        //
+        // FIRE-AND-POLL. The pricing work runs in a BACKGROUND function (15-min
+        // budget — its proxy chain makes 5-8 Etsy round-trips and can sleep on
+        // 429s, which did not fit the 10-second budget of a synchronous
+        // function). Netlify answers a background call with 202 and NO body, so
+        // the outcome arrives via a Firestore doc keyed by request_id, which we
+        // poll through the tiny synchronous etsyPricingApplyResult endpoint.
+        // The polled result has EXACTLY the shape the old synchronous endpoint
+        // returned, so the handling branches below are unchanged.
+        //
+        // Non-fatal by design: the listing itself is already complete and
+        // correct at this point, and the Pricing Console remains the backstop.
+        // A pricing failure must not fail or retry the whole upload.
+        try {
+          save({ stage: "PRICING", lastActivityAt: Date.now() });
+          updateFirebaseStatus("Applying pricing...", "active");
+          // request_id keys the Firestore result doc. Generated HERE so a
+          // re-run against the same listing can never be answered by a stale
+          // doc from an earlier run.
+          const pricingRequestId = (typeof crypto !== "undefined" && crypto.randomUUID)
+            ? crypto.randomUUID()
+            : (Date.now().toString(36) + "-" + Math.random().toString(36).slice(2, 10));
+          const fireResp = await etsyFetchWithTransientRetry(
+            "/.netlify/functions/etsyPricingApplyOne-background",
+            {
+              method: "POST",
+              headers: { "Content-Type": "application/json", "access-token": token },
+              body: JSON.stringify({
+                listing_id: listingId,
+                request_id: pricingRequestId,
+                queue_id: job.queueId || "",
+                // category is the SECOND signal the endpoint accepts. Without it,
+                // its category fallback was unreachable and a job with no queueId
+                // (anything queued before this feature shipped) could only skip.
+                category: job.category || "",
+                engraving: true
+              })
+            },
+            30000, "Pricing (fire)",
+            // Pricing must NEVER be auto-retried. Netlify 202s a background call
+            // before any work happens, so a transport-level retry could START THE
+            // REBUILD TWICE -- and the price tier is drawn at random per listing,
+            // so the two runs would race to write DIFFERENT prices.
+            { noRetry: true }
+          );
+          // Netlify answers a background invocation with 202 before the handler
+          // runs. Anything else means the function was not accepted at all.
+          if (!fireResp.ok && fireResp.status !== 202) {
+            throw new Error("Pricing background call was not accepted: HTTP " + fireResp.status);
+          }
+
+          // Poll the result doc. Typical completion is 10-30s; the budget covers
+          // a rate-limited worst case. Individual poll failures are ignored --
+          // the NEXT poll will see the doc.
+          updateFirebaseStatus("Pricing (running in background)...", "active");
+          const POLL_EVERY_MS = 3000, POLL_BUDGET_MS = 180000;
+          const pollStart = Date.now();
+          let priceJson = null, pricingUnreportable = false;
+          while (Date.now() - pollStart < POLL_BUDGET_MS) {
+            await new Promise(r => setTimeout(r, POLL_EVERY_MS));
+            let pr = null;
+            try {
+              const pollResp = await etsyFetchWithTimeout(
+                "/.netlify/functions/etsyPricingApplyResult?request_id=" + encodeURIComponent(pricingRequestId) +
+                  "&listing_id=" + encodeURIComponent(listingId) + "&t=" + Date.now(),
+                {}, 10000, "Pricing (poll)"
+              );
+              pr = await pollResp.json().catch(() => null);
+            } catch (_) { /* transient poll failure -- keep polling */ }
+            if (pr && pr.unavailable) { pricingUnreportable = true; break; }
+            if (pr && pr.done) { priceJson = pr.result || {}; break; }
+          }
+          if (!priceJson) {
+            // The background run outlives our poll window (or this site cannot
+            // report results). The pricing may still land -- the run has a
+            // 15-minute budget -- so the message is "check", never "failed".
+            window.__DIAG?.log?.("etsy-pricing-unresolved", { listingId, requestId: pricingRequestId, unreportable: pricingUnreportable });
+            updateFirebaseStatus(pricingUnreportable
+              ? "Pricing ran, result not reportable — check Pricing Console"
+              : "Pricing still running in background — check Pricing Console", "");
+            window.M?.toast?.({ html: pricingUnreportable
+              ? "Pricing ran in the background but this site can't report results — spot-check the listing in the Pricing Console."
+              : ("Pricing for " + listingId + " is still running in the background — check it in the Pricing Console in a minute.") });
+          } else if (priceJson.ok) {
+            const range = (priceJson.min_price != null && priceJson.max_price != null)
+              ? ` $${priceJson.min_price}–$${priceJson.max_price}` : "";
+            window.__DIAG?.log?.("etsy-pricing-applied", { listingId, variants: priceJson.variants, range });
+            updateFirebaseStatus(`Priced: ${priceJson.variants} variants${range}`, "active");
+          } else if (priceJson.skipped) {
+            // Expected for Stud/Hoop/Charm listings — the scheme is
+            // necklace-only. Not an error, just not applicable.
+            window.__DIAG?.log?.("etsy-pricing-skipped", { listingId, reason: priceJson.reason, error: priceJson.error });
+            console.info("Pricing skipped for", listingId, "—", priceJson.error);
+            // Previously console-only, so three of the five queues (Charms, Studs,
+            // Hoops) went live at template prices with nothing visible anywhere.
+            // A job with no queueId — i.e. one queued before this feature shipped —
+            // lands here too, and that one IS worth flagging.
+            const staleJob = !job.queueId;
+            updateFirebaseStatus(
+              staleJob ? "Pricing skipped — queued before pricing existed" : "Pricing not applicable (not a necklace)",
+              ""
+            );
+            if (staleJob) {
+              window.M?.toast?.({ html: "Listing uploaded, but it was queued before automatic pricing existed — run the Pricing Console over it." });
+            }
+          } else {
+            console.warn("Pricing failed for", listingId, "—", priceJson.error || "unknown error",
+                         "(listing is live; run the Pricing Console over it)");
+            window.__DIAG?.log?.("etsy-pricing-failed", { listingId, reason: priceJson.reason, error: priceJson.error, writeLanded: !!priceJson.write_landed });
+            updateFirebaseStatus("Pricing failed — see Pricing Console", "");
+            // write_landed means the PUT reached Etsy but the read-back disagreed:
+            // the listing may be partly repriced, so it needs eyes before a re-run.
+            window.M?.toast?.({ html: priceJson.write_landed
+              ? ("Pricing may have partially applied to " + listingId + " — CHECK it in the Pricing Console before re-running.")
+              : "Listing uploaded, but pricing failed — run the Pricing Console over it." });
+          }
+          // Engraving is attached separately from the price matrix and can fail on
+          // its own (e.g. SHOP_ID unset). It used to report as a clean success.
+          if (priceJson && priceJson.ok && priceJson.personalization && priceJson.personalization.applied === false) {
+            console.warn("Pricing applied but the engraving text box was NOT attached for", listingId,
+                         "—", priceJson.personalization.error);
+            window.M?.toast?.({ html: "Priced, but the engraving box was not attached — check the listing." });
+          }
+        } catch (e) {
+          console.warn("Pricing step failed for", listingId, "—", e && e.message,
+                       "(listing is live; run the Pricing Console over it)");
         }
 
         if (typeof setCreateProgress === "function") setCreateProgress(100);
@@ -10537,7 +10704,11 @@ async function callOpenAI(payload, opts = {}) {
 
       // ---- category inference ----
       function inferCategory() {
-        const q = window.__activeAutomationQueueId;
+        // Only trust the automation's queue while automation is actually running.
+        // Read unconditionally, this shadowed the title heuristics below forever
+        // after the first run — a manually pushed bracelet became a Necklace,
+        // because Bracelets deliberately share the Reg Necklace queue.
+        const q = window.isProcessingSet ? window.__activeAutomationQueueId : null;
         if (q && QUEUE_TO_CATEGORY[q]) return QUEUE_TO_CATEGORY[q];
         const t = ((document.getElementById("listingTitle")?.value || "") + " " +
                    (document.getElementById("listingDescInput")?.value || "")).toLowerCase();
@@ -10670,11 +10841,30 @@ async function callOpenAI(payload, opts = {}) {
 
       // ---- AI: Shopify-specific fields ----
       function stripFences(t) { return String(t || "").replace(/```json|```/g, "").trim(); }
+      // Metal lineup actually offered per Shopify category — mirrors
+      // buildMatrix() in shopifyListingUpload.js. Kept category-accurate on
+      // purpose: the prompt below tells the model "never promise features not
+      // listed", so a generic all-metals list would make it advertise Rose
+      // Gold on a Beady necklace or 10k on a huggie, neither of which exist.
+      function shopifyMetalsFor(category) {
+        const c = String(category || "").toLowerCase();
+        const SS = "Sterling Silver", GF = "14k Gold Filled", RG = "14k Rose Gold Filled",
+              TG = "10k Solid Gold", SG = "14k Solid Gold";
+        if (c.startsWith("beady")) return { metals: [SS, GF, TG, SG], charmOnly: true };
+        if (c.startsWith("hoop") || c.startsWith("huggie")) return { metals: [SS, GF, SG], charmOnly: false };
+        if (c.startsWith("stud")) return { metals: [SS, GF, RG, TG, SG], charmOnly: false };
+        if (c.startsWith("charm")) return { metals: [SS, GF, RG, TG, SG], charmOnly: false };
+        if (c.startsWith("bracelet")) return { metals: [SS, GF, RG, SG], charmOnly: false };
+        return { metals: [SS, GF, RG, TG, SG], charmOnly: true }; // regular necklace
+      }
       async function generateShopifyFields(category) {
         const etsyTitle = (document.getElementById("listingTitle")?.value || "").trim();
         const focal = (document.getElementById("listingDescInput")?.value || "").trim();
         const skp = (document.getElementById("searchKeyPhrases")?.value || "").trim().slice(0, 1200);
         const catHuman = category.replace(/_/g, " ");
+        const __m = shopifyMetalsFor(category);
+        const metalsLine = __m.metals.join(" / ");
+        const charmOnlyLine = __m.charmOnly ? "; also sold as a Charm Only option — the charm without a chain, plain or engraved" : "";
         const prompt = `You are generating fields for a LIVE Shopify product at Brites Jewelry (handmade personalized charm jewelry, britesjewelry.com).
 INPUT CONTEXT:
 - Jewelry category: ${catHuman}
@@ -10687,7 +10877,7 @@ Return STRICT JSON only — no markdown fences, no commentary:
 
 RULES:
 - title: 4-7 words, natural Title Case product name that names the SUBJECT and the jewelry type (e.g. "Dainty Hummingbird Charm Necklace"). No metal names, no lengths, no commas or pipes, no keyword stuffing.
-- description_html: exactly two short <p> paragraphs, then one <ul> with 4 <li> bullets (available metals: Sterling Silver / 14k Gold Filled / 14k Solid Gold; handmade in small batches; personalization or engraving when applicable to a ${catHuman}; arrives gift-ready). Warm and concise. No emojis. Never promise features not listed.
+- description_html: exactly two short <p> paragraphs, then one <ul> with 4 <li> bullets (available metals: ${metalsLine}${charmOnlyLine}; handmade in small batches; personalization or engraving when applicable to a ${catHuman}; arrives gift-ready). Warm and concise. No emojis. Never promise features not listed.
 - tags: 10-14 lowercase tags covering subject, style, occasion, recipient. No metal names.
 - theme_keywords: 3-6 single lowercase words naming the subject/theme (e.g. "dog","animal","pet") used to file the product into store collections.`;
         const payload = {
