@@ -1956,7 +1956,14 @@ ALLOWED MATERIAL TOKENS (Materials segment only)
 - Sterling Silver
 - Gold Filled
 - Rose Gold
+- 10K Solid Gold  (accept "10k" or "10K")
 - 14K Solid Gold  (accept "14k" or "14K")
+- Solid Gold 10K, 14K   (preferred compact form when BOTH solid golds are offered — counts as ONE material item, not two)
+
+SOLID GOLD RULE (CRITICAL)
+- Every necklace, stud and charm listing is offered in BOTH 10K and 14K solid gold, so the Materials segment must say so.
+- Prefer the compact "Solid Gold 10K, 14K" over spelling out both. It reads naturally and costs fewer characters.
+- Never list 14K Solid Gold while omitting 10K — a shopper filtering on 10k will not find the listing.
 
 ACTION/STYLE TOKENS (optional, place BEFORE the Motif; Title Case)
 - Running, Flying, Leaping, Soaring, Howling, Dancing, Blooming
@@ -10865,6 +10872,16 @@ async function callOpenAI(payload, opts = {}) {
         const __m = shopifyMetalsFor(category);
         const metalsLine = __m.metals.join(" / ");
         const charmOnlyLine = __m.charmOnly ? "; also sold as a Charm Only option — the charm without a chain, plain or engraved" : "";
+        // A "Charms" listing sells a CHARM ON ITS OWN — it does not include a
+        // chain and is not a necklace. Without this the model copies the
+        // generic example below and produces "Rabbit Bunny Charm Necklace",
+        // which promises a necklace the buyer never receives. The noun order
+        // matters: "Necklace Charm" = a charm FOR a necklace; "Charm Necklace"
+        // = a necklace. Only the first is true for this category.
+        const isCharmListing = String(category || "").toLowerCase().startsWith("charm");
+        const productNounRule = isCharmListing
+          ? `\n- CRITICAL PRODUCT TYPE: this listing sells a CHARM ONLY. No chain and no necklace is included. The title MUST end with "Necklace Charm", "Charm" or "Charm Pendant" — NEVER "Charm Necklace" or any phrase ending in "Necklace", "Earrings" or "Bracelet", because those name a finished piece this product is not. Correct: "Rabbit Bunny Necklace Charm". Wrong: "Rabbit Bunny Charm Necklace". The charm fits both necklaces and hoop earrings, so do not commit the title to either one.`
+          : "";
         const prompt = `You are generating fields for a LIVE Shopify product at Brites Jewelry (handmade personalized charm jewelry, britesjewelry.com).
 INPUT CONTEXT:
 - Jewelry category: ${catHuman}
@@ -10876,7 +10893,7 @@ Return STRICT JSON only — no markdown fences, no commentary:
 {"title":"...","description_html":"...","tags":["..."],"theme_keywords":["..."]}
 
 RULES:
-- title: 4-7 words, natural Title Case product name that names the SUBJECT and the jewelry type (e.g. "Dainty Hummingbird Charm Necklace"). No metal names, no lengths, no commas or pipes, no keyword stuffing.
+- title: 4-7 words, natural Title Case product name that names the SUBJECT and the jewelry type (e.g. "Dainty Hummingbird Charm Necklace" for a necklace, "Dainty Hummingbird Necklace Charm" for a charm-only listing). No metal names, no lengths, no commas or pipes, no keyword stuffing.${productNounRule}
 - description_html: exactly two short <p> paragraphs, then one <ul> with 4 <li> bullets (available metals: ${metalsLine}${charmOnlyLine}; handmade in small batches; personalization or engraving when applicable to a ${catHuman}; arrives gift-ready). Warm and concise. No emojis. Never promise features not listed.
 - tags: 10-14 lowercase tags covering subject, style, occasion, recipient. No metal names.
 - theme_keywords: 3-6 single lowercase words naming the subject/theme (e.g. "dog","animal","pet") used to file the product into store collections.`;
