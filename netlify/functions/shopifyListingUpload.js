@@ -378,12 +378,28 @@ function buildMatrix(category, tier, baseSku) {
     for (const m of [M.SS, M.GF, M.RG, M.TG, M.SG]) {
       for (const ct of ["Necklace Charm", "Huggie Charm"]) {
         for (const e of ["No", "Yes"]) {
-          if (ct === "Huggie Charm" && e === "Yes") continue;   // not engravable
+          /*  A Huggie Charm cannot be engraved.
+           *
+           *  This combination used to be OMITTED entirely. That is wrong in
+           *  Shopify's model: option VALUES are product-wide, so "Yes" still
+           *  appeared in the Engraving dropdown while a Huggie Charm was
+           *  selected, and a theme that does not disable value combinations
+           *  with no matching variant left it looking purchasable.
+           *
+           *  It is now emitted as a REAL variant that is explicitly out of
+           *  stock (tracked, quantity 0, DENY), which is the shape every theme
+           *  understands: the value renders struck through / "unavailable" and
+           *  cannot be added to cart. Every other variant on the store keeps
+           *  tracked:false + CONTINUE, so nothing else can go out of stock.  */
+          const impossible = (ct === "Huggie Charm" && e === "Yes");
           const col = e === "Yes" ? "Charm + Engrave" : ct;
           v.push({
             options: { [OPT.metal]: m, [OPT.ctype]: ct, [OPT.engrave]: e },
-            price: P.charm[m][col][t],
-            sku: sku(`${MSFX[m]}-${ct === "Necklace Charm" ? "NC" : "HC"}-${e === "Yes" ? "E" : "N"}`)
+            // Price is required by Shopify even for an unbuyable variant; the
+            // plain Huggie price keeps it from ever advertising a lower figure.
+            price: P.charm[m][impossible ? "Huggie Charm" : col][t],
+            sku: sku(`${MSFX[m]}-${ct === "Necklace Charm" ? "NC" : "HC"}-${e === "Yes" ? "E" : "N"}`),
+            ...(impossible ? { unavailable: true } : {})
           });
         }
       }
@@ -773,12 +789,17 @@ async function createShopifyProduct(job) {
       if (valuesByName[n].indexOf(val) < 0) valuesByName[n].push(val);
       return { optionName: n, name: val };
     });
-    const variant = {
-      optionValues: ov,
-      price: String(v.price),
-      inventoryPolicy: "CONTINUE",
-      inventoryItem: { tracked: false }
-    };
+    /*  Normal variants are never out of stock: untracked + CONTINUE.
+     *  A variant flagged `unavailable` is a combination that must not exist
+     *  (currently: Huggie Charm + Engraving Yes). Tracking it with no quantity
+     *  leaves it at 0 on hand, and DENY stops overselling — so the storefront
+     *  shows it as unavailable and the option value greys out, rather than
+     *  looking purchasable because no variant backs it.  */
+    const variant = v.unavailable
+      ? { optionValues: ov, price: String(v.price),
+          inventoryPolicy: "DENY", inventoryItem: { tracked: true } }
+      : { optionValues: ov, price: String(v.price),
+          inventoryPolicy: "CONTINUE", inventoryItem: { tracked: false } };
     if (v.sku) variant.sku = v.sku;
     return variant;
   });
