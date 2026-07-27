@@ -175,52 +175,134 @@ async function gql(query, variables, _attempt) {
   return body.data;
 }
 
-/* ------------------------- PRICING (Pricing_Scheme_v2) ------------------------- */
+/* ------------------------- PRICING (Pricing_Scheme_v2) -------------------------
+ *
+ *  UPDATED — adds two things to match the Etsy scheme:
+ *
+ *  1. 10k Solid Gold, a new metal on Stud Earrings, Regular Necklaces and
+ *     Beady Necklaces. Every 10k price is the corresponding 14k Solid Gold
+ *     price less 15%, rounded to the nearest dollar (the rest of this file's
+ *     tables are whole dollars, so 10k matches that convention). Beady is then
+ *     uplifted 15% on solid gold only, Regular Necklace solid gold 20%, and
+ *     Stud Earring solid gold 15% — 10k tracks 14k through all of them.
+ *     Also on the standalone Charm product type (all three Charm Types), and on
+ *     Bracelets — Bracelets share the Etsy Regular Necklace sheet and therefore
+ *     already offer 10k and Charm Only there, so excluding them here made the same
+ *     product carry different options on the two channels.
+ *     Deliberately NOT added to Huggie/Hoop earrings.
+ *
+ *  2. Charm Only — the chainless variant, added to necklace products only
+ *     (Regular + Beady, not Bracelets). These keep Shopify's EXISTING charm
+ *     economics rather than Etsy's much lower charm pricing: each Charm Only
+ *     row is priced from P.charm[metal]["Necklace Charm"], which is the same
+ *     physical item this variant sells. Beady skips Rose Gold, matching both
+ *     the existing Beady table and the Etsy scheme.
+ *
+ *  Charm Only rows are emitted BOTH plain and engraved (the Etsy scheme gained
+ *  engraved Charm Only options, and this matches them), and on Beady they carry
+ *  Chain Length:"Charm Only-No Chain" — the same string the Etsy pricing console
+ *  uses for the no-chain row.
+ * ------------------------------------------------------------------------- */
+
 // Canonical metal strings — MUST match the catalog exactly.
 const M = {
   SS: "Sterling Silver",
   GF: "14k Gold Filled",
   RG: "14k Rose Gold Filled",
+  TG: "10k Solid Gold",   // NEW — must exist in the catalog before deploying
   SG: "14k Solid Gold"
 };
+
+// Charm Only metal values. Named in Shopify's own vocabulary (not Etsy's
+// "Gold-Charm Only" shorthand) so a single Metal Choice dropdown reads
+// consistently to the shopper.
+const CO = {
+  SS: "Sterling Silver-Charm Only",
+  GF: "14k Gold Filled-Charm Only",
+  RG: "14k Rose Gold Filled-Charm Only",
+  TG: "10k Solid Gold-Charm Only",
+  SG: "14k Solid Gold-Charm Only"
+};
+
 // Option names: "Metal Choice" is the standardized catalog option name.
 const OPT = { metal: "Metal Choice", engrave: "Engraving", length: "Chain Length", size: "Hoop Size", ctype: "Charm Type" };
 
-// Tables indexed [tier-1]. Verbatim from Pricing_Scheme_v2.
+// Chain-length value used for chainless rows on Beady necklaces.
+const NO_CHAIN = "Charm Only-No Chain";
+
+// Tables indexed [tier-1]. Verbatim from Pricing_Scheme_v2, plus 10k.
 const P = {
   stud: { // Material -> [T1,T2,T3]
-    [M.SS]: [45, 48, 51], [M.GF]: [49, 52, 55], [M.RG]: [52, 55, 58], [M.SG]: [201, 216, 231]
+    [M.SS]: [45, 48, 51], [M.GF]: [49, 52, 55], [M.RG]: [52, 55, 58],
+    // Solid gold re-based: 10k takes over the previous 14k figures, and 14k
+    // rises 20% from there. Applied identically to the Etsy STUD_PRICES table
+    // so the two channels stay aligned on studs.
+    [M.TG]: [231, 248, 266],          // was [196, 211, 226]
+    [M.SG]: [277, 298, 319]           // was [231, 248, 266]  (+20%)
   },
-  huggie: { // no Rose Gold; 14K only 11mm
+  huggie: { // no Rose Gold, no 10k; 14K only 11mm
     [M.SS]: [51, 54, 57], [M.GF]: [56, 59, 62], [M.SG]: [307, 330, 353]
   },
   beady: { // [material][engrave? "E":"N"][length] -> [T1,T2,T3]; no Rose Gold; lengths 14/16/18
-    [M.SS]: { N: { 14: [68, 72, 76], 16: [74, 78, 82], 18: [76, 80, 84] },
-              E: { 14: [78, 82, 86], 16: [83, 88, 93], 18: [85, 90, 95] } },
-    [M.GF]: { N: { 14: [76, 80, 84], 16: [82, 87, 92], 18: [84, 89, 94] },
-              E: { 14: [85, 90, 95], 16: [92, 97, 102], 18: [93, 99, 105] } },
-    [M.SG]: { N: { 14: [392, 422, 452], 16: [435, 468, 501], 18: [448, 482, 516] },
-              E: { 14: [411, 442, 473], 16: [454, 488, 522], 18: [467, 502, 537] } }
+    // Chain spread normalised: 14" is the anchor, 16" = +4%, 18" = +8%, so the
+    // smallest-to-largest span is ~8% on every metal and tier (was 9-14.4%).
+    [M.SS]: { N: { 14: [68, 72, 76], 16: [71, 75, 79], 18: [73, 78, 82] },
+              E: { 14: [78, 82, 86], 16: [81, 85, 89], 18: [84, 89, 93] } },
+    [M.GF]: { N: { 14: [76, 80, 84], 16: [79, 83, 87], 18: [82, 86, 91] },
+              E: { 14: [85, 90, 95], 16: [88, 94, 99], 18: [92, 97, 103] } },
+    [M.TG]: { N: { 14: [383, 412, 442], 16: [398, 428, 460], 18: [414, 445, 477] },
+              E: { 14: [402, 432, 462], 16: [418, 449, 480], 18: [434, 467, 499] } },
+    [M.SG]: { N: { 14: [451, 485, 520], 16: [469, 504, 541], 18: [487, 524, 562] },
+              E: { 14: [473, 508, 544], 16: [492, 528, 566], 18: [511, 549, 588] } }
   },
   regular: { // [material][engrave] -> [T1,T2,T3]
-    [M.SS]: { N: [54, 57, 60], E: [64, 67, 70] },
-    [M.GF]: { N: [59, 62, 65], E: [68, 72, 76] },
-    [M.RG]: { N: [62, 65, 68], E: [71, 75, 79] },
-    [M.SG]: { N: [254, 262, 280], E: [273, 282, 301] }
+    // Tier spread normalised: T1 is the anchor, T2 = +4%, T3 = +8%, so the
+    // smallest-to-largest span is ~8% on every metal (was 9.4-11.8%).
+    [M.SS]: { N: [54, 56, 58], E: [64, 67, 69] },
+    [M.GF]: { N: [59, 61, 64], E: [68, 71, 73] },
+    [M.RG]: { N: [62, 64, 67], E: [71, 74, 77] },
+    [M.TG]: { N: [259, 269, 280], E: [279, 290, 301] },
+    [M.SG]: { N: [305, 317, 329], E: [328, 341, 354] }
   },
-  charm: { // [material][charmType] -> [T1,T2,T3]
-    [M.SS]: { "Necklace Charm": [35, 37, 39], "Charm + Engrave": [44, 47, 50], "Huggie Charm": [37, 39, 41] },
-    [M.GF]: { "Necklace Charm": [40, 42, 44], "Charm + Engrave": [49, 52, 55], "Huggie Charm": [43, 45, 47] },
-    [M.RG]: { "Necklace Charm": [40, 42, 44], "Charm + Engrave": [49, 52, 55], "Huggie Charm": [43, 45, 47] },
-    [M.SG]: { "Necklace Charm": [154, 166, 178], "Charm + Engrave": [170, 182, 195], "Huggie Charm": [145, 156, 167] }
+  // Charm columns hold flat premiums off "Necklace Charm". Engraving is a
+  // labour cost, so it is a flat dollar add, not a percentage: +5/+6/+6 on
+  // the filled metals and +10/+11/+11 on the two solid golds (solid gold
+  // engraving is deeper/slower work). Huggie Charm is +2 on silver and +3
+  // on the gold-filleds; solid gold inverts it — its huggie is CHEAPER than
+  // the necklace charm (less metal), so 10k/14k keep their own offsets.
+  charm: { // [material][charmType] -> [T1,T2,T3]  (standalone Charm product type)
+    // Tier spread normalised the same way: T1 anchor, T2 = +4%, T3 = +8%
+    // (was 10.5-15.6%). P_CHARM_ONLY references these arrays, so the chainless
+    // Charm Only variant on both necklace types moves with them.
+    [M.SS]: { "Necklace Charm": [28, 29, 30], "Charm + Engrave": [33, 34, 36], "Huggie Charm": [30, 31, 32] },
+    [M.GF]: { "Necklace Charm": [33, 34, 36], "Charm + Engrave": [38, 40, 41], "Huggie Charm": [36, 37, 39] },
+    [M.RG]: { "Necklace Charm": [35, 36, 38], "Charm + Engrave": [40, 42, 43], "Huggie Charm": [38, 40, 41] },
+    [M.TG]: { "Necklace Charm": [131, 136, 141], "Charm + Engrave": [141, 147, 152], "Huggie Charm": [123, 128, 133] },
+    [M.SG]: { "Necklace Charm": [154, 160, 166], "Charm + Engrave": [164, 171, 177], "Huggie Charm": [145, 151, 157] }
   }
 };
 
-const MSFX = { [M.SS]: "SS", [M.GF]: "GF", [M.RG]: "RG", [M.SG]: "SG" };
+// Charm Only prices for necklace products. Kept on Shopify's existing charm
+// economics — each row references the SAME arrays as the standalone Charm
+// product, so the two can never drift: a charm costs the same whether it is
+// bought on its own or as the chainless option on a necklace. N = plain,
+// E = engraved (the engrave premium is therefore inherited too).
+const P_CHARM_ONLY = {
+  [CO.SS]: { N: P.charm[M.SS]["Necklace Charm"], E: P.charm[M.SS]["Charm + Engrave"] },
+  [CO.GF]: { N: P.charm[M.GF]["Necklace Charm"], E: P.charm[M.GF]["Charm + Engrave"] },
+  [CO.RG]: { N: P.charm[M.RG]["Necklace Charm"], E: P.charm[M.RG]["Charm + Engrave"] },
+  [CO.TG]: { N: P.charm[M.TG]["Necklace Charm"], E: P.charm[M.TG]["Charm + Engrave"] },
+  [CO.SG]: { N: P.charm[M.SG]["Necklace Charm"], E: P.charm[M.SG]["Charm + Engrave"] }
+};
+
+const MSFX = { [M.SS]: "SS", [M.GF]: "GF", [M.RG]: "RG", [M.TG]: "TG", [M.SG]: "SG" };
+// Charm Only SKU suffixes reuse the metal code plus -CO.
+const COSFX = { [CO.SS]: "SS", [CO.GF]: "GF", [CO.RG]: "RG", [CO.TG]: "TG", [CO.SG]: "SG" };
 
 // Category (Listing-Generator folder prefix) -> builder + productType + type tag.
 // Bracelets have no dedicated table in the scheme; documented fallback is the
-// Regular Necklace table (same structure: Metal x Engraving).
+// Regular Necklace table (same structure: Metal x Engraving) — and, as on Etsy,
+// they carry 10k Solid Gold and the Charm Only variants from that same table.
 function buildMatrix(category, tier, baseSku) {
   const t = tier - 1;
   const sku = (s) => (baseSku ? `${baseSku}-${s}` : undefined);
@@ -230,7 +312,7 @@ function buildMatrix(category, tier, baseSku) {
     return {
       productType: "Earrings", typeTag: "be-ptype-earrings",
       optionOrder: [OPT.metal],
-      variants: [M.SS, M.GF, M.RG, M.SG].map(m => ({
+      variants: [M.SS, M.GF, M.RG, M.TG, M.SG].map(m => ({
         options: { [OPT.metal]: m }, price: P.stud[m][t], sku: sku(MSFX[m])
       }))
     };
@@ -247,7 +329,7 @@ function buildMatrix(category, tier, baseSku) {
   }
   if (cat.startsWith("beady")) {
     const v = [];
-    for (const m of [M.SS, M.GF, M.SG]) {
+    for (const m of [M.SS, M.GF, M.TG, M.SG]) {
       for (const e of ["No", "Yes"]) {
         for (const len of [14, 16, 18]) {
           v.push({
@@ -258,11 +340,21 @@ function buildMatrix(category, tier, baseSku) {
         }
       }
     }
+    // Charm Only — chainless, plain and engraved, no Rose (matches Beady).
+    for (const c of [CO.SS, CO.GF, CO.TG, CO.SG]) {
+      for (const e of ["No", "Yes"]) {
+        v.push({
+          options: { [OPT.metal]: c, [OPT.engrave]: e, [OPT.length]: NO_CHAIN },
+          price: P_CHARM_ONLY[c][e === "Yes" ? "E" : "N"][t],
+          sku: sku(`${COSFX[c]}-CO-${e === "Yes" ? "E" : "N"}`)
+        });
+      }
+    }
     return { productType: "Necklace", typeTag: "be-ptype-necklace", optionOrder: [OPT.metal, OPT.engrave, OPT.length], variants: v };
   }
   if (cat.startsWith("charm")) {
     const v = [];
-    for (const m of [M.SS, M.GF, M.RG, M.SG]) {
+    for (const m of [M.SS, M.GF, M.RG, M.TG, M.SG]) {
       for (const ct of ["Necklace Charm", "Charm + Engrave", "Huggie Charm"]) {
         v.push({ options: { [OPT.metal]: m, [OPT.ctype]: ct }, price: P.charm[m][ct][t], sku: sku(`${MSFX[m]}-${ct === "Necklace Charm" ? "NC" : ct === "Charm + Engrave" ? "CE" : "HC"}`) });
       }
@@ -271,10 +363,26 @@ function buildMatrix(category, tier, baseSku) {
   }
   // regular necklace + bracelets (fallback table)
   const isBracelet = cat.startsWith("bracelet");
+  // Bracelets now use the SAME metal set as Regular Necklaces, including 10k.
+  // They already receive 10k and Charm Only on Etsy (they share the Regular
+  // Necklace queue and therefore the Regular sheet), so restricting them here
+  // meant one product with two different option sets across the two channels.
+  const metals = [M.SS, M.GF, M.RG, M.TG, M.SG];
   const v = [];
-  for (const m of [M.SS, M.GF, M.RG, M.SG]) {
+  for (const m of metals) {
     for (const e of ["No", "Yes"]) {
       v.push({ options: { [OPT.metal]: m, [OPT.engrave]: e }, price: P.regular[m][e === "Yes" ? "E" : "N"][t], sku: sku(`${MSFX[m]}-${e === "Yes" ? "E" : "N"}`) });
+    }
+  }
+  // Charm Only — chainless, plain and engraved, all five metals. Applied to
+  // Bracelets as well, matching Etsy.
+  for (const c of [CO.SS, CO.GF, CO.RG, CO.TG, CO.SG]) {
+    for (const e of ["No", "Yes"]) {
+      v.push({
+        options: { [OPT.metal]: c, [OPT.engrave]: e },
+        price: P_CHARM_ONLY[c][e === "Yes" ? "E" : "N"][t],
+        sku: sku(`${COSFX[c]}-CO-${e === "Yes" ? "E" : "N"}`)
+      });
     }
   }
   return {

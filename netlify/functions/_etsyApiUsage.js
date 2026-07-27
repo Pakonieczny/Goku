@@ -113,6 +113,10 @@ const COLL = "EtsyApi_Config";
 const DOC_ID = "usage";
 const HISTORY_PREFIX = "usageHistory_";
 
+// Mirrored per-day doc that etsyApiUsage.js reads for the Index.html widget.
+// Must match USAGE_COLLECTION in etsyRateLimiter.js.
+const LEGACY_USAGE_COLLECTION = process.env.ETSY_USAGE_COLLECTION || "EtsyApi_Usage";
+
 // Policy: this system may consume at most 50% of Etsy's per-key quota so
 // the remainder stays available to the other apps sharing the key.
 const ETSY_DAILY_LIMIT_DEFAULT = 5000;
@@ -226,6 +230,35 @@ async function _flush() {
         else if (!data.qps || data.qps.day !== day) patch.qps = { max: storedQps, day };
 
         tx.set(ref, patch, { merge: true });
+
+        /*  LEGACY MIRROR — etsyApiUsage.js (the widget endpoint) reads a
+         *  per-day document at USAGE_COLLECTION/<torontoDayKey> with a flat
+         *  shape. Writing it here means one batched Firestore round-trip
+         *  serves both the new store above and the widget, and the widget
+         *  cannot drift from the real counter. Same transaction, so it is
+         *  atomic with the write above; failures are swallowed by the
+         *  surrounding catch exactly as before. */
+        try {
+          const legacyTotal = Object.values(apps)
+            .reduce((n, a) => n + Number((a && a.count) || 0), 0);
+          const legacySince = Object.values(apps)
+            .reduce((m, a) => {
+              const v = Number((a && a.since) || 0);
+              return v && (!m || v < m) ? v : m;
+            }, 0) || now;
+          const legacy = {
+            count: legacyTotal,
+            count_since: legacySince,
+            updated_at: now,
+            max_qps: (patch.qps && Number(patch.qps.max)) || 0,
+          };
+          if (headers) {
+            if (headers.limit_per_day != null) legacy.etsy_limit_per_day = Number(headers.limit_per_day);
+            if (headers.remaining_today != null) legacy.etsy_remaining_today = Number(headers.remaining_today);
+            if (headers.reported_at != null) legacy.etsy_reported_at = Number(headers.reported_at);
+          }
+          tx.set(db.collection(LEGACY_USAGE_COLLECTION).doc(day), legacy, { merge: true });
+        } catch (_) { /* mirror is best-effort; never fails the main write */ }
       });
     } catch (_) {
       // Swallow: metering must never surface as an API failure.

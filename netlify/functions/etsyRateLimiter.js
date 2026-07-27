@@ -204,4 +204,54 @@ async function etsyFetch(url, init = {}, opts = {}) {
   }
 }
 
-module.exports = { etsyFetch, takeToken };
+/*  ═══ BACKWARD-COMPATIBILITY EXPORTS ═══════════════════════════════════
+ *
+ *  REGRESSION FIX. This site's original etsyRateLimiter.js exported FIVE
+ *  things. The version that replaced it (copied from the Etsy Pricing Console,
+ *  which has a different API surface) exported only two, so etsyApiUsage.js —
+ *  which does
+ *
+ *      const { torontoDayKey, USAGE_COLLECTION, DAILY_BUDGET, RATE_PER_SEC }
+ *        = require("./etsyRateLimiter");
+ *
+ *  — got `undefined` for all four. torontoDayKey() then threw on the first
+ *  line of the handler, the endpoint returned 500, and the API-usage widget
+ *  showed "Unavailable / — QPS". Nothing else was affected: the other twelve
+ *  consumers only need etsyFetch, which never went missing.
+ *
+ *  All four are restored below, and the metering path now ALSO mirrors its
+ *  per-day totals into USAGE_COLLECTION in the exact shape etsyApiUsage.js
+ *  reads, so the widget has data to display again.
+ */
+
+// Toronto day key, e.g. "2026-07-27". Matches the "resets 11:59 PM Toronto"
+// wording the widget shows the operator.
+const _DAY_FMT = new Intl.DateTimeFormat("en-CA", {
+  timeZone: "America/Toronto", year: "numeric", month: "2-digit", day: "2-digit",
+});
+function torontoDayKey(d = new Date()) { return _DAY_FMT.format(d); }
+
+/*  The Firestore collection etsyApiUsage.js reads its per-day counters from.
+ *
+ *  ⚠ IF YOU KNOW THE NAME YOUR ORIGINAL FILE USED, SET IT — either by editing
+ *  the default below or via the ETSY_USAGE_COLLECTION env var. The name could
+ *  not be recovered from the deployed bundle, so this default starts a FRESH
+ *  daily counter; any figures already banked under the old name are not lost,
+ *  just not read. Etsy's own key figures (limit/remaining) come from live
+ *  response headers, so those are correct immediately either way.
+ */
+const USAGE_COLLECTION = process.env.ETSY_USAGE_COLLECTION || "EtsyApi_Usage";
+
+// The app's own daily call budget, and the per-second cap. RATE_PER_SEC is the
+// same constant the limiter enforces above, so the widget cannot drift from
+// actual behaviour.
+const DAILY_BUDGET = Number(process.env.ETSY_APP_DAILY_BUDGET || 2500);
+
+module.exports = {
+  etsyFetch,
+  takeToken,
+  torontoDayKey,
+  USAGE_COLLECTION,
+  DAILY_BUDGET,
+  RATE_PER_SEC,
+};
