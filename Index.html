@@ -3662,7 +3662,7 @@ ANTI-REPETITION (TITLE)
                       count: 0,
                       isManual: false
                   });
-                  localStorage.setItem("etsyUploadHistory", JSON.stringify(history));
+                  lsSetItemSafe("etsyUploadHistory", JSON.stringify(history));
                   
               } else {
                   this.classList.remove("running", "green", "darken-2");
@@ -6290,6 +6290,183 @@ https://www.etsy.com/your/shops/me/listing-editor/edit/1822973998
     //   etsyJob:<jobId>               -> JSON meta for a single job
     //   <jobId>_p0_c0 / <jobId>_p0_n  -> chunked photo dataURL storage (see helpers)
     //
+    // ---- localStorage garbage collection + quota-safe writes ----------------
+    // BUG FIXED HERE (QuotaExceededError on `etsyJob:<id>`):
+    // Job image bytes were already going to IndexedDB, so the job RECORD is
+    // only ~8-12 KB. The failure was not one big write — it was that job
+    // records were NEVER deleted. dequeueAndCleanupJob() spliced the id out of
+    // `etsyUploadJobs` and freed the IDB blobs, but left `etsyJob:<id>` in
+    // localStorage forever. At ~70 listings/day that is ~700 KB/day of
+    // permanent accumulation against a ~5 MB origin quota, so after a few
+    // weeks even a small write throws — and because the throw happened during
+    // enqueue, the scanner re-found the same ready set and retried it in an
+    // endless loop.
+    //
+    // Two defences:
+    //   pruneEtsyStorage()  — drops job records that are neither queued nor
+    //                         recent, orphaned photo chunks from the old
+    //                         chunked-LS era, and over-long upload history.
+    //   lsSetItemSafe()     — on QuotaExceededError, prunes and retries, then
+    //                         prunes harder and retries once more. Any future
+    //                         leak self-heals instead of wedging the pipeline.
+    const ETSY_JOB_RETENTION = 20;   // completed job records kept for status lookups
+    const ETSY_HISTORY_MAX   = 200;  // upload-history entries kept
+
+    function _lsBytes(key, val) { return ((key || "").length + (val || "").length) * 2; }
+
+    // Reports total localStorage use and the biggest consumers. Also exposed
+    // as window.etsyStorageReport() for console use.
+    function etsyStorageReport(topN = 15) {
+      const rows = [];
+      let total = 0;
+      for (let i = 0; i < localStorage.length; i++) {
+        const k = localStorage.key(i);
+        const b = _lsBytes(k, localStorage.getItem(k));
+        total += b;
+        rows.push({ key: k, bytes: b });
+      }
+      rows.sort((a, b) => b.bytes - a.bytes);
+      const jobKeys = rows.filter(r => r.key.startsWith("etsyJob:"));
+      return {
+        totalMB: +(total / 1048576).toFixed(2),
+        keys: rows.length,
+        jobRecords: jobKeys.length,
+        jobRecordsMB: +(jobKeys.reduce((a, r) => a + r.bytes, 0) / 1048576).toFixed(2),
+        top: rows.slice(0, topN).map(r => ({ key: r.key, KB: +(r.bytes / 1024).toFixed(1) }))
+      };
+    }
+    window.etsyStorageReport = etsyStorageReport;
+
+    // Removes storage that is safe to lose. `aggressive` also drops the
+    // retention window (used as a second attempt after a quota failure).
+    function pruneEtsyStorage({ aggressive = false } = {}) {
+      let freed = 0;
+      const removed = { jobs: 0, chunks: 0, history: 0 };
+      try {
+        const active = new Set(JSON.parse(localStorage.getItem("etsyUploadJobs") || "[]"));
+
+        // Collect every job record with its embedded creation timestamp.
+        const jobs = [];
+        for (let i = 0; i < localStorage.length; i++) {
+          const k = localStorage.key(i);
+          if (!k || !k.startsWith("etsyJob:")) continue;
+          const id = k.slice("etsyJob:".length);
+          const m = id.match(/^etsyJob_(\d+)_/);
+          jobs.push({ key: k, id, ts: m ? Number(m[1]) : 0 });
+        }
+        jobs.sort((a, b) => b.ts - a.ts);
+
+        const keep = new Set();
+        for (const j of jobs) if (active.has(j.id)) keep.add(j.key);
+        if (!aggressive) {
+          let kept = 0;
+          for (const j of jobs) {
+            if (keep.has(j.key)) continue;
+            if (kept++ < ETSY_JOB_RETENTION) keep.add(j.key);
+          }
+        }
+        for (const j of jobs) {
+          if (keep.has(j.key)) continue;
+          freed += _lsBytes(j.key, localStorage.getItem(j.key));
+          localStorage.removeItem(j.key);
+          removed.jobs++;
+        }
+
+        // Orphaned image chunks from the pre-IndexedDB chunked-LS path.
+        // Shape: etsyJob_<ts>_<rand>_p3_c0 / _p3_n / _rp1_c2 ...
+        const liveIds = new Set([...active, ...jobs.filter(j => keep.has(j.key)).map(j => j.id)]);
+        const orphanChunks = [];
+        for (let i = 0; i < localStorage.length; i++) {
+          const k = localStorage.key(i);
+          const m = k && k.match(/^(etsyJob_\d+_[a-z0-9]+)_(?:r?p)\d+_(?:c\d+|n)$/i);
+          if (m && !liveIds.has(m[1])) orphanChunks.push(k);
+        }
+        for (const k of orphanChunks) {
+          freed += _lsBytes(k, localStorage.getItem(k));
+          localStorage.removeItem(k);
+          removed.chunks++;
+        }
+
+        // Upload history grew without bound. Trimming it naively would shrink
+        // the lifetime "Uploads: N" total, since updateUploadCounterUI() sums
+        // session.count across every entry. So the dropped sessions are
+        // COLLAPSED into a single archive entry that carries their summed
+        // count: storage stays bounded and the lifetime total stays exact.
+        try {
+          const hist = JSON.parse(localStorage.getItem("etsyUploadHistory") || "[]");
+          if (Array.isArray(hist) && hist.length > ETSY_HISTORY_MAX) {
+            const before = _lsBytes("etsyUploadHistory", localStorage.getItem("etsyUploadHistory"));
+            const drop = hist.slice(0, hist.length - ETSY_HISTORY_MAX);
+            const keepTail = hist.slice(-ETSY_HISTORY_MAX);
+            const archivedCount = drop.reduce((sum, e) => sum + (Number(e && e.count) || 0), 0);
+            const archivedSessions = drop.reduce((n, e) => n + (e && e.archived ? (Number(e.sessions) || 0) : 1), 0);
+            const archive = {
+              id: "archived",
+              archived: true,
+              sessions: archivedSessions,
+              startTime: `${archivedSessions} earlier session(s)`,
+              count: archivedCount,
+              isManual: false
+            };
+            const merged = archivedCount || archivedSessions ? [archive, ...keepTail] : keepTail;
+            localStorage.setItem("etsyUploadHistory", JSON.stringify(merged));
+            freed += before - _lsBytes("etsyUploadHistory", localStorage.getItem("etsyUploadHistory"));
+            removed.history = hist.length - merged.length;
+          }
+        } catch (_) {}
+      } catch (e) {
+        console.warn("pruneEtsyStorage failed:", e);
+      }
+      if (removed.jobs || removed.chunks || removed.history) {
+        console.log(`[storage] pruned ${removed.jobs} job record(s), ${removed.chunks} orphan chunk(s), ${removed.history} history entr(ies) — freed ${(freed / 1024).toFixed(0)} KB`);
+        try { window.__DIAG?.log?.("storage-prune", { ...removed, freedKB: Math.round(freed / 1024), aggressive }); } catch (_) {}
+      }
+      return freed;
+    }
+    window.pruneEtsyStorage = pruneEtsyStorage;
+
+    function _isQuotaError(e) {
+      return !!e && (e.name === "QuotaExceededError" ||
+                     e.name === "NS_ERROR_DOM_QUOTA_REACHED" ||
+                     e.code === 22 || e.code === 1014);
+    }
+
+    // Use for any write that must not fail. Falls back to pruning and retrying
+    // rather than letting a full store break the pipeline.
+    function lsSetItemSafe(key, value) {
+      try {
+        localStorage.setItem(key, value);
+        return true;
+      } catch (e) {
+        if (!_isQuotaError(e)) throw e;
+      }
+      pruneEtsyStorage();
+      try {
+        localStorage.setItem(key, value);
+        console.warn(`[storage] quota hit writing ${key}; recovered after pruning.`);
+        return true;
+      } catch (e) {
+        if (!_isQuotaError(e)) throw e;
+      }
+      pruneEtsyStorage({ aggressive: true });
+      try {
+        localStorage.setItem(key, value);
+        console.warn(`[storage] quota hit writing ${key}; recovered after aggressive pruning.`);
+        return true;
+      } catch (e) {
+        if (!_isQuotaError(e)) throw e;
+        const rep = etsyStorageReport(5);
+        console.error("[storage] localStorage is full and pruning could not free enough space.", rep);
+        try { window.__DIAG?.log?.("storage-full", rep); } catch (_) {}
+        throw new Error(
+          `Browser storage is full (${rep.totalMB} MB used across ${rep.keys} keys). ` +
+          `Largest: ${rep.top.map(t => `${t.key} ${t.KB}KB`).join(", ")}. ` +
+          `Run window.etsyStorageReport() for the full picture.`
+        );
+      }
+    }
+    window.lsSetItemSafe = lsSetItemSafe;
+
     // ---- Chunked LS helpers (store large data URLs safely) ----
     const LS_CHUNK_SIZE = 480 * 1024; // ~480KB per chunk
     function lsSaveLarge(baseKey, str) {
@@ -6636,10 +6813,13 @@ https://www.etsy.com/your/shops/me/listing-editor/edit/1822973998
         mains: photoNames.map((n, i) => ({ i: i + 1, name: n, alt: (photoMeta[i] || "").slice(0, 40) })),
         reserved: reservedNames.map((n, i) => ({ i: 9 + i, name: n, alt: (reservedMeta[i] || "").slice(0, 40) }))
       });
-      localStorage.setItem(`etsyJob:${jobId}`, JSON.stringify(job));
+      // Prune before the write so a long-running session cannot creep back
+      // up to the quota, then write through the self-healing setter.
+      pruneEtsyStorage();
+      lsSetItemSafe(`etsyJob:${jobId}`, JSON.stringify(job));
       const queue = JSON.parse(localStorage.getItem("etsyUploadJobs") || "[]");
       queue.push(jobId);
-      localStorage.setItem("etsyUploadJobs", JSON.stringify(queue));
+      lsSetItemSafe("etsyUploadJobs", JSON.stringify(queue));
       return jobId;
     }
 
@@ -6734,7 +6914,7 @@ https://www.etsy.com/your/shops/me/listing-editor/edit/1822973998
       if (!job) return;
       const save = (patch) => {
         job = { ...job, ...patch };
-        localStorage.setItem(`etsyJob:${jobId}`, JSON.stringify(job));
+        lsSetItemSafe(`etsyJob:${jobId}`, JSON.stringify(job));
         // Outcome mirror: the automation verifies DONE/FAILED here before it
         // consumes a folder or an Etsy ID (jobs are attempted exactly once,
         // so a dropped failure must not silently eat the set + ID).
@@ -7388,6 +7568,9 @@ https://www.etsy.com/your/shops/me/listing-editor/edit/1822973998
           }
         }
       } catch {}
+      // Job records used to accumulate here forever. Prune on every
+      // completion so the store stays bounded during long Auto runs.
+      try { pruneEtsyStorage(); } catch (_) {}
     }
 
     async function processEtsyJobs() {
@@ -9575,7 +9758,7 @@ https://www.etsy.com/your/shops/me/listing-editor/edit/1822973998
               const job = JSON.parse(localStorage.getItem(key) || "null");
               if (job && job.accessToken !== window.accessToken) {
                 job.accessToken = window.accessToken;
-                localStorage.setItem(key, JSON.stringify(job));
+                lsSetItemSafe(key, JSON.stringify(job));
               }
             }
           } catch {}
@@ -9630,7 +9813,7 @@ https://www.etsy.com/your/shops/me/listing-editor/edit/1822973998
             const job = JSON.parse(localStorage.getItem(key) || "null");
             if (job && job.accessToken !== window.accessToken) {
               job.accessToken = window.accessToken;
-              localStorage.setItem(key, JSON.stringify(job));
+              lsSetItemSafe(key, JSON.stringify(job));
             }
           }
         } catch {}
@@ -10011,7 +10194,7 @@ async function callOpenAI(payload, opts = {}) {
             currentSession.count++;
         }
         
-        localStorage.setItem("etsyUploadHistory", JSON.stringify(history));
+        lsSetItemSafe("etsyUploadHistory", JSON.stringify(history));
         updateUploadCounterUI();
     }
 
