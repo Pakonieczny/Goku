@@ -1543,6 +1543,27 @@
     .dmodal__live{font-family:var(--mono); font-size:10.5px; color:var(--ink45); display:flex; align-items:center; gap:6px}
     .dmodal__live::before{content:""; width:6px; height:6px; border-radius:50%; background:var(--sage); animation:dscopePulse 2s ease-in-out infinite}
     @keyframes dscopePulse{0%,100%{opacity:1}50%{opacity:.3}}
+    /* batch-size chooser (Start Auto modal) */
+    .dbatch{border-top:1px solid var(--line2); padding:14px 18px 4px}
+    .dbatch__lab{font-size:9px; letter-spacing:.1em; text-transform:uppercase; color:var(--ink45); font-weight:700; margin-bottom:9px}
+    .dbatch__row{display:flex; align-items:center; gap:8px; flex-wrap:wrap}
+    .dbatch__chip{font-family:var(--mono); font-size:12px; padding:7px 13px; border-radius:9px; cursor:pointer;
+      border:1px solid var(--line2); background:var(--card2); color:var(--ink70); font-weight:600; transition:.12s}
+    .dbatch__chip:hover{border-color:var(--gold2); color:var(--ink)}
+    .dbatch__chip.sel{background:var(--gold2); border-color:var(--gold2); color:#fff}
+    .dbatch__custom{display:flex; align-items:center; gap:7px; margin-left:4px}
+    .dbatch__custom input{width:74px; height:34px; box-sizing:border-box; font-family:var(--mono); font-size:12px; text-align:center;
+      border:1px solid var(--line2); border-radius:9px; background:var(--card2); color:var(--ink); padding:0 8px; margin:0}
+    .dbatch__custom input:focus{border-color:var(--gold2); outline:none; box-shadow:none}
+    .dbatch__custom input.sel{border-color:var(--gold2)}
+    .dbatch__hint{font-size:10.5px; color:var(--ink45); margin-top:9px; min-height:14px}
+    .dbatch__hint b{color:var(--gold2); font-family:var(--mono); font-weight:700}
+    /* rail batch progress */
+    .dr-batch{display:flex; align-items:center; gap:7px; margin-top:7px; font-size:10.5px; color:#8c8476; font-weight:600}
+    .dr-batch .lab{letter-spacing:.1em; text-transform:uppercase; font-size:9px}
+    .dr-batch .val{font-family:var(--mono); color:var(--gold2)}
+    .dr-batch .trk{flex:1 1 auto; height:3px; border-radius:2px; background:var(--velvetLine); overflow:hidden; min-width:24px}
+    .dr-batch .fil{height:100%; width:0%; background:var(--gold2); transition:width .3s ease}
     /* option rows */
     .dscope{display:flex; align-items:center; gap:13px; width:100%; text-align:left; cursor:pointer;
       background:var(--card); border:1.5px solid var(--line); border-radius:11px; padding:12px 15px;
@@ -3468,6 +3489,42 @@ ANTI-REPETITION (TITLE)
       let scrim = null, listEl = null, confirmBtn = null, tick = null;
       let pending = null;      // { resolve } for the open() promise
       let choice = null;       // queueId | null (= all)
+      let batch = 0;           // 0 = All (run until the source is drained)
+      let batchRow = null, batchInput = null, batchHint = null;
+      const BATCH_MAX = 100;
+
+      // Normalises anything the operator can produce into 0 (=All) or 1..100.
+      function normBatch(v) {
+        const n = Math.floor(Number(v));
+        if (!Number.isFinite(n) || n <= 0) return 0;
+        return Math.min(BATCH_MAX, n);
+      }
+
+      function paintBatch() {
+        if (!batchRow) return;
+        const presets = Array.from(batchRow.querySelectorAll(".dbatch__chip"));
+        const isPreset = presets.some(b => Number(b.dataset.batch) === batch);
+        presets.forEach(b => b.classList.toggle("sel", Number(b.dataset.batch) === batch));
+        if (batchInput) {
+          batchInput.classList.toggle("sel", !isPreset && batch > 0);
+          const shown = (!isPreset && batch > 0) ? String(batch) : "";
+          if (document.activeElement !== batchInput && batchInput.value !== shown) batchInput.value = shown;
+        }
+        if (batchHint) {
+          const t = totals();
+          const runnable = choice ? (() => { const c = counts(choice); return Math.min(c.folders, c.ids); })()
+                                  : Math.min(t.folders, t.ids);
+          if (batch === 0) {
+            batchHint.innerHTML = `Runs until the source is drained — <b>${runnable}</b> listing${runnable === 1 ? "" : "s"} can run right now.`;
+          } else if (runnable === 0) {
+            batchHint.innerHTML = `Stops after <b>${batch}</b> listing${batch === 1 ? "" : "s"} — nothing is ready to run yet.`;
+          } else if (batch > runnable) {
+            batchHint.innerHTML = `Stops after <b>${batch}</b>, but only <b>${runnable}</b> can run right now — the rest need more folders or Listing IDs.`;
+          } else {
+            batchHint.innerHTML = `Auto-pilot stops itself after <b>${batch}</b> completed listing${batch === 1 ? "" : "s"}.`;
+          }
+        }
+      }
 
       const counts = (queueId) => {
         const fEl = document.getElementById("fb_count_" + queueId);
@@ -3496,6 +3553,21 @@ ANTI-REPETITION (TITLE)
               <p>Pick which section this run pulls its sets from. A section needs both ready folders and Listing IDs to run.</p>
             </div>
             <div class="dmodal__body" id="dScopeList"></div>
+            <div class="dbatch">
+              <div class="dbatch__lab">How many listings in this run?</div>
+              <div class="dbatch__row" id="dBatchRow">
+                <button type="button" class="dbatch__chip" data-batch="5">5</button>
+                <button type="button" class="dbatch__chip" data-batch="10">10</button>
+                <button type="button" class="dbatch__chip" data-batch="25">25</button>
+                <button type="button" class="dbatch__chip" data-batch="50">50</button>
+                <button type="button" class="dbatch__chip" data-batch="0">All</button>
+                <span class="dbatch__custom">
+                  <input id="dBatchCustom" type="number" min="1" max="100" step="1" placeholder="1-100"
+                         inputmode="numeric" aria-label="Custom number of listings, maximum 100">
+                </span>
+              </div>
+              <div class="dbatch__hint" id="dBatchHint"></div>
+            </div>
             <div class="dmodal__foot">
               <span class="dmodal__live">live</span>
               <span class="dspacer"></span>
@@ -3505,6 +3577,35 @@ ANTI-REPETITION (TITLE)
           </div>`;
         document.body.appendChild(scrim);
         listEl = scrim.querySelector("#dScopeList");
+        batchRow = scrim.querySelector("#dBatchRow");
+        batchInput = scrim.querySelector("#dBatchCustom");
+        batchHint = scrim.querySelector("#dBatchHint");
+        if (batchRow) {
+          batchRow.addEventListener("click", (e) => {
+            const b = e.target.closest(".dbatch__chip");
+            if (!b) return;
+            batch = normBatch(b.dataset.batch);
+            if (batchInput) batchInput.value = "";
+            paintBatch();
+          });
+        }
+        if (batchInput) {
+          const readCustom = () => {
+            const raw = batchInput.value.trim();
+            if (raw === "") { batch = 0; paintBatch(); return; }
+            let n = normBatch(raw);
+            if (n === 0) n = 1;                       // typed 0 or junk -> 1
+            if (Number(raw) > BATCH_MAX) batchInput.value = String(BATCH_MAX);
+            batch = n;
+            paintBatch();
+          };
+          batchInput.addEventListener("input", readCustom);
+          batchInput.addEventListener("change", readCustom);
+          // Enter in the number field confirms, matching the primary button.
+          batchInput.addEventListener("keydown", (e) => {
+            if (e.key === "Enter" && confirmBtn && !confirmBtn.disabled) { e.preventDefault(); close(true); }
+          });
+        }
         confirmBtn = scrim.querySelector("#dScopeConfirm");
         scrim.querySelector("#dScopeCancel").addEventListener("click", () => close(false));
         confirmBtn.addEventListener("click", () => close(true));
@@ -3571,6 +3672,7 @@ ANTI-REPETITION (TITLE)
           if (c.folders === 0 || c.ids === 0) { choice = null; paint(); return; }
         }
         if (confirmBtn) confirmBtn.disabled = allBlocked;
+        paintBatch();
       }
 
       function close(confirmed) {
@@ -3580,9 +3682,17 @@ ANTI-REPETITION (TITLE)
         if (!p) return;
         if (!confirmed) { p.resolve(null); return; }
         window.__autoScope = choice;
-        try { localStorage.setItem("autoScope", choice || ""); } catch (_) {}
+        // Batch limit: 0/null = unlimited (legacy behaviour). Setting it here
+        // also RESETS the counter, so every Start Auto begins a fresh batch.
+        window.__autoBatchLimit = batch > 0 ? batch : null;
+        window.__autoBatchDone = 0;
+        try {
+          localStorage.setItem("autoScope", choice || "");
+          localStorage.setItem("autoBatchSize", String(batch || 0));
+        } catch (_) {}
         if (typeof window.updateRailScope === "function") window.updateRailScope();
-        p.resolve({ scope: choice });
+        if (typeof window.updateRailBatch === "function") window.updateRailBatch();
+        p.resolve({ scope: choice, batch: window.__autoBatchLimit });
       }
 
       // Resolves { scope } on confirm, or null if cancelled/dismissed.
@@ -3607,6 +3717,10 @@ ANTI-REPETITION (TITLE)
           const c = counts(pre);
           choice = (c.folders > 0 && c.ids > 0) ? pre : null;
         } else { choice = null; }
+        // Pre-select the last batch size (like the scope, it is a preference,
+        // and like the scope it is still always confirmed explicitly).
+        try { batch = normBatch(localStorage.getItem("autoBatchSize") || 0); } catch (_) { batch = 0; }
+        if (batchInput) batchInput.value = "";
         paint();
         scrim.classList.add("open");
         if (tick) clearInterval(tick);
@@ -3623,6 +3737,63 @@ ANTI-REPETITION (TITLE)
     window.updateRailScope = function updateRailScope() {
       const el = document.getElementById("railScopeVal");
       if (el) el.textContent = window.scopeLabel(window.__autoScope);
+    };
+
+    // ---- Batch limit -------------------------------------------------------
+    // null = unlimited (the legacy behaviour: run until the source drains).
+    // A number = stop auto-pilot after that many COMPLETED listings.
+    //
+    // "Completed" deliberately means a set that finished its sequence and was
+    // archived — the same event the Done status reports. Failed sets are NOT
+    // counted, because they keep their folder and their Listing ID for a retry
+    // and nothing was published; counting them would let a run of failures burn
+    // through the batch without producing listings. Failures still stop the run
+    // by their own existing paths (2 strikes = skip, quota = halt).
+    window.__autoBatchLimit = null;
+    window.__autoBatchDone = 0;
+
+    window.updateRailBatch = function updateRailBatch() {
+      const wrap = document.getElementById("railBatch");
+      const val = document.getElementById("railBatchVal");
+      const fill = document.getElementById("railBatchFill");
+      if (!wrap) return;
+      const lim = window.__autoBatchLimit;
+      if (!lim) { wrap.style.display = "none"; return; }
+      wrap.style.display = "flex";
+      const done = Math.min(Number(window.__autoBatchDone) || 0, lim);
+      if (val) val.textContent = `${done} / ${lim}`;
+      if (fill) fill.style.width = `${Math.round((done / lim) * 100)}%`;
+    };
+
+    // Called once per successfully completed listing. Returns true when the
+    // batch is now full, so the caller can stop the pilot.
+    window.noteBatchListingDone = function noteBatchListingDone(setName) {
+      window.__autoBatchDone = (Number(window.__autoBatchDone) || 0) + 1;
+      if (typeof window.updateRailBatch === "function") window.updateRailBatch();
+      const lim = window.__autoBatchLimit;
+      if (!lim) return false;
+      if (window.__autoBatchDone < lim) {
+        updateFirebaseStatus(`Done: ${setName} — ${window.__autoBatchDone}/${lim} in this batch`, "active");
+        return false;
+      }
+      return true;
+    };
+
+    // Stops auto-pilot exactly the way the Stop Auto button does, so the
+    // button label, styling and status all stay consistent. Deliberately does
+    // NOT touch a set already in flight — the daemon finishes it.
+    window.stopAutoForBatchComplete = function stopAutoForBatchComplete() {
+      const lim = window.__autoBatchLimit || 0;
+      window.autoProcessingEnabled = false;
+      const btn = document.getElementById("toggleAuto");
+      if (btn) {
+        btn.textContent = "Start Auto";
+        btn.classList.remove("running", "green", "darken-2");
+        btn.classList.add("stopped", "red", "darken-1");
+      }
+      updateFirebaseStatus(`Batch complete — ${lim} listing${lim === 1 ? "" : "s"} done. Auto stopped.`, "");
+      window.M?.toast?.({ html: `Batch complete: ${lim} listing${lim === 1 ? "" : "s"} published. Auto-pilot stopped.` });
+      try { window.__DIAG?.log?.("batch-complete", { limit: lim }); } catch (_) {}
     };
 
     document.getElementById("toggleAuto").addEventListener("click", async function() {
@@ -3651,7 +3822,9 @@ ANTI-REPETITION (TITLE)
                   this.classList.remove("stopped", "red", "darken-1");
                   this.classList.add("running", "green", "darken-2");
                   updateFirebaseStatus("Auto Started", "active");
-                  M.toast({ html: `Auto started — source: ${window.scopeLabel(window.__autoScope)}` });
+                  M.toast({ html: `Auto started — source: ${window.scopeLabel(window.__autoScope)}` +
+                    (window.__autoBatchLimit ? ` · batch of ${window.__autoBatchLimit}` : " · until drained") });
+                  if (typeof window.updateRailBatch === "function") window.updateRailBatch();
                   if (typeof window.updateRailScope === "function") window.updateRailScope();
                   
                   // --- NEW: Log new Auto session ---
@@ -3667,6 +3840,10 @@ ANTI-REPETITION (TITLE)
               } else {
                   this.classList.remove("running", "green", "darken-2");
                   this.classList.add("stopped", "red", "darken-1");
+                  // A manual stop ends the batch too; the next Start Auto
+                  // prompts for a fresh size and resets the counter.
+                  window.__autoBatchDone = 0;
+                  if (typeof window.updateRailBatch === "function") window.updateRailBatch();
                   if(window.isProcessingSet) {
                        updateFirebaseStatus("Pausing after set...", "working");
                   } else {
@@ -4022,7 +4199,10 @@ ANTI-REPETITION (TITLE)
         }
         
         // Loop continuously regardless of autoPilot so UI counters stay updated
-        setTimeout(checkFirebaseForSets, foundReadySet ? 5000 : 15000);
+        // PERF: after a set completes there is normally another ready set
+        // waiting, so the 5s re-scan delay was idle time between listings.
+        // The idle cadence (no set found) is unchanged at 15s.
+        setTimeout(checkFirebaseForSets, foundReadySet ? 750 : 15000);
     }
 
     // Helper: Wait function
@@ -4181,7 +4361,10 @@ ANTI-REPETITION (TITLE)
     }
 
     // Helper: Wait for a condition function to return true
-    async function waitForCondition(predicate, interval = 1000, maxWait = 120000) {
+    // PERF: default tick tightened from 1000ms to 300ms. Every caller polls a
+    // local DOM/state predicate, so the cost is negligible and the average
+    // overshoot per wait drops from ~500ms to ~150ms.
+    async function waitForCondition(predicate, interval = 300, maxWait = 120000) {
         const start = Date.now();
         while (true) {
             // Skip wins over the predicate: if the user pressed "Skip Listing",
@@ -4335,7 +4518,11 @@ ANTI-REPETITION (TITLE)
           console.warn(`waitForQueueDrain: stage "${stage}" had no activity for ${Math.round(sinceActivity / 1000)}s — giving up.`);
           return false;
         }
-        await wait(2000);
+        // PERF: 2s granularity added up to ~1s of avg dead time per wait, on
+        // several waits per listing. Reads are localStorage-only — no network,
+        // no quota, negligible cost — so a tighter tick is free. Timeouts and
+        // idle detection are unchanged (they are wall-clock based).
+        await wait(400);
       }
       console.warn("waitForQueueDrain: hard cap reached — giving up.");
       return false;
@@ -4351,7 +4538,7 @@ ANTI-REPETITION (TITLE)
           try { st = (JSON.parse(localStorage.getItem(`etsyJob:${jobId}`) || "null") || {}).status; } catch (_) {}
         }
         if (st === "DONE" || st === "FAILED" || st === "AUTH_NEEDED" || st === "QUOTA_HALT") return st;
-        await wait(2000);
+        await wait(400);
       }
       try {
         const job = JSON.parse(localStorage.getItem(`etsyJob:${jobId}`) || "null");
@@ -4393,7 +4580,9 @@ ANTI-REPETITION (TITLE)
         try {
             // 0. Ensure UI is clear
             document.getElementById("clearBtn").click();
-            await wait(500);
+            // PERF: legacy "let the UI settle" pause. clearBtn's handler is
+            // synchronous, so a full frame is enough.
+            await wait(50);
 
             // 1. Populate Images (Download from Firebase)
             const setFiles = await setRef.listAll();
@@ -4466,7 +4655,8 @@ ANTI-REPETITION (TITLE)
                              .sort((a, b) => a.idx - b.idx)
                              .map(f => ({ slot: f.idx + 1, name: f.name }))
             });
-            await wait(1000);
+            // PERF: grid population above is already awaited; this was cosmetic.
+            await wait(100);
 
             // 2. Generate Description/Context
             updateFirebaseStatus("Analyzing Details...", "working");
@@ -4551,25 +4741,28 @@ ANTI-REPETITION (TITLE)
 
             // i. Key Phrases (title & description both consume these, so
             //    they must be verified FIRST).
+            // PERF: generateTagPhrases() is awaited, so these 2s pauses were
+            // padding on an already-settled result. A short tick still lets the
+            // DOM write flush before the validators read it back.
             await generateTagPhrases();
-            await wait(2000);
+            await wait(150);
             if (!_skpHasTags()) {
                 updateFirebaseStatus("Key phrases empty — retrying...", "working");
                 await generateTagPhrases();
-                await wait(2000);
+                await wait(150);
             }
             if (!_skpHasTags()) { _genFail("key phrases"); return; }
 
             // ii, iii, iv. Title & Description
             await Promise.all([generateTitleOnly(), generateDescriptionOnly()]);
-            await wait(2000);
+            await wait(150);
             if (!_titleReal() || !_descReal()) {
                 updateFirebaseStatus("Title/description incomplete — retrying...", "working");
                 const retries = [];
                 if (!_titleReal()) retries.push(generateTitleOnly());
                 if (!_descReal()) retries.push(generateDescriptionOnly());
                 await Promise.all(retries);
-                await wait(2000);
+                await wait(150);
             }
             if (!_titleReal() || !_descReal()) {
                 const what = [!_titleReal() && "title", !_descReal() && "description"].filter(Boolean).join(" + ");
@@ -4582,14 +4775,14 @@ ANTI-REPETITION (TITLE)
             // Wait for analyze checkmark (but never hang forever)
             const ok = await waitForCondition(() => {
                 return document.getElementById("analyzeMetadataCheck").style.display !== "none";
-            }, 1000, 240000); // 4 min
+            }, 300, 240000); // 4 min
             if (!ok) {
                 console.warn("Metadata step timed out; continuing automation.");
                 toggleCheck("analyzeMetadataCheck", true);
                 showMetadataProgress(false);
                 if (window.M?.toast) M.toast({ html: "Metadata timed out; continuing." });
             }
-            await wait(1000);
+            await wait(100);
 
             // Skip checkpoint: bail out cleanly if the user pressed "Skip Listing".
             if (window.__skipListingRequested) return;
@@ -4633,8 +4826,10 @@ ANTI-REPETITION (TITLE)
             
             // Wait for queue to process. The daemon removes jobs from localStorage "etsyUploadJobs".
             await waitForQueueDrain(originalEnqueue.jobId);
-            
-            await wait(3000);
+
+            // PERF: the drain above already returned; awaitJobOutcome() below
+            // polls for the terminal status, so this 3s buffer was dead time.
+            await wait(150);
 
             // Skip checkpoint: if the user pressed "Skip Listing" during the
             // (possibly stuck) upload, stop here and let the pipeline move on.
@@ -4739,7 +4934,8 @@ ANTI-REPETITION (TITLE)
                 await waitForCondition(() => {
                      return document.getElementById("duplicateListingCheck").style.display !== "none";
                 });
-                await wait(2000);
+                // PERF: the checkmark condition above is the real signal.
+                await wait(150);
 
                 // viii. Create Listing (2nd pass - Variant)
                 updateFirebaseStatus("Uploading Variant...", "working");
@@ -4833,7 +5029,22 @@ ANTI-REPETITION (TITLE)
             archiveSetInBackground(setRef, setName);
 
             updateFirebaseStatus(`Done: ${setName} (archiving in background)`, "active");
-            await wait(1500);
+
+            // BATCH LIMIT: this is the single success point for a listing, so
+            // it is the only place the batch counter advances. If the batch is
+            // now full, auto-pilot stops itself here — the scanner's next tick
+            // sees autoProcessingEnabled === false and simply does not pick up
+            // another set. Nothing in flight is interrupted.
+            try {
+                if (typeof window.noteBatchListingDone === "function" &&
+                    window.noteBatchListingDone(setName)) {
+                    window.stopAutoForBatchComplete();
+                }
+            } catch (batchErr) { console.warn("Batch counter failed (run continues):", batchErr); }
+
+            // PERF: this sat on the critical path between listings purely so
+            // the "Done" status was readable. The archive is already detached.
+            await wait(150);
 
         } catch (e) {
             console.error("Automation sequence failed:", e);
@@ -4893,8 +5104,9 @@ ANTI-REPETITION (TITLE)
                     let pending = [];
                     try { pending = JSON.parse(localStorage.getItem("etsyUploadJobs") || "[]"); } catch (_) {}
                     if (!pending.length) break;
-                    await wait(1500);
-                    yielded += 1500;
+                    // PERF: background archive gate — tighter tick, same 10-min cap.
+                    await wait(500);
+                    yielded += 500;
                 }
 
                 let moveRetries = 4;
@@ -5536,6 +5748,11 @@ ANTI-REPETITION (TITLE)
             <span class="lab">Source</span>
             <span class="val" id="railScopeVal">All categories</span>
             <button type="button" id="railScopeChange" title="Choose which section auto-pilot draws from">Change</button>
+          </div>
+          <div class="dr-batch" id="railBatch" style="display:none">
+            <span class="lab">Batch</span>
+            <span class="val" id="railBatchVal">0 / 0</span>
+            <span class="trk"><span class="fil" id="railBatchFill"></span></span>
           </div>
         </div>
         <div class="drail__pipeline">
@@ -6290,6 +6507,34 @@ https://www.etsy.com/your/shops/me/listing-editor/edit/1822973998
     //   etsyJob:<jobId>               -> JSON meta for a single job
     //   <jobId>_p0_c0 / <jobId>_p0_n  -> chunked photo dataURL storage (see helpers)
     //
+    // ---- Bounded-concurrency helper -----------------------------------------
+    // Runs `items` through `fn` with at most `limit` in flight. Results keep
+    // the INPUT ORDER regardless of completion order. `shouldAbort` is polled
+    // between starts so a fatal outcome (auth expiry, daily quota) stops the
+    // remaining work immediately instead of firing N more doomed requests.
+    // Individual rejections are captured per item, never thrown, so one bad
+    // item cannot take down the batch — the caller inspects results and
+    // applies its own policy, exactly as the previous sequential loops did.
+    async function runPool(items, limit, fn, { shouldAbort = () => false } = {}) {
+      const results = new Array(items.length);
+      let next = 0;
+      let aborted = false;
+      const workers = new Array(Math.max(1, Math.min(limit, items.length))).fill(0).map(async () => {
+        while (true) {
+          if (aborted || shouldAbort()) { aborted = true; return; }
+          const i = next++;
+          if (i >= items.length) return;
+          try {
+            results[i] = { ok: true, value: await fn(items[i], i) };
+          } catch (e) {
+            results[i] = { ok: false, error: e };
+          }
+        }
+      });
+      await Promise.all(workers);
+      return { results, aborted };
+    }
+
     // ---- localStorage garbage collection + quota-safe writes ----------------
     // BUG FIXED HERE (QuotaExceededError on `etsyJob:<id>`):
     // Job image bytes were already going to IndexedDB, so the job RECORD is
@@ -6700,6 +6945,15 @@ https://www.etsy.com/your/shops/me/listing-editor/edit/1822973998
       // best. Each skipped photo is exactly 1 Etsy API call saved.
       const photoBudget = window.etsyPhotoBudget || { maxMain: 8, includeBrand: true };
       const maxMain = Math.min(8, Math.max(4, Number(photoBudget.maxMain) || 8));
+      // PERF: normalizeImageForEtsy() decodes, canvas-scales and re-encodes
+      // each image — CPU work that ran strictly one at a time. Pre-normalizing
+      // the candidates concurrently overlaps those encodes. The loop below is
+      // UNCHANGED in logic and still runs in order, so the photo budget, the
+      // dedup set and the fake-review filter all behave exactly as before; it
+      // simply reads an already-computed result instead of awaiting each one.
+      const _normalized = await Promise.all(
+        rawPhotos.map(du => du ? normalizeImageForEtsy(du).catch(() => du) : Promise.resolve(du))
+      );
       for (let i = 0; i < rawPhotos.length; i++) {
         if (photos.length >= maxMain) {
           console.log(`Photo budget: cap of ${maxMain} reached — skipping remaining slot(s) from ${i}.`);
@@ -6708,7 +6962,7 @@ https://www.etsy.com/your/shops/me/listing-editor/edit/1822973998
         }
         let du = rawPhotos[i];
         if (!du) continue;
-        du = await normalizeImageForEtsy(du);
+        du = _normalized[i] || du;
         if (seenPhotos.has(du)) {
           console.warn(`Per-job dedup: dropping duplicate photo at slot ${i}.`);
           continue;
@@ -6740,6 +6994,9 @@ https://www.etsy.com/your/shops/me/listing-editor/edit/1822973998
         console.log("Photo budget: Brand images OFF — skipping reserved uploads.");
         window.__DIAG.log("photo-budget-brand-off", { skipped: (window.reservedPhotos || []).length });
       }
+      const _normalizedReserved = await Promise.all(
+        rawReserved.map(r => (r && r.src) ? normalizeImageForEtsy(r.src).catch(() => r.src) : Promise.resolve(null))
+      );
       const seenReserved = new Set();
       const reservedSrc = [];
       const reservedNames = [];
@@ -6748,7 +7005,7 @@ https://www.etsy.com/your/shops/me/listing-editor/edit/1822973998
         const r = rawReserved[i] || {};
         let du = r.src;
         if (!du) continue;
-        du = await normalizeImageForEtsy(du);
+        du = _normalizedReserved[i] || du;
         // Also reject if this dataURL is already in the main photos set —
         // that would be the same image appearing in two pipelines, which
         // is always a bug.
@@ -6946,9 +7203,13 @@ https://www.etsy.com/your/shops/me/listing-editor/edit/1822973998
         const primePromise = window.__etsyBatchPrimePromises?.get(jobId);
         if (primePromise) {
           save({ stage: "BATCH_SNAPSHOT", lastActivityAt: Date.now() });
+          // PERF: 12s was a generous ceiling for what the comment above calls
+          // "an optimization, never a prerequisite" — a slow snapshot simply
+          // means Stage 0 falls back to per-listing reads. 4s captures the
+          // common case and caps the loss.
           await Promise.race([
             Promise.resolve(primePromise),
-            new Promise(resolve => setTimeout(resolve, 12000))
+            new Promise(resolve => setTimeout(resolve, 4000))
           ]).catch(() => {});
           window.__etsyBatchPrimePromises.delete(jobId);
         }
@@ -7193,13 +7454,39 @@ https://www.etsy.com/your/shops/me/listing-editor/edit/1822973998
         };
 
         // --- Stage 1: Upload Photos (main 0–7)
-        for (let i = 0; i < job.photoCount; i++) {
-        // Skip override: stop uploading this listing immediately if requested.
-        if (window.__skipListingRequested) return;
-        const blob = job.storage?.photos === "idb"
-          ? (await idbGetBlob(job.photoKeyBases[i]))
-          : await (async () => { const du = lsLoadLarge(job.photoKeyBases[i]); return du ? (await fetch(du)).blob() : null; })();
-        if (!blob) continue;
+        //
+        // PERFORMANCE: these ran strictly one-at-a-time, which made the image
+        // stage the single largest block of wall-clock in the pipeline (8
+        // round-trips x browser -> Netlify -> Etsy). They now run through a
+        // bounded pool.
+        //
+        // Why 4 is safe: Etsy's cap is 5 requests/sec and the server-side
+        // token-bucket limiter (etsyRateLimiter.js, RATE_PER_SEC = 5, BURST = 5,
+        // MAX_RETRIES = 5) already shapes traffic and backs off on 429, so it —
+        // not this number — is the real guard. 4 in flight leaves one slot of
+        // headroom for the purge/info/inventory calls that interleave with the
+        // uploads. Rank is sent explicitly with every request, so completion
+        // order does not affect gallery order, and `operationKey` keeps each
+        // upload idempotent, which means a limiter-driven retry can never
+        // duplicate an image. Fatal outcomes (auth expiry / daily quota) abort
+        // the pool between starts rather than firing the remaining uploads at a
+        // dead session.
+        //
+        // TUNING: this is the only number to change. 3 is the conservative
+        // setting; 5 would saturate the cap and leave nothing for the other
+        // stages, so treat 4 as the practical ceiling.
+        const ETSY_UPLOAD_CONCURRENCY = 4;
+        let fatalUpload = null;   // "auth" | "quota"
+
+        const mainIdx = [];
+        for (let i = 0; i < job.photoCount; i++) mainIdx.push(i);
+
+        const mainRun = await runPool(mainIdx, ETSY_UPLOAD_CONCURRENCY, async (i) => {
+          if (window.__skipListingRequested) return { skipped: true };
+          const blob = job.storage?.photos === "idb"
+            ? (await idbGetBlob(job.photoKeyBases[i]))
+            : await (async () => { const du = lsLoadLarge(job.photoKeyBases[i]); return du ? (await fetch(du)).blob() : null; })();
+          if (!blob) return { skipped: true };
           const fd = new FormData();
           fd.append("listingId", listingId);
           fd.append("token", token);
@@ -7208,25 +7495,41 @@ https://www.etsy.com/your/shops/me/listing-editor/edit/1822973998
           fd.append("alt_text", job.photoMeta[i] || "");
           fd.append("operationKey", `${job.jobId}:main:${i}`);
           fd.append("file", blob, job.photoNames[i] || `uploaded_photo_${i}.jpg`);
-          mainAttempted++;
           const up = await uploadImage(fd, `Photo ${i + 1}`);
-          if (up.authExpired) {
-            // AUTH error. Auto-resume / auto-reconnect REMOVED — fail cleanly.
-            save({ status: "AUTH_NEEDED", error: "token_expired" });
-            window.M?.toast?.({ html: 'Etsy session expired — click "Connect to Etsy", then re-run this listing.' });
-            return;
+          if (up.authExpired) fatalUpload = "auth";
+          if (up.quotaExceeded) fatalUpload = "quota";
+          if (up.ok && typeof bumpCreateProgressPerImage === "function") bumpCreateProgressPerImage();
+          if (!up.ok && !up.authExpired && !up.quotaExceeded) console.warn("Photo upload failed", i + 1, up.detail);
+          return up;
+        }, { shouldAbort: () => !!fatalUpload || !!window.__skipListingRequested });
+
+        if (window.__skipListingRequested) return;
+        if (fatalUpload === "auth") {
+          save({ status: "AUTH_NEEDED", error: "token_expired" });
+          window.M?.toast?.({ html: 'Etsy session expired — click "Connect to Etsy", then re-run this listing.' });
+          return;
+        }
+        if (fatalUpload === "quota") {
+          save({ status: "QUOTA_HALT", error: "etsy_daily_quota" });
+          haltAutomationForQuota();
+          return;
+        }
+        // Accounting must match the old sequential loop exactly, because the
+        // quality floor below depends on it. An item that THREW (rather than
+        // returning {ok:false}) counts as attempted-and-failed: previously an
+        // exception propagated and failed the whole job, so silently dropping
+        // it from the denominator would have weakened the floor.
+        for (const r of mainRun.results) {
+          if (!r) continue;                        // never started (aborted)
+          if (!r.ok) {                             // threw
+            mainAttempted++;
+            console.warn("Photo upload threw:", r.error && r.error.message);
+            continue;
           }
-          if (up.quotaExceeded) {
-            save({ status: "QUOTA_HALT", error: "etsy_daily_quota" });
-            haltAutomationForQuota();
-            return;
-          }
-          if (up.ok) {
-            mainUploaded++;
-            if (typeof bumpCreateProgressPerImage === "function") bumpCreateProgressPerImage();
-          } else {
-            console.warn("Photo upload failed", i + 1, up.detail);
-          }
+          const up = r.value;
+          if (!up || up.skipped) continue;         // no blob / skip requested
+          mainAttempted++;
+          if (up.ok) mainUploaded++;
         }
 
         // Quality floor: a listing published with most of its photos missing
@@ -7236,20 +7539,22 @@ https://www.etsy.com/your/shops/me/listing-editor/edit/1822973998
         if (mainAttempted > 0 && (mainUploaded === 0 || mainUploaded < Math.ceil(mainAttempted / 2))) {
           throw new Error(`Only ${mainUploaded}/${mainAttempted} main photos uploaded — failing the job instead of publishing a broken listing.`);
         }
-        // --- Stage 1b: Reserved (8–9)
-        for (let i = 0; i < job.reservedCount; i++) {
+        // --- Stage 1b: Reserved (8–9)  (same pool treatment; 2 items max)
+        const reservedIdx = [];
+        for (let i = 0; i < job.reservedCount; i++) reservedIdx.push(i);
+
+        await runPool(reservedIdx, Math.min(2, ETSY_UPLOAD_CONCURRENCY), async (i) => {
           const reservedAltKey = String(job.reservedMeta[i] || "").trim().replace(/\s+/g, " ").toLowerCase();
           if (reservedAltKey && preservedReservedAlts.has(reservedAltKey)) {
             console.log(`Reserved ${9 + i}: retained existing matching brand image (0 Etsy calls).`);
             if (typeof bumpCreateProgressPerImage === "function") bumpCreateProgressPerImage();
-            continue;
+            return { skipped: true };
           }
-          // Skip override: stop uploading this listing immediately if requested.
-          if (window.__skipListingRequested) return;
+          if (window.__skipListingRequested) return { skipped: true };
           const blob = job.storage?.reserved === "idb"
             ? (await idbGetBlob(job.reservedKeyBases[i]))
             : await (async () => { const du = lsLoadLarge(job.reservedKeyBases[i]); return du ? (await fetch(du)).blob() : null; })();
-          if (!blob) continue;
+          if (!blob) return { skipped: true };
           const fd = new FormData();
           fd.append("listingId", listingId);
           fd.append("token", token);
@@ -7259,23 +7564,24 @@ https://www.etsy.com/your/shops/me/listing-editor/edit/1822973998
           fd.append("operationKey", `${job.jobId}:reserved:${i}`);
           fd.append("file", blob, job.reservedNames[i] || `reserved_photo_${i}.jpg`);
           const up = await uploadImage(fd, `Reserved ${9 + i}`);
-          if (up.authExpired) {
-            // AUTH error. Auto-resume / auto-reconnect REMOVED — fail cleanly.
-            save({ status: "AUTH_NEEDED", error: "token_expired" });
-            window.M?.toast?.({ html: 'Etsy session expired — click "Connect to Etsy", then re-run this listing.' });
-            return;
-          }
-          if (up.quotaExceeded) {
-            save({ status: "QUOTA_HALT", error: "etsy_daily_quota" });
-            haltAutomationForQuota();
-            return;
-          }
-          if (up.ok) {
-            if (typeof bumpCreateProgressPerImage === "function") bumpCreateProgressPerImage();
-          } else {
-            // Reserved slots are optional — a failure here never fails the job.
-            console.warn("Reserved upload failed", 9 + i, up.detail);
-          }
+          if (up.authExpired) fatalUpload = "auth";
+          if (up.quotaExceeded) fatalUpload = "quota";
+          if (up.ok && typeof bumpCreateProgressPerImage === "function") bumpCreateProgressPerImage();
+          // Reserved slots are optional — a failure here never fails the job.
+          if (!up.ok && !up.authExpired && !up.quotaExceeded) console.warn("Reserved upload failed", 9 + i, up.detail);
+          return up;
+        }, { shouldAbort: () => !!fatalUpload || !!window.__skipListingRequested });
+
+        if (window.__skipListingRequested) return;
+        if (fatalUpload === "auth") {
+          save({ status: "AUTH_NEEDED", error: "token_expired" });
+          window.M?.toast?.({ html: 'Etsy session expired — click "Connect to Etsy", then re-run this listing.' });
+          return;
+        }
+        if (fatalUpload === "quota") {
+          save({ status: "QUOTA_HALT", error: "etsy_daily_quota" });
+          haltAutomationForQuota();
+          return;
         }
 
         // Remove any leftovers the pre-upload purge had to defer (they are
@@ -7435,11 +7741,29 @@ https://www.etsy.com/your/shops/me/listing-editor/edit/1822973998
           // a rate-limited worst case. Individual poll failures are ignored --
           // the NEXT poll will see the doc.
           updateFirebaseStatus("Pricing (running in background)...", "active");
-          const POLL_EVERY_MS = 3000, POLL_BUDGET_MS = 180000;
+          // PERFORMANCE: this poll used to BLOCK the job for a typical 10-30s
+          // (budget 180s) even though the comment above states the listing is
+          // "already complete and correct at this point" and a pricing failure
+          // "must not fail or retry the whole upload". Blocking on a
+          // non-fatal, non-blocking-by-design stage was pure dead time on the
+          // critical path.
+          //
+          // It is now detached: the job proceeds to DONE while a watcher polls
+          // the same result doc and reports the same outcomes through the same
+          // status/DIAG/toast calls. Nothing downstream depends on it — the
+          // Shopify push prices server-side from its own scheme, and the
+          // duplicate pass runs its own pricing stage against its own listing
+          // ID — so the ordering change is safe. The poll cadence is also
+          // tightened (first check immediate, then every 1.5s) so the result
+          // is reported sooner than before.
+          const POLL_EVERY_MS = 1500, POLL_BUDGET_MS = 180000;
+          const runPricingWatcher = async () => {
           const pollStart = Date.now();
           let priceJson = null, pricingUnreportable = false;
+          let firstPoll = true;
           while (Date.now() - pollStart < POLL_BUDGET_MS) {
-            await new Promise(r => setTimeout(r, POLL_EVERY_MS));
+            if (!firstPoll) await new Promise(r => setTimeout(r, POLL_EVERY_MS));
+            firstPoll = false;
             let pr = null;
             try {
               const pollResp = await etsyFetchWithTimeout(
@@ -7503,6 +7827,18 @@ https://www.etsy.com/your/shops/me/listing-editor/edit/1822973998
                          "—", priceJson.personalization.error);
             window.M?.toast?.({ html: "Priced, but the engraving box was not attached — check the listing." });
           }
+          }; // end runPricingWatcher
+
+          // Detached on purpose — see the note above the poll. The watcher is
+          // registered so a page-level check can see outstanding pricing work,
+          // and its own failures are swallowed exactly as the blocking version's
+          // were (pricing is never allowed to fail the listing).
+          window.__pricingWatchers = window.__pricingWatchers || new Map();
+          window.__pricingWatchers.set(pricingRequestId, { listingId: String(listingId), startedAt: Date.now() });
+          runPricingWatcher()
+            .catch((e) => console.warn("Pricing watcher failed for", listingId, "—", e && e.message,
+                                       "(listing is live; run the Pricing Console over it)"))
+            .finally(() => { try { window.__pricingWatchers.delete(pricingRequestId); } catch (_) {} });
         } catch (e) {
           console.warn("Pricing step failed for", listingId, "—", e && e.message,
                        "(listing is live; run the Pricing Console over it)");
@@ -8043,14 +8379,29 @@ https://www.etsy.com/your/shops/me/listing-editor/edit/1822973998
         if (window.M?.toast) M.toast({ html: "Committing visible crops…" });
         await cropPreviewsForIndices(workIdx);
 
-        // Proceed with your existing analyze loop
+        // PERFORMANCE: these vision calls ran one-at-a-time — 8 sequential
+        // round-trips, the second-largest block of wall-clock in the pipeline.
+        // They are independent per image (each embeds metadata into its own
+        // slot), so a bounded pool is a pure latency win with no ordering
+        // requirement. Concurrency is deliberately modest to stay well inside
+        // provider rate limits, and each item keeps its own error handling:
+        // one image failing to analyze leaves the others intact, exactly as
+        // before, and the progress bar still advances per completion.
         resetMetadataProgress();
         let done = 0;
-        for (const i of workIdx) {
-          await metadataHandler.analyzeAndEmbedMetadata(i);
+        const METADATA_CONCURRENCY = 4;
+        const metaRun = await runPool(workIdx, METADATA_CONCURRENCY, async (i) => {
+          const out = await metadataHandler.analyzeAndEmbedMetadata(i);
           done++;
           setMetadataProgress((done / total) * 100);
+          return out;
+        });
+        const metaFailed = metaRun.results.filter(r => r && !r.ok);
+        if (metaFailed.length) {
+          console.warn(`Metadata: ${metaFailed.length}/${total} image(s) failed to analyze.`, metaFailed[0].error);
+          window.__DIAG?.log?.("metadata-partial", { failed: metaFailed.length, total, first: String(metaFailed[0].error?.message || metaFailed[0].error).slice(0, 120) });
         }
+        setMetadataProgress(100);
         if (window.M?.toast) M.toast({ html: `Analyzed metadata for ${total} image${total !== 1 ? "s" : ""} (cells 0–7).` });
       } catch (e) {
         console.error(e);
