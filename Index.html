@@ -3126,28 +3126,59 @@ ANTI-REPETITION (TITLE)
     // description once the operator approves the whole batch — the other
     // 9 approvals are persisted for the runs that follow. Returns null on
     // build failure so the caller can use the legacy single-set gate.
+    // How many listings this review gate should prepare in one pass.
+    //
+    // This used to be hard-coded to 10, which is unrelated to — and was easily
+    // confused with — the run-size chosen in the Start Auto picker. Choosing a
+    // 25-listing run therefore still produced review popups of 10 (at listing
+    // 1, 11 and 21). The two are now linked: the gate prepares exactly the
+    // listings remaining in the current run, so one approval pass covers the
+    // whole run. With no run limit set (the "All" option) it falls back to the
+    // original 10, because there is no meaningful total to size against.
+    function batchReviewSize() {
+        const lim = Number(window.__autoBatchLimit) || 0;
+        if (!lim) return 10;
+        const done = Number(window.__autoBatchDone) || 0;
+        return Math.max(1, Math.min(100, lim - done));
+    }
+
     async function runBatchReviewGate(currentSetRef, currentSetName) {
         try {
-            updateFirebaseStatus("PAUSED — building the next 10-listing review batch...", "working");
+            const wantSize = batchReviewSize();
+            updateFirebaseStatus(`PAUSED — building the next ${wantSize}-listing review batch...`, "working");
             const prevTitle = document.title;
             document.title = "⚠ Batch Review — Listing Generator";
 
-            const candidates = await listBatchCandidates(currentSetRef, currentSetName, 10);
+            const candidates = await listBatchCandidates(currentSetRef, currentSetName, wantSize);
 
-            // Identify charms with bounded concurrency (3-wide): fast
-            // enough for 10 sets, gentle on the OpenAI proxy.
+            // Identify charms with bounded concurrency. This is a blocking
+            // pause for the operator, and it now scales with the run size, so
+            // the width was raised from 3 to 5 to keep a 25-50 listing batch
+            // from turning into a multi-minute wait. Still gentle on the proxy:
+            // 5 concurrent vision calls is the same ceiling the metadata stage
+            // uses, and each candidate keeps its own error handling.
             updateFirebaseStatus(`PAUSED — identifying ${candidates.length} charm(s) for review...`, "working");
             const prepared = new Array(candidates.length);
             let next = 0;
             const worker = async () => {
                 while (next < candidates.length) {
                     const i = next++;
-                    prepared[i] = await prepareBatchCandidate(candidates[i]);
+                    try {
+                        prepared[i] = await prepareBatchCandidate(candidates[i]);
+                    } catch (prepErr) {
+                        console.warn("Batch candidate prep failed:", candidates[i]?.setName, prepErr && prepErr.message);
+                        prepared[i] = null;
+                    }
+                    updateFirebaseStatus(`PAUSED — identifying charms for review (${prepared.filter(Boolean).length}/${candidates.length})...`, "working");
                 }
             };
-            await Promise.all([worker(), worker(), worker()]);
+            await Promise.all([worker(), worker(), worker(), worker(), worker()]);
 
-            const reviewResult = await showBatchReviewPopup(prepared);
+            // Drop any candidate whose prep failed rather than rendering a
+            // broken row; the run still covers them, they just fall back to
+            // the single-set gate when their turn comes.
+            const preparedOk = prepared.filter(Boolean);
+            const reviewResult = await showBatchReviewPopup(preparedOk);
             document.title = prevTitle;
             if (!reviewResult) return null; // popup could not be shown — fallback
             if (reviewResult === "CANCELLED") {
