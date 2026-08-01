@@ -7491,22 +7491,22 @@ https://www.etsy.com/your/shops/me/listing-editor/edit/1822973998
         // round-trips x browser -> Netlify -> Etsy). They now run through a
         // bounded pool.
         //
-        // Why 4 is safe: Etsy's cap is 5 requests/sec and the server-side
-        // token-bucket limiter (etsyRateLimiter.js, RATE_PER_SEC = 5, BURST = 5,
-        // MAX_RETRIES = 5) already shapes traffic and backs off on 429, so it —
-        // not this number — is the real guard. 4 in flight leaves one slot of
-        // headroom for the purge/info/inventory calls that interleave with the
-        // uploads. Rank is sent explicitly with every request, so completion
-        // order does not affect gallery order, and `operationKey` keeps each
-        // upload idempotent, which means a limiter-driven retry can never
-        // duplicate an image. Fatal outcomes (auth expiry / daily quota) abort
-        // the pool between starts rather than firing the remaining uploads at a
-        // dead session.
+        // CONCURRENCY — REVISED DOWN AFTER A REAL FAILURE.
         //
-        // TUNING: this is the only number to change. 3 is the conservative
-        // setting; 5 would saturate the cap and leave nothing for the other
-        // stages, so treat 4 as the practical ceiling.
-        const ETSY_UPLOAD_CONCURRENCY = 4;
+        // At 4 in flight, live listings came back missing 3-4 of their 10
+        // images. The global 5/sec cap was never the binding constraint: the
+        // problem is that all of these POSTs target the SAME listing resource,
+        // and Etsy rejects concurrent writes to one listing (the rejections
+        // arrive as ordinary non-2xx responses, which the old code merely
+        // logged). Per-listing contention, not the global rate, is what breaks.
+        //
+        // 2 keeps most of the wall-clock win while cutting collisions sharply,
+        // and it is now backstopped by the sequential repair pass below, so
+        // correctness no longer depends on getting this number exactly right.
+        // If missing images ever reappear, set this to 1 — that is the fully
+        // serial behaviour the pipeline had before, and the repair pass plus
+        // the completeness check will still guarantee a whole gallery.
+        const ETSY_UPLOAD_CONCURRENCY = 2;
         let fatalUpload = null;   // "auth" | "quota"
 
         const mainIdx = [];
@@ -7546,14 +7546,16 @@ https://www.etsy.com/your/shops/me/listing-editor/edit/1822973998
           return;
         }
         // Accounting must match the old sequential loop exactly, because the
-        // quality floor below depends on it. An item that THREW (rather than
-        // returning {ok:false}) counts as attempted-and-failed: previously an
-        // exception propagated and failed the whole job, so silently dropping
-        // it from the denominator would have weakened the floor.
-        for (const r of mainRun.results) {
+        // completeness check below depends on it. An item that THREW (rather
+        // than returning {ok:false}) counts as attempted-and-failed.
+        const failedMain = [];   // indices that still need an image
+        for (let k = 0; k < mainRun.results.length; k++) {
+          const r = mainRun.results[k];
+          const i = mainIdx[k];
           if (!r) continue;                        // never started (aborted)
           if (!r.ok) {                             // threw
             mainAttempted++;
+            failedMain.push(i);
             console.warn("Photo upload threw:", r.error && r.error.message);
             continue;
           }
@@ -7561,20 +7563,88 @@ https://www.etsy.com/your/shops/me/listing-editor/edit/1822973998
           if (!up || up.skipped) continue;         // no blob / skip requested
           mainAttempted++;
           if (up.ok) mainUploaded++;
+          else failedMain.push(i);
         }
 
-        // Quality floor: a listing published with most of its photos missing
-        // is worse than a failed job (a FAILED job restores the listing ID
-        // and keeps the set for retry; a half-empty listing goes live
-        // silently). Zero uploads = nothing usable happened at all.
-        if (mainAttempted > 0 && (mainUploaded === 0 || mainUploaded < Math.ceil(mainAttempted / 2))) {
-          throw new Error(`Only ${mainUploaded}/${mainAttempted} main photos uploaded — failing the job instead of publishing a broken listing.`);
+        // ---- REPAIR PASS -----------------------------------------------------
+        // Any image the pool could not place is retried ONE AT A TIME, with a
+        // short pause between attempts. Serial retries remove the per-listing
+        // contention that caused the failure in the first place, so a photo that
+        // lost a race almost always lands here. Two attempts per image; the
+        // upload is idempotent via `operationKey`, so a retry can never produce
+        // a duplicate even if the original request actually reached Etsy.
+        if (failedMain.length && !fatalUpload && !window.__skipListingRequested) {
+          console.warn(`Image repair: ${failedMain.length} main photo(s) missing — retrying serially.`);
+          window.__DIAG.log("image-repair-start", { listingId, missing: failedMain.slice() });
+          save({ stage: "IMAGE_REPAIR", lastActivityAt: Date.now() });
+          for (const i of failedMain.slice()) {
+            if (fatalUpload || window.__skipListingRequested) break;
+            for (let attempt = 1; attempt <= 2; attempt++) {
+              await new Promise(r => setTimeout(r, 600 * attempt));
+              let blob = null;
+              try {
+                blob = job.storage?.photos === "idb"
+                  ? (await idbGetBlob(job.photoKeyBases[i]))
+                  : await (async () => { const du = lsLoadLarge(job.photoKeyBases[i]); return du ? (await fetch(du)).blob() : null; })();
+              } catch (_) { blob = null; }
+              if (!blob) break;
+              const fd = new FormData();
+              fd.append("listingId", listingId);
+              fd.append("token", token);
+              fd.append("fileName", job.photoNames[i] || `uploaded_photo_${i}.jpg`);
+              fd.append("rank", i + 1);
+              fd.append("alt_text", job.photoMeta[i] || "");
+              fd.append("operationKey", `${job.jobId}:main:${i}`);
+              fd.append("retryCheck", "1");   // let the server replay a recorded success
+              fd.append("file", blob, job.photoNames[i] || `uploaded_photo_${i}.jpg`);
+              const up = await uploadImage(fd, `Photo ${i + 1} (repair ${attempt})`);
+              if (up.authExpired) { fatalUpload = "auth"; break; }
+              if (up.quotaExceeded) { fatalUpload = "quota"; break; }
+              if (up.ok) {
+                mainUploaded++;
+                const at = failedMain.indexOf(i);
+                if (at > -1) failedMain.splice(at, 1);
+                if (typeof bumpCreateProgressPerImage === "function") bumpCreateProgressPerImage();
+                break;
+              }
+            }
+          }
+          window.__DIAG.log("image-repair-end", { listingId, stillMissing: failedMain.slice(), uploaded: mainUploaded, attempted: mainAttempted });
+          if (fatalUpload === "auth") {
+            save({ status: "AUTH_NEEDED", error: "token_expired" });
+            window.M?.toast?.({ html: 'Etsy session expired — click "Connect to Etsy", then re-run this listing.' });
+            return;
+          }
+          if (fatalUpload === "quota") {
+            save({ status: "QUOTA_HALT", error: "etsy_daily_quota" });
+            haltAutomationForQuota();
+            return;
+          }
+        }
+
+        // COMPLETENESS CHECK — was a 50% "quality floor", now all-or-fail.
+        //
+        // The old rule allowed a listing to publish with up to half its photos
+        // missing. That tolerance is what let concurrent-upload losses reach
+        // live listings silently: 6 or 7 of 10 passed the floor and shipped.
+        // A gallery with holes in it is not a shippable product, and a FAILED
+        // job is strictly better — it restores the Listing ID and keeps the
+        // folder for a clean retry.
+        //
+        // By this point every main photo has had a pooled attempt plus up to
+        // two serial repair attempts, so reaching here with anything missing
+        // means something is genuinely wrong with the listing or the account,
+        // not a transient race.
+        if (mainAttempted > 0 && mainUploaded < mainAttempted) {
+          const missing = failedMain.length ? ` (ranks ${failedMain.map(n => n + 1).join(", ")})` : "";
+          throw new Error(`Only ${mainUploaded}/${mainAttempted} main photos uploaded${missing} — failing the job instead of publishing a listing with missing images.`);
         }
         // --- Stage 1b: Reserved (8–9)  (same pool treatment; 2 items max)
         const reservedIdx = [];
         for (let i = 0; i < job.reservedCount; i++) reservedIdx.push(i);
 
-        await runPool(reservedIdx, Math.min(2, ETSY_UPLOAD_CONCURRENCY), async (i) => {
+        const failedReserved = [];
+        const reservedRun = await runPool(reservedIdx, Math.min(2, ETSY_UPLOAD_CONCURRENCY), async (i) => {
           const reservedAltKey = String(job.reservedMeta[i] || "").trim().replace(/\s+/g, " ").toLowerCase();
           if (reservedAltKey && preservedReservedAlts.has(reservedAltKey)) {
             console.log(`Reserved ${9 + i}: retained existing matching brand image (0 Etsy calls).`);
@@ -7613,6 +7683,54 @@ https://www.etsy.com/your/shops/me/listing-editor/edit/1822973998
           save({ status: "QUOTA_HALT", error: "etsy_daily_quota" });
           haltAutomationForQuota();
           return;
+        }
+
+        // Reserved brand images get the same serial repair treatment. They stay
+        // NON-FATAL by design (a missing packaging shot is cosmetic, unlike a
+        // missing product photo), but one retry each recovers the common case.
+        for (let k = 0; k < reservedRun.results.length; k++) {
+          const r = reservedRun.results[k];
+          const i = reservedIdx[k];
+          const up = r && r.ok ? r.value : null;
+          if (r && !r.ok) failedReserved.push(i);
+          else if (up && !up.skipped && !up.ok) failedReserved.push(i);
+        }
+        if (failedReserved.length && !fatalUpload && !window.__skipListingRequested) {
+          console.warn(`Image repair: ${failedReserved.length} reserved photo(s) missing — retrying serially.`);
+          for (const i of failedReserved) {
+            if (fatalUpload || window.__skipListingRequested) break;
+            await new Promise(r => setTimeout(r, 600));
+            let blob = null;
+            try {
+              blob = job.storage?.reserved === "idb"
+                ? (await idbGetBlob(job.reservedKeyBases[i]))
+                : await (async () => { const du = lsLoadLarge(job.reservedKeyBases[i]); return du ? (await fetch(du)).blob() : null; })();
+            } catch (_) { blob = null; }
+            if (!blob) continue;
+            const fd = new FormData();
+            fd.append("listingId", listingId);
+            fd.append("token", token);
+            fd.append("fileName", job.reservedNames[i] || `reserved_photo_${i}.jpg`);
+            fd.append("rank", 9 + i);
+            fd.append("alt_text", job.reservedMeta[i] || "");
+            fd.append("operationKey", `${job.jobId}:reserved:${i}`);
+            fd.append("retryCheck", "1");
+            fd.append("file", blob, job.reservedNames[i] || `reserved_photo_${i}.jpg`);
+            const up = await uploadImage(fd, `Reserved ${9 + i} (repair)`);
+            if (up.authExpired) { fatalUpload = "auth"; break; }
+            if (up.quotaExceeded) { fatalUpload = "quota"; break; }
+            if (up.ok && typeof bumpCreateProgressPerImage === "function") bumpCreateProgressPerImage();
+          }
+          if (fatalUpload === "auth") {
+            save({ status: "AUTH_NEEDED", error: "token_expired" });
+            window.M?.toast?.({ html: 'Etsy session expired — click "Connect to Etsy", then re-run this listing.' });
+            return;
+          }
+          if (fatalUpload === "quota") {
+            save({ status: "QUOTA_HALT", error: "etsy_daily_quota" });
+            haltAutomationForQuota();
+            return;
+          }
         }
 
         // Remove any leftovers the pre-upload purge had to defer (they are
