@@ -4474,7 +4474,8 @@ ANTI-REPETITION (TITLE)
           if (txt) txt.textContent = "Reading manifest…";
           const manifest = await readManifest(r);
           const charmPath = manifest && (manifest.sourceCharm || (manifest.slots || []).find(s => s && s.newCharm)?.newCharm);
-          if (!charmPath) throw new Error("this set has no source charm recorded");
+          if (!manifest) throw new Error("could not read this set's manifest.json — see the console for the reason");
+          if (!charmPath) throw new Error("this set's manifest.json records no source charm");
 
           if (txt) txt.textContent = "Picking reference…";
           const refPath = await randomRef(cat, plan.folder);
@@ -4512,13 +4513,38 @@ ANTI-REPETITION (TITLE)
         }
       }
 
+      /*  manifest.json was fetched straight from firebasestorage.googleapis.com.
+          The bucket sends no Access-Control-Allow-Origin for this site, so the
+          browser blocked it, readManifest swallowed the failure and returned
+          null, and regenerate then reported "this set has no source charm
+          recorded" — a misleading message for what was really a CORS refusal.
+
+          Every image already travels through corsProxy for exactly this
+          reason; the manifest now does too. The direct fetch is still tried
+          first (it succeeds wherever CORS is configured, and avoids a proxy
+          hop), with the proxy as the fallback. */
       async function readManifest(r) {
+        const m = r.setRef.child("manifest.json");
+        let url;
+        try { url = (await m.getDownloadURL()) + "&cb=" + Date.now(); }
+        catch (e) { console.warn("[regen] manifest URL unavailable:", e && e.message); return null; }
+
         try {
-          const m = r.setRef.child("manifest.json");
-          const url = (await m.getDownloadURL()) + "&cb=" + Date.now();
           const res = await fetch(url);
+          if (res.ok) return await res.json();
+          console.warn("[regen] manifest direct fetch HTTP " + res.status + " — retrying via corsProxy");
+        } catch (e) {
+          console.warn("[regen] manifest blocked directly (" + (e && e.message) + ") — retrying via corsProxy");
+        }
+
+        try {
+          const res = await fetch("/.netlify/functions/corsProxy?url=" + encodeURIComponent(url));
+          if (!res.ok) throw new Error("HTTP " + res.status);
           return await res.json();
-        } catch (_) { return null; }
+        } catch (e) {
+          console.warn("[regen] manifest unreadable via corsProxy:", e && e.message);
+          return null;
+        }
       }
       async function randomRef(category, folder) {
         try {
