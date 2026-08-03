@@ -3871,8 +3871,12 @@ ANTI-REPETITION (TITLE)
           Object URLs are owned, counted and revoked (releaseSlots) rather
           than left for the GC — a blob URL is a hard reference the collector
           will never reclaim on its own. */
-      function hydrateBlobs(setName, out) {
-        return Promise.all(out.map(async (s) => {
+      async function hydrateBlobs(setName, out) {
+        // Four at a time. Browsers allow ~6 connections per host, so firing
+        // eight per set across three prefetch workers just queues them all
+        // and makes every set look stalled.
+        const queue = out.slice();
+        const one = async (s) => {
           if (!s.url || s.blobUrl) return;
           try {
             // The chunked proxy has no timeout of its own; one wedged request
@@ -3891,18 +3895,32 @@ ANTI-REPETITION (TITLE)
             const img = grid.querySelector(`.rv-tile[data-slot="${s.slot}"] img`);
             if (img && img.dataset.set === setName) img.src = blobUrl;
           } catch (_) {}
-        }));
+        };
+        const worker = async () => { while (queue.length) await one(queue.shift()); };
+        await Promise.all([worker(), worker(), worker(), worker()]);
       }
 
       // Decoding off-thread means the first paint after a row switch is
       // instant instead of a flash of empty box.
+      // A promise that cannot outlive its budget. img.decode() and fetch both
+      // sit forever on a stalled connection instead of rejecting, which is
+      // what pinned all three prefetch workers at zero.
+      function withTimeout(pr, ms, label) {
+        let t;
+        return Promise.race([
+          Promise.resolve(pr).finally(() => clearTimeout(t)),
+          new Promise((_, rej) => { t = setTimeout(() => rej(new Error((label || "step") + " timed out")), ms); })
+        ]);
+      }
+
       function decodeAll(out) {
         return Promise.all(out.map((s) => {
           const src = s.blobUrl || s.url;
           if (!src) return null;
           const im = new Image();
           im.src = src;
-          return (im.decode ? im.decode() : Promise.resolve()).catch(() => {});
+          const d = im.decode ? im.decode() : Promise.resolve();
+          return withTimeout(d, 8000, "decode").catch(() => {});
         }));
       }
 
@@ -3985,11 +4003,27 @@ ANTI-REPETITION (TITLE)
           while (queue.length) {
             const r = queue.shift();
             try {
-              const out = await loadSlots(r);
-              await ensureHydrated(r.setName, out);   // the actual download work
-              await decodeAll(out);
-            } catch (_) {}
-            onProgress && onProgress(++done, list.length);
+              /*  Time-boxed as a whole. Progress is reported in `finally`, so
+                  a set that fails or times out still advances the bar and
+                  frees the worker — one bad set can no longer strand the
+                  other fifteen behind it. */
+              await withTimeout((async () => {
+                const out = await loadSlots(r);
+                await ensureHydrated(r.setName, out);
+                await decodeAll(out);
+                // The rail thumbnail comes from the first surviving slot;
+                // sets opened from the Review Queue have no thumbUrl of their
+                // own, which is why those rows were blank squares.
+                if (!r.thumbUrl && out && out.length) {
+                  const first = out.find(x => x.blobUrl || x.url);
+                  if (first) { r.thumbUrl = first.blobUrl || first.url; paintRailRow(r.setName); }
+                }
+              })(), 90000, `caching ${r.setName}`);
+            } catch (e) {
+              console.warn("[review] cache pass skipped", r.setName, "—", e && e.message);
+            } finally {
+              onProgress && onProgress(++done, list.length);
+            }
           }
         };
         await Promise.all([worker(), worker(), worker()]);
