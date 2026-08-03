@@ -3906,14 +3906,18 @@ ANTI-REPETITION (TITLE)
         paintRailRow(setName);
         // legacy mirrors the existing pipeline already reads
         try {
-          /*  Only an APPROVED set belongs in the publish queue. This used to
-              write unconditionally, so it immediately re-added a listing that
-              the un-approve above had just pulled out — the stale approval
-              would still have been spent by the pipeline. */
-          if (typeof readBatchApproved === "function" && cur.description) {
+          /*  save() only ever REMOVES from the publish queue (un-approve);
+              it never adds. Adding here double-entered every set at Start
+              Auto: the gate's close() approves all pending rows, each save
+              wrote the set into the queue, and the gate then wrote its own
+              batch — including an entry for the CURRENT set, which the gate
+              deliberately excludes because its description is returned
+              directly. The queue visibly doubling at Start Auto was this.
+              The gate and the Review Queue reconciliation are now the only
+              writers. */
+          if (typeof readBatchApproved === "function") {
             const m = readBatchApproved();
-            if (cur.status === RV_STATUS.OK) { m[setName] = cur.description; writeBatchApproved(m); }
-            else if (setName in m) { delete m[setName]; writeBatchApproved(m); }
+            if (cur.status !== RV_STATUS.OK && setName in m) { delete m[setName]; writeBatchApproved(m); }
           }
           if (typeof readBatchZoom === "function" && cur.zoom && cur.zoom["1"]) {
             const z = readBatchZoom(); z[setName] = cur.zoom["1"]; writeBatchZoom(z);
@@ -5474,6 +5478,31 @@ ANTI-REPETITION (TITLE)
       // rows: [{setName, setRef, category, thumbUrl, description}]
       async function open(list) {
         bind();
+        /*  Reentrancy: a second open() while one session is pending used to
+            overwrite `pending`, leaving the first caller awaiting a promise
+            that could never resolve — the pipeline hangs, and two prefetch
+            passes fight over one progress bar, doubling its totals. The
+            prior session is resolved as CANCELLED first (both callers handle
+            that), then this one proceeds cleanly. */
+        if (pending) { try { close("cancelled"); } catch (_) {} }
+        /*  Dedupe by set name — a duplicated row double-counts every image in
+            the cache totals and paints two rail entries for one listing. */
+        if (Array.isArray(list)) {
+          const seen = new Set();
+          list = list.filter(r => r && r.setName && !seen.has(r.setName) && seen.add(r.setName));
+        }
+        /*  The session promise exists from the FIRST line, before any await.
+            A close() (or a superseding open) during the async prep below can
+            therefore always resolve this caller — previously `pending` was
+            only created at the end of open(), so a close landing mid-prep hit
+            pending=null, the caller hung forever, and the prep then revealed
+            a ghost panel that nothing could resolve. Each await checks the
+            session is still current and aborts silently if not. */
+        let _resolveSession;
+        const sessionPromise = new Promise((res) => { _resolveSession = res; });
+        pending = { resolve: _resolveSession };
+        const mySession = pending;
+        const stillMine = () => pending === mySession;
         rows = (list || []).filter(Boolean);
         sel = rows.length ? 0 : -1;
         filter = "all";
@@ -5522,6 +5551,7 @@ ANTI-REPETITION (TITLE)
             click looked like it had done nothing at all. Same prefetch, same
             guarantee that cycling rows never waits on the network; only the
             order of reveal and work has changed. */
+        if (!stillMine()) return sessionPromise;   // closed or superseded during prep
         paintCounts(); paintRail(); paintDetail();
         overlay.classList.add("open");
 
@@ -5543,7 +5573,7 @@ ANTI-REPETITION (TITLE)
         // Repaint the open row now that its images are decoded and cached.
         paintDetail();
         subscribe();
-        return new Promise(resolve => { pending = { resolve }; });
+        return sessionPromise;
       }
 
       return { open, close: () => close("cancelled"), RV_STATUS,
@@ -7382,7 +7412,7 @@ ANTI-REPETITION (TITLE)
                 operator approved. Per-image failure keeps the original rather
                 than dropping the listing. */
             if (__rvDec && __rvDec.zoom && Object.keys(__rvDec.zoom).length) {
-                let baked = 0;
+                let baked = 0, slot1Baked = false;
                 for (const f of hydrated) {
                     if (!(f.idx >= 0 && f.idx < 8)) continue;
                     const slotKey = String(f.__origSlot != null ? f.__origSlot : f.idx + 1);
@@ -7395,12 +7425,25 @@ ANTI-REPETITION (TITLE)
                             try { if (String(f.displayUrl).startsWith("blob:")) URL.revokeObjectURL(f.displayUrl); } catch (_) {}
                             f.displayUrl = framed;
                             baked++;
+                            if (slotKey === "1") slot1Baked = true;
                         }
                     } catch (e) {
                         console.warn(`[review] framing bake failed for slot ${slotKey} — publishing the original:`, e && e.message);
                     }
                 }
                 if (baked) console.log(`[review] ${setName}: framing baked into ${baked} image(s).`);
+                /*  THE DOUBLE-ZOOM BUG (Etsy images over-zoomed, off-target,
+                    wrong ratio). Slot 1's framing is now IN the pixels above —
+                    but the legacy path (applyBatchZoomToSlot0 → the metadata
+                    stage's crop-commit) still held the same zoom in the
+                    batch-zoom store and applied it AGAIN, cropping the
+                    already-cropped image to the preview box's ratio. Consume
+                    the store entry the moment the bake succeeds, so the legacy
+                    replay finds nothing. On bake failure the entry stays, and
+                    the legacy replay remains the fallback framing. */
+                if (slot1Baked) {
+                    try { const z = readBatchZoom(); if (z[setName] !== undefined) { delete z[setName]; writeBatchZoom(z); } } catch (_) {}
+                }
             }
 
             hydrated.forEach(f => {
