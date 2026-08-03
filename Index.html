@@ -1271,14 +1271,49 @@
     .dcolumn-offset{margin-left:264px; transition:margin-left .18s ease}
     .dapp.collapsed .drail{width:58px}
     .dapp.collapsed .dcolumn-offset{margin-left:58px}
-    .drail__brand{padding:16px 14px 12px; border-bottom:1px solid var(--velvetLine); display:flex; align-items:flex-start; gap:8px}
-    .drail .dbrand{display:flex; flex-direction:column; line-height:1.15; min-width:0}
-    .drail .dbrand .logo{font-family:var(--serif); font-size:17px; color:#fff; white-space:nowrap}
+    /* Brand: one line. The old two-line lockup cost ~30px of rail height for
+       a tagline the operator reads once — it now lives in the settings
+       popover, where there is room for it. */
+    .drail__brand{padding:11px 12px 11px 14px; border-bottom:1px solid var(--velvetLine);
+      display:flex; align-items:center; gap:6px; flex:0 0 auto; position:relative}
+    .drail .dbrand{display:flex; min-width:0; overflow:hidden}
+    .drail .dbrand .logo{font-family:var(--serif); font-size:15.5px; color:#fff; white-space:nowrap;
+      letter-spacing:-.005em; line-height:1.2}
     .drail .dbrand .logo b{color:var(--gold2); font-weight:400}
-    .drail .dbrand .tag{font-size:9px; letter-spacing:.2em; text-transform:uppercase; color:#9a9183; margin-top:2px; white-space:nowrap}
-    .drail__collapse{margin-left:auto; flex:0 0 auto; width:24px; height:24px; border-radius:7px; background:var(--velvet2); color:#cfc7b8; border:1px solid var(--velvetLine); font-size:14px; line-height:1; cursor:pointer; padding:0}
-    .drail__collapse:hover{color:#fff}
-    .drail .dnav{padding:10px 10px; display:flex; flex-direction:column; gap:2px; background:transparent}
+    .drail__ico{margin-left:auto; flex:0 0 auto; width:25px; height:25px; border-radius:7px; background:transparent;
+      color:#8c8476; border:1px solid transparent; font-size:13px; line-height:1; cursor:pointer; padding:0;
+      display:flex; align-items:center; justify-content:center; position:relative; transition:.13s}
+    .drail__ico + .drail__ico{margin-left:0}
+    .drail__ico:hover{color:#fff; background:var(--velvet2); border-color:var(--velvetLine)}
+    .drail__ico[aria-expanded="true"]{color:#fff; background:var(--velvet2); border-color:var(--velvetLine)}
+    /* A narrowed source is state the operator must not lose track of once it
+       is behind a menu — the button carries a dot until it is All categories. */
+    .drail__ico .dot{position:absolute; top:2px; right:2px; width:5px; height:5px; border-radius:50%;
+      background:var(--gold2); display:none; box-shadow:0 0 0 2px var(--velvet)}
+    .drail__ico .dot.on{display:block}
+
+    /* ── settings popover ── */
+    .drail__menu{position:fixed; z-index:3200; width:244px;
+      background:#221f1a; border:1px solid #3a352d; border-radius:12px; padding:4px;
+      box-shadow:0 18px 44px rgba(0,0,0,.5); animation:dmIn .13s ease}
+    .drail__menu[hidden]{display:none}
+    @keyframes dmIn{from{opacity:0; transform:translateY(-4px)}to{opacity:1; transform:none}}
+    .dm-head{padding:9px 10px 10px; border-bottom:1px solid #332e27; margin-bottom:4px}
+    .dm-title{display:block; font-family:var(--serif); font-size:13.5px; color:#f0ebe1; line-height:1.2}
+    .dm-tag{display:block; font-size:8.5px; letter-spacing:.19em; text-transform:uppercase; color:#7d7568; margin-top:3px}
+    .dm-sect{padding:9px 10px 10px; border-radius:9px}
+    .dm-sect + .dm-sect{margin-top:1px; border-top:1px solid #302b24}
+    .dm-lab{display:block; font-size:8.5px; letter-spacing:.13em; text-transform:uppercase; color:#7d7568; font-weight:700; margin-bottom:6px}
+    .dm-row{display:flex; align-items:center; gap:9px}
+    .dm-val{font-family:var(--mono); font-size:11.5px; color:var(--gold2); font-weight:600; flex:1 1 auto;
+      min-width:0; overflow:hidden; text-overflow:ellipsis; white-space:nowrap}
+    .dm-btn{flex:0 0 auto; background:var(--velvet2); border:1px solid var(--velvetLine); color:#cfc7b8;
+      border-radius:7px; padding:4px 10px; font-size:10px; font-weight:700; cursor:pointer;
+      letter-spacing:.05em; text-transform:uppercase; font-family:inherit; transition:.13s}
+    .dm-btn:hover{color:#fff; border-color:#5f574a; background:#332e27}
+    .dm-btn.danger:hover{color:#f0c9bd; border-color:#7a4335; background:#3a2620}
+    .dm-why{display:block; font-size:10px; color:#6f685d; margin-top:6px; line-height:1.45}
+    .drail .dnav{padding:9px 10px 11px; display:flex; flex-direction:column; gap:3px; background:transparent}
     .dnav button{display:flex; align-items:center; gap:10px; padding:9px 11px; border-radius:10px; color:#cfc7b8; font-size:13px; font-weight:500; text-align:left; width:100%; background:none; border:0; cursor:pointer; transition:background .15s,color .15s; white-space:nowrap; box-sizing:border-box}
     .dnav button .ic{width:16px; flex:0 0 16px; opacity:.85; font-size:14px}
     .dnav button .badge{margin-left:auto; font-family:var(--mono); font-size:10.5px; background:var(--gold); color:#2a2114; border-radius:20px; padding:1px 7px; font-weight:700}
@@ -1296,6 +1331,9 @@
     .dr-platform[hidden]{display:none !important}
     .drail__foot{padding:12px 14px; border-top:1px solid var(--velvetLine); font-size:10.5px; color:#8c8476; white-space:nowrap}
     .drail__foot .dot{display:inline-block; width:7px; height:7px; border-radius:50%; background:var(--sage); margin-right:6px; box-shadow:0 0 0 3px rgba(95,122,91,.18)}
+    .dapp.collapsed .drail__menu, .dapp.collapsed #dRailMenu{display:none !important}
+    .dapp.collapsed .drail__brand{padding:11px 0; justify-content:center}
+    .dapp.collapsed .drail__ico{margin-left:0}
     .dapp.collapsed .dbrand, .dapp.collapsed .dnav .lbl, .dapp.collapsed .dnav .badge,
     .dapp.collapsed .drail__stats, .dapp.collapsed .drail__foot .lbl{display:none}
     .dapp.collapsed .dnav button{justify-content:center; padding:9px 0}
@@ -1358,9 +1396,19 @@
     /* ── Round 9 (revised round 11): pipeline header (label + overall
        progress) is pinned above the scroll region so it can never be
        clipped mid-scroll; the steps/session/activity scroll below it. ── */
-    .drail__pipehead{padding:14px 16px 12px; border-top:1px solid var(--velvetLine); flex:0 0 auto}
-    .drail__pipehead .dr-overall{margin:8px 0 0}
-    .drail__pipeline{padding:4px 16px 15px; flex:1 1 auto; min-height:0; overflow-y:auto; display:flex; flex-direction:column;
+    /* The pipeline block is its own compartment: a slightly lifted panel with
+       a real section header, so the eye separates "what is running" from
+       "where do I navigate" without reading a word. */
+    .drail__pipehead{padding:11px 15px 12px; border-top:1px solid var(--velvetLine);
+      background:rgba(0,0,0,.16); flex:0 0 auto}
+    .drail__pipehead .dr-overall{margin:9px 0 0}
+    .dr-plabel{display:flex; align-items:center; gap:8px}
+    .dr-plab{font-size:8.5px; letter-spacing:.15em; text-transform:uppercase; color:#8c8476; font-weight:700}
+    .dr-plabel .dr-pset{margin-left:auto; font-family:var(--mono); font-size:10.5px; font-weight:700;
+      color:#cfc7b8; background:var(--velvet2); border:1px solid var(--velvetLine); border-radius:20px;
+      padding:2px 9px; max-width:60%; overflow:hidden; text-overflow:ellipsis; white-space:nowrap}
+    .dr-plabel .dr-pset.running{color:#2a2114; background:var(--gold2); border-color:var(--gold2)}
+    .drail__pipeline{padding:12px 15px 15px; flex:1 1 auto; min-height:0; overflow-y:auto; display:flex; flex-direction:column;
       scrollbar-width:thin; scrollbar-color:rgba(233,227,215,.18) transparent}
     .drail__pipeline::-webkit-scrollbar{width:5px}
     .drail__pipeline::-webkit-scrollbar-track{background:transparent}
@@ -1598,8 +1646,6 @@
     .lg-foot{margin-top:auto;padding-top:26px;font-size:11px;color:var(--ink45,#8c8476);display:flex;gap:8px;flex-wrap:wrap}
     .lg-foot a{color:var(--ink45,#8c8476)}
     .lg-sep{opacity:.45}
-    #lgSignOut{margin-left:10px;font-size:11px;color:#8c8476;text-decoration:underline;cursor:pointer;background:none;border:0}
-    #lgSignOut:hover{color:#2b2621}
     /* ===================== REVIEW PANEL (master–detail) ===================== */
     .rv-overlay{position:fixed; inset:0; z-index:4200; display:none; background:rgba(28,25,21,.62); backdrop-filter:blur(3px)}
     .rv-overlay.open{display:block}
@@ -1982,7 +2028,7 @@
     var b = document.getElementById("lgSignOut");
     if (b && !b.__wired) { b.__wired = 1; b.addEventListener("click", function () { window.lgSignOut(); }); }
     var v = document.getElementById("railSessVal");
-    if (v && window.LG_OPEN) { v.textContent = "unsecured"; v.title = "EDIT_PASSCODE is not set on this site — the console is open to anyone."; }
+    if (v && window.LG_OPEN) { v.textContent = "Unsecured"; v.title = "EDIT_PASSCODE is not set on this site — the console is open to anyone."; }
   });
   window.lgSignOut = function () {
     sessClear();
@@ -5178,7 +5224,7 @@ ANTI-REPETITION (TITLE)
                     let scopeStarved = false;
                     for (const q of CATEGORY_ORDER) {
                         if (__scope && q !== __scope) continue;   // out of scope this run
-                        const bucket = setsByQueue[q] || [];
+                        let bucket = setsByQueue[q] || [];
                         // REVIEW PANEL: sets flagged "needs further review" or
                         // rejected are held back from auto-pilot until the flag
                         // is cleared in the panel. Filtered here, at the single
@@ -10669,32 +10715,49 @@ ANTI-REPETITION (TITLE)
       const rail = mk("aside", "dRail", "drail");
       rail.innerHTML = `
         <div class="drail__brand">
-          <div class="dbrand">
-            <span class="logo">Brites <b>Listing Generator</b></span>
-            <span class="tag">Etsy · Shopify Automation</span>
+          <div class="dbrand"><span class="logo">Brites <b>Listing Generator</b></span></div>
+          <button id="dRailMenu" class="drail__ico" type="button" title="Console settings"
+                  aria-haspopup="true" aria-expanded="false"><span>&#9881;</span><i class="dot" id="dRailMenuDot"></i></button>
+          <button id="dRailCollapse" class="drail__ico" type="button" title="Collapse menu">&lsaquo;</button>
+        </div>
+
+        <!-- Settings popover: everything the operator sets once and rarely
+             touches. Kept out of the rail proper so the rail only ever shows
+             live state. -->
+        <div class="drail__menu" id="dRailMenuPanel" hidden>
+          <div class="dm-head">
+            <span class="dm-title">Brites Listing Generator</span>
+            <span class="dm-tag">Etsy · Shopify Automation</span>
           </div>
-          <button id="dRailCollapse" class="drail__collapse" type="button" title="Collapse menu">‹</button>
+          <div class="dm-sect">
+            <span class="dm-lab">Source</span>
+            <div class="dm-row">
+              <span class="dm-val" id="railScopeVal">All categories</span>
+              <button type="button" id="railScopeChange" class="dm-btn"
+                      title="Choose which section auto-pilot draws from">Change</button>
+            </div>
+            <span class="dm-why">Which section auto-pilot draws its next set from.</span>
+          </div>
+          <div class="dm-sect">
+            <span class="dm-lab">Session</span>
+            <div class="dm-row">
+              <span class="dm-val" id="railSessVal">Signed in</span>
+              <button type="button" id="lgSignOut" class="dm-btn danger"
+                      title="Clear this device's saved sign-in">Sign out</button>
+            </div>
+            <span class="dm-why">Signed in on this device for 30 days.</span>
+          </div>
         </div>
         <div class="dnav">
           <button id="dNavWork" class="dnav-active" data-view-btn="work"><span class="ic">◧</span><span class="lbl">Workspace</span></button>
           <button id="dNavStats" data-view-btn="stats"><span class="ic">◫</span><span class="lbl">Statistics &amp; Review</span><span id="dNavStatsBadge" class="badge" style="display:none">0</span></button>
         </div>
         <div class="drail__pipehead">
-          <div class="dr-plabel">Pipeline <span class="dr-pset" id="railPipelineSet">Idle</span></div>
+          <div class="dr-plabel"><span class="dr-plab">Pipeline</span><span class="dr-pset" id="railPipelineSet">Idle</span></div>
           <div class="dr-overall">
             <div class="dr-overall-row"><span id="railOverallStep">—</span><span id="railOverallPct">0%</span></div>
             <div class="dr-overall-track"><div class="dr-overall-fill" id="railOverallFill"></div></div>
             <div class="dr-overall-row dr-overall-sub"><span id="railSetElapsed"></span><span id="railQueueChips"></span></div>
-          </div>
-          <div class="dr-scope">
-            <span class="lab">Source</span>
-            <span class="val" id="railScopeVal">All categories</span>
-            <button type="button" id="railScopeChange" title="Choose which section auto-pilot draws from">Change</button>
-          </div>
-          <div class="dr-scope" style="margin-top:7px">
-            <span class="lab">Session</span>
-            <span class="val" id="railSessVal">signed in</span>
-            <button type="button" id="lgSignOut" title="Clear this device's saved sign-in">sign out</button>
           </div>
           <div class="dr-batch" id="railBatch" style="display:none">
             <span class="lab">Batch</span>
@@ -10876,6 +10939,50 @@ ANTI-REPETITION (TITLE)
       });
 
       // ── Rail collapse (persisted) ──
+      // ── settings popover ──────────────────────────────────────────────
+      // Source and Session are set-once controls. They lived in the rail body
+      // where they competed with live pipeline state for attention; here they
+      // are one click away and the rail shows only what changes.
+      (function initRailMenu() {
+        const btn = $("dRailMenu"), panel = $("dRailMenuPanel");
+        if (!btn || !panel) return;
+        // A narrowed source must stay glanceable now that it is behind a menu.
+        const dot = $("dRailMenuDot"), val = $("railScopeVal");
+        if (dot && val) {
+          const sync = () => {
+            const t = (val.textContent || "").trim().toLowerCase();
+            dot.classList.toggle("on", !!t && t !== "all categories");
+          };
+          sync();
+          new MutationObserver(sync).observe(val, { childList: true, characterData: true, subtree: true });
+        }
+        // The rail is overflow:hidden (for the collapse animation), so the
+        // popover is fixed and measured off the brand row rather than nested
+        // inside a clipping ancestor.
+        const place = () => {
+          const brand = btn.closest(".drail__brand") || btn;
+          const r = brand.getBoundingClientRect();
+          panel.style.top = (r.bottom + 6) + "px";
+          panel.style.left = (r.left + 10) + "px";
+          panel.style.width = Math.max(200, r.width - 20) + "px";
+        };
+        const open = (on) => {
+          if (on) place();
+          panel.hidden = !on;
+          btn.setAttribute("aria-expanded", on ? "true" : "false");
+        };
+        window.addEventListener("resize", () => { if (!panel.hidden) place(); });
+        window.addEventListener("scroll", () => { if (!panel.hidden) place(); }, true);
+        btn.addEventListener("click", (e) => { e.stopPropagation(); open(panel.hidden); });
+        // Click-away and Escape, both of which people expect from a popover.
+        document.addEventListener("click", (e) => {
+          if (!panel.hidden && !panel.contains(e.target) && e.target !== btn) open(false);
+        });
+        document.addEventListener("keydown", (e) => { if (e.key === "Escape" && !panel.hidden) open(false); });
+        // Choosing a source or signing out both resolve the menu's purpose.
+        panel.addEventListener("click", (e) => { if (e.target.closest(".dm-btn")) open(false); });
+      })();
+
       const collapseBtn = $("dRailCollapse");
       const applyCollapsed = (c) => {
         app.classList.toggle("collapsed", c);
@@ -11087,7 +11194,12 @@ ANTI-REPETITION (TITLE)
       }
       function railSetLabel(text) {
         const el = document.getElementById("railPipelineSet");
-        if (el) el.textContent = text || "Idle";
+        if (!el) return;
+        el.textContent = text || "Idle";
+        // Gold chip while a set is named, muted while idle — the pipeline's
+        // state is then readable from the far side of the desk.
+        el.classList.toggle("running", !!text && text !== "Idle");
+        el.title = text || "Idle";
       }
       function railActiveStep() {
         return RAIL_STEPS.find(k => window.__railStepState[k] === "active");
