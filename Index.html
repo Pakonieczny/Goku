@@ -1319,6 +1319,9 @@
     .dnav button .badge{margin-left:auto; font-family:var(--mono); font-size:10.5px; background:var(--gold); color:#2a2114; border-radius:20px; padding:1px 7px; font-weight:700}
     .dnav button:hover{background:var(--velvet2); color:#fff}
     .dnav button.dnav-active{background:linear-gradient(180deg,#34302a,#2b2722) !important; color:#fff !important; box-shadow:inset 2px 0 0 var(--gold2)}
+    /* Nothing queued: still reachable, visibly not demanding attention. */
+    .dnav button.dnav-empty{color:#8c8476}
+    .dnav button.dnav-empty:hover{color:#cfc7b8}
     .drail__stats{padding:12px 14px; display:flex; flex-direction:column; gap:11px; border-top:1px solid var(--velvetLine); overflow:auto; flex:1}
     .dr-block .dr-lab{font-size:9.5px; letter-spacing:.14em; text-transform:uppercase; color:#8c8476; font-weight:700; white-space:nowrap}
     .dr-block .dr-val{font-family:var(--mono); font-size:19px; color:#fff; font-variant-numeric:tabular-nums; margin-top:1px; white-space:nowrap}
@@ -1730,6 +1733,14 @@
       transform-origin:center center; transition:transform .3s ease; cursor:grab;
       user-select:none; -webkit-user-drag:none}
     .rv-box img:active{cursor:grabbing}
+    /* prefetch progress — shown inside the open panel, not before it */
+    .rv-prefetch{display:none; align-items:center; gap:12px; margin:0 0 12px; padding:9px 13px;
+      background:var(--goldSoft,#f7efdc); border:1px solid var(--goldLine,#e3d2a8); border-radius:10px}
+    .rv-prefetch.on{display:flex}
+    .rv-prefetch__txt{font-size:11.5px; font-weight:600; color:#7a5a1d; white-space:nowrap}
+    .rv-prefetch__trk{flex:1 1 auto; height:4px; border-radius:3px; background:rgba(122,90,29,.18); overflow:hidden}
+    .rv-prefetch__fill{display:block; height:100%; width:0%; background:var(--gold,#caa861); transition:width .25s ease}
+
     /* Rule-of-thirds overlay — the exact pattern from Listing_Generator_1's
        .slotPrev::after. Permanent, so the on/off tool is gone: four 1px
        hairlines at 18% white on the thirds, above the image, click-through. */
@@ -3980,6 +3991,10 @@ ANTI-REPETITION (TITLE)
             <div class="rv-spacer"></div>
             <button type="button" class="rv-btn" id="rvResetOrder"><i class="material-icons">restart_alt</i>Reset order</button>
           </div>
+          <div class="rv-prefetch" id="rvPrefetch">
+            <span class="rv-prefetch__txt" id="rvPrefetchTxt">Caching images…</span>
+            <span class="rv-prefetch__trk"><span class="rv-prefetch__fill" id="rvPrefetchFill"></span></span>
+          </div>
           <div class="rv-grid" id="rvGrid"><div class="rv-empty">Loading images…</div></div>`;
 
         document.getElementById("rvDesc").addEventListener("input", (e) => {
@@ -4560,22 +4575,28 @@ ANTI-REPETITION (TITLE)
         }
         if (titleEl) titleEl.textContent = `Review ${rows.length} listing${rows.length === 1 ? "" : "s"}`;
         if (subEl) subEl.textContent = "Automation is paused. Approve, flag for further review, or reject. Every change saves as you make it.";
-        /*  Pre-download everything BEFORE the panel is shown. Cycling rows
-            then never waits on the network — the images are already decoded
-            in memory. Progress goes to the pipeline status line and the tab
-            title, because this is a deliberate pause and silence during it
-            reads as a hang. */
-        const prevStatusTitle = document.title;
-        try {
-          await prefetchAll(rows, (done, total) => {
-            try { updateFirebaseStatus(`PAUSED — caching review images (${done}/${total} listings)...`, "working"); } catch (_) {}
-            document.title = `⚠ Caching ${done}/${total} — Listing Generator`;
-          });
-        } catch (_) { /* a failed prefetch must never block the review */ }
-        document.title = prevStatusTitle;
-
+        /*  The panel is shown FIRST, then the images stream in behind a
+            progress bar. Prefetching before the reveal meant a 16-listing
+            queue spent a minute downloading with nothing on screen — the
+            click looked like it had done nothing at all. Same prefetch, same
+            guarantee that cycling rows never waits on the network; only the
+            order of reveal and work has changed. */
         paintCounts(); paintRail(); paintDetail();
         overlay.classList.add("open");
+
+        const bar = document.getElementById("rvPrefetch");
+        const barTxt = document.getElementById("rvPrefetchTxt");
+        const barFill = document.getElementById("rvPrefetchFill");
+        if (bar) bar.classList.add("on");
+        try {
+          await prefetchAll(rows, (done, total) => {
+            if (barTxt) barTxt.textContent = `Caching images — ${done} of ${total} listings`;
+            if (barFill) barFill.style.width = (total ? (done / total) * 100 : 100) + "%";
+          });
+        } catch (_) { /* a failed prefetch must never block the review */ }
+        if (bar) bar.classList.remove("on");
+        // Repaint the open row now that its images are decoded and cached.
+        paintDetail();
         subscribe();
         return new Promise(resolve => { pending = { resolve }; });
       }
@@ -11292,6 +11313,15 @@ ANTI-REPETITION (TITLE)
             <span class="dm-why">Which section auto-pilot draws its next set from.</span>
           </div>
           <div class="dm-sect">
+            <span class="dm-lab">Review queue</span>
+            <div class="dm-row">
+              <span class="dm-val" id="dmQueueVal">none queued</span>
+              <button type="button" id="dmQueueClear" class="dm-btn danger"
+                      title="Drop the queued approvals — these sets come back unreviewed in the next batch">Clear</button>
+            </div>
+            <span class="dm-why">Clearing deletes nothing — those sets return in the next batch as unreviewed.</span>
+          </div>
+          <div class="dm-sect">
             <span class="dm-lab">Session</span>
             <div class="dm-row">
               <span class="dm-val" id="railSessVal">Signed in</span>
@@ -11304,6 +11334,9 @@ ANTI-REPETITION (TITLE)
         <div class="dnav">
           <button id="dNavWork" class="dnav-active" data-view-btn="work"><span class="ic">◧</span><span class="lbl">Workspace</span></button>
           <button id="dNavStats" data-view-btn="stats"><span class="ic">◫</span><span class="lbl">Statistics &amp; Review</span><span id="dNavStatsBadge" class="badge" style="display:none">0</span></button>
+          <!-- Opens the review modal directly. Not a view switch: there is no
+               "queue page" to land on, the panel IS the destination. -->
+          <button id="dNavQueue" type="button" title="Open the review panel over listings already approved and waiting"><span class="ic">◨</span><span class="lbl">Review Queue</span><span id="dNavQueueBadge" class="badge" style="display:none">0</span></button>
         </div>
         <div class="drail__pipehead">
           <div class="dr-plabel"><span class="dr-plab">Pipeline</span><span class="dr-pset" id="railPipelineSet">Idle</span></div>
@@ -11311,19 +11344,6 @@ ANTI-REPETITION (TITLE)
             <div class="dr-overall-row"><span id="railOverallStep">—</span><span id="railOverallPct">0%</span></div>
             <div class="dr-overall-track"><div class="dr-overall-fill" id="railOverallFill"></div></div>
             <div class="dr-overall-row dr-overall-sub"><span id="railSetElapsed"></span><span id="railQueueChips"></span></div>
-          </div>
-          <div class="dr-queue" id="railQueue">
-            <div class="dr-qhead">
-              <span class="dr-qlab">Review queue</span>
-              <span class="dr-qcount" id="railQueueCount">0</span>
-            </div>
-            <div class="dr-qnames" id="railQueueNames">Nothing queued</div>
-            <div class="dr-qacts">
-              <button type="button" id="railQueueView" class="dr-qbtn"
-                      title="Open the review panel over the listings already approved and waiting">View</button>
-              <button type="button" id="railQueueClear" class="dr-qbtn ghost"
-                      title="Drop the queued approvals — these sets come back unreviewed in the next batch">Clear</button>
-            </div>
           </div>
           <div class="dr-batch" id="railBatch" style="display:none">
             <span class="lab">Batch</span>
@@ -11549,55 +11569,52 @@ ANTI-REPETITION (TITLE)
         panel.addEventListener("click", (e) => { if (e.target.closest(".dm-btn")) open(false); });
       })();
 
-      // ── review-queue readout ─────────────────────────────────────────
-      // Driven by the batchqueue-changed event, so it reflects the store the
-      // instant anything mutates it — an approval landing, a set being spent
-      // by the pipeline, a clear. Also listens for `storage` so a second tab
-      // stays truthful.
-      (function initRailQueue() {
-        const box = $("railQueue"), cntEl = $("railQueueCount"),
-              namesEl = $("railQueueNames"), viewBtn = $("railQueueView"), clearBtn = $("railQueueClear");
-        if (!box || !window.ReviewQueue) return;
+      // ── Review Queue nav button ───────────────────────────────────────
+      // Sits under Statistics & Review and opens the review modal directly.
+      // The badge tracks the store live via batchqueue-changed, so the count
+      // is never stale, and `storage` keeps a second tab honest.
+      (function initQueueNav() {
+        const btn = $("dNavQueue"), badge = $("dNavQueueBadge");
+        if (!btn || !window.ReviewQueue) return;
+
+        const dmVal = $("dmQueueVal"), dmClear = $("dmQueueClear");
+        if (dmClear) dmClear.addEventListener("click", () => {
+          const n = window.ReviewQueue.count();
+          if (!n) return;
+          if (!window.confirm(
+            `Clear ${n} queued listing${n === 1 ? "" : "s"}?\n\nNothing is deleted. These sets lose their ` +
+            `approval and come back in the next batch as unreviewed, so you can decide on them again.`)) return;
+          const cleared = window.ReviewQueue.clear();
+          window.M?.toast?.({ html: `${cleared} listing${cleared === 1 ? "" : "s"} returned to the queue as unreviewed.` });
+          paint();
+        });
 
         function paint() {
-          const list = window.ReviewQueue.names();
-          const n = list.length;
-          box.classList.toggle("has", n > 0);
-          cntEl.textContent = String(n);
-          namesEl.textContent = n ? list.join(" · ") : "Nothing queued";
-          namesEl.title = n ? list.join("\n") : "";
-          viewBtn.disabled = !n;
-          clearBtn.disabled = !n;
-          box.title = n
-            ? n + " listing" + (n === 1 ? "" : "s") + " already approved — these publish without stopping for review."
-            : "No pre-approved listings. The next set will stop for review.";
+          const n = window.ReviewQueue.count();
+          if (badge) { badge.textContent = String(n); badge.style.display = n ? "" : "none"; }
+          if (dmVal) dmVal.textContent = n ? `${n} queued` : "none queued";
+          if (dmClear) dmClear.disabled = !n;
+          btn.classList.toggle("dnav-empty", !n);
+          btn.title = n
+            ? `${n} listing${n === 1 ? "" : "s"} already approved and waiting — open to review them`
+            : "No listings are queued for review";
         }
 
-        viewBtn.addEventListener("click", async () => {
-          viewBtn.disabled = true;
+        // No disabling around the await: the panel's promise settles only when
+        // the operator closes it, so an early disable would stick for the
+        // whole session — that is what made the old View button look dead.
+        btn.addEventListener("click", async () => {
+          if (!window.ReviewQueue.count()) {
+            window.M?.toast?.({ html: "Nothing queued — the next set will stop for review." });
+            return;
+          }
           try {
             const r = await window.ReviewQueue.open();
-            if (r && r.reviewed) {
-              window.M?.toast?.({ html: `Queue reviewed — ${r.kept} of ${r.reviewed} still approved.` });
-            }
+            if (r && r.reviewed) window.M?.toast?.({ html: `Queue reviewed — ${r.kept} of ${r.reviewed} still approved.` });
           } catch (e) {
             console.warn("Review queue open failed:", e && e.message);
             window.M?.toast?.({ html: "Could not open the review queue.", classes: "red" });
           } finally { paint(); }
-        });
-
-        // Destructive-sounding, deliberately isn't: say exactly what happens.
-        clearBtn.addEventListener("click", () => {
-          const n = window.ReviewQueue.count();
-          if (!n) return;
-          const ok = window.confirm(
-            `Clear ${n} queued listing${n === 1 ? "" : "s"}?\n\n` +
-            `Nothing is deleted. These sets lose their approval and come back ` +
-            `in the next batch as unreviewed, so you can decide on them again.`);
-          if (!ok) return;
-          const cleared = window.ReviewQueue.clear();
-          window.M?.toast?.({ html: `${cleared} listing${cleared === 1 ? "" : "s"} returned to the queue as unreviewed.` });
-          paint();
         });
 
         window.addEventListener("batchqueue-changed", paint);
