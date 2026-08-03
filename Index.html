@@ -3591,6 +3591,10 @@ ANTI-REPETITION (TITLE)
     function consumeBatchApprovedDescription(setName) {
         const map = readBatchApproved();
         if (!(setName in map)) return null;
+        /*  The pipeline is about to publish this set and move its folder to
+            Approved_Listing_Sets, which invalidates every cached URL for it.
+            Drop it here — the one moment we know the move is coming. */
+        try { window.ReviewPanel?.releaseSet?.(setName); } catch (_) {}
         const value = String(map[setName] || "").trim();
         delete map[setName];
         writeBatchApproved(map);
@@ -4032,11 +4036,13 @@ ANTI-REPETITION (TITLE)
           Object URLs are owned, counted and revoked (releaseSlots) rather
           than left for the GC — a blob URL is a hard reference the collector
           will never reclaim on its own. */
-      async function hydrateBlobs(setName, out) {
+      async function hydrateBlobs(setName, out, opts) {
+        const only = opts && opts.only;          // array of slot numbers, or null for all
+        const onImage = opts && opts.onImage;
         // Four at a time. Browsers allow ~6 connections per host, so firing
         // eight per set across three prefetch workers just queues them all
         // and makes every set look stalled.
-        const queue = out.slice();
+        const queue = out.filter(x => !only || only.includes(Number(x.slot)));
         const one = async (s) => {
           if (!s.url || s.blobUrl) return;
           try {
@@ -4060,7 +4066,13 @@ ANTI-REPETITION (TITLE)
             // slot repainting here is what let non-primary images flash into
             // the thumbnail.
             if (Number(s.slot) === 1) paintRailRow(setName);
-          } catch (_) {}
+          } catch (e) {
+            // Remember the failure so this slot is not retried on every open.
+            // Cleared by releaseSlots, so a genuine retry is still possible.
+            s.failed = true;
+            console.warn(`[review] image unavailable (${setName} slot ${s.slot}) — using the direct URL:`, e && e.message);
+          }
+          finally { if (onImage) onImage(); }
         };
         const worker = async () => { while (queue.length) await one(queue.shift()); };
         await Promise.all([worker(), worker(), worker(), worker()]);
@@ -4097,7 +4109,10 @@ ANTI-REPETITION (TITLE)
         hydrateInFlight.delete(setName);
         const out = slotsCache.get(setName);
         if (!out) return;
-        out.forEach((s) => { if (s.blobUrl) { try { URL.revokeObjectURL(s.blobUrl); } catch (_) {} s.blobUrl = ""; } });
+        out.forEach((s) => {
+          if (s.blobUrl) { try { URL.revokeObjectURL(s.blobUrl); } catch (_) {} s.blobUrl = ""; }
+          s.failed = false;                      // a fresh load may well succeed
+        });
         slotsCache.delete(setName);
       }
       function releaseAllSlots() { [...slotsCache.keys()].forEach(releaseSlots); slotsCache.clear(); }
@@ -4123,23 +4138,43 @@ ANTI-REPETITION (TITLE)
         return { sets: slotsCache.size,
                  images: [...slotsCache.values()].reduce((n, o) => n + o.filter(x => x.blobUrl).length, 0) };
       }
+      /*  "Fully cached" must mean "nothing left worth fetching", not "every
+          slot has a blob". An image that permanently fails (dead object, a
+          proxy that always times out) never gets a blobUrl, which made the
+          whole set look uncached and re-download on every single open —
+          forever. A slot that has been tried and failed counts as settled;
+          it falls back to its direct URL, which still renders. */
       function isFullyCached(setName) {
         const out = slotsCache.get(setName);
-        return !!(out && out.length && out.every(s => s.blobUrl));
+        return !!(out && out.length && out.every(s => s.blobUrl || s.failed));
       }
 
-      // Terminal decisions free their images; pending ones are kept.
+      /*  What actually invalidates a cached set?
+          ---------------------------------------
+          ONLY a folder move. Reject and Needs-review physically relocate the
+          set, so its cached download URLs are dead and must go. Approval does
+          NOT move anything — the set sits in the queue until the pipeline
+          spends it — so its images stay valid and stay cached. Evicting on
+          approve was wrong: approve several, Cancel, reopen, and everything
+          re-downloaded for no reason.
+
+          The pipeline consuming an approval DOES move the folder, and that
+          path calls releaseSlots() at the point of the move (see the
+          move_set_to_completed sites), so nothing is left stale. */
       function sweepDecidedFromCache() {
         [...slotsCache.keys()].forEach((name) => {
           const st = get(name).status;
-          if (st === RV_STATUS.OK || st === RV_STATUS.REJECT || st === RV_STATUS.REVIEW) releaseSlots(name);
+          if (st === RV_STATUS.REJECT || st === RV_STATUS.REVIEW) releaseSlots(name);
         });
       }
 
       // Oldest-used first, and never a set in the current batch.
       function trimCache(max, keepNames) {
         const keep = new Set(keepNames || []);
-        let names = [...slotsCache.keys()].filter(n => !keep.has(n));
+        // Never evict a set with work in flight: releasing it mid-hydration
+        // orphans the download and leaves a half-populated entry behind.
+        let names = [...slotsCache.keys()].filter(n =>
+          !keep.has(n) && !slotsInFlight.has(n) && !hydrateInFlight.has(n));
         let over = slotsCache.size - max;
         if (over <= 0) return;
         names.sort((a, b) => (cacheTouched.get(a) || 0) - (cacheTouched.get(b) || 0));
@@ -4165,27 +4200,30 @@ ANTI-REPETITION (TITLE)
       const slotsInFlight = new Map();     // setName -> Promise<slots>
       const hydrateInFlight = new Map();   // setName -> Promise<void>
 
-      function ensureHydrated(setName, out) {
+      function ensureHydrated(setName, out, opts) {
+        // A partial pass (thumbnail-first) is not cached as "the" hydration —
+        // otherwise the full pass would be skipped and slots 2..N never load.
+        if (opts && opts.only) return hydrateBlobs(setName, out, opts);
         if (!hydrateInFlight.has(setName)) {
-          hydrateInFlight.set(setName, hydrateBlobs(setName, out)
+          hydrateInFlight.set(setName, hydrateBlobs(setName, out, opts)
             .finally(() => hydrateInFlight.delete(setName)));
         }
         return hydrateInFlight.get(setName);
       }
 
-      function loadSlots(r) {
+      function loadSlots(r, opts) {
         if (slotsCache.has(r.setName)) {
           const out = slotsCache.get(r.setName);
           ensureHydrated(r.setName, out);       // resume if a previous pass died
           return Promise.resolve(out);
         }
         if (slotsInFlight.has(r.setName)) return slotsInFlight.get(r.setName);
-        const pr = loadSlotsUncached(r).finally(() => slotsInFlight.delete(r.setName));
+        const pr = loadSlotsUncached(r, opts && opts.defer).finally(() => slotsInFlight.delete(r.setName));
         slotsInFlight.set(r.setName, pr);
         return pr;
       }
 
-      async function loadSlotsUncached(r) {
+      async function loadSlotsUncached(r, defer) {
         const files = await r.setRef.listAll();
         const items = files.items
           .filter(it => !/manifest\.json$/i.test(it.name))
@@ -4198,7 +4236,7 @@ ANTI-REPETITION (TITLE)
           out.push({ slot: n, name: it.name, ref: it, url, blobUrl: "" });
         }
         slotsCache.set(r.setName, out);
-        ensureHydrated(r.setName, out);   // deliberately NOT awaited — the grid paints now
+        if (!defer) ensureHydrated(r.setName, out);   // NOT awaited — the grid paints now
         return out;
       }
 
@@ -4207,44 +4245,64 @@ ANTI-REPETITION (TITLE)
           the same one the pipeline uses and a 25-listing batch would otherwise
           open 250 concurrent fetches. */
       async function prefetchAll(list, onProgress) {
-        /*  Only fetch what is missing. Sets already fully in memory are
-            counted immediately and never touch the network again — which is
-            the whole point of keeping the cache between opens. */
+        /*  TWO PHASES, AND PROGRESS PER IMAGE.
+
+            Before: one worker took a whole set at a time and the counter
+            moved once per SET. With three workers and eight images each,
+            nothing changed on screen until a full set finished — a minute of
+            apparent silence — and sets 4..16 were not touched at all, which
+            is why their thumbnails only appeared when you clicked them and
+            forced a load.
+
+            Now: phase 1 lists every set and fetches ONLY slot 1, so every
+            thumbnail in the list fills in early and roughly together. Phase 2
+            fetches the rest. The bar counts individual images, so it moves
+            continuously instead of in eight-image jumps. */
         const cached = list.filter(r => isFullyCached(r.setName));
         cached.forEach(r => touchCache(r.setName));
-        const queue = list.filter(r => !isFullyCached(r.setName));
-        let done = cached.length;
-        onProgress && onProgress(done, list.length, queue.length);
-        if (!queue.length) return { cached: cached.length, fetched: 0 };
-        console.log(`[review] cache: ${cached.length} listing(s) already in memory, fetching ${queue.length}.`);
-        const worker = async () => {
-          while (queue.length) {
-            const r = queue.shift();
-            try {
-              /*  Time-boxed as a whole. Progress is reported in `finally`, so
-                  a set that fails or times out still advances the bar and
-                  frees the worker — one bad set can no longer strand the
-                  other fifteen behind it. */
-              await withTimeout((async () => {
-                const out = await loadSlots(r);
-                await ensureHydrated(r.setName, out);
-                await decodeAll(out);
-                // The rail thumbnail comes from the first surviving slot;
-                // sets opened from the Review Queue have no thumbUrl of their
-                // own, which is why those rows were blank squares.
-                // thumbFor() reads the cache directly; just repaint the row.
-                if (out && out.length) paintRailRow(r.setName);
-              })(), 90000, `caching ${r.setName}`);
-            } catch (e) {
-              console.warn("[review] cache pass skipped", r.setName, "—", e && e.message);
-            } finally {
-              touchCache(r.setName);
-              onProgress && onProgress(++done, list.length, queue.length);
-            }
-          }
+        const todo = list.filter(r => !isFullyCached(r.setName));
+
+        let imgDone = 0, imgTotal = 0;
+        const report = () => onProgress && onProgress({
+          images: imgDone, imagesTotal: imgTotal,
+          sets: cached.length + todo.filter(r => isFullyCached(r.setName)).length,
+          setsTotal: list.length
+        });
+        report();
+        if (!todo.length) return { cached: cached.length, fetched: 0 };
+        console.log(`[review] cache: ${cached.length} listing(s) already in memory, fetching ${todo.length}.`);
+
+        const pool = async (items, width, fn) => {
+          const q = items.slice();
+          const w = async () => { while (q.length) { const it = q.shift(); try { await fn(it); } catch (_) {} } };
+          await Promise.all(Array.from({ length: width }, w));
         };
-        await Promise.all([worker(), worker(), worker()]);
-        return { cached: cached.length, fetched: queue.length };
+
+        // ── phase 1: listings + slot 1 only (the thumbnails) ──
+        const loaded = new Map();
+        await pool(todo, 5, async (r) => {
+          const out = await withTimeout(loadSlots(r, { defer: true }), 45000, `listing ${r.setName}`);
+          loaded.set(r.setName, out);
+          imgTotal += out.length; report();
+          await withTimeout(
+            ensureHydrated(r.setName, out, { only: [1], onImage: () => { imgDone++; report(); } }),
+            45000, `thumbnail ${r.setName}`);
+        });
+
+        // ── phase 2: everything else ──
+        await pool(todo, 3, async (r) => {
+          const out = loaded.get(r.setName) || slotsCache.get(r.setName);
+          if (!out) return;
+          await withTimeout(
+            ensureHydrated(r.setName, out, { onImage: () => { imgDone++; report(); } }),
+            90000, `caching ${r.setName}`);
+          await decodeAll(out);
+          touchCache(r.setName);
+          paintRailRow(r.setName);
+        });
+
+        report();
+        return { cached: cached.length, fetched: todo.length };
       }
 
       const orderedSlots = (setName, slots) => {
@@ -5090,11 +5148,12 @@ ANTI-REPETITION (TITLE)
         const missing = rows.filter(r => !isFullyCached(r.setName)).length;
         if (bar && missing) bar.classList.add("on");   // fully cached: no bar at all
         try {
-          await prefetchAll(rows, (done, total, toFetch) => {
-            if (barTxt) barTxt.textContent = toFetch === 0
-              ? `${total} cached`
-              : `${done}/${total} cached`;
-            if (barFill) barFill.style.width = (total ? (done / total) * 100 : 100) + "%";
+          await prefetchAll(rows, (p) => {
+            const pct = p.imagesTotal ? (p.images / p.imagesTotal) * 100 : 0;
+            if (barTxt) barTxt.textContent = p.imagesTotal
+              ? `${p.images}/${p.imagesTotal} images`
+              : "listing images…";
+            if (barFill) barFill.style.width = pct + "%";
           });
         } catch (_) { /* a failed prefetch must never block the review */ }
         if (bar) bar.classList.remove("on");
@@ -5108,6 +5167,7 @@ ANTI-REPETITION (TITLE)
                // Exposed so the pipeline can mark a slot regenerating even
                // when the panel is not the thing driving it.
                setRegenState: (setName, slot, status) => setRegenState(setName, slot, status),
+               releaseSet: (setName) => releaseSlots(setName),
                cacheStats: () => ({ sets: slotsCache.size,
                                     images: [...slotsCache.values()].reduce((n, o) => n + o.filter(x => x.blobUrl).length, 0) }),
                statusOf: (n) => get(n).status, decisionOf: (n) => ({ ...get(n) }) };
