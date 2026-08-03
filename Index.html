@@ -3865,6 +3865,20 @@ ANTI-REPETITION (TITLE)
       function save(setName, patch, { immediate = false } = {}) {
         const cur = { ...get(setName), ...patch, setName, updatedAt: Date.now() };
         state.set(setName, cur);
+        /*  Mirror on EVERY save, not inside the debounced flush.
+            Diagnostics from the field showed a mirror holding only slots
+            1, 2 and 5 while Firestore held all six at the SAME timestamp —
+            the mirror was a snapshot from whichever flush happened to run,
+            so any save whose flush was superseded never reached it. Writing
+            here makes the mirror exactly current at all times, and localStorage
+            is synchronous so this cannot interleave. */
+        try {
+          const mir = readDecisionMirror();
+          mir[setName] = { setName, status: cur.status, description: cur.description || "",
+            titleOverride: cur.titleOverride || "", order: cur.order || null,
+            excluded: cur.excluded || [], zoom: cur.zoom || {}, updatedAt: cur.updatedAt };
+          localStorage.setItem(RV_MIRROR_KEY, JSON.stringify(mir));
+        } catch (_) {}
         paintCounts();
         paintRailRow(setName);
         // legacy mirrors the existing pipeline already reads
@@ -3877,17 +3891,6 @@ ANTI-REPETITION (TITLE)
           }
         } catch (_) {}
         const flush = async () => {
-          /*  Mirror to localStorage FIRST, unconditionally. Firestore is the
-              sync channel between terminals; localStorage is the guarantee
-              that this terminal's own edits survive a reload even when the
-              Firestore write is rejected (rules) or offline. */
-          try {
-            const mir = readDecisionMirror();
-            mir[setName] = { setName, status: cur.status, description: cur.description || "",
-              titleOverride: cur.titleOverride || "", order: cur.order || null,
-              excluded: cur.excluded || [], zoom: cur.zoom || {}, updatedAt: cur.updatedAt };
-            localStorage.setItem(RV_MIRROR_KEY, JSON.stringify(mir));
-          } catch (_) {}
           try {
             await fsdb.collection(RV_COLL).doc(setName).set({
               setName, status: cur.status, description: cur.description || "",
@@ -4720,10 +4723,30 @@ ANTI-REPETITION (TITLE)
               the transform without writing anything, so the cycle has no
               way to start. */
           function clampAndApply(im, scale, offX, offY, persist) {
-            const viewportW = box.clientWidth || 120;
-            const viewportH = box.clientHeight || 120;
-            const baseW = im.clientWidth || 120;
-            const baseH = im.clientHeight || 120;
+            /*  THE PAN-RESET BUG
+                -----------------
+                This runs immediately after paintGrid sets innerHTML, before
+                the browser has laid the <img> out — so im.clientWidth is 0 and
+                the old `|| 120` fallback took over. With a 120px base in a
+                204px viewport, maxX/maxY both compute to 0, so a saved pan of
+                (-9.8, -22.2) was clamped to (0, 0) AND the zeros were written
+                back into the dataset, destroying the real offsets. The scale
+                survived (it is never clamped), which is why framing looked
+                "reset" while the zoom level looked roughly right.
+
+                A zero dimension means "cannot clamp yet", not "clamp to
+                nothing". Apply the transform faithfully and let the load /
+                ResizeObserver pass re-clamp once real geometry exists. */
+            const viewportW = box.clientWidth;
+            const viewportH = box.clientHeight;
+            const baseW = im.clientWidth;
+            const baseH = im.clientHeight;
+            if (!viewportW || !viewportH || !baseW || !baseH) {
+              im.dataset.scale = scale; im.dataset.offsetX = offX; im.dataset.offsetY = offY;
+              im.style.transform = `scale(${scale}) translate(${offX}px, ${offY}px)`;
+              if (persist) persistZoom(scale, offX, offY);
+              return;
+            }
             const scaledW = baseW * scale;
             const scaledH = baseH * scale;
 
@@ -4749,6 +4772,14 @@ ANTI-REPETITION (TITLE)
           apply();
           void img.offsetWidth;                          // commit before re-enabling
           img.style.transition = "";
+          /*  If the image had no geometry above, the values were applied
+              unclamped. Re-run once it has actually loaded so the framing is
+              clamped against real dimensions — and re-run on decode too, since
+              a cached blob can be `complete` before layout settles. */
+          const reapply = () => { img.style.transition = "none"; apply();
+                                  void img.offsetWidth; img.style.transition = ""; };
+          if (!img.complete || !img.naturalWidth) img.addEventListener("load", reapply, { once: true });
+          else requestAnimationFrame(reapply);
           
 
           /*  Tiles carry no `draggable` attribute — that is deliberate, because
