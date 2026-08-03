@@ -4612,6 +4612,18 @@ ANTI-REPETITION (TITLE)
           const charmPath = manifest && (manifest.sourceCharm || (manifest.slots || []).find(s => s && s.newCharm)?.newCharm);
           if (!manifest) throw new Error("could not read this set's manifest.json — see the console for the reason");
           if (!charmPath) throw new Error("this set's manifest.json records no source charm");
+          /*  The manifest records where the charm WAS when the set was built.
+              Charms get consumed and relocated afterwards, so that path is
+              often stale by the time anyone regenerates — the generator then
+              fails with "not found" and (confusingly) blames
+              input_storage_path, because it uses that message for both
+              images. Resolve it to wherever the file lives now. */
+          const resolvedCharm = await resolveCharmPath(charmPath);
+          if (!resolvedCharm) {
+            throw new Error(`the source charm recorded for this set no longer exists in Storage `
+              + `(${charmPath.split("/").pop()}) — it was most likely consumed or moved after the set was generated`);
+          }
+          if (resolvedCharm !== charmPath) console.log(`[regen] charm relocated: ${charmPath} -> ${resolvedCharm}`);
 
           if (txt) txt.textContent = "Picking reference…";
           const refPath = await randomRef(cat, plan.folder);
@@ -4628,7 +4640,7 @@ ANTI-REPETITION (TITLE)
             method: "POST", headers: { "Content-Type": "application/json" },
             body: JSON.stringify(window.withImageModel({
               kind: "edits", activeCategory: cat,
-              input_storage_path: refPath, input_charm_storage_path: charmPath,
+              input_storage_path: refPath, input_charm_storage_path: resolvedCharm,
               output_base_path: r.setRef.fullPath, slotIndex: slot - 1, prompt
             }))
           });
@@ -4648,7 +4660,7 @@ ANTI-REPETITION (TITLE)
             console.error("[regen] generator rejected the request", {
               status: resp.status, detail,
               activeCategory: cat, input_storage_path: refPath,
-              input_charm_storage_path: charmPath,
+              input_charm_storage_path: resolvedCharm,
               output_base_path: r.setRef.fullPath, slotIndex: slot - 1,
               model: window.getSelectedImageModel()
             });
@@ -4705,6 +4717,41 @@ ANTI-REPETITION (TITLE)
           return null;
         }
       }
+      /*  Does this object still exist? getMetadata is the cheapest existence
+          check the SDK offers and needs no CORS. */
+      async function storageExists(path) {
+        try { await storage.ref(path).getMetadata(); return true; }
+        catch (_) { return false; }
+      }
+
+      /*  Find the charm by filename. Tries the recorded path first, then
+          sweeps the Charm_Maker subfolders — charms are moved between them as
+          they are used, and the filename is stable across the move. Cached per
+          session so a batch of regenerations does not re-list every time. */
+      const charmPathCache = new Map();
+      async function resolveCharmPath(recorded) {
+        const original = String(recorded || "").trim();
+        if (!original) return null;
+        if (charmPathCache.has(original)) return charmPathCache.get(original);
+
+        let found = null;
+        if (await storageExists(original)) {
+          found = original;
+        } else {
+          const file = original.split("/").pop();
+          try {
+            const root = await storage.ref("listing-generator-1/Charm_Maker").listAll();
+            for (const dir of root.prefixes) {
+              if (await storageExists(`${dir.fullPath}/${file}`)) { found = `${dir.fullPath}/${file}`; break; }
+            }
+          } catch (e) {
+            console.warn("[regen] could not sweep Charm_Maker for the charm:", e && e.message);
+          }
+        }
+        charmPathCache.set(original, found);
+        return found;
+      }
+
       async function randomRef(category, folder) {
         try {
           const res = await storage.ref(`listing-generator-1/${category}/${folder}`).listAll();
