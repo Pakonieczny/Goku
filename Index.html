@@ -1545,7 +1545,7 @@
     @keyframes dscopePulse{0%,100%{opacity:1}50%{opacity:.3}}
     /* ======================= OPERATOR SIGN-IN GATE =======================
        Mirrors brites-adwords.html: one shared operator passcode, validated
-       server-side by googleAdsAutopilotKick.js (EDIT_PASSCODE / 401), kept
+       server-side by operatorAuth.js on this site (EDIT_PASSCODE / 401), kept
        on this device for 30 days when the operator opts in. */
     body.lg-locked > *:not(#lgGate){display:none !important}
     body.lg-locked{overflow:hidden}
@@ -1831,10 +1831,15 @@
    OPERATOR SIGN-IN GATE  —  same system as brites-adwords.html
    =====================================================================
    One shared operator passcode across the Brites consoles. It is NOT
-   checked in the browser: the passcode is POSTed to an existing Netlify
-   function that already owns EDIT_PASSCODE (googleAdsAutopilotKick.js,
-   `authed()` → 401 on mismatch), so the secret never ships to the client
-   and changing it is an env-var change with no redeploy of this page.
+   checked in the browser: the passcode is POSTed to operatorAuth.js on
+   THIS site, which owns EDIT_PASSCODE and answers 401 on mismatch, so the
+   secret never ships to the client and rotating it is an env-var change
+   with no redeploy of this page.
+
+   operatorAuth.js is deliberately dependency-free. This console lives on a
+   different Netlify project from goldenspike, and the earlier attempt to
+   verify against googleAdsAutopilotKick.js could not build here — that file
+   requires the googleAdsAutopilot engine, which only exists on goldenspike.
 
    The "session" is the passcode itself, kept in localStorage inside a
    base64 envelope with a 30-day expiry — identical to baSess in the ads
@@ -1848,7 +1853,7 @@
    ===================================================================== */
 (function () {
   var SESS_KEY = "lgSess";
-  var AUTH_FN  = "/.netlify/functions/googleAdsAutopilotKick";
+  var AUTH_FN  = "/.netlify/functions/operatorAuth";
   var $ = function (s) { return document.querySelector(s); };
 
   document.body.classList.add("lg-locked");
@@ -1869,18 +1874,22 @@
   function sessClear() { try { localStorage.removeItem(SESS_KEY); } catch (e) {} }
   window.lgSessClear = sessClear;
 
-  // Verification round-trip. An unknown action is deliberate: authed() runs
-  // BEFORE the action router, so a wrong passcode is rejected with 401 and a
-  // correct one falls through the router without performing any work.
+  // Verification round-trip against operatorAuth.js on THIS site. That function
+  // is deliberately dependency-free, so sign-in here cannot be broken by a
+  // module that lives on another Netlify project.
   async function verify(pass) {
     var res = await fetch(AUTH_FN, {
       method: "POST",
       headers: { "Content-Type": "application/json", "X-Edit-Passcode": pass },
-      body: JSON.stringify({ action: "__verify_passcode", passcode: pass })
+      body: JSON.stringify({ passcode: pass })
     });
     if (res.status === 401) { var e = new Error("unauthorized"); e.status = 401; throw e; }
     if (res.status === 403) { var f = new Error("forbidden"); f.status = 403; throw f; }
     if (res.status === 404) { var g = new Error("not found"); g.status = 404; throw g; }
+    if (!res.ok) { var h = new Error("HTTP " + res.status); h.status = res.status; throw h; }
+    // EDIT_PASSCODE unset server-side means the console is open. Say so on the
+    // rail rather than implying a check happened that did not.
+    try { var j = await res.json(); window.LG_OPEN = !!(j && j.open); } catch (_) {}
     return true;
   }
 
@@ -1901,7 +1910,7 @@
     } else if (err && err.status === 403) {
       box.innerHTML = "<b>Not a passcode problem.</b> Netlify refused the request (403).";
     } else if (err && err.status === 404) {
-      box.textContent = "Auth endpoint not found (404) — is googleAdsAutopilotKick.js deployed on this site?";
+      box.textContent = "Auth endpoint not found (404) — is operatorAuth.js deployed in netlify/functions on this site?";
     } else {
       box.textContent = "Could not reach the auth endpoint: " + ((err && err.message) || err);
     }
@@ -1972,6 +1981,8 @@
   document.addEventListener("lg-unlocked", function () {
     var b = document.getElementById("lgSignOut");
     if (b && !b.__wired) { b.__wired = 1; b.addEventListener("click", function () { window.lgSignOut(); }); }
+    var v = document.getElementById("railSessVal");
+    if (v && window.LG_OPEN) { v.textContent = "unsecured"; v.title = "EDIT_PASSCODE is not set on this site — the console is open to anyone."; }
   });
   window.lgSignOut = function () {
     sessClear();
