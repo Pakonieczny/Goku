@@ -1697,6 +1697,13 @@
     .rv-row{display:flex; gap:10px; align-items:center; padding:9px 11px; cursor:pointer; border-bottom:1px solid #f0eade; position:relative}
     .rv-row:hover{background:#fff8ec}
     /* per-slot regeneration chips in the rail row */
+    /* Row pulse when an approved listing is knocked back to Pending. */
+    .rv-row.rv-unapproved{animation:rvUnapp 1.6s ease}
+    @keyframes rvUnapp{
+      0%{background:#fdf0d8; box-shadow:inset 3px 0 0 var(--gold,#caa861)}
+      70%{background:#fdf0d8; box-shadow:inset 3px 0 0 var(--gold,#caa861)}
+      100%{background:transparent; box-shadow:none}
+    }
     .rv-regen{display:inline-flex; gap:4px; margin-left:6px; vertical-align:middle}
     .rv-regen__chip{display:inline-flex; align-items:center; gap:4px; font-family:var(--mono,monospace);
       font-size:9.5px; font-weight:700; padding:1px 6px 1px 5px; border-radius:20px; line-height:1.6;
@@ -3863,6 +3870,22 @@ ANTI-REPETITION (TITLE)
         catch (_) { return {}; }
       }
       function save(setName, patch, { immediate = false } = {}) {
+        /*  Editing the images of an APPROVED listing un-approves it.
+            An approval means "these exact images are cleared to publish"; the
+            moment the framing, order or slot selection changes, that approval
+            no longer describes what would go out. The set also leaves the
+            publish queue, so the pipeline cannot spend the stale approval
+            before anyone re-reviews it. */
+        const touchesImages = patch && (patch.zoom !== undefined
+          || patch.order !== undefined || patch.excluded !== undefined);
+        if (touchesImages && patch.status === undefined && get(setName).status === RV_STATUS.OK) {
+          patch = { ...patch, status: RV_STATUS.PENDING };
+          try {
+            const q = readBatchApproved();
+            if (setName in q) { delete q[setName]; writeBatchApproved(q); }
+          } catch (_) {}
+          flashUnapproved(setName);
+        }
         const cur = { ...get(setName), ...patch, setName, updatedAt: Date.now() };
         state.set(setName, cur);
         /*  Mirror on EVERY save, not inside the debounced flush.
@@ -3883,8 +3906,14 @@ ANTI-REPETITION (TITLE)
         paintRailRow(setName);
         // legacy mirrors the existing pipeline already reads
         try {
+          /*  Only an APPROVED set belongs in the publish queue. This used to
+              write unconditionally, so it immediately re-added a listing that
+              the un-approve above had just pulled out — the stale approval
+              would still have been spent by the pipeline. */
           if (typeof readBatchApproved === "function" && cur.description) {
-            const m = readBatchApproved(); m[setName] = cur.description; writeBatchApproved(m);
+            const m = readBatchApproved();
+            if (cur.status === RV_STATUS.OK) { m[setName] = cur.description; writeBatchApproved(m); }
+            else if (setName in m) { delete m[setName]; writeBatchApproved(m); }
           }
           if (typeof readBatchZoom === "function" && cur.zoom && cur.zoom["1"]) {
             const z = readBatchZoom(); z[setName] = cur.zoom["1"]; writeBatchZoom(z);
@@ -3936,6 +3965,20 @@ ANTI-REPETITION (TITLE)
         pendingFlush.forEach((flush) => { try { jobs.push(flush()); } catch (_) {} });
         pendingFlush.clear();
         try { await Promise.all(jobs); } catch (_) {}
+      }
+
+      /*  Announce the un-approval once per set, and pulse its row so the
+          change is visible in the list even if the toast is missed. */
+      const unapprovedNotified = new Set();
+      function flashUnapproved(setName) {
+        setTimeout(() => {
+          const el = railEl && railEl.querySelector(`.rv-row[data-set="${CSS.escape(setName)}"]`);
+          if (el) { el.classList.add("rv-unapproved"); setTimeout(() => el.classList.remove("rv-unapproved"), 1600); }
+        }, 0);
+        if (unapprovedNotified.has(setName)) return;
+        unapprovedNotified.add(setName);
+        setTimeout(() => unapprovedNotified.delete(setName), 4000);
+        toast(`${setName} moved back to Pending — its images changed after approval`);
       }
 
       function subscribe() {
@@ -4060,6 +4103,17 @@ ANTI-REPETITION (TITLE)
           out.push({ slot: Number(slot), status: v.status });
         });
         return out.sort((a, b) => a.slot - b.slot);
+      }
+
+      // state → mirror → blank. Synchronous, so publish-time callers can use it.
+      function decisionFor(setName) {
+        const mem = state.get(setName);
+        if (mem && Number(mem.updatedAt || 0) > 0) return { ...mem };
+        try {
+          const mine = (readDecisionMirror() || {})[setName];
+          if (mine) return { ...blank(setName), ...mine };
+        } catch (_) {}
+        return { ...blank(setName) };
       }
 
       function thumbFor(r) {
@@ -5514,7 +5568,15 @@ ANTI-REPETITION (TITLE)
                },
                cacheStats: () => ({ sets: slotsCache.size,
                                     images: [...slotsCache.values()].reduce((n, o) => n + o.filter(x => x.blobUrl).length, 0) }),
-               statusOf: (n) => get(n).status, decisionOf: (n) => ({ ...get(n) }) };
+               statusOf: (n) => decisionFor(n).status,
+               /*  Reads state, then the localStorage mirror. The publish
+                   pipeline calls this for every set it is about to upload —
+                   and it runs whether or not the panel was ever opened this
+                   session. Reading only in-memory state meant a set the panel
+                   had not loaded returned a BLANK decision, so its framing,
+                   image order and exclusions were silently dropped from the
+                   published listing even though they were saved. */
+               decisionOf: (n) => decisionFor(n) };
     })();
     window.ReviewPanel = ReviewPanel;
     // Console shortcut for diagnosing a set's saved framing.
