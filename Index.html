@@ -1696,6 +1696,8 @@
     .rv-rail:hover::-webkit-scrollbar-thumb{background:#ddd4c4}
     .rv-row{display:flex; gap:10px; align-items:center; padding:9px 11px; cursor:pointer; border-bottom:1px solid #f0eade; position:relative}
     .rv-row:hover{background:#fff8ec}
+    .rv-thumbph{flex:0 0 auto; width:44px; height:44px; border-radius:8px; display:block;
+      background:repeating-linear-gradient(45deg,#f0eade,#f0eade 4px,#e8e0d0 4px,#e8e0d0 8px)}
     .rv-row.sel{background:#fff3dc}
     .rv-row.sel::before{content:""; position:absolute; left:0; top:0; bottom:0; width:3px; background:var(--gold2,#a8873f)}
     .rv-row img{width:54px; height:54px; object-fit:cover; border-radius:8px; background:#efe9dd; flex:0 0 auto; border:1px solid #e6ded0}
@@ -3914,11 +3916,30 @@ ANTI-REPETITION (TITLE)
         : st === RV_STATUS.REVIEW ? ["p-review", "Needs review"]
         : st === RV_STATUS.REJECT ? ["p-reject", "Rejected"] : ["p-pending", "Pending"];
 
+      /*  The rail thumbnail is DERIVED from the slot cache, never stored on
+          the row. Rows are rebuilt from scratch on every open (ReviewQueue
+          constructs fresh objects with thumbUrl:""), so a thumbnail written
+          onto the row object died with it — which is why the detail images
+          survived a close but the thumbnails all re-downloaded. Reading the
+          cache instead means they survive exactly as long as the images do. */
+      function thumbFor(r) {
+        if (r.thumbUrl) return r.thumbUrl;
+        const out = slotsCache.get(r.setName);
+        if (!out || !out.length) return "";
+        const first = out.find(x => x.blobUrl) || out.find(x => x.url);
+        return first ? (first.blobUrl || first.url) : "";
+      }
+
       function rowHtml(r, i) {
         const d = get(r.setName);
         const [pc, pl] = pillFor(d.status);
+        const thumb = thumbFor(r);
         return `<div class="rv-row ${i === sel ? "sel" : ""} ${pc}" data-set="${esc(r.setName)}" data-i="${i}">
-            <img src="${esc(r.thumbUrl || "")}" alt="" loading="lazy">
+            ${thumb
+              // An <img src=""> renders as a broken-image icon, which is what
+              // those grey boxes were. Show a neutral placeholder instead.
+              ? `<img src="${esc(thumb)}" alt="" loading="lazy">`
+              : `<span class="rv-thumbph" aria-hidden="true"></span>`}
             <div class="meta">
               <div class="nm">${esc(r.setName)}</div>
               <div class="ds">${esc(d.description || r.description || "—")}</div>
@@ -4152,10 +4173,8 @@ ANTI-REPETITION (TITLE)
                 // The rail thumbnail comes from the first surviving slot;
                 // sets opened from the Review Queue have no thumbUrl of their
                 // own, which is why those rows were blank squares.
-                if (!r.thumbUrl && out && out.length) {
-                  const first = out.find(x => x.blobUrl || x.url);
-                  if (first) { r.thumbUrl = first.blobUrl || first.url; paintRailRow(r.setName); }
-                }
+                // thumbFor() reads the cache directly; just repaint the row.
+                if (out && out.length) paintRailRow(r.setName);
               })(), 90000, `caching ${r.setName}`);
             } catch (e) {
               console.warn("[review] cache pass skipped", r.setName, "—", e && e.message);
