@@ -3949,7 +3949,14 @@ ANTI-REPETITION (TITLE)
               const mine = state.get(d.setName);
               // Another terminal's newer write wins; our own in-flight edits do not flicker.
               if (mine && Number(mine.updatedAt || 0) >= Number(d.updatedAt || 0)) return;
-              state.set(d.setName, { ...blank(d.setName), ...d });
+              /*  Merge only the fields the remote doc actually carries. A
+                  blind {...blank, ...d} spread let a doc written without a
+                  `zoom` key reset framing to blank — the field would silently
+                  vanish rather than simply not being updated. */
+              const merged = { ...blank(d.setName), ...(mine || {}) };
+              ["status", "description", "titleOverride", "order", "excluded", "zoom", "updatedAt"]
+                .forEach((k) => { if (d[k] !== undefined) merged[k] = d[k]; });
+              state.set(d.setName, merged);
               touched = true;
             });
             if (touched) { paintCounts(); paintRail(); if (sel > -1) paintDetail(); }
@@ -4828,12 +4835,25 @@ ANTI-REPETITION (TITLE)
             const dx = (ev.clientX - lastX) * 0.5;
             const dy = (ev.clientY - lastY) * 0.5;
             offX += dx; offY += dy;
-            clampAndApply(im, scaleNow, offX, offY, true);
+            // Move visually only. Persisting here fired save() on EVERY
+            // mousemove — ~60 writes a second, each re-rendering the rail row
+            // — and the debounce meant only the last one ever reached
+            // Firestore anyway. The gesture is committed once, on mouseup.
+            clampAndApply(im, scaleNow, offX, offY);
             lastX = ev.clientX; lastY = ev.clientY;
           });
 
-          box.addEventListener("mouseup",    () => { isMouseDown = false; });
-          box.addEventListener("mouseleave", () => { isMouseDown = false; });
+          // Commit the pan once, when the gesture ends.
+          const endPan = () => {
+            if (!isMouseDown) return;
+            isMouseDown = false;
+            const im = box.querySelector("img");
+            if (im) persistZoom(parseFloat(im.dataset.scale) || 1,
+                                parseFloat(im.dataset.offsetX) || 0,
+                                parseFloat(im.dataset.offsetY) || 0);
+          };
+          box.addEventListener("mouseup",    endPan);
+          box.addEventListener("mouseleave", endPan);
 
           box.addEventListener("click", function (ev) {
             if (ev.target.closest(".rv-handle") || ev.target.closest(".rv-tool")) return;
@@ -5439,11 +5459,35 @@ ANTI-REPETITION (TITLE)
                // when the panel is not the thing driving it.
                setRegenState: (setName, slot, status) => setRegenState(setName, slot, status),
                releaseSet: (setName) => releaseSlots(setName, true),   // consumed → completed
+               /*  Diagnostic: prints every link in the persistence chain for
+                   one set, so a failure can be located instead of guessed at.
+                   Run window.rvDiagZoom("Stud_Earrings_Set_258") in DevTools. */
+               diagZoom: async (setName) => {
+                 const mem = state.get(setName) || null;
+                 let mir = null, remote = null, remoteErr = null;
+                 try { mir = (readDecisionMirror() || {})[setName] || null; } catch (_) {}
+                 try {
+                   const snap = await fsdb.collection(RV_COLL).doc(setName).get();
+                   remote = snap.exists ? snap.data() : null;
+                 } catch (e) { remoteErr = e && e.message; }
+                 const out = {
+                   set: setName,
+                   inMemory:   mem    ? { zoom: mem.zoom,    updatedAt: mem.updatedAt }    : "(none)",
+                   localMirror: mir   ? { zoom: mir.zoom,    updatedAt: mir.updatedAt }    : "(none)",
+                   firestore:  remote ? { zoom: remote.zoom, updatedAt: remote.updatedAt } : (remoteErr ? "ERROR: " + remoteErr : "(no doc)"),
+                   pendingWrites: [...writeTimers.keys()],
+                   signedIn: !!(firebase.auth().currentUser)
+                 };
+                 console.log("[rv-diag]", JSON.stringify(out, null, 2));
+                 return out;
+               },
                cacheStats: () => ({ sets: slotsCache.size,
                                     images: [...slotsCache.values()].reduce((n, o) => n + o.filter(x => x.blobUrl).length, 0) }),
                statusOf: (n) => get(n).status, decisionOf: (n) => ({ ...get(n) }) };
     })();
     window.ReviewPanel = ReviewPanel;
+    // Console shortcut for diagnosing a set's saved framing.
+    window.rvDiagZoom = (setName) => ReviewPanel.diagZoom(setName);
 
     // Read-through helper the pipeline uses for held-back / rejected sets.
     window.__rvBlocked = new Map();
