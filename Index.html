@@ -1733,13 +1733,14 @@
       transform-origin:center center; transition:transform .3s ease; cursor:grab;
       user-select:none; -webkit-user-drag:none}
     .rv-box img:active{cursor:grabbing}
-    /* prefetch progress — shown inside the open panel, not before it */
-    .rv-prefetch{display:none; align-items:center; gap:12px; margin:0 0 12px; padding:9px 13px;
-      background:var(--goldSoft,#f7efdc); border:1px solid var(--goldLine,#e3d2a8); border-radius:10px}
+    /* Caching progress — compact, in the panel head, persistent for the whole
+       download. Short bar + count rather than a full-width banner. */
+    .rv-prefetch{display:none; align-items:center; gap:9px; margin-left:16px; flex:0 0 auto}
     .rv-prefetch.on{display:flex}
-    .rv-prefetch__txt{font-size:11.5px; font-weight:600; color:#7a5a1d; white-space:nowrap}
-    .rv-prefetch__trk{flex:1 1 auto; height:4px; border-radius:3px; background:rgba(122,90,29,.18); overflow:hidden}
+    .rv-prefetch__trk{width:104px; height:4px; border-radius:3px; background:rgba(122,90,29,.20); overflow:hidden}
     .rv-prefetch__fill{display:block; height:100%; width:0%; background:var(--gold,#caa861); transition:width .25s ease}
+    .rv-prefetch__txt{font-size:10.5px; font-weight:700; color:#7a5a1d; white-space:nowrap;
+      font-family:var(--mono,monospace); font-variant-numeric:tabular-nums}
 
     /* Rule-of-thirds overlay — the exact pattern from Listing_Generator_1's
        .slotPrev::after. Permanent, so the on/off tool is gone: four 1px
@@ -1760,20 +1761,34 @@
       background-repeat: no-repeat;
     }
 
-    /* ── drag to reorder ──
-       A drop target you can see. The lifted tile fades back, the target shows
-       a blue rail on the exact edge the image will land against, and the grid
-       dims everything else so the operation reads at a glance. */
-    .rv-tile{transition:transform .18s cubic-bezier(.2,.8,.2,1), box-shadow .18s, opacity .18s}
-    .rv-grid.dragging .rv-tile{opacity:.55}
+    /* ── drag to reorder (swap) ──
+       One tile, one target: hovering A over B exchanges the two. The overlay
+       lands on the hovered image in real time — a blue wash, a ring, and a
+       swap glyph — so it is always obvious which pair is about to trade. */
+    .rv-tile{position:relative; transition:transform .18s cubic-bezier(.2,.8,.2,1), box-shadow .18s, opacity .18s}
+    .rv-grid.dragging .rv-tile{opacity:.6}
     .rv-grid.dragging .rv-tile.over, .rv-grid.dragging .rv-tile.drag{opacity:1}
-    .rv-tile.drag{transform:scale(.96); opacity:.4 !important}
-    .rv-tile.over{position:relative; transform:translateY(-3px); box-shadow:0 10px 26px rgba(43,110,196,.22)}
-    .rv-tile.over::after{content:""; position:absolute; top:-2px; bottom:-2px; width:3px; border-radius:3px;
-      background:#2b6ec4; box-shadow:0 0 0 3px rgba(43,110,196,.20); animation:rvEdge .18s ease}
-    .rv-tile.over-l::after{left:-6px}
-    .rv-tile.over-r::after{right:-6px}
-    @keyframes rvEdge{from{opacity:0; transform:scaleY(.6)}to{opacity:1; transform:none}}
+    .rv-tile.drag{transform:scale(.96); opacity:.42 !important}
+    .rv-tile.drag .rv-box{box-shadow:inset 0 0 0 2px rgba(43,110,196,.45)}
+    .rv-tile.over{transform:translateY(-3px) scale(1.015); box-shadow:0 12px 30px rgba(43,110,196,.26)}
+    /* Blue wash sits above the photo but below the grid hairlines (z 700). */
+    .rv-tile.over .rv-box::before{
+      content:""; position:absolute; inset:0; z-index:690; pointer-events:none;
+      background:linear-gradient(180deg, rgba(43,110,196,.34), rgba(43,110,196,.22));
+      box-shadow:inset 0 0 0 3px #2b6ec4;
+      animation:rvWash .14s ease}
+    @keyframes rvWash{from{opacity:0}to{opacity:1}}
+    /* Swap glyph, centred on the hovered tile. */
+    .rv-tile.over .rv-box::after{
+      background-image:none;                 /* suppress the thirds grid under the badge */
+    }
+    .rv-tile.over .rv-swap{display:flex}
+    .rv-swap{display:none; position:absolute; left:50%; top:50%; transform:translate(-50%,-50%);
+      z-index:760; width:42px; height:42px; border-radius:50%; background:#2b6ec4; color:#fff;
+      align-items:center; justify-content:center; font-size:21px; line-height:1; pointer-events:none;
+      box-shadow:0 8px 22px rgba(43,110,196,.5), 0 0 0 4px rgba(255,255,255,.28);
+      animation:rvSwapIn .16s cubic-bezier(.2,.8,.2,1)}
+    @keyframes rvSwapIn{from{opacity:0; transform:translate(-50%,-50%) scale(.6)}to{opacity:1; transform:translate(-50%,-50%) scale(1)}}
     .rv-tile.landed .rv-box{animation:rvLanded .6s ease}
     @keyframes rvLanded{0%{box-shadow:0 0 0 3px rgba(43,110,196,.55)}100%{box-shadow:0 0 0 3px rgba(43,110,196,0)}}
     .rv-handle{cursor:grab}
@@ -2168,6 +2183,14 @@
         <div>
           <h3 id="rvTitle">Review listings</h3>
           <div class="sub" id="rvSub">Approve, flag for further review, or reject. Changes save as you make them.</div>
+        </div>
+        <!-- Caching progress lives in the HEAD, outside the detail pane.
+             It used to sit inside the detail template, which paintDetail
+             rewrites wholesale on every row click — so selecting a listing
+             destroyed the element mid-download and the bar vanished. -->
+        <div class="rv-prefetch" id="rvPrefetch">
+          <span class="rv-prefetch__trk"><span class="rv-prefetch__fill" id="rvPrefetchFill"></span></span>
+          <span class="rv-prefetch__txt" id="rvPrefetchTxt">Caching…</span>
         </div>
         <div class="rv-counts" id="rvCounts"></div>
         <div class="rv-spacer"></div>
@@ -4075,10 +4098,6 @@ ANTI-REPETITION (TITLE)
             <div class="rv-spacer"></div>
             <button type="button" class="rv-btn" id="rvResetOrder"><i class="material-icons">restart_alt</i>Reset order</button>
           </div>
-          <div class="rv-prefetch" id="rvPrefetch">
-            <span class="rv-prefetch__txt" id="rvPrefetchTxt">Caching images…</span>
-            <span class="rv-prefetch__trk"><span class="rv-prefetch__fill" id="rvPrefetchFill"></span></span>
-          </div>
           <div class="rv-grid" id="rvGrid"><div class="rv-empty">Loading images…</div></div>`;
 
         document.getElementById("rvDesc").addEventListener("input", (e) => {
@@ -4126,6 +4145,7 @@ ANTI-REPETITION (TITLE)
                 <img src="${esc(s.blobUrl || s.url)}" alt="Slot ${s.slot}" draggable="false"
                      data-set="${esc(r.setName)}" decoding="async">
                 <div class="rv-busy"><div class="rv-spin"></div><span class="rv-busytxt">Regenerating…</span></div>
+                <span class="rv-swap" aria-hidden="true">&#8646;</span>
               </div>
               <div class="rv-tools">
                 <button type="button" class="rv-tool" data-a="regen" title="Regenerate this image"><i class="material-icons">autorenew</i></button>
@@ -4158,7 +4178,8 @@ ANTI-REPETITION (TITLE)
           const b = t.getBoundingClientRect();
           const dx = a.left - b.left, dy = a.top - b.top;
           if (!dx && !dy) return;
-          const isMoved = Number(t.dataset.slot) === Number(movedSlot);
+          const movers = Array.isArray(movedSlot) ? movedSlot.map(Number) : [Number(movedSlot)];
+          const isMoved = movers.includes(Number(t.dataset.slot));
           t.animate(
             [{ transform: `translate(${dx}px, ${dy}px)`, boxShadow: isMoved ? "0 12px 30px rgba(31,27,22,.28)" : "none" },
              { transform: "translate(0,0)", boxShadow: "none" }],
@@ -4373,40 +4394,44 @@ ANTI-REPETITION (TITLE)
             tile.draggable = false;
             grid.classList.remove("dragging");
             tile.classList.remove("drag");
-            grid.querySelectorAll(".rv-tile").forEach(t => t.classList.remove("over", "over-l", "over-r"));
+            grid.querySelectorAll(".rv-tile").forEach(t => t.classList.remove("over"));
+          });
+          /*  SWAP, not insert. Hovering A over B exchanges exactly those two
+              and leaves every other image where it is, so the gesture is
+              symmetric: A onto B and B onto A produce the same arrangement.
+              There is therefore no "which side" to indicate — the whole tile
+              is one target, which is why the left/right edge rail is gone. */
+          tile.addEventListener("dragenter", (ev) => {
+            ev.preventDefault();
+            if (!tile.classList.contains("drag")) tile.classList.add("over");
           });
           tile.addEventListener("dragover", (ev) => {
             ev.preventDefault();
-            if (tile.classList.contains("drag")) return;
-            // Show WHICH SIDE it will land on, so the drop is never a guess.
-            const rect = tile.getBoundingClientRect();
-            const before = (ev.clientX - rect.left) < rect.width / 2;
-            tile.classList.add("over");
-            tile.classList.toggle("over-l", before);
-            tile.classList.toggle("over-r", !before);
+            ev.dataTransfer.dropEffect = "move";
+            if (!tile.classList.contains("drag")) tile.classList.add("over");
           });
-          tile.addEventListener("dragleave", () => tile.classList.remove("over", "over-l", "over-r"));
+          // relatedTarget guards the flicker as the pointer crosses child nodes.
+          tile.addEventListener("dragleave", (ev) => {
+            if (!ev.relatedTarget || !tile.contains(ev.relatedTarget)) tile.classList.remove("over");
+          });
           tile.addEventListener("drop", async (ev) => {
             ev.preventDefault();
-            const before = tile.classList.contains("over-l");
-            tile.classList.remove("over", "over-l", "over-r");
+            tile.classList.remove("over");
             const from = Number(ev.dataTransfer.getData("text/plain"));
             if (!Number.isFinite(from) || from === slot) return;
             const cur = orderedSlots(r.setName, ord).map(s => s.slot);
-            const a = cur.indexOf(from);
-            if (a < 0) return;
-            const moving = cur.splice(a, 1)[0];
-            let b = cur.indexOf(slot);
-            if (b < 0) return;
-            cur.splice(before ? b : b + 1, 0, moving);
+            const a = cur.indexOf(from), bIdx = cur.indexOf(slot);
+            if (a < 0 || bIdx < 0) return;
+            const moving = from;
+            [cur[a], cur[bIdx]] = [cur[bIdx], cur[a]];   // pure exchange
             // FLIP: measure where every tile is now, repaint, then animate
             // each one from its old box to its new one. The operator sees the
             // images travel, so what moved and where is never ambiguous.
             const first = captureRects(grid);
             save(r.setName, { order: cur });
             await paintGrid(r);
-            playFlip(grid, first, moving);
-            toast("Image order updated");
+            playFlip(grid, first, [moving, slot]);       // both travel
+            toast(`Swapped image ${a + 1} and ${bIdx + 1}`);
           });
 
           // tools
@@ -4695,9 +4720,7 @@ ANTI-REPETITION (TITLE)
         if (bar) bar.classList.add("on");
         try {
           await prefetchAll(rows, (done, total) => {
-            if (barTxt) barTxt.textContent = done >= total
-              ? `Images cached — ${total} listing${total === 1 ? "" : "s"} ready`
-              : `Caching images — ${done} of ${total} listings`;
+            if (barTxt) barTxt.textContent = `${done}/${total} cached`;
             if (barFill) barFill.style.width = (total ? (done / total) * 100 : 100) + "%";
           });
         } catch (_) { /* a failed prefetch must never block the review */ }
