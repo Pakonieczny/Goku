@@ -4689,12 +4689,24 @@ ANTI-REPETITION (TITLE)
         const ord = orderedSlots(r.setName, slots);
         grid.innerHTML = ord.map((s, i) => {
           const gone = (d.excluded || []).includes(s.slot);
+          /*  Saved framing is written straight into the markup — the style
+              attribute and the dataset — so it is correct on the FIRST paint
+              and cannot depend on when JS runs, when the image loads, or
+              whether the element has geometry yet. Every previous attempt
+              restored it afterwards from script, which is why it kept losing
+              races I could not reproduce locally. wireTiles now only attaches
+              behaviour; it no longer has to establish the framing. */
+          const zs = (d.zoom && d.zoom[String(s.slot)]) || { s: 1, x: 0, y: 0 };
+          const zsc = Number(zs.s) || 1, zx = Number(zs.x) || 0, zy = Number(zs.y) || 0;
+          const zStyle = `transform:scale(${zsc}) translate(${zx}px, ${zy}px)`;
           return `<div class="rv-tile ${gone ? "removed" : ""}" data-slot="${s.slot}">
               <div class="rv-box" data-slot="${s.slot}">
                 <span class="rv-idx">${i + 1}</span>
                 <button type="button" class="rv-handle" title="Drag to reorder"><i class="material-icons">drag_indicator</i></button>
                 <img src="${esc(s.blobUrl || s.url)}" alt="Slot ${s.slot}" draggable="false"
-                     data-set="${esc(r.setName)}" decoding="async">
+                     data-set="${esc(r.setName)}" decoding="async"
+                     data-scale="${zsc}" data-offset-x="${zx}" data-offset-y="${zy}"
+                     style="${zStyle}">
                 <div class="rv-busy"><div class="rv-spin"></div><span class="rv-busytxt">Regenerating…</span></div>
                 <span class="rv-swap" aria-hidden="true">&#8646;</span>
               </div>
@@ -4758,8 +4770,12 @@ ANTI-REPETITION (TITLE)
               re-clamp. Only addition: the framing is persisted per slot so it
               survives a row switch, which the source had no need for. */
           const MAX_SCALE = 8, dragThreshold = 3;
-          const z0 = (d.zoom && d.zoom[String(slot)]) || { s: 1, x: 0, y: 0 };
-          img.dataset.scale = z0.s; img.dataset.offsetX = z0.x; img.dataset.offsetY = z0.y;
+          // The framing is already in the markup (see paintGrid). Trust it —
+          // re-deriving it here is what kept racing image load and layout.
+          if (img.dataset.scale === undefined || img.dataset.scale === "") {
+            const z0 = (d.zoom && d.zoom[String(slot)]) || { s: 1, x: 0, y: 0 };
+            img.dataset.scale = z0.s; img.dataset.offsetX = z0.x; img.dataset.offsetY = z0.y;
+          }
 
           /*  THE INFINITE ZOOM LOOP
               ----------------------
@@ -4820,20 +4836,11 @@ ANTI-REPETITION (TITLE)
             parseFloat(img.dataset.scale) || 1,
             parseFloat(img.dataset.offsetX) || 0,
             parseFloat(img.dataset.offsetY) || 0);      // no persist: restoring, not editing
-          // Restore instantly. The .3s transition is for gestures; animating
-          // the restore is what read as an "automatic zoom" on every repaint.
-          img.style.transition = "none";
-          apply();
-          void img.offsetWidth;                          // commit before re-enabling
-          img.style.transition = "";
-          /*  If the image had no geometry above, the values were applied
-              unclamped. Re-run once it has actually loaded so the framing is
-              clamped against real dimensions — and re-run on decode too, since
-              a cached blob can be `complete` before layout settles. */
-          const reapply = () => { img.style.transition = "none"; apply();
-                                  void img.offsetWidth; img.style.transition = ""; };
-          if (!img.complete || !img.naturalWidth) img.addEventListener("load", reapply, { once: true });
-          else requestAnimationFrame(reapply);
+          /*  No apply() on restore. The markup already carries the correct
+              transform, so re-applying could only ever make it worse (that is
+              exactly how the pan got clamped to zero against an un-laid-out
+              image). Once the picture has real geometry the ResizeObserver
+              re-clamps it against true dimensions, without persisting. */
           
 
           /*  Tiles carry no `draggable` attribute — that is deliberate, because
@@ -5555,11 +5562,28 @@ ANTI-REPETITION (TITLE)
                    const snap = await fsdb.collection(RV_COLL).doc(setName).get();
                    remote = snap.exists ? snap.data() : null;
                  } catch (e) { remoteErr = e && e.message; }
+                 /*  What the SCREEN is actually showing, per slot, next to what
+                     is saved. If saved and onScreen disagree, the restore is at
+                     fault; if they agree, the data being restored is not what
+                     the operator expected to have saved. */
+                 const grid = document.getElementById("rvGrid");
+                 const onScreen = {};
+                 if (grid) grid.querySelectorAll(".rv-tile img").forEach((im) => {
+                   const slot = im.closest(".rv-tile").dataset.slot;
+                   onScreen[slot] = {
+                     transform: im.style.transform || "(none)",
+                     ds: { s: im.dataset.scale, x: im.dataset.offsetX, y: im.dataset.offsetY },
+                     boxW: im.closest(".rv-box") ? im.closest(".rv-box").clientWidth : null,
+                     imgW: im.clientWidth, loaded: !!im.naturalWidth
+                   };
+                 });
                  const out = {
                    set: setName,
-                   inMemory:   mem    ? { zoom: mem.zoom,    updatedAt: mem.updatedAt }    : "(none)",
-                   localMirror: mir   ? { zoom: mir.zoom,    updatedAt: mir.updatedAt }    : "(none)",
-                   firestore:  remote ? { zoom: remote.zoom, updatedAt: remote.updatedAt } : (remoteErr ? "ERROR: " + remoteErr : "(no doc)"),
+                   isDisplayedSet: !!(grid && grid.dataset.set === setName),
+                   inMemory:   mem    ? { zoom: mem.zoom,    updatedAt: mem.updatedAt, status: mem.status } : "(none)",
+                   localMirror: mir   ? { zoom: mir.zoom,    updatedAt: mir.updatedAt, status: mir.status } : "(none)",
+                   firestore:  remote ? { zoom: remote.zoom, updatedAt: remote.updatedAt, status: remote.status } : (remoteErr ? "ERROR: " + remoteErr : "(no doc)"),
+                   onScreen,
                    pendingWrites: [...writeTimers.keys()],
                    signedIn: !!(firebase.auth().currentUser)
                  };
