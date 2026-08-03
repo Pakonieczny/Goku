@@ -4215,6 +4215,27 @@ ANTI-REPETITION (TITLE)
             parseFloat(img.dataset.offsetY) || 0);
           apply();
 
+          /*  Tiles carry no `draggable` attribute — that is deliberate, because
+              a natively draggable tile swallows every press inside the picture
+              and kills panning. The handle arms it for the duration of the
+              gesture instead.
+
+              REGRESSION NOTE: this block previously lived inside the zoom/pan
+              section and was overwritten wholesale when that section was
+              replaced with the Listing_Generator_1 implementation. With it
+              gone nothing ever set draggable=true, so dragstart could never
+              fire and reordering was dead everywhere — not only after Reset
+              order, which is simply where it got noticed. */
+          const handle = tile.querySelector(".rv-handle");
+          if (handle) {
+            const arm   = () => { tile.draggable = true; };
+            const disarm = () => { tile.draggable = false; };
+            handle.addEventListener("pointerdown", arm);
+            handle.addEventListener("mousedown", arm);      // belt and braces for the HTML5 drag path
+            handle.addEventListener("pointerup", disarm);
+            handle.addEventListener("pointercancel", disarm);
+          }
+
           let isDragging = false, isMouseDown = false;
           let dragStartX = 0, dragStartY = 0, lastX = 0, lastY = 0;
 
