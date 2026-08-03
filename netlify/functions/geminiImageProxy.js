@@ -1,22 +1,18 @@
 /* netlify/functions/geminiImageProxy.js
    ---------------------------------------------------------------------------
-   SELF-CONTAINED. This file previously required a sibling
-   ("./geminiImageProxy-background"), and that sibling kept arriving on the
-   build server as "geminiImageProxybackground.js" — hyphen missing — so
-   esbuild could not resolve it and the deploy failed at bundling time. A
-   try/catch around the require would not have helped: esbuild resolves
-   requires statically, before any code runs.
+   SELF-CONTAINED — the implementation is inlined, so there is no sibling file
+   to name correctly and nothing for esbuild to fail to resolve. Delete any
+   geminiImageProxybackground.js / geminiImageProxy-background.js still in
+   netlify/functions; this one file replaces both.
 
-   The implementation is now inlined here, so there is no sibling to name
-   correctly and no cross-file resolution to fail. Delete any
-   geminiImageProxybackground.js / geminiImageProxy-background.js left in
-   netlify/functions — this one file replaces both.
+   THIS REVISION also widens assertAllowedOutputBase() to permit the review
+   panel's own folders under Generated_Listing_Sets. See the comment there.
 
-   Still required for RUNTIME (the build will now succeed without them, and
-   then fail on first call):
-     · env GEMINI_API_KEY          — not currently set on this site
-     · dependency "sharp"          — in package.json AND in
-                                     netlify.toml external_node_modules
+   Still required at RUNTIME:
+     · env GEMINI_API_KEY   — set (this revision assumes it is)
+     · dependency "sharp"   — package.json AND netlify.toml
+                              external_node_modules; only the zoom-postprocess
+                              path uses it
    --------------------------------------------------------------------------- */
 
 /* netlify/functions/geminiImageProxy-background.js
@@ -288,7 +284,20 @@ function assertAllowedOutputBase(base) {
   const isSet = /^listing-generator-1\/[^/]+\/Ready_To_List\/Set_\d+$/i.test(b);
   const isDeriv = /^listing-generator-1\/Charm_Maker\/Generated_Charm_Sets\/Deriv_\d+$/i.test(b); // ✅ Updated Regex
 
-  if (!isSet && !isDeriv) {
+  /*  Review-panel regeneration.
+      -------------------------
+      The panel regenerates a single slot for a set that has ALREADY been
+      produced, and those sets live under Generated_Listing_Sets — not in
+      Ready_To_List, which only ever holds sets being built for the first
+      time. Without this the panel's Regenerate button always failed with
+      "output_base_path not allowed".
+
+      Deliberately still narrow: the four known review folders, one path
+      segment for the set name, and that segment may not contain slashes or
+      dots, so no traversal and no escape from Generated_Listing_Sets. */
+  const isReviewSet = /^listing-generator-1\/Generated_Listing_Sets\/(Completed|Approved|Rejected|Needs_Review)_Listing_Sets\/[A-Za-z0-9_-]+$/i.test(b);
+
+  if (!isSet && !isDeriv && !isReviewSet) {
     throw new Error("output_base_path not allowed: " + b);
   }
   return b;
