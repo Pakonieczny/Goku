@@ -3877,7 +3877,14 @@ ANTI-REPETITION (TITLE)
               setName, status: cur.status, description: cur.description || "",
               titleOverride: cur.titleOverride || "", order: cur.order || null,
               excluded: cur.excluded || [], zoom: cur.zoom || {},
-              client: (window.CLIENT_ID || ""), updatedAt: Date.now()
+              /*  cur.updatedAt, NOT a fresh Date.now(). The flush runs up to
+                  450ms after save() stamped local state; writing a newer
+                  timestamp made our own echo look like another terminal's
+                  newer write, which repainted the grid after EVERY zoom
+                  gesture — the tile rebuilt at scale 1 and animated back to
+                  the saved zoom. That was the "resets itself then performs
+                  one automatic zoom" effect. */
+              client: (window.CLIENT_ID || ""), updatedAt: cur.updatedAt
             }, { merge: true });
           } catch (e) { console.warn("Review save failed (kept locally):", e && e.message); }
         };
@@ -3891,6 +3898,9 @@ ANTI-REPETITION (TITLE)
           unsub = fsdb.collection(RV_COLL).onSnapshot((snap) => {
             let touched = false;
             snap.docChanges().forEach((ch) => {
+              // Our own write coming back is not news — skip it before the
+              // timestamp compare even gets a say.
+              if (ch.doc.metadata && ch.doc.metadata.hasPendingWrites) return;
               const d = ch.doc.data() || {};
               if (!d.setName) return;
               const mine = state.get(d.setName);
@@ -4036,6 +4046,60 @@ ANTI-REPETITION (TITLE)
           Object URLs are owned, counted and revoked (releaseSlots) rather
           than left for the GC — a blob URL is a hard reference the collector
           will never reclaim on its own. */
+      /* =====================================================================
+         IMAGE LOAD MANAGER
+         =====================================================================
+         Every image download — prefetch phase 1, phase 2, a manual click on a
+         listing, a cache-hit re-check — funnels through fetchSlotManaged().
+         One key per image ("set::slot"), one in-flight promise per key:
+
+           · settled (blobUrl or failed)  → resolves immediately, no network
+           · downloading                  → callers share the SAME promise
+           · otherwise                    → exactly one fetch starts
+
+         Before this, the settled-check only saw COMPLETED downloads, so a
+         manual click and the background prefetch would fetch the same image
+         twice in parallel; and skipped images returned before the progress
+         callback, which is why the bar's numbers were wrong. */
+      const IMG_JOBS = new Map();   // "set::slot" -> { s, pr }
+
+      function fetchSlotManaged(setName, s) {
+        if (!s.url || s.blobUrl || s.failed) return Promise.resolve();
+        const key = `${setName}::${s.slot}`;
+        const existing = IMG_JOBS.get(key);
+        // Same slot OBJECT → share the download. A different object means the
+        // set was released and reloaded; the old job is orphaned (its guard
+        // below makes it harmless) and a fresh one starts.
+        if (existing && existing.s === s) return existing.pr;
+        const pr = (async () => {
+          try {
+            const blobUrl = await Promise.race([
+              fetchImageViaChunkedProxy(s.url),
+              new Promise((_, rej) => setTimeout(() => rej(new Error("image fetch timed out")), 45000))
+            ]);
+            // Valid only if this exact entry is still the cached one — the
+            // set may have been evicted, or evicted-and-reloaded, in flight.
+            const cur = slotsCache.get(setName);
+            if (!cur || !cur.includes(s)) { try { URL.revokeObjectURL(blobUrl); } catch (_) {} return; }
+            s.blobUrl = blobUrl;
+            const grid = document.getElementById("rvGrid");
+            if (grid && grid.dataset.set === setName) {
+              const img = grid.querySelector(`.rv-tile[data-slot="${s.slot}"] img`);
+              if (img && img.dataset.set === setName) img.src = blobUrl;
+            }
+            // Slot 1 IS the rail thumbnail; only slot 1 repaints the row.
+            if (Number(s.slot) === 1) paintRailRow(setName);
+          } catch (e) {
+            // Remembered so the slot is not retried on every open; cleared by
+            // releaseSlots, so a genuine retry stays possible.
+            s.failed = true;
+            console.warn(`[review] image unavailable (${setName} slot ${s.slot}) — using the direct URL:`, e && e.message);
+          }
+        })().finally(() => { const j = IMG_JOBS.get(key); if (j && j.s === s) IMG_JOBS.delete(key); });
+        IMG_JOBS.set(key, { s, pr });
+        return pr;
+      }
+
       async function hydrateBlobs(setName, out, opts) {
         const only = opts && opts.only;          // array of slot numbers, or null for all
         const onImage = opts && opts.onImage;
@@ -4044,34 +4108,11 @@ ANTI-REPETITION (TITLE)
         // and makes every set look stalled.
         const queue = out.filter(x => !only || only.includes(Number(x.slot)));
         const one = async (s) => {
-          if (!s.url || s.blobUrl) return;
-          try {
-            // The chunked proxy has no timeout of its own; one wedged request
-            // would otherwise stall the cache pass indefinitely. The direct
-            // Firebase URL already in s.url remains the fallback.
-            const blobUrl = await Promise.race([
-              fetchImageViaChunkedProxy(s.url),
-              new Promise((_, rej) => setTimeout(() => rej(new Error("image fetch timed out")), 45000))
-            ]);
-            // The set may have been evicted while this was in flight; if so,
-            // revoke immediately rather than leaking an orphan.
-            if (!slotsCache.has(setName)) { try { URL.revokeObjectURL(blobUrl); } catch (_) {} return; }
-            s.blobUrl = blobUrl;
-            const grid = document.getElementById("rvGrid");
-            if (!grid || grid.dataset.set !== setName) return;      // panel moved on
-            const img = grid.querySelector(`.rv-tile[data-slot="${s.slot}"] img`);
-            if (img && img.dataset.set === setName) img.src = blobUrl;
-            // Slot 1 IS the rail thumbnail — repaint that row so it upgrades
-            // from the direct URL to the cached bytes. Only slot 1: any other
-            // slot repainting here is what let non-primary images flash into
-            // the thumbnail.
-            if (Number(s.slot) === 1) paintRailRow(setName);
-          } catch (e) {
-            // Remember the failure so this slot is not retried on every open.
-            // Cleared by releaseSlots, so a genuine retry is still possible.
-            s.failed = true;
-            console.warn(`[review] image unavailable (${setName} slot ${s.slot}) — using the direct URL:`, e && e.message);
-          }
+          /*  The settled-check lives INSIDE the manager, and onImage fires in
+              finally — so an image that was already downloaded (by a manual
+              click, an earlier phase, anything) still counts toward progress
+              instead of silently vanishing from the total. */
+          try { await fetchSlotManaged(setName, s); }
           finally { if (onImage) onImage(); }
         };
         const worker = async () => { while (queue.length) await one(queue.shift()); };
@@ -4107,6 +4148,9 @@ ANTI-REPETITION (TITLE)
       function releaseSlots(setName) {
         slotsInFlight.delete(setName);
         hydrateInFlight.delete(setName);
+        // Abandon this set's download jobs; their in-flight guards make the
+        // stragglers harmless and a reload starts from a clean slate.
+        [...IMG_JOBS.keys()].forEach(k => { if (k.startsWith(setName + "::")) IMG_JOBS.delete(k); });
         const out = slotsCache.get(setName);
         if (!out) return;
         out.forEach((s) => {
@@ -4294,7 +4338,10 @@ ANTI-REPETITION (TITLE)
           const out = loaded.get(r.setName) || slotsCache.get(r.setName);
           if (!out) return;
           await withTimeout(
-            ensureHydrated(r.setName, out, { onImage: () => { imgDone++; report(); } }),
+            ensureHydrated(r.setName, out, {
+              only: out.map(x => Number(x.slot)).filter(n => n !== 1),
+              onImage: () => { imgDone++; report(); }
+            }),
             90000, `caching ${r.setName}`);
           await decodeAll(out);
           touchCache(r.setName);
@@ -4502,7 +4549,13 @@ ANTI-REPETITION (TITLE)
             parseFloat(img.dataset.scale) || 1,
             parseFloat(img.dataset.offsetX) || 0,
             parseFloat(img.dataset.offsetY) || 0);      // no persist: restoring, not editing
+          // Restore instantly. The .3s transition is for gestures; animating
+          // the restore is what read as an "automatic zoom" on every repaint.
+          img.style.transition = "none";
           apply();
+          void img.offsetWidth;                          // commit before re-enabling
+          img.style.transition = "";
+          
 
           /*  Tiles carry no `draggable` attribute — that is deliberate, because
               a natively draggable tile swallows every press inside the picture
@@ -5067,11 +5120,17 @@ ANTI-REPETITION (TITLE)
         document.addEventListener("keydown", (e) => {
           if (!overlay.classList.contains("open")) return;
           if (e.key === "Escape") { close("cancelled"); return; }
-          if ((e.key === "ArrowDown" || e.key === "ArrowUp") && !/input|textarea/i.test(e.target.tagName)) {
+          /*  ↑/↓ and ←/→ both step through the listings. Left/right is the
+              natural gesture when the eye is on the image grid; the guard
+              keeps arrows working normally inside text fields, where ←/→
+              must keep moving the caret. */
+          if ((e.key === "ArrowDown" || e.key === "ArrowUp" || e.key === "ArrowRight" || e.key === "ArrowLeft")
+              && !/input|textarea|select/i.test(e.target.tagName)) {
             e.preventDefault();
             const v = visible(); if (!v.length) return;
             const at = v.indexOf(rows[sel]);
-            const next = e.key === "ArrowDown" ? Math.min(v.length - 1, at + 1) : Math.max(0, at - 1);
+            const fwd = e.key === "ArrowDown" || e.key === "ArrowRight";
+            const next = fwd ? Math.min(v.length - 1, at + 1) : Math.max(0, at - 1);
             sel = rows.indexOf(v[next]); paintRail(); paintDetail();
             railEl.querySelector(".rv-row.sel")?.scrollIntoView({ block: "nearest" });
           }
