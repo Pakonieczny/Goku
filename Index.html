@@ -3875,7 +3875,13 @@ ANTI-REPETITION (TITLE)
         return Promise.all(out.map(async (s) => {
           if (!s.url || s.blobUrl) return;
           try {
-            const blobUrl = await fetchImageViaChunkedProxy(s.url);
+            // The chunked proxy has no timeout of its own; one wedged request
+            // would otherwise stall the cache pass indefinitely. The direct
+            // Firebase URL already in s.url remains the fallback.
+            const blobUrl = await Promise.race([
+              fetchImageViaChunkedProxy(s.url),
+              new Promise((_, rej) => setTimeout(() => rej(new Error("image fetch timed out")), 45000))
+            ]);
             // The set may have been evicted while this was in flight; if so,
             // revoke immediately rather than leaking an orphan.
             if (!slotsCache.has(setName)) { try { URL.revokeObjectURL(blobUrl); } catch (_) {} return; }
@@ -3903,6 +3909,8 @@ ANTI-REPETITION (TITLE)
       // Explicit teardown. Blob URLs are not garbage — they are entries in a
       // process-wide table that only revokeObjectURL clears.
       function releaseSlots(setName) {
+        slotsInFlight.delete(setName);
+        hydrateInFlight.delete(setName);
         const out = slotsCache.get(setName);
         if (!out) return;
         out.forEach((s) => { if (s.blobUrl) { try { URL.revokeObjectURL(s.blobUrl); } catch (_) {} s.blobUrl = ""; } });
@@ -3910,8 +3918,46 @@ ANTI-REPETITION (TITLE)
       }
       function releaseAllSlots() { [...slotsCache.keys()].forEach(releaseSlots); slotsCache.clear(); }
 
-      async function loadSlots(r) {
-        if (slotsCache.has(r.setName)) return slotsCache.get(r.setName);
+      /*  Two faults made caching appear to hang at 0%:
+
+          1. loadSlots awaited EVERY blob before resolving, so paintGrid —
+             which calls it to draw the grid — could not paint until all eight
+             images had come through the chunked proxy. Hence "Loading
+             images…" sitting under a 0% bar.
+          2. Nothing deduped in-flight work. paintDetail and prefetchAll both
+             call loadSlots for the visible row at the same moment, so the
+             listing and all eight fetches ran twice, competing for the same
+             proxy.
+
+          Now: loadSlots resolves as soon as the download URLs are known
+          (fast), so the grid paints immediately; blob hydration runs behind it
+          and swaps images in under the existing ownership guard. Both the
+          listing and the hydration are promise-cached, so N callers share one
+          unit of work. */
+      const slotsInFlight = new Map();     // setName -> Promise<slots>
+      const hydrateInFlight = new Map();   // setName -> Promise<void>
+
+      function ensureHydrated(setName, out) {
+        if (!hydrateInFlight.has(setName)) {
+          hydrateInFlight.set(setName, hydrateBlobs(setName, out)
+            .finally(() => hydrateInFlight.delete(setName)));
+        }
+        return hydrateInFlight.get(setName);
+      }
+
+      function loadSlots(r) {
+        if (slotsCache.has(r.setName)) {
+          const out = slotsCache.get(r.setName);
+          ensureHydrated(r.setName, out);       // resume if a previous pass died
+          return Promise.resolve(out);
+        }
+        if (slotsInFlight.has(r.setName)) return slotsInFlight.get(r.setName);
+        const pr = loadSlotsUncached(r).finally(() => slotsInFlight.delete(r.setName));
+        slotsInFlight.set(r.setName, pr);
+        return pr;
+      }
+
+      async function loadSlotsUncached(r) {
         const files = await r.setRef.listAll();
         const items = files.items
           .filter(it => !/manifest\.json$/i.test(it.name))
@@ -3924,7 +3970,7 @@ ANTI-REPETITION (TITLE)
           out.push({ slot: n, name: it.name, ref: it, url, blobUrl: "" });
         }
         slotsCache.set(r.setName, out);
-        await hydrateBlobs(r.setName, out);
+        ensureHydrated(r.setName, out);   // deliberately NOT awaited — the grid paints now
         return out;
       }
 
@@ -3938,7 +3984,11 @@ ANTI-REPETITION (TITLE)
         const worker = async () => {
           while (queue.length) {
             const r = queue.shift();
-            try { const out = await loadSlots(r); await decodeAll(out); } catch (_) {}
+            try {
+              const out = await loadSlots(r);
+              await ensureHydrated(r.setName, out);   // the actual download work
+              await decodeAll(out);
+            } catch (_) {}
             onProgress && onProgress(++done, list.length);
           }
         };
@@ -4590,7 +4640,9 @@ ANTI-REPETITION (TITLE)
         if (bar) bar.classList.add("on");
         try {
           await prefetchAll(rows, (done, total) => {
-            if (barTxt) barTxt.textContent = `Caching images — ${done} of ${total} listings`;
+            if (barTxt) barTxt.textContent = done >= total
+              ? `Images cached — ${total} listing${total === 1 ? "" : "s"} ready`
+              : `Caching images — ${done} of ${total} listings`;
             if (barFill) barFill.style.width = (total ? (done / total) * 100 : 100) + "%";
           });
         } catch (_) { /* a failed prefetch must never block the review */ }
