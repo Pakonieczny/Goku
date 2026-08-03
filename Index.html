@@ -1313,6 +1313,16 @@
     .dm-btn:hover{color:#fff; border-color:#5f574a; background:#332e27}
     .dm-btn.danger:hover{color:#f0c9bd; border-color:#7a4335; background:#3a2620}
     .dm-why{display:block; font-size:10px; color:#6f685d; margin-top:6px; line-height:1.45}
+    .dm-select{flex:1 1 auto; min-width:0; height:30px; box-sizing:border-box;
+      background-color:#332e27 !important; background-repeat:no-repeat; background-position:right 9px center;
+      color:#e9e3d7 !important;
+      background-image:url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='10' height='6'><path d='M1 1l4 4 4-4' fill='none' stroke='%23cfc7b8' stroke-width='1.6' stroke-linecap='round'/></svg>");
+      border:1px solid var(--velvetLine); color:#e9e3d7; border-radius:7px; padding:0 26px 0 9px; margin:0;
+      font-family:var(--mono, monospace); font-size:11px; font-weight:600; display:block; cursor:pointer;
+      text-overflow:ellipsis; -webkit-appearance:none; -moz-appearance:none; appearance:none}
+    .dm-select:hover{border-color:#5f574a}
+    .dm-select:focus{outline:none; border-color:var(--gold2); box-shadow:none}
+    .dm-select option{background:#221f1a; color:#e9e3d7}
     .drail .dnav{padding:9px 10px 11px; display:flex; flex-direction:column; gap:3px; background:transparent}
     .dnav button{display:flex; align-items:center; gap:10px; padding:9px 11px; border-radius:10px; color:#cfc7b8; font-size:13px; font-weight:500; text-align:left; width:100%; background:none; border:0; cursor:pointer; transition:background .15s,color .15s; white-space:nowrap; box-sizing:border-box}
     .dnav button .ic{width:16px; flex:0 0 16px; opacity:.85; font-size:14px}
@@ -3736,6 +3746,59 @@ ANTI-REPETITION (TITLE)
        the exact per-slot prompt from the mirrored prompt library, then poll
        Storage for the rewritten Slot_N.png. No new Netlify function.
        ===================================================================== */
+    /* =====================================================================
+       IMAGE MODEL SELECTION — the two Gemini options, as in
+       Listing_Generator_1. Same localStorage key, same alias normalisation
+       and same default, so a terminal that already has a choice saved keeps
+       it and the two consoles never disagree about which model is in use.
+       ===================================================================== */
+    const IMAGE_MODEL_LS_KEY = "lg1_image_model_v1";
+    const DEFAULT_IMAGE_MODEL = "gemini-3.1-flash-image";
+    const IMAGE_MODEL_ALIASES = Object.freeze({
+      "gemini-3.1-flash-image-preview": "gemini-3.1-flash-image",
+      "gemini-3-pro-image-preview": "gemini-3-pro-image",
+    });
+    const IMAGE_MODEL_CATALOG = Object.freeze({
+      "gemini-3.1-flash-image": Object.freeze({
+        id: "gemini-3.1-flash-image", provider: "gemini",
+        endpoint: "geminiImageProxy-background", quality: "high", supportsBatch: true,
+        label: "Gemini 3.1 Flash Image", detail: "Fastest and best value for bulk generation",
+      }),
+      "gemini-3-pro-image": Object.freeze({
+        id: "gemini-3-pro-image", provider: "gemini",
+        endpoint: "geminiImageProxy-background", quality: "high", supportsBatch: true,
+        label: "Gemini 3 Pro Image", detail: "Maximum Gemini fidelity for complex product edits",
+      }),
+    });
+
+    function normalizeImageModelId(value) {
+      const requested = String(value || "").trim();
+      const normalized = IMAGE_MODEL_ALIASES[requested] || requested;
+      return IMAGE_MODEL_CATALOG[normalized] ? normalized : DEFAULT_IMAGE_MODEL;
+    }
+    function readSelectedImageModel() {
+      try { return normalizeImageModelId(localStorage.getItem(IMAGE_MODEL_LS_KEY) || DEFAULT_IMAGE_MODEL); }
+      catch (_) { return DEFAULT_IMAGE_MODEL; }
+    }
+    function writeSelectedImageModel(modelId) {
+      const normalized = normalizeImageModelId(modelId);
+      try { localStorage.setItem(IMAGE_MODEL_LS_KEY, normalized); } catch (_) {}
+      try { window.dispatchEvent(new CustomEvent("imagemodel-changed", { detail: normalized })); } catch (_) {}
+      return normalized;
+    }
+    window.getSelectedImageModel = function () {
+      const sel = document.getElementById("imageModelSelect");
+      return normalizeImageModelId(sel ? sel.value : readSelectedImageModel());
+    };
+    /*  Every generator request carries the choice. Sent as `model` plus the
+        catalog's `quality` and `endpoint`, matching what the proxy already
+        receives from Listing_Generator_1, so no server change is needed. */
+    window.withImageModel = function (body) {
+      const id = window.getSelectedImageModel();
+      const m = IMAGE_MODEL_CATALOG[id] || IMAGE_MODEL_CATALOG[DEFAULT_IMAGE_MODEL];
+      return Object.assign({}, body, { model: m.id, provider: m.provider, quality: m.quality, endpoint: m.endpoint });
+    };
+
     const RV_COLL = "ListingGen_Review";
     const RV_SETS_ROOT = "listing-generator-1/Generated_Listing_Sets";
     const RV_COMPLETED = RV_SETS_ROOT + "/Completed_Listing_Sets";
@@ -3959,6 +4022,50 @@ ANTI-REPETITION (TITLE)
       }
       function releaseAllSlots() { [...slotsCache.keys()].forEach(releaseSlots); slotsCache.clear(); }
 
+      // Called on close: free the images of everything decided this session.
+      // Deferred to close deliberately — evicting the moment Approve is
+      // pressed would blank the very set still on screen.
+      window.__rvSweepOnClose = true;
+
+      /*  CACHE LIFECYCLE
+          ---------------
+          A set's images stay in memory until the set leaves review. "Leaves"
+          means approved (its decision is spent) or rejected / flagged (the
+          folder has physically moved, so the cached download URLs are dead).
+          Everything else — pending, or simply looked at — is kept, so
+          re-opening the panel is instant for anything seen before. */
+      const CACHE_MAX_SETS = 40;          // ~40 sets x 8 images; LRU beyond this
+      const cacheTouched = new Map();     // setName -> monotonic use counter
+      let cacheClock = 0;
+      function touchCache(setName) { cacheTouched.set(setName, ++cacheClock); }
+
+      function ReviewPanelCacheInfo() {
+        return { sets: slotsCache.size,
+                 images: [...slotsCache.values()].reduce((n, o) => n + o.filter(x => x.blobUrl).length, 0) };
+      }
+      function isFullyCached(setName) {
+        const out = slotsCache.get(setName);
+        return !!(out && out.length && out.every(s => s.blobUrl));
+      }
+
+      // Terminal decisions free their images; pending ones are kept.
+      function sweepDecidedFromCache() {
+        [...slotsCache.keys()].forEach((name) => {
+          const st = get(name).status;
+          if (st === RV_STATUS.OK || st === RV_STATUS.REJECT || st === RV_STATUS.REVIEW) releaseSlots(name);
+        });
+      }
+
+      // Oldest-used first, and never a set in the current batch.
+      function trimCache(max, keepNames) {
+        const keep = new Set(keepNames || []);
+        let names = [...slotsCache.keys()].filter(n => !keep.has(n));
+        let over = slotsCache.size - max;
+        if (over <= 0) return;
+        names.sort((a, b) => (cacheTouched.get(a) || 0) - (cacheTouched.get(b) || 0));
+        while (over-- > 0 && names.length) releaseSlots(names.shift());
+      }
+
       /*  Two faults made caching appear to hang at 0%:
 
           1. loadSlots awaited EVERY blob before resolving, so paintGrid —
@@ -4020,8 +4127,16 @@ ANTI-REPETITION (TITLE)
           the same one the pipeline uses and a 25-listing batch would otherwise
           open 250 concurrent fetches. */
       async function prefetchAll(list, onProgress) {
-        let done = 0;
-        const queue = list.slice();
+        /*  Only fetch what is missing. Sets already fully in memory are
+            counted immediately and never touch the network again — which is
+            the whole point of keeping the cache between opens. */
+        const cached = list.filter(r => isFullyCached(r.setName));
+        cached.forEach(r => touchCache(r.setName));
+        const queue = list.filter(r => !isFullyCached(r.setName));
+        let done = cached.length;
+        onProgress && onProgress(done, list.length, queue.length);
+        if (!queue.length) return { cached: cached.length, fetched: 0 };
+        console.log(`[review] cache: ${cached.length} listing(s) already in memory, fetching ${queue.length}.`);
         const worker = async () => {
           while (queue.length) {
             const r = queue.shift();
@@ -4045,11 +4160,13 @@ ANTI-REPETITION (TITLE)
             } catch (e) {
               console.warn("[review] cache pass skipped", r.setName, "—", e && e.message);
             } finally {
-              onProgress && onProgress(++done, list.length);
+              touchCache(r.setName);
+              onProgress && onProgress(++done, list.length, queue.length);
             }
           }
         };
         await Promise.all([worker(), worker(), worker()]);
+        return { cached: cached.length, fetched: queue.length };
       }
 
       const orderedSlots = (setName, slots) => {
@@ -4490,13 +4607,36 @@ ANTI-REPETITION (TITLE)
           const before = await slotStamp(r, slot);
           const resp = await fetch("/.netlify/functions/geminiImageProxy", {
             method: "POST", headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({
+            body: JSON.stringify(window.withImageModel({
               kind: "edits", activeCategory: cat,
               input_storage_path: refPath, input_charm_storage_path: charmPath,
               output_base_path: r.setRef.fullPath, slotIndex: slot - 1, prompt
-            })
+            }))
           });
-          if (!resp.ok) throw new Error(`generator returned HTTP ${resp.status}`);
+          /*  The function answers a 400 with a specific reason
+              ("activeCategory not generatable", "input_storage_path is
+              required", "Missing GEMINI_API_KEY env var", ...). Throwing the
+              bare status threw that away and left every rejection looking
+              identical. Read the body and report what it actually said. */
+          if (!resp.ok) {
+            let detail = "";
+            try {
+              const j = await resp.clone().json();
+              detail = (j && j.error && (j.error.message || j.error)) || (j && j.message) || "";
+            } catch (_) {
+              try { detail = (await resp.text()).slice(0, 200); } catch (__) {}
+            }
+            console.error("[regen] generator rejected the request", {
+              status: resp.status, detail,
+              activeCategory: cat, input_storage_path: refPath,
+              input_charm_storage_path: charmPath,
+              output_base_path: r.setRef.fullPath, slotIndex: slot - 1,
+              model: window.getSelectedImageModel()
+            });
+            throw new Error(detail
+              ? `generator returned HTTP ${resp.status}: ${detail}`
+              : `generator returned HTTP ${resp.status}`);
+          }
 
           if (txt) txt.textContent = "Waiting for image…";
           const fresh = await waitForNewSlot(r, slot, before, 420000);
@@ -4648,9 +4788,15 @@ ANTI-REPETITION (TITLE)
       }
       async function postJsonRV(body) {
         const res = await fetch("/.netlify/functions/geminiImageProxy", {
-          method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body)
+          method: "POST", headers: { "Content-Type": "application/json" },
+          body: JSON.stringify(window.withImageModel(body))
         });
-        if (!res.ok) throw new Error(`HTTP ${res.status}`);
+        if (!res.ok) {
+          let detail = "";
+          try { const j = await res.clone().json(); detail = (j && j.error && (j.error.message || j.error)) || ""; }
+          catch (_) { try { detail = (await res.text()).slice(0, 200); } catch (__) {} }
+          throw new Error(detail ? `HTTP ${res.status}: ${detail}` : `HTTP ${res.status}`);
+        }
         return res.json().catch(() => ({}));
       }
 
@@ -4697,6 +4843,16 @@ ANTI-REPETITION (TITLE)
       function close(outcome) {
         overlay.classList.remove("open");
         if (unsub) { try { unsub(); } catch (_) {} unsub = null; }
+        /*  Free the images of everything decided, and keep the rest. Done on
+            CLOSE rather than at the moment Approve is pressed — evicting then
+            would blank the very set still on screen. Cancel sweeps too: a
+            decision already saved is terminal regardless of how the panel
+            was dismissed. */
+        try {
+          sweepDecidedFromCache();
+          const st = ReviewPanelCacheInfo();
+          console.log(`[review] cache retained: ${st.sets} listing(s), ${st.images} image(s) in memory.`);
+        } catch (_) {}
         const p = pending; pending = null;
         if (!p) return;
         if (outcome === "cancelled") { p.resolve("CANCELLED"); return; }
@@ -4718,7 +4874,15 @@ ANTI-REPETITION (TITLE)
         rows = (list || []).filter(Boolean);
         sel = rows.length ? 0 : -1;
         filter = "all";
-        releaseAllSlots();          // revoke object URLs, do not merely forget them
+        /*  The cache SURVIVES between opens. This line used to wipe it on
+            every open, which is why re-opening the panel re-downloaded every
+            image. Images are held until their listing leaves review — either
+            approved, or rejected/flagged (which moves the folder and makes
+            the URLs stale anyway). Anything decided in a previous session is
+            swept here, plus an LRU trim so the cache cannot grow without
+            bound. */
+        sweepDecidedFromCache();
+        trimCache(CACHE_MAX_SETS, rows.map(r => r.setName));
         // Seed from Firestore so prior decisions show immediately.
         try {
           const snaps = await Promise.all(rows.map(r => fsdb.collection(RV_COLL).doc(r.setName).get().catch(() => null)));
@@ -4743,10 +4907,13 @@ ANTI-REPETITION (TITLE)
         const bar = document.getElementById("rvPrefetch");
         const barTxt = document.getElementById("rvPrefetchTxt");
         const barFill = document.getElementById("rvPrefetchFill");
-        if (bar) bar.classList.add("on");
+        const missing = rows.filter(r => !isFullyCached(r.setName)).length;
+        if (bar && missing) bar.classList.add("on");   // fully cached: no bar at all
         try {
-          await prefetchAll(rows, (done, total) => {
-            if (barTxt) barTxt.textContent = `${done}/${total} cached`;
+          await prefetchAll(rows, (done, total, toFetch) => {
+            if (barTxt) barTxt.textContent = toFetch === 0
+              ? `${total} cached`
+              : `${done}/${total} cached`;
             if (barFill) barFill.style.width = (total ? (done / total) * 100 : 100) + "%";
           });
         } catch (_) { /* a failed prefetch must never block the review */ }
@@ -4758,6 +4925,8 @@ ANTI-REPETITION (TITLE)
       }
 
       return { open, close: () => close("cancelled"), RV_STATUS,
+               cacheStats: () => ({ sets: slotsCache.size,
+                                    images: [...slotsCache.values()].reduce((n, o) => n + o.filter(x => x.blobUrl).length, 0) }),
                statusOf: (n) => get(n).status, decisionOf: (n) => ({ ...get(n) }) };
     })();
     window.ReviewPanel = ReviewPanel;
@@ -11469,6 +11638,17 @@ ANTI-REPETITION (TITLE)
             <span class="dm-why">Which section auto-pilot draws its next set from.</span>
           </div>
           <div class="dm-sect">
+            <span class="dm-lab">Image model</span>
+            <div class="dm-row">
+              <select id="imageModelSelect" class="dm-select" aria-label="Image generation model"
+                      title="Controls every new generation and regeneration">
+                <option value="gemini-3.1-flash-image">3.1 Flash · fast / value</option>
+                <option value="gemini-3-pro-image">3 Pro · maximum quality</option>
+              </select>
+            </div>
+            <span class="dm-why" id="dmModelWhy">Fastest and best value for bulk generation</span>
+          </div>
+          <div class="dm-sect">
             <span class="dm-lab">Review queue</span>
             <div class="dm-row">
               <span class="dm-val" id="dmQueueVal">none queued</span>
@@ -11723,6 +11903,28 @@ ANTI-REPETITION (TITLE)
         document.addEventListener("keydown", (e) => { if (e.key === "Escape" && !panel.hidden) open(false); });
         // Choosing a source or signing out both resolve the menu's purpose.
         panel.addEventListener("click", (e) => { if (e.target.closest(".dm-btn")) open(false); });
+      })();
+
+      // ── image model picker ────────────────────────────────────────────
+      // Restores the saved choice, persists on change, and mirrors the
+      // catalog's own description so the two options explain themselves.
+      (function initImageModel() {
+        const sel = $("imageModelSelect"), why = $("dmModelWhy");
+        if (!sel) return;
+        const paint = () => {
+          const id = window.getSelectedImageModel();
+          if (sel.value !== id) sel.value = id;
+          if (why) why.textContent = (IMAGE_MODEL_CATALOG[id] || {}).detail || "";
+        };
+        sel.value = readSelectedImageModel();
+        paint();
+        sel.addEventListener("change", () => {
+          const id = writeSelectedImageModel(sel.value);
+          paint();
+          window.M?.toast?.({ html: `Image model: ${(IMAGE_MODEL_CATALOG[id] || {}).label || id}` });
+        });
+        // A second tab changing the model must not leave this one stale.
+        window.addEventListener("storage", (e) => { if (!e.key || e.key === IMAGE_MODEL_LS_KEY) { sel.value = readSelectedImageModel(); paint(); } });
       })();
 
       // ── Review Queue nav button ───────────────────────────────────────
