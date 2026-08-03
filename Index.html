@@ -1722,12 +1722,57 @@
     .rv-tile.removed{opacity:.4}
     .rv-tile.removed .rv-box{filter:grayscale(1)}
     .rv-box{position:relative; aspect-ratio:1/1; overflow:hidden; background:#f4efe5; cursor:grab; touch-action:none}
-    .rv-box img{position:absolute; left:50%; top:50%; width:100%; height:100%; object-fit:cover;
-      transform-origin:center center; will-change:transform; user-select:none; -webkit-user-drag:none}
-    .rv-box .rv-gridlines{position:absolute; inset:0; pointer-events:none; opacity:0; transition:opacity .12s;
-      background-image:linear-gradient(rgba(255,255,255,.55) 1px,transparent 1px),linear-gradient(90deg,rgba(255,255,255,.55) 1px,transparent 1px);
-      background-size:33.333% 33.333%; mix-blend-mode:difference}
-    .rv-tile.grid .rv-box .rv-gridlines{opacity:1}
+    /* Matches Listing_Generator_1's .slotPrev img exactly — object-fit:contain
+       (not cover), no absolute centring, and the .3s transition that makes
+       click-to-zoom glide rather than snap. The pan maths assumes this box
+       model: change it and the clamp is wrong. */
+    .rv-box img{width:100%; height:100%; object-fit:contain; display:block;
+      transform-origin:center center; transition:transform .3s ease; cursor:grab;
+      user-select:none; -webkit-user-drag:none}
+    .rv-box img:active{cursor:grabbing}
+    /* Rule-of-thirds overlay — the exact pattern from Listing_Generator_1's
+       .slotPrev::after. Permanent, so the on/off tool is gone: four 1px
+       hairlines at 18% white on the thirds, above the image, click-through. */
+    .rv-box::after{
+      content:"";
+      position:absolute;
+      inset:0;
+      pointer-events:none;
+      z-index:700;
+      background-image:
+        linear-gradient(to right, rgba(255,255,255,.18), rgba(255,255,255,.18)),
+        linear-gradient(to right, rgba(255,255,255,.18), rgba(255,255,255,.18)),
+        linear-gradient(to bottom, rgba(255,255,255,.18), rgba(255,255,255,.18)),
+        linear-gradient(to bottom, rgba(255,255,255,.18), rgba(255,255,255,.18));
+      background-size: 1px 100%, 1px 100%, 100% 1px, 100% 1px;
+      background-position: 33.333% 0, 66.666% 0, 0 33.333%, 0 66.666%;
+      background-repeat: no-repeat;
+    }
+
+    /* ── drag to reorder ──
+       A drop target you can see. The lifted tile fades back, the target shows
+       a blue rail on the exact edge the image will land against, and the grid
+       dims everything else so the operation reads at a glance. */
+    .rv-tile{transition:transform .18s cubic-bezier(.2,.8,.2,1), box-shadow .18s, opacity .18s}
+    .rv-grid.dragging .rv-tile{opacity:.55}
+    .rv-grid.dragging .rv-tile.over, .rv-grid.dragging .rv-tile.drag{opacity:1}
+    .rv-tile.drag{transform:scale(.96); opacity:.4 !important}
+    .rv-tile.over{position:relative; transform:translateY(-3px); box-shadow:0 10px 26px rgba(43,110,196,.22)}
+    .rv-tile.over::after{content:""; position:absolute; top:-2px; bottom:-2px; width:3px; border-radius:3px;
+      background:#2b6ec4; box-shadow:0 0 0 3px rgba(43,110,196,.20); animation:rvEdge .18s ease}
+    .rv-tile.over-l::after{left:-6px}
+    .rv-tile.over-r::after{right:-6px}
+    @keyframes rvEdge{from{opacity:0; transform:scaleY(.6)}to{opacity:1; transform:none}}
+    .rv-tile.landed .rv-box{animation:rvLanded .6s ease}
+    @keyframes rvLanded{0%{box-shadow:0 0 0 3px rgba(43,110,196,.55)}100%{box-shadow:0 0 0 3px rgba(43,110,196,0)}}
+    .rv-handle{cursor:grab}
+    .rv-handle:active{cursor:grabbing}
+    @media (prefers-reduced-motion: reduce){
+      .rv-tile, .rv-tile.over{transition:none; transform:none}
+      .rv-tile.landed .rv-box{animation:none}
+    }
+
+
     .rv-idx{position:absolute; left:7px; top:7px; z-index:3; font-family:var(--mono,monospace); font-size:10.5px; font-weight:700;
       background:rgba(28,25,21,.72); color:#fff; padding:2px 7px; border-radius:20px}
     .rv-handle{position:absolute; right:7px; top:7px; z-index:3; background:rgba(28,25,21,.72); color:#fff; border:none;
@@ -3802,6 +3847,58 @@ ANTI-REPETITION (TITLE)
       }
 
       // ---- slot loading ----------------------------------------------------
+      /*  THE CROSS-CONTAMINATION BUG, AND WHY IT HAPPENED
+          -------------------------------------------------
+          Blob hydration used to run fire-and-forget and then patch
+          `.rv-tile[data-slot=N] img` — a selector that matches whichever set
+          is on screen RIGHT NOW, not the set the download belongs to. Switch
+          listing while set 267's slot 1 is still in flight and its rabbit
+          lands in set 268's slot 1. Every write to the DOM is now gated on
+          the grid still showing the owning set, and the <img> carries its own
+          data-set so a stale write cannot slip through even mid-repaint.
+
+          Object URLs are owned, counted and revoked (releaseSlots) rather
+          than left for the GC — a blob URL is a hard reference the collector
+          will never reclaim on its own. */
+      function hydrateBlobs(setName, out) {
+        return Promise.all(out.map(async (s) => {
+          if (!s.url || s.blobUrl) return;
+          try {
+            const blobUrl = await fetchImageViaChunkedProxy(s.url);
+            // The set may have been evicted while this was in flight; if so,
+            // revoke immediately rather than leaking an orphan.
+            if (!slotsCache.has(setName)) { try { URL.revokeObjectURL(blobUrl); } catch (_) {} return; }
+            s.blobUrl = blobUrl;
+            const grid = document.getElementById("rvGrid");
+            if (!grid || grid.dataset.set !== setName) return;      // panel moved on
+            const img = grid.querySelector(`.rv-tile[data-slot="${s.slot}"] img`);
+            if (img && img.dataset.set === setName) img.src = blobUrl;
+          } catch (_) {}
+        }));
+      }
+
+      // Decoding off-thread means the first paint after a row switch is
+      // instant instead of a flash of empty box.
+      function decodeAll(out) {
+        return Promise.all(out.map((s) => {
+          const src = s.blobUrl || s.url;
+          if (!src) return null;
+          const im = new Image();
+          im.src = src;
+          return (im.decode ? im.decode() : Promise.resolve()).catch(() => {});
+        }));
+      }
+
+      // Explicit teardown. Blob URLs are not garbage — they are entries in a
+      // process-wide table that only revokeObjectURL clears.
+      function releaseSlots(setName) {
+        const out = slotsCache.get(setName);
+        if (!out) return;
+        out.forEach((s) => { if (s.blobUrl) { try { URL.revokeObjectURL(s.blobUrl); } catch (_) {} s.blobUrl = ""; } });
+        slotsCache.delete(setName);
+      }
+      function releaseAllSlots() { [...slotsCache.keys()].forEach(releaseSlots); slotsCache.clear(); }
+
       async function loadSlots(r) {
         if (slotsCache.has(r.setName)) return slotsCache.get(r.setName);
         const files = await r.setRef.listAll();
@@ -3816,16 +3913,25 @@ ANTI-REPETITION (TITLE)
           out.push({ slot: n, name: it.name, ref: it, url, blobUrl: "" });
         }
         slotsCache.set(r.setName, out);
-        // Hydrate CORS-safe blobs in the background so zoom/pan and canvas work.
-        out.forEach(async (s) => {
-          if (!s.url) return;
-          try {
-            s.blobUrl = await fetchImageViaChunkedProxy(s.url);
-            const img = detailEl && detailEl.querySelector(`.rv-tile[data-slot="${s.slot}"] img`);
-            if (img) img.src = s.blobUrl;
-          } catch (_) {}
-        });
+        await hydrateBlobs(r.setName, out);
         return out;
+      }
+
+      /*  Pre-download EVERY listing's images before the panel is shown, so
+          cycling rows is instant. Bounded to 3 sets at a time: the proxy is
+          the same one the pipeline uses and a 25-listing batch would otherwise
+          open 250 concurrent fetches. */
+      async function prefetchAll(list, onProgress) {
+        let done = 0;
+        const queue = list.slice();
+        const worker = async () => {
+          while (queue.length) {
+            const r = queue.shift();
+            try { const out = await loadSlots(r); await decodeAll(out); } catch (_) {}
+            onProgress && onProgress(++done, list.length);
+          }
+        };
+        await Promise.all([worker(), worker(), worker()]);
       }
 
       const orderedSlots = (setName, slots) => {
@@ -3851,7 +3957,7 @@ ANTI-REPETITION (TITLE)
             </div>
             <div class="rv-spacer"></div>
             <button type="button" class="rv-btn ${d.status === RV_STATUS.OK ? "primary" : ""}" id="rvAct-ok">
-              <i class="material-icons">check_circle</i>Approve</button>
+              <i class="material-icons">check_circle</i>Approve &amp; Next</button>
             <button type="button" class="rv-btn warn ${d.status === RV_STATUS.REVIEW ? "on" : ""}" id="rvAct-review">
               <i class="material-icons">flag</i>Needs review</button>
             <button type="button" class="rv-btn danger" id="rvAct-reject">
@@ -3872,7 +3978,6 @@ ANTI-REPETITION (TITLE)
           <div class="rv-gridhead">
             <span class="t">Images — drag to reorder · scroll to zoom · drag inside to reframe</span>
             <div class="rv-spacer"></div>
-            <button type="button" class="rv-btn" id="rvGridAll"><i class="material-icons">grid_on</i>Grid overlay</button>
             <button type="button" class="rv-btn" id="rvResetOrder"><i class="material-icons">restart_alt</i>Reset order</button>
           </div>
           <div class="rv-grid" id="rvGrid"><div class="rv-empty">Loading images…</div></div>`;
@@ -3883,45 +3988,49 @@ ANTI-REPETITION (TITLE)
         document.getElementById("rvTitle2").addEventListener("input", (e) => {
           save(r.setName, { titleOverride: e.target.value });
         });
-        document.getElementById("rvAct-ok").addEventListener("click", () => { setStatus(r, RV_STATUS.OK); });
+        document.getElementById("rvAct-ok").addEventListener("click", () => {
+          setStatus(r, RV_STATUS.OK);
+          advanceToNext(r);
+        });
         document.getElementById("rvAct-review").addEventListener("click", () =>
           setStatus(r, get(r.setName).status === RV_STATUS.REVIEW ? RV_STATUS.PENDING : RV_STATUS.REVIEW));
         document.getElementById("rvAct-reject").addEventListener("click", () =>
           get(r.setName).status === RV_STATUS.REJECT ? restoreSet(r) : rejectSet(r));
-        document.getElementById("rvGridAll").addEventListener("click", (e) => {
-          const on = !detailEl.querySelector(".rv-tile.grid");
-          detailEl.querySelectorAll(".rv-tile").forEach(t => t.classList.toggle("grid", on));
-          e.currentTarget.classList.toggle("primary", on);
-        });
         document.getElementById("rvResetOrder").addEventListener("click", () => {
           save(r.setName, { order: null }); paintGrid(r);
         });
         paintGrid(r);
       }
 
+      let paintGen = 0;
       async function paintGrid(r) {
         const grid = document.getElementById("rvGrid");
         if (!grid) return;
+        const myGen = ++paintGen;
+        // Blank the previous set's images the instant we start loading a new
+        // one — a stale picture under a new title is worse than no picture.
+        if (grid.dataset.set && grid.dataset.set !== r.setName) grid.innerHTML = "";
         let slots;
         try { slots = await loadSlots(r); }
         catch (e) { grid.innerHTML = `<div class="rv-empty">Could not load images: ${esc(e && e.message)}</div>`; return; }
         if (sel < 0 || rows[sel] !== r) return;   // selection moved on while loading
+        if (myGen !== paintGen) return;           // a newer paint superseded this one
+        grid.dataset.set = r.setName;             // ownership stamp for hydrateBlobs
         const d = get(r.setName);
         const ord = orderedSlots(r.setName, slots);
         grid.innerHTML = ord.map((s, i) => {
           const gone = (d.excluded || []).includes(s.slot);
-          return `<div class="rv-tile ${gone ? "removed" : ""}" data-slot="${s.slot}" draggable="true">
+          return `<div class="rv-tile ${gone ? "removed" : ""}" data-slot="${s.slot}">
               <div class="rv-box" data-slot="${s.slot}">
                 <span class="rv-idx">${i + 1}</span>
                 <button type="button" class="rv-handle" title="Drag to reorder"><i class="material-icons">drag_indicator</i></button>
-                <img src="${esc(s.blobUrl || s.url)}" alt="Slot ${s.slot}" draggable="false">
-                <div class="rv-gridlines"></div>
+                <img src="${esc(s.blobUrl || s.url)}" alt="Slot ${s.slot}" draggable="false"
+                     data-set="${esc(r.setName)}" decoding="async">
                 <div class="rv-busy"><div class="rv-spin"></div><span class="rv-busytxt">Regenerating…</span></div>
               </div>
               <div class="rv-tools">
                 <button type="button" class="rv-tool" data-a="regen" title="Regenerate this image"><i class="material-icons">autorenew</i></button>
                 <button type="button" class="rv-tool" data-a="adjust" title="Targeted adjustment"><i class="material-icons">tune</i></button>
-                <button type="button" class="rv-tool" data-a="grid" title="Grid overlay"><i class="material-icons">grid_on</i></button>
                 <button type="button" class="rv-tool" data-a="zoomreset" title="Reset framing"><i class="material-icons">zoom_out_map</i></button>
                 <button type="button" class="rv-tool danger" data-a="del" title="${gone ? "Restore image" : "Remove from listing"}">
                   <i class="material-icons">${gone ? "undo" : "delete_outline"}</i></button>
@@ -3930,6 +4039,33 @@ ANTI-REPETITION (TITLE)
             </div>`;
         }).join("");
         wireTiles(r, ord);
+      }
+
+      // ---- FLIP reorder animation -----------------------------------------
+      // First/Last/Invert/Play. Measure before the repaint, measure after,
+      // then run each tile from its old position to its new one. Transforms
+      // only, so it stays on the compositor and never reflows mid-flight.
+      function captureRects(grid) {
+        const m = new Map();
+        grid.querySelectorAll(".rv-tile").forEach(t => m.set(t.dataset.slot, t.getBoundingClientRect()));
+        return m;
+      }
+      function playFlip(grid, first, movedSlot) {
+        if (!grid || !first) return;
+        if (window.matchMedia && window.matchMedia("(prefers-reduced-motion: reduce)").matches) return;
+        grid.querySelectorAll(".rv-tile").forEach((t) => {
+          const a = first.get(t.dataset.slot);
+          if (!a) return;
+          const b = t.getBoundingClientRect();
+          const dx = a.left - b.left, dy = a.top - b.top;
+          if (!dx && !dy) return;
+          const isMoved = Number(t.dataset.slot) === Number(movedSlot);
+          t.animate(
+            [{ transform: `translate(${dx}px, ${dy}px)`, boxShadow: isMoved ? "0 12px 30px rgba(31,27,22,.28)" : "none" },
+             { transform: "translate(0,0)", boxShadow: "none" }],
+            { duration: isMoved ? 380 : 300, easing: "cubic-bezier(.2,.8,.2,1)", fill: "none" });
+          if (isMoved) t.classList.add("landed"), setTimeout(() => t.classList.remove("landed"), 620);
+        });
       }
 
       // ---- tile behaviour: zoom/pan, drag-reorder, tools -------------------
@@ -3942,72 +4078,214 @@ ANTI-REPETITION (TITLE)
           const slot = Number(tile.dataset.slot);
           const box = tile.querySelector(".rv-box");
           const img = tile.querySelector("img");
-          const z = (d.zoom && d.zoom[String(slot)]) || { s: 1, x: 0, y: 0 };
-          const apply = () => { img.style.transform = `translate(-50%,-50%) translate(${z.x}px,${z.y}px) scale(${z.s})`; };
+          /*  ZOOM / PAN / SCROLL — ported verbatim from Listing_Generator_1's
+              attachPreviewBoxListeners(). Same transform order
+              `scale(S) translate(X,Y)` (offsets are pre-scale units, which is
+              why they are divided by scale when clamping), same 1.1 wheel
+              step with snap-back to 1, same MAX_SCALE 8, same 0.5-damped
+              drag, same click-to-zoom-at-point maths, same ResizeObserver
+              re-clamp. Only addition: the framing is persisted per slot so it
+              survives a row switch, which the source had no need for. */
+          const MAX_SCALE = 8, dragThreshold = 3;
+          const z0 = (d.zoom && d.zoom[String(slot)]) || { s: 1, x: 0, y: 0 };
+          img.dataset.scale = z0.s; img.dataset.offsetX = z0.x; img.dataset.offsetY = z0.y;
+
+          function clampAndApply(im, scale, offX, offY) {
+            const viewportW = box.clientWidth || 120;
+            const viewportH = box.clientHeight || 120;
+            const baseW = im.clientWidth || 120;
+            const baseH = im.clientHeight || 120;
+            const scaledW = baseW * scale;
+            const scaledH = baseH * scale;
+
+            const maxX = Math.max(0, (scaledW - viewportW) / 2 / scale);
+            const maxY = Math.max(0, (scaledH - viewportH) / 2 / scale);
+
+            offX = Math.max(-maxX, Math.min(maxX, offX));
+            offY = Math.max(-maxY, Math.min(maxY, offY));
+
+            im.dataset.scale = scale;
+            im.dataset.offsetX = offX;
+            im.dataset.offsetY = offY;
+            im.style.transform = `scale(${scale}) translate(${offX}px, ${offY}px)`;
+            persistZoom(scale, offX, offY);
+          }
+          const apply = () => clampAndApply(img,
+            parseFloat(img.dataset.scale) || 1,
+            parseFloat(img.dataset.offsetX) || 0,
+            parseFloat(img.dataset.offsetY) || 0);
           apply();
 
-          // wheel zoom — clamped, and the pan is clamped so the frame never
-          // shows empty space at the edges.
-          box.addEventListener("wheel", (ev) => {
+          let isDragging = false, isMouseDown = false;
+          let dragStartX = 0, dragStartY = 0, lastX = 0, lastY = 0;
+
+          if (typeof ResizeObserver !== "undefined") {
+            const ro = new ResizeObserver(() => {
+              const im = box.querySelector("img");
+              if (!im) return;
+              clampAndApply(im, parseFloat(im.dataset.scale) || 1,
+                parseFloat(im.dataset.offsetX) || 0, parseFloat(im.dataset.offsetY) || 0);
+            });
+            ro.observe(box);
+          }
+
+          box.addEventListener("wheel", function (ev) {
+            const im = box.querySelector("img");
+            if (!im) return;
             ev.preventDefault();
-            const prev = z.s;
-            z.s = Math.max(1, Math.min(4, z.s * (ev.deltaY < 0 ? 1.12 : 1 / 1.12)));
-            if (z.s === 1) { z.x = 0; z.y = 0; }
-            else { const k = z.s / prev; z.x *= k; z.y *= k; clamp(); }
-            apply(); persistZoom();
+            let currentScale = parseFloat(im.dataset.scale) || 1;
+            let offX = parseFloat(im.dataset.offsetX) || 0;
+            let offY = parseFloat(im.dataset.offsetY) || 0;
+
+            if (ev.deltaY < 0) {
+              currentScale *= 1.1;            // zoom in
+            } else {
+              currentScale /= 1.1;            // zoom out
+              if (currentScale <= 1) {        // snap back
+                currentScale = 1;
+                offX = 0; offY = 0;
+              }
+            }
+            if (currentScale > MAX_SCALE) currentScale = MAX_SCALE;
+            clampAndApply(im, currentScale, offX, offY);
           }, { passive: false });
 
-          let dragging = false, lx = 0, ly = 0;
-          box.addEventListener("pointerdown", (ev) => {
-            if (ev.target.closest(".rv-handle")) return;
-            if (z.s <= 1) return;
-            dragging = true; lx = ev.clientX; ly = ev.clientY;
-            box.setPointerCapture(ev.pointerId); box.style.cursor = "grabbing";
+          box.addEventListener("mousedown", function (ev) {
+            if (ev.target.closest(".rv-handle") || ev.target.closest(".rv-tool")) return;
+            const im = box.querySelector("img");
+            if (!im) return;
+            const scaleNow = parseFloat(im.dataset.scale) || 1;
+            if (scaleNow <= 1) return;
+            ev.preventDefault();
+            isMouseDown = true;
+            isDragging = false;
+            dragStartX = ev.clientX; dragStartY = ev.clientY;
+            lastX = ev.clientX; lastY = ev.clientY;
           });
-          box.addEventListener("pointermove", (ev) => {
-            if (!dragging) return;
-            z.x += ev.clientX - lx; z.y += ev.clientY - ly; lx = ev.clientX; ly = ev.clientY;
-            clamp(); apply();
-          });
-          const end = () => { if (!dragging) return; dragging = false; box.style.cursor = "grab"; persistZoom(); };
-          box.addEventListener("pointerup", end);
-          box.addEventListener("pointercancel", end);
 
-          function clamp() {
-            const w = box.clientWidth || 1, h = box.clientHeight || 1;
-            const mx = (w * z.s - w) / 2, my = (h * z.s - h) / 2;
-            z.x = Math.max(-mx, Math.min(mx, z.x));
-            z.y = Math.max(-my, Math.min(my, z.y));
-          }
-          function persistZoom() {
+          box.addEventListener("mousemove", function (ev) {
+            if (!isMouseDown) return;
+            ev.preventDefault();
+            const dxAll = Math.abs(ev.clientX - dragStartX);
+            const dyAll = Math.abs(ev.clientY - dragStartY);
+            if (dxAll > dragThreshold || dyAll > dragThreshold) isDragging = true;
+
+            const im = box.querySelector("img");
+            if (!im) return;
+            const scaleNow = parseFloat(im.dataset.scale) || 1;
+            let offX = parseFloat(im.dataset.offsetX) || 0;
+            let offY = parseFloat(im.dataset.offsetY) || 0;
+            const dx = (ev.clientX - lastX) * 0.5;
+            const dy = (ev.clientY - lastY) * 0.5;
+            offX += dx; offY += dy;
+            clampAndApply(im, scaleNow, offX, offY);
+            lastX = ev.clientX; lastY = ev.clientY;
+          });
+
+          box.addEventListener("mouseup",    () => { isMouseDown = false; });
+          box.addEventListener("mouseleave", () => { isMouseDown = false; });
+
+          box.addEventListener("click", function (ev) {
+            if (ev.target.closest(".rv-handle") || ev.target.closest(".rv-tool")) return;
+            if (isDragging) { isDragging = false; return; }
+            const im = box.querySelector("img");
+            if (!im) return;
+
+            const s0    = parseFloat(im.dataset.scale)   || 1;
+            const offX0 = parseFloat(im.dataset.offsetX) || 0;
+            const offY0 = parseFloat(im.dataset.offsetY) || 0;
+
+            const rect = box.getBoundingClientRect();
+            const cx = rect.left + box.clientWidth  / 2;
+            const cy = rect.top  + box.clientHeight / 2;
+            const dx_screen = ev.clientX - cx;
+            const dy_screen = ev.clientY - cy;
+
+            const px = dx_screen / s0 - offX0;
+            const py = dy_screen / s0 - offY0;
+
+            let targetOffX = -px;
+            let targetOffY = -py;
+
+            const halfW = (im.clientWidth  || 120) / 2;
+            const halfH = (im.clientHeight || 120) / 2;
+            function requiredScaleFor(delta, half) {
+              const ratio = Math.abs(delta) / half;
+              if (ratio >= 1) return Infinity;
+              return 1 / (1 - ratio);
+            }
+            const needX = requiredScaleFor(targetOffX, halfW);
+            const needY = requiredScaleFor(targetOffY, halfH);
+
+            const DESIRED = 1.33;
+            let s1 = Math.max(DESIRED, s0 * 1.5, needX, needY);
+            if (!Number.isFinite(s1)) s1 = MAX_SCALE;
+            if (s1 > MAX_SCALE) s1 = MAX_SCALE;
+
+            if (s0 > 1.2 && Math.abs(s1 - s0) < 0.5) s1 = 1;
+
+            clampAndApply(im, s1, targetOffX, targetOffY);
+          });
+
+          /*  The offsets are element-space CSS pixels, so they are meaningless
+              without the viewport they were measured in — a 200px tile and a
+              340px tile produce different numbers for the same framing. `vw`
+              travels with them so the publish-time bake can convert to source
+              pixels, exactly as convertBatchZoom does for slot 0. */
+          function persistZoom(sc, ox, oy) {
             const cur = { ...(get(r.setName).zoom || {}) };
-            if (z.s === 1 && !z.x && !z.y) delete cur[String(slot)]; else cur[String(slot)] = { ...z };
+            if (sc === 1 && !ox && !oy) delete cur[String(slot)];
+            else cur[String(slot)] = { s: sc, x: ox, y: oy,
+                                       vw: box.clientWidth || 0, vh: box.clientHeight || 0 };
             save(r.setName, { zoom: cur });
           }
 
-          // drag to reorder
+          // ---- drag to reorder: visible target, animated outcome ----------
           tile.addEventListener("dragstart", (ev) => {
             ev.dataTransfer.effectAllowed = "move";
             ev.dataTransfer.setData("text/plain", String(slot));
-            tile.classList.add("drag");
+            grid.classList.add("dragging");
+            // Deferred: adding the class synchronously would bake the faded
+            // style into the browser's drag image.
+            setTimeout(() => tile.classList.add("drag"), 0);
           });
           tile.addEventListener("dragend", () => {
+            tile.draggable = false;
+            grid.classList.remove("dragging");
             tile.classList.remove("drag");
-            grid.querySelectorAll(".rv-tile").forEach(t => t.classList.remove("over"));
+            grid.querySelectorAll(".rv-tile").forEach(t => t.classList.remove("over", "over-l", "over-r"));
           });
-          tile.addEventListener("dragover", (ev) => { ev.preventDefault(); tile.classList.add("over"); });
-          tile.addEventListener("dragleave", () => tile.classList.remove("over"));
-          tile.addEventListener("drop", (ev) => {
+          tile.addEventListener("dragover", (ev) => {
             ev.preventDefault();
-            tile.classList.remove("over");
+            if (tile.classList.contains("drag")) return;
+            // Show WHICH SIDE it will land on, so the drop is never a guess.
+            const rect = tile.getBoundingClientRect();
+            const before = (ev.clientX - rect.left) < rect.width / 2;
+            tile.classList.add("over");
+            tile.classList.toggle("over-l", before);
+            tile.classList.toggle("over-r", !before);
+          });
+          tile.addEventListener("dragleave", () => tile.classList.remove("over", "over-l", "over-r"));
+          tile.addEventListener("drop", async (ev) => {
+            ev.preventDefault();
+            const before = tile.classList.contains("over-l");
+            tile.classList.remove("over", "over-l", "over-r");
             const from = Number(ev.dataTransfer.getData("text/plain"));
             if (!Number.isFinite(from) || from === slot) return;
             const cur = orderedSlots(r.setName, ord).map(s => s.slot);
-            const a = cur.indexOf(from), b = cur.indexOf(slot);
-            if (a < 0 || b < 0) return;
-            cur.splice(b, 0, cur.splice(a, 1)[0]);
+            const a = cur.indexOf(from);
+            if (a < 0) return;
+            const moving = cur.splice(a, 1)[0];
+            let b = cur.indexOf(slot);
+            if (b < 0) return;
+            cur.splice(before ? b : b + 1, 0, moving);
+            // FLIP: measure where every tile is now, repaint, then animate
+            // each one from its old box to its new one. The operator sees the
+            // images travel, so what moved and where is never ambiguous.
+            const first = captureRects(grid);
             save(r.setName, { order: cur });
-            paintGrid(r);
+            await paintGrid(r);
+            playFlip(grid, first, moving);
             toast("Image order updated");
           });
 
@@ -4015,8 +4293,7 @@ ANTI-REPETITION (TITLE)
           tile.querySelectorAll(".rv-tool").forEach((btn) => {
             btn.addEventListener("click", async () => {
               const a = btn.dataset.a;
-              if (a === "grid") { tile.classList.toggle("grid"); btn.classList.toggle("on"); return; }
-              if (a === "zoomreset") { z.s = 1; z.x = 0; z.y = 0; apply(); persistZoom(); return; }
+              if (a === "zoomreset") { clampAndApply(img, 1, 0, 0); return; }
               if (a === "adjust") { tile.classList.toggle("adj"); btn.classList.toggle("on");
                 const inp = tile.querySelector(".rv-adj input"); if (tile.classList.contains("adj") && inp) inp.focus(); return; }
               if (a === "del") {
@@ -4079,7 +4356,7 @@ ANTI-REPETITION (TITLE)
           const fresh = await waitForNewSlot(r, slot, before, 420000);
           if (!fresh) throw new Error("timed out waiting for the new image");
 
-          slotsCache.delete(r.setName);
+          releaseSlots(r.setName);
           toast(`Slot ${slot} regenerated`);
           await paintGrid(r);
         } catch (e) {
@@ -4120,6 +4397,27 @@ ANTI-REPETITION (TITLE)
       }
 
       // ---- per-listing status actions --------------------------------------
+      /*  Approve & Next: land on the next listing that still needs a decision,
+          not merely the next row — after a few approvals the untouched ones
+          are scattered, and stepping onto an already-approved listing just
+          makes the operator hunt. Falls back to the next row when everything
+          below is decided, and stays put when this was the last one. */
+      function advanceToNext(r) {
+        const from = rows.indexOf(r);
+        if (from < 0) return;
+        const isPending = (row) => get(row.setName).status === RV_STATUS.PENDING;
+        let next = -1;
+        for (let i = from + 1; i < rows.length; i++) if (isPending(rows[i])) { next = i; break; }
+        if (next < 0) for (let i = 0; i < from; i++) if (isPending(rows[i])) { next = i; break; }
+        if (next < 0) {
+          toast("Every listing has a decision — nothing left to review");
+          return;
+        }
+        sel = next;
+        paintRail(); paintDetail();
+        try { railEl.querySelector(".rv-row.sel")?.scrollIntoView({ block: "nearest", behavior: "smooth" }); } catch (_) {}
+      }
+
       // Needs-review PHYSICALLY relocates the set so the scanner can never pick
       // it up, no matter which terminal is running. The status flag alone would
       // have been enough for this app, but a folder move is also visible in the
@@ -4134,14 +4432,14 @@ ANTI-REPETITION (TITLE)
           toast("Flagged — moving to Needs_Review in the background");
           const dest = `${RV_NEEDS_REVIEW}/${r.setName}`;
           const ok = await moveSet(r, dest);
-          if (ok) { r.setRef = storage.ref(dest); slotsCache.delete(r.setName); save(r.setName, { path: dest }); }
+          if (ok) { r.setRef = storage.ref(dest); releaseSlots(r.setName); save(r.setName, { path: dest }); }
           toast(ok ? "Flagged for further review" : "Flagged — folder move failed, status recorded");
           return;
         }
         if (was === RV_STATUS.REVIEW && status !== RV_STATUS.REVIEW) {
           const dest = `${RV_COMPLETED}/${r.setName}`;
           const ok = await moveSet(r, dest);
-          if (ok) { r.setRef = storage.ref(dest); slotsCache.delete(r.setName); save(r.setName, { path: dest }); }
+          if (ok) { r.setRef = storage.ref(dest); releaseSlots(r.setName); save(r.setName, { path: dest }); }
           toast(ok ? "Flag cleared — returned to the queue" : "Flag cleared — folder move failed");
           return;
         }
@@ -4166,7 +4464,7 @@ ANTI-REPETITION (TITLE)
         toast("Rejected — moving folder in the background");
         const dest = `${RV_REJECTED}/${r.setName}`;
         const ok = await moveSet(r, dest);
-        if (ok) { r.setRef = storage.ref(dest); slotsCache.delete(r.setName); save(r.setName, { path: dest }); }
+        if (ok) { r.setRef = storage.ref(dest); releaseSlots(r.setName); save(r.setName, { path: dest }); }
         if (!ok) toast("Rejected — folder move failed, status recorded");
       }
       async function restoreSet(r) {
@@ -4174,7 +4472,7 @@ ANTI-REPETITION (TITLE)
         paintDetail();
         const dest = `${RV_COMPLETED}/${r.setName}`;
         const ok = await moveSet(r, dest);
-        if (ok) { r.setRef = storage.ref(dest); slotsCache.delete(r.setName); save(r.setName, { path: dest }); }
+        if (ok) { r.setRef = storage.ref(dest); releaseSlots(r.setName); save(r.setName, { path: dest }); }
         toast(ok ? "Restored to the queue" : "Restored — folder move failed");
       }
       async function postJsonRV(body) {
@@ -4249,7 +4547,7 @@ ANTI-REPETITION (TITLE)
         rows = (list || []).filter(Boolean);
         sel = rows.length ? 0 : -1;
         filter = "all";
-        slotsCache.clear();
+        releaseAllSlots();          // revoke object URLs, do not merely forget them
         // Seed from Firestore so prior decisions show immediately.
         try {
           const snaps = await Promise.all(rows.map(r => fsdb.collection(RV_COLL).doc(r.setName).get().catch(() => null)));
@@ -4262,6 +4560,20 @@ ANTI-REPETITION (TITLE)
         }
         if (titleEl) titleEl.textContent = `Review ${rows.length} listing${rows.length === 1 ? "" : "s"}`;
         if (subEl) subEl.textContent = "Automation is paused. Approve, flag for further review, or reject. Every change saves as you make it.";
+        /*  Pre-download everything BEFORE the panel is shown. Cycling rows
+            then never waits on the network — the images are already decoded
+            in memory. Progress goes to the pipeline status line and the tab
+            title, because this is a deliberate pause and silence during it
+            reads as a hang. */
+        const prevStatusTitle = document.title;
+        try {
+          await prefetchAll(rows, (done, total) => {
+            try { updateFirebaseStatus(`PAUSED — caching review images (${done}/${total} listings)...`, "working"); } catch (_) {}
+            document.title = `⚠ Caching ${done}/${total} — Listing Generator`;
+          });
+        } catch (_) { /* a failed prefetch must never block the review */ }
+        document.title = prevStatusTitle;
+
         paintCounts(); paintRail(); paintDetail();
         overlay.classList.add("open");
         subscribe();
@@ -5646,6 +5958,66 @@ ANTI-REPETITION (TITLE)
     // the Smart Match template exactly:
     window.AI_ZOOM_TEMPLATE = window.AI_ZOOM_TEMPLATE || { zoom: 2, offsetX: 0, offsetY: 0.08 };
 
+    /* =====================================================================
+       BAKE FRAMING INTO PIXELS
+       =====================================================================
+       Pan and zoom were previously a viewing aid: stored, replayed in the UI,
+       and then thrown away at upload, so a listing published the uncropped
+       original no matter how the operator had framed it. This renders the
+       framing into the bytes that actually get uploaded.
+
+       Geometry, derived from the CSS the review tile uses
+       (`object-fit:contain` + `transform: scale(S) translate(X,Y)`, origin
+       centre). CSS applies transforms right-to-left, so a local point p
+       (origin at centre) lands at S*(p + T). The visible window is therefore
+       centred on -T with size viewport/S in element space. `contain` letter-
+       boxes the bitmap by k = min(vw/Wsrc, vh/Hsrc), so dividing by k moves
+       element space into source pixels.
+       ===================================================================== */
+    async function bakeFramingIntoBlob(srcUrl, z) {
+        const S = Math.max(1, Number(z && z.s) || 1);
+        if (S <= 1) return null;                       // nothing to bake
+        const img = await new Promise((res, rej) => {
+            const im = new Image();
+            im.crossOrigin = "anonymous";              // blob: is same-origin; this keeps the canvas clean
+            im.onload = () => res(im);
+            im.onerror = () => rej(new Error("image load failed"));
+            im.src = srcUrl;
+        });
+        const Wsrc = img.naturalWidth, Hsrc = img.naturalHeight;
+        if (!Wsrc || !Hsrc) throw new Error("image has no dimensions");
+
+        // Viewport the offsets were measured in. Falls back to a square of the
+        // recorded width so an older decision without vh still resolves.
+        const vw = Number(z.vw) || Wsrc, vh = Number(z.vh) || vw;
+        const k = Math.min(vw / Wsrc, vh / Hsrc);      // object-fit: contain
+        if (!(k > 0)) return null;
+
+        const cw = (vw / S) / k;                       // visible width  in source px
+        const ch = (vh / S) / k;                       // visible height in source px
+        let sx = (Wsrc / 2) - (Number(z.x) || 0) / k - cw / 2;
+        let sy = (Hsrc / 2) - (Number(z.y) || 0) / k - ch / 2;
+
+        // Never sample outside the bitmap — that yields transparent edges.
+        const w = Math.min(cw, Wsrc), h = Math.min(ch, Hsrc);
+        sx = Math.max(0, Math.min(Wsrc - w, sx));
+        sy = Math.max(0, Math.min(Hsrc - h, sy));
+
+        // Keep the published resolution: render the crop back out at the
+        // source's own pixel density rather than the tile's.
+        const canvas = document.createElement("canvas");
+        canvas.width  = Math.max(1, Math.round(w));
+        canvas.height = Math.max(1, Math.round(h));
+        const ctx = canvas.getContext("2d");
+        ctx.imageSmoothingEnabled = true;
+        ctx.imageSmoothingQuality = "high";
+        ctx.drawImage(img, sx, sy, w, h, 0, 0, canvas.width, canvas.height);
+
+        const blob = await new Promise((res) => canvas.toBlob(res, "image/png"));
+        if (!blob) throw new Error("canvas produced no blob");
+        return URL.createObjectURL(blob);
+    }
+
     async function cropImageForAI(srcUrl, tpl) {
         tpl = tpl || window.AI_ZOOM_TEMPLATE || {};
         const zoom = Math.max(1, Number(tpl.zoom) || 2);
@@ -5975,9 +6347,39 @@ ANTI-REPETITION (TITLE)
                                         (rank.has(b.idx + 1) ? rank.get(b.idx + 1) : 999));
                 }
                 // Re-index densely so the pipeline sees a gap-free 0..N-1 run.
-                keep.forEach((f, i) => { f.idx = i; });
+                // The ORIGINAL slot is stamped first — framing is keyed by it,
+                // and after this loop f.idx no longer identifies the slot.
+                keep.forEach((f, i) => { f.__origSlot = f.idx + 1; f.idx = i; });
                 hydrated = keep.concat(hydrated.filter(f => !(f.idx >= 0 && f.idx < 8)));
                 console.log(`[review] ${setName}: ${excluded.size} image(s) excluded, order ${__rvDec.order ? "custom" : "default"}.`);
+            }
+
+            /*  Bake the operator's framing into the bytes. Runs after the
+                exclude/reorder pass so only images that survive are rendered,
+                and before previewImages is populated so the uploader, the
+                preview grid and the vision calls all see the same pixels the
+                operator approved. Per-image failure keeps the original rather
+                than dropping the listing. */
+            if (__rvDec && __rvDec.zoom && Object.keys(__rvDec.zoom).length) {
+                let baked = 0;
+                for (const f of hydrated) {
+                    if (!(f.idx >= 0 && f.idx < 8)) continue;
+                    const slotKey = String(f.__origSlot != null ? f.__origSlot : f.idx + 1);
+                    const z = __rvDec.zoom[slotKey];
+                    if (!z || !(Number(z.s) > 1)) continue;
+                    try {
+                        const framed = await bakeFramingIntoBlob(f.displayUrl, z);
+                        if (framed) {
+                            // The pre-bake blob is dead the moment it is replaced.
+                            try { if (String(f.displayUrl).startsWith("blob:")) URL.revokeObjectURL(f.displayUrl); } catch (_) {}
+                            f.displayUrl = framed;
+                            baked++;
+                        }
+                    } catch (e) {
+                        console.warn(`[review] framing bake failed for slot ${slotKey} — publishing the original:`, e && e.message);
+                    }
+                }
+                if (baked) console.log(`[review] ${setName}: framing baked into ${baked} image(s).`);
             }
 
             hydrated.forEach(f => {
