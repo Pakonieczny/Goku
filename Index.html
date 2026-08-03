@@ -1796,6 +1796,30 @@
     .dscope__num.ids{background:var(--goldSoft); color:#7a5a1d}
     .dscope__num.zero{background:var(--paper2); color:var(--ink45)}
     .dscope__num.ready{background:var(--sageSoft); color:#3c5a39}
+    /* ── rail review-queue readout ──
+       Its own compartment: this is state the operator acts on, not passive
+       progress, so it gets a border and a live count rather than a line of
+       small text competing with the pipeline steps. */
+    .dr-queue{margin-top:11px; padding:10px 11px; border-radius:10px;
+      background:rgba(255,255,255,.035); border:1px solid var(--velvetLine)}
+    .dr-queue.has{border-color:#6a5a34; background:rgba(202,168,97,.08)}
+    .dr-qhead{display:flex; align-items:center; gap:8px}
+    .dr-qlab{font-size:8.5px; letter-spacing:.14em; text-transform:uppercase; color:#8c8476; font-weight:700}
+    .dr-qcount{margin-left:auto; font-family:var(--mono); font-size:11px; font-weight:700; color:#8c8476;
+      background:var(--velvet2); border:1px solid var(--velvetLine); border-radius:20px; padding:1px 9px;
+      font-variant-numeric:tabular-nums}
+    .dr-queue.has .dr-qcount{color:#2a2114; background:var(--gold2); border-color:var(--gold2)}
+    .dr-qnames{font-size:10.5px; color:#7d7568; margin-top:7px; line-height:1.5;
+      display:-webkit-box; -webkit-line-clamp:2; -webkit-box-orient:vertical; overflow:hidden}
+    .dr-queue.has .dr-qnames{color:#b3aa9a}
+    .dr-qacts{display:flex; gap:6px; margin-top:9px}
+    .dr-qbtn{flex:1 1 0; background:var(--velvet2); border:1px solid var(--velvetLine); color:#cfc7b8;
+      border-radius:7px; padding:5px 8px; font-size:9.5px; font-weight:700; letter-spacing:.06em;
+      text-transform:uppercase; cursor:pointer; font-family:inherit; transition:.13s}
+    .dr-qbtn:hover:not(:disabled){color:#fff; border-color:#5f574a; background:#332e27}
+    .dr-qbtn.ghost:hover:not(:disabled){color:#f0c9bd; border-color:#7a4335; background:#3a2620}
+    .dr-qbtn:disabled{opacity:.4; cursor:not-allowed}
+    .dapp.collapsed .dr-queue{display:none}
     /* rail scope indicator */
     .dr-scope{display:flex; align-items:center; gap:7px; margin-top:9px; font-size:10.5px; color:#8c8476; font-weight:600}
     .dr-scope .lab{letter-spacing:.1em; text-transform:uppercase; font-size:9px}
@@ -3451,6 +3475,10 @@ ANTI-REPETITION (TITLE)
     }
     function writeBatchApproved(map) {
         try { localStorage.setItem(BATCH_APPROVED_KEY, JSON.stringify(map || {})); } catch (_) {}
+        /*  Every mutation of the queue announces itself. localStorage fires no
+            event in the tab that wrote it, so without this the readout could
+            only poll — and a queue that lags reality is worse than no queue. */
+        try { window.dispatchEvent(new CustomEvent("batchqueue-changed")); } catch (_) {}
     }
     // Returns the approved description for a set and REMOVES it (single
     // use — a consumed approval must never leak onto a different run),
@@ -4260,6 +4288,98 @@ ANTI-REPETITION (TITLE)
           });
         }, () => {});
       } catch (_) {}
+    })();
+
+    /* =====================================================================
+       REVIEW QUEUE  —  visibility and control over pre-approved listings
+       =====================================================================
+       A batch review approves several listings at once. Their descriptions
+       live in BATCH_APPROVED_KEY until the pipeline reaches each set, and
+       listBatchCandidates deliberately skips any set holding an unused
+       approval ("if (name in already) continue"). That is why a run can
+       start publishing with no popup: those listings were approved earlier
+       and are simply being spent.
+
+       Correct behaviour, invisible mechanism. This exposes it:
+         · a live count of what is queued, updated on every mutation
+         · the full Review Panel, on demand, over the queued sets
+         · a clear that is non-destructive — it drops the approvals, so
+           listBatchCandidates stops skipping those sets and they come back
+           round in the next batch as unreviewed
+       ===================================================================== */
+    const RQ_COMPLETED = "listing-generator-1/Generated_Listing_Sets/Completed_Listing_Sets";
+
+    window.ReviewQueue = (function () {
+      const names = () => Object.keys(readBatchApproved()).sort((a, b) => a.localeCompare(b));
+      const count = () => names().length;
+
+      /*  Clearing removes the APPROVALS, never the folders. The sets stay in
+          Completed_Listing_Sets, so the next scan offers them again with no
+          decision attached. Nothing is destroyed and nothing is published. */
+      function clear() {
+        const n = count();
+        if (!n) return 0;
+        writeBatchApproved({});
+        try {
+          // The saved zoom framings are decisions too — a set coming back as
+          // unreviewed should not silently keep the last crop.
+          const z = readBatchZoom(); names().forEach(k => delete z[k]); writeBatchZoom(z);
+        } catch (_) {}
+        return n;
+      }
+
+      /*  Opens the real panel — same master/detail, same approve / flag /
+          reject / regenerate as the automatic gate, because it IS the same
+          component. Rows are rebuilt from the queued names against their
+          Storage folders. */
+      async function open() {
+        const queued = names();
+        if (!queued.length) return { empty: true };
+        if (!window.ReviewPanel || !document.getElementById("rvOverlay")) {
+          console.warn("Review queue: panel unavailable.");
+          return { error: "panel-unavailable" };
+        }
+        const store = readBatchApproved();
+        const rows = queued.map((setName) => ({
+          setName,
+          setRef: storage.ref(`${RQ_COMPLETED}/${setName}`),
+          category: (typeof routeFolderName === "function" && routeFolderName(setName)?.category) || "",
+          thumbUrl: "",                       // the panel loads slots itself
+          description: String(store[setName] || "")
+        }));
+
+        const promise = window.ReviewPanel.open(rows);
+        /*  The panel's standing subtitle says "Automation is paused", which is
+            true when the pipeline opens it and false when the operator does.
+            Corrected after open() has painted, so the panel never tells the
+            operator something that isn't so. */
+        setTimeout(() => {
+          const sub = document.querySelector("#rvOverlay .rv-head .sub");
+          if (sub) sub.textContent = window.autoProcessingEnabled
+            ? "Auto-pilot is still running. These listings are already approved and waiting to publish — changes apply before each one is used."
+            : "These listings are already approved and waiting to publish. Approve, flag or reject before they are used.";
+        }, 0);
+        const result = await promise;
+        if (!result || result === "CANCELLED") return { cancelled: true };
+
+        /*  Reconcile. A set the operator approved keeps (or updates) its
+            queued description. A set they rejected or flagged comes OUT of
+            the queue — the panel has already moved its folder — so it is no
+            longer spent silently by the pipeline. */
+        const approved = result.map || {};
+        const next = readBatchApproved();
+        queued.forEach((n) => { delete next[n]; });
+        Object.entries(approved).forEach(([n, desc]) => { next[n] = desc; });
+        writeBatchApproved(next);
+        try {
+          const zs = readBatchZoom();
+          Object.entries(result.zooms || {}).forEach(([n, t]) => { zs[n] = t; });
+          writeBatchZoom(zs);
+        } catch (_) {}
+        return { reviewed: queued.length, kept: Object.keys(approved).length };
+      }
+
+      return { names, count, clear, open };
     })();
 
     async function runBatchReviewGate(currentSetRef, currentSetName) {
@@ -10790,6 +10910,19 @@ ANTI-REPETITION (TITLE)
             <div class="dr-overall-track"><div class="dr-overall-fill" id="railOverallFill"></div></div>
             <div class="dr-overall-row dr-overall-sub"><span id="railSetElapsed"></span><span id="railQueueChips"></span></div>
           </div>
+          <div class="dr-queue" id="railQueue">
+            <div class="dr-qhead">
+              <span class="dr-qlab">Review queue</span>
+              <span class="dr-qcount" id="railQueueCount">0</span>
+            </div>
+            <div class="dr-qnames" id="railQueueNames">Nothing queued</div>
+            <div class="dr-qacts">
+              <button type="button" id="railQueueView" class="dr-qbtn"
+                      title="Open the review panel over the listings already approved and waiting">View</button>
+              <button type="button" id="railQueueClear" class="dr-qbtn ghost"
+                      title="Drop the queued approvals — these sets come back unreviewed in the next batch">Clear</button>
+            </div>
+          </div>
           <div class="dr-batch" id="railBatch" style="display:none">
             <span class="lab">Batch</span>
             <span class="val" id="railBatchVal">0 / 0</span>
@@ -11012,6 +11145,63 @@ ANTI-REPETITION (TITLE)
         document.addEventListener("keydown", (e) => { if (e.key === "Escape" && !panel.hidden) open(false); });
         // Choosing a source or signing out both resolve the menu's purpose.
         panel.addEventListener("click", (e) => { if (e.target.closest(".dm-btn")) open(false); });
+      })();
+
+      // ── review-queue readout ─────────────────────────────────────────
+      // Driven by the batchqueue-changed event, so it reflects the store the
+      // instant anything mutates it — an approval landing, a set being spent
+      // by the pipeline, a clear. Also listens for `storage` so a second tab
+      // stays truthful.
+      (function initRailQueue() {
+        const box = $("railQueue"), cntEl = $("railQueueCount"),
+              namesEl = $("railQueueNames"), viewBtn = $("railQueueView"), clearBtn = $("railQueueClear");
+        if (!box || !window.ReviewQueue) return;
+
+        function paint() {
+          const list = window.ReviewQueue.names();
+          const n = list.length;
+          box.classList.toggle("has", n > 0);
+          cntEl.textContent = String(n);
+          namesEl.textContent = n ? list.join(" · ") : "Nothing queued";
+          namesEl.title = n ? list.join("\n") : "";
+          viewBtn.disabled = !n;
+          clearBtn.disabled = !n;
+          box.title = n
+            ? n + " listing" + (n === 1 ? "" : "s") + " already approved — these publish without stopping for review."
+            : "No pre-approved listings. The next set will stop for review.";
+        }
+
+        viewBtn.addEventListener("click", async () => {
+          viewBtn.disabled = true;
+          try {
+            const r = await window.ReviewQueue.open();
+            if (r && r.reviewed) {
+              window.M?.toast?.({ html: `Queue reviewed — ${r.kept} of ${r.reviewed} still approved.` });
+            }
+          } catch (e) {
+            console.warn("Review queue open failed:", e && e.message);
+            window.M?.toast?.({ html: "Could not open the review queue.", classes: "red" });
+          } finally { paint(); }
+        });
+
+        // Destructive-sounding, deliberately isn't: say exactly what happens.
+        clearBtn.addEventListener("click", () => {
+          const n = window.ReviewQueue.count();
+          if (!n) return;
+          const ok = window.confirm(
+            `Clear ${n} queued listing${n === 1 ? "" : "s"}?\n\n` +
+            `Nothing is deleted. These sets lose their approval and come back ` +
+            `in the next batch as unreviewed, so you can decide on them again.`);
+          if (!ok) return;
+          const cleared = window.ReviewQueue.clear();
+          window.M?.toast?.({ html: `${cleared} listing${cleared === 1 ? "" : "s"} returned to the queue as unreviewed.` });
+          paint();
+        });
+
+        window.addEventListener("batchqueue-changed", paint);
+        window.addEventListener("storage", (e) => { if (!e.key || e.key === "etsyBatchApproved.v1") paint(); });
+        window.updateRailQueue = paint;
+        paint();
       })();
 
       const collapseBtn = $("dRailCollapse");
