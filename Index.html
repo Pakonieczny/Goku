@@ -4302,8 +4302,23 @@ ANTI-REPETITION (TITLE)
             // returns the same { map, zooms } shape (or "CANCELLED"), so every
             // consumer below is unchanged. showBatchReviewPopup remains as the
             // fallback if the panel markup is somehow absent.
-            const rvRows = preparedOk.map((pc, i) => {
-                const cand = candidates[i] || {};
+            /*  Rows are built from `prepared` with its ORIGINAL indices, not
+                from the compacted `preparedOk`. prepared[i] pairs with
+                candidates[i]; the moment one prep fails and a null is
+                squeezed out, indices in the compacted array no longer line
+                up, so row N would carry set N's images alongside a DIFFERENT
+                set's storage ref — approving it would write to the wrong
+                folder. When every prep failed the rows came out empty, the
+                panel was skipped entirely and the run fell through to the
+                legacy single-listing gate: the panel "not showing up" while
+                listings published anyway. */
+            const rvRows = prepared.map((pc, i) => {
+                if (!pc) return null;                       // prep failed for this candidate
+                const cand = candidates[i] || {};           // i is the ORIGINAL index
+                if (!cand.setRef) {
+                    console.warn("Review row dropped — candidate has no setRef:", pc.setName);
+                    return null;
+                }
                 return {
                     setName: pc.setName,
                     setRef: cand.setRef,
@@ -4311,7 +4326,23 @@ ANTI-REPETITION (TITLE)
                     thumbUrl: pc.displayUrl || pc.blobUrl || "",
                     description: pc.description || ""
                 };
-            }).filter(x => x.setRef);
+            }).filter(Boolean);
+
+            /*  Silence here is what made this hard to see from the outside:
+                every one of these conditions skips the panel and publishes
+                through the legacy path with no visible difference. Say which
+                one fired. */
+            if (!rvRows.length) {
+                console.warn("Review panel skipped — no reviewable rows.", {
+                    candidates: candidates.length,
+                    prepared: preparedOk.length,
+                    withSetRef: prepared.filter((pc, i) => pc && candidates[i] && candidates[i].setRef).length
+                });
+            } else if (!window.ReviewPanel) {
+                console.warn("Review panel skipped — window.ReviewPanel is undefined (its script block threw).");
+            } else if (!document.getElementById("rvOverlay")) {
+                console.warn("Review panel skipped — #rvOverlay is missing from the DOM.");
+            }
             const reviewResult = (window.ReviewPanel && document.getElementById("rvOverlay") && rvRows.length)
                 ? await window.ReviewPanel.open(rvRows)
                 : await showBatchReviewPopup(preparedOk);
