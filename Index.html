@@ -1696,6 +1696,20 @@
     .rv-rail:hover::-webkit-scrollbar-thumb{background:#ddd4c4}
     .rv-row{display:flex; gap:10px; align-items:center; padding:9px 11px; cursor:pointer; border-bottom:1px solid #f0eade; position:relative}
     .rv-row:hover{background:#fff8ec}
+    /* per-slot regeneration chips in the rail row */
+    .rv-regen{display:inline-flex; gap:4px; margin-left:6px; vertical-align:middle}
+    .rv-regen__chip{display:inline-flex; align-items:center; gap:4px; font-family:var(--mono,monospace);
+      font-size:9.5px; font-weight:700; padding:1px 6px 1px 5px; border-radius:20px; line-height:1.6;
+      border:1px solid transparent}
+    .rv-regen__chip i{width:6px; height:6px; border-radius:50%; display:block}
+    .rv-regen__chip.running{background:#eef4fc; border-color:#c5d9f2; color:#2b6ec4}
+    .rv-regen__chip.running i{background:#2b6ec4; animation:rvPulse 1s ease-in-out infinite}
+    .rv-regen__chip.done{background:#eef7ec; border-color:#cbe3c6; color:#3c5a39}
+    .rv-regen__chip.done i{background:#4e8c46}
+    .rv-regen__chip.failed{background:#fbeeea; border-color:#eccec4; color:#8c3f2d}
+    .rv-regen__chip.failed i{background:#a8503c}
+    @keyframes rvPulse{0%,100%{opacity:1; box-shadow:0 0 0 0 rgba(43,110,196,.5)}50%{opacity:.55; box-shadow:0 0 0 4px rgba(43,110,196,0)}}
+    @media (prefers-reduced-motion: reduce){ .rv-regen__chip.running i{animation:none} }
     .rv-thumbph{flex:0 0 auto; width:44px; height:44px; border-radius:8px; display:block;
       background:repeating-linear-gradient(45deg,#f0eade,#f0eade 4px,#e8e0d0 4px,#e8e0d0 8px)}
     .rv-row.sel{background:#fff3dc}
@@ -3922,12 +3936,44 @@ ANTI-REPETITION (TITLE)
           onto the row object died with it — which is why the detail images
           survived a close but the thumbnails all re-downloaded. Reading the
           cache instead means they survive exactly as long as the images do. */
+      /*  The thumbnail is the PRIMARY image — slot 1 — and nothing else.
+          It previously took "the first entry that happens to have a blobUrl",
+          which during hydration is whichever slot finished first. That is why
+          thumbnails appeared scrambled while a batch was still caching: a set
+          would briefly show its slot 4 or slot 7 until slot 1 arrived. */
+      /*  PER-SLOT REGENERATION STATE
+          ---------------------------
+          Mirrors Listing_Generator_1's REDO_STATE: a map keyed
+          "setName::slot" holding "running" | "done" | "failed". The rail row
+          renders a chip per affected slot so progress is visible from the
+          list without opening the set — the same idea as LG1's
+          "Slot 3: ⏳, Slot 5: 🟢", with the emoji replaced by styled dots so
+          it matches the rest of this console. */
+      const REGEN_STATE = new Map();
+      const regenKey = (setName, slot) => `${setName}::${slot}`;
+      function setRegenState(setName, slot, status) {
+        const k = regenKey(setName, slot);
+        if (!status) REGEN_STATE.delete(k); else REGEN_STATE.set(k, { status, at: Date.now() });
+        paintRailRow(setName);
+      }
+      function regenChipsFor(setName) {
+        const out = [];
+        REGEN_STATE.forEach((v, k) => {
+          const [name, slot] = k.split("::");
+          if (name !== setName) return;
+          out.push({ slot: Number(slot), status: v.status });
+        });
+        return out.sort((a, b) => a.slot - b.slot);
+      }
+
       function thumbFor(r) {
         if (r.thumbUrl) return r.thumbUrl;
         const out = slotsCache.get(r.setName);
         if (!out || !out.length) return "";
-        const first = out.find(x => x.blobUrl) || out.find(x => x.url);
-        return first ? (first.blobUrl || first.url) : "";
+        const primary = out.find(x => Number(x.slot) === 1) || out[0];
+        if (!primary) return "";
+        // Only the primary's own bytes — never a stand-in from another slot.
+        return primary.blobUrl || primary.url || "";
       }
 
       function rowHtml(r, i) {
@@ -3944,6 +3990,14 @@ ANTI-REPETITION (TITLE)
               <div class="nm">${esc(r.setName)}</div>
               <div class="ds">${esc(d.description || r.description || "—")}</div>
               <span class="rv-pill ${pc}">${pl}</span>
+              ${(() => {
+                const chips = regenChipsFor(r.setName);
+                if (!chips.length) return "";
+                return `<span class="rv-regen">` + chips.map(c =>
+                  `<span class="rv-regen__chip ${c.status}" title="Slot ${c.slot}: ${
+                    c.status === "running" ? "regenerating" : c.status === "done" ? "regenerated" : "failed"
+                  }"><i></i>${c.slot}</span>`).join("") + `</span>`;
+              })()}
             </div>
           </div>`;
       }
@@ -4001,6 +4055,11 @@ ANTI-REPETITION (TITLE)
             if (!grid || grid.dataset.set !== setName) return;      // panel moved on
             const img = grid.querySelector(`.rv-tile[data-slot="${s.slot}"] img`);
             if (img && img.dataset.set === setName) img.src = blobUrl;
+            // Slot 1 IS the rail thumbnail — repaint that row so it upgrades
+            // from the direct URL to the cached bytes. Only slot 1: any other
+            // slot repainting here is what let non-primary images flash into
+            // the thumbnail.
+            if (Number(s.slot) === 1) paintRailRow(setName);
           } catch (_) {}
         };
         const worker = async () => { while (queue.length) await one(queue.shift()); };
@@ -4346,7 +4405,22 @@ ANTI-REPETITION (TITLE)
           const z0 = (d.zoom && d.zoom[String(slot)]) || { s: 1, x: 0, y: 0 };
           img.dataset.scale = z0.s; img.dataset.offsetX = z0.x; img.dataset.offsetY = z0.y;
 
-          function clampAndApply(im, scale, offX, offY) {
+          /*  THE INFINITE ZOOM LOOP
+              ----------------------
+              clampAndApply used to persist on EVERY call. The ResizeObserver
+              calls it whenever the tile is measured — including when a
+              background tab is restored and layout is recomputed. That write
+              hit Firestore, the snapshot listener fired, paintDetail
+              repainted the grid, the new tiles got a new ResizeObserver,
+              which measured and wrote again... forever. What you saw as
+              images zooming and resetting endlessly was that cycle.
+
+              Persistence is now an explicit opt-in, taken only on real user
+              gestures (wheel, drag end, click-to-zoom, reset). Programmatic
+              re-clamps — the initial apply and the ResizeObserver — adjust
+              the transform without writing anything, so the cycle has no
+              way to start. */
+          function clampAndApply(im, scale, offX, offY, persist) {
             const viewportW = box.clientWidth || 120;
             const viewportH = box.clientHeight || 120;
             const baseW = im.clientWidth || 120;
@@ -4364,12 +4438,12 @@ ANTI-REPETITION (TITLE)
             im.dataset.offsetX = offX;
             im.dataset.offsetY = offY;
             im.style.transform = `scale(${scale}) translate(${offX}px, ${offY}px)`;
-            persistZoom(scale, offX, offY);
+            if (persist) persistZoom(scale, offX, offY);
           }
           const apply = () => clampAndApply(img,
             parseFloat(img.dataset.scale) || 1,
             parseFloat(img.dataset.offsetX) || 0,
-            parseFloat(img.dataset.offsetY) || 0);
+            parseFloat(img.dataset.offsetY) || 0);      // no persist: restoring, not editing
           apply();
 
           /*  Tiles carry no `draggable` attribute — that is deliberate, because
@@ -4400,6 +4474,7 @@ ANTI-REPETITION (TITLE)
             const ro = new ResizeObserver(() => {
               const im = box.querySelector("img");
               if (!im) return;
+              // Re-clamp only. Persisting here is what created the loop.
               clampAndApply(im, parseFloat(im.dataset.scale) || 1,
                 parseFloat(im.dataset.offsetX) || 0, parseFloat(im.dataset.offsetY) || 0);
             });
@@ -4424,7 +4499,7 @@ ANTI-REPETITION (TITLE)
               }
             }
             if (currentScale > MAX_SCALE) currentScale = MAX_SCALE;
-            clampAndApply(im, currentScale, offX, offY);
+            clampAndApply(im, currentScale, offX, offY, true);
           }, { passive: false });
 
           box.addEventListener("mousedown", function (ev) {
@@ -4455,7 +4530,7 @@ ANTI-REPETITION (TITLE)
             const dx = (ev.clientX - lastX) * 0.5;
             const dy = (ev.clientY - lastY) * 0.5;
             offX += dx; offY += dy;
-            clampAndApply(im, scaleNow, offX, offY);
+            clampAndApply(im, scaleNow, offX, offY, true);
             lastX = ev.clientX; lastY = ev.clientY;
           });
 
@@ -4501,7 +4576,7 @@ ANTI-REPETITION (TITLE)
 
             if (s0 > 1.2 && Math.abs(s1 - s0) < 0.5) s1 = 1;
 
-            clampAndApply(im, s1, targetOffX, targetOffY);
+            clampAndApply(im, s1, targetOffX, targetOffY, true);
           });
 
           /*  The offsets are element-space CSS pixels, so they are meaningless
@@ -4574,7 +4649,7 @@ ANTI-REPETITION (TITLE)
           tile.querySelectorAll(".rv-tool").forEach((btn) => {
             btn.addEventListener("click", async () => {
               const a = btn.dataset.a;
-              if (a === "zoomreset") { clampAndApply(img, 1, 0, 0); return; }
+              if (a === "zoomreset") { clampAndApply(img, 1, 0, 0, true); return; }
               if (a === "adjust") { tile.classList.toggle("adj"); btn.classList.toggle("on");
                 const inp = tile.querySelector(".rv-adj input"); if (tile.classList.contains("adj") && inp) inp.focus(); return; }
               if (a === "del") {
@@ -4605,6 +4680,7 @@ ANTI-REPETITION (TITLE)
         const plan = (P.SLOT_MAP[cat] || [])[slot - 1];
         if (!plan) { toast(`No slot plan for ${cat} slot ${slot}`); return; }
         tile.classList.add("busy");
+        setRegenState(r.setName, slot, "running");
         const txt = tile.querySelector(".rv-busytxt");
         try {
           if (txt) txt.textContent = "Reading manifest…";
@@ -4673,11 +4749,19 @@ ANTI-REPETITION (TITLE)
           const fresh = await waitForNewSlot(r, slot, before, 420000);
           if (!fresh) throw new Error("timed out waiting for the new image");
 
-          releaseSlots(r.setName);
+          /*  Refresh ONLY the regenerated slot. releaseSlots() dropped the
+              whole set, so the next paint re-downloaded all eight images for
+              the sake of one — slow, and it threw away framing work in
+              progress. Swap this slot's bytes in place and repaint nothing
+              else. */
+          await refreshOneSlot(r, slot);
+          setRegenState(r.setName, slot, "done");
+          // Clear the "done" marker after a beat so the list settles back.
+          setTimeout(() => setRegenState(r.setName, slot, null), 8000);
           toast(`Slot ${slot} regenerated`);
-          await paintGrid(r);
         } catch (e) {
           console.warn("Regenerate failed:", e);
+          setRegenState(r.setName, slot, "failed");
           toast(`Regenerate failed: ${(e && e.message) || e}`);
         } finally {
           tile.classList.remove("busy");
@@ -4750,6 +4834,36 @@ ANTI-REPETITION (TITLE)
         }
         charmPathCache.set(original, found);
         return found;
+      }
+
+      /*  Re-fetch one slot's image and swap it into the cache and the DOM.
+          Everything else in the set is left untouched. */
+      async function refreshOneSlot(r, slot) {
+        const out = slotsCache.get(r.setName);
+        const entry = out && out.find(x => Number(x.slot) === Number(slot));
+        if (!entry) { await paintGrid(r); return; }   // not cached: full paint is the only option
+
+        const old = entry.blobUrl;
+        entry.blobUrl = "";
+        try {
+          entry.url = (await entry.ref.getDownloadURL()) + "&cb=" + Date.now();
+        } catch (e) { console.warn("[regen] could not refresh slot URL:", e && e.message); }
+
+        try {
+          const fresh = await fetchImageViaChunkedProxy(entry.url);
+          entry.blobUrl = fresh;
+          if (old) { try { URL.revokeObjectURL(old); } catch (_) {} }
+        } catch (e) {
+          console.warn("[regen] blob refresh failed, using the direct URL:", e && e.message);
+        }
+
+        const grid = document.getElementById("rvGrid");
+        if (grid && grid.dataset.set === r.setName) {
+          const img = grid.querySelector(`.rv-tile[data-slot="${slot}"] img`);
+          if (img) img.src = entry.blobUrl || entry.url;
+        }
+        // Slot 1 doubles as the rail thumbnail.
+        if (Number(slot) === 1) paintRailRow(r.setName);
       }
 
       async function randomRef(category, folder) {
@@ -4991,6 +5105,9 @@ ANTI-REPETITION (TITLE)
       }
 
       return { open, close: () => close("cancelled"), RV_STATUS,
+               // Exposed so the pipeline can mark a slot regenerating even
+               // when the panel is not the thing driving it.
+               setRegenState: (setName, slot, status) => setRegenState(setName, slot, status),
                cacheStats: () => ({ sets: slotsCache.size,
                                     images: [...slotsCache.values()].reduce((n, o) => n + o.filter(x => x.blobUrl).length, 0) }),
                statusOf: (n) => get(n).status, decisionOf: (n) => ({ ...get(n) }) };
