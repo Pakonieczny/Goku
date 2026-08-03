@@ -3963,12 +3963,41 @@ ANTI-REPETITION (TITLE)
           list without opening the set — the same idea as LG1's
           "Slot 3: ⏳, Slot 5: 🟢", with the emoji replaced by styled dots so
           it matches the rest of this console. */
-      const REGEN_STATE = new Map();
+      /*  Regeneration markers persist for the LIFE OF THE LISTING — they no
+          longer time out, and they survive a tab reload via localStorage. A
+          marker is removed only when its slot is regenerated again (the old
+          status is replaced) or when the whole listing leaves review
+          (completed / deleted), which clears the set's markers alongside its
+          cached images. */
+      const REGEN_LS_KEY = "lgReviewRegenMarks.v1";
+      const REGEN_STATE = new Map(loadRegenMarks());
+      /*  A "running" marker cannot survive the tab that was doing the work —
+          on load it is orphaned. Demote stale ones to "failed" so the row
+          shows a real outcome instead of a spinner that will never resolve. */
+      REGEN_STATE.forEach((v, k) => { if (v && v.status === "running") REGEN_STATE.set(k, { status: "failed", at: v.at }); });
+      saveRegenMarks();
       const regenKey = (setName, slot) => `${setName}::${slot}`;
+      function loadRegenMarks() {
+        try { return Object.entries(JSON.parse(localStorage.getItem(REGEN_LS_KEY) || "{}")); }
+        catch (_) { return []; }
+      }
+      function saveRegenMarks() {
+        try { localStorage.setItem(REGEN_LS_KEY, JSON.stringify(Object.fromEntries(REGEN_STATE))); } catch (_) {}
+      }
       function setRegenState(setName, slot, status) {
         const k = regenKey(setName, slot);
         if (!status) REGEN_STATE.delete(k); else REGEN_STATE.set(k, { status, at: Date.now() });
+        saveRegenMarks();
         paintRailRow(setName);
+      }
+      // Clear every marker for a set — called when the listing is completed or
+      // deleted, so markers vanish exactly when the images do, never before.
+      function clearRegenMarks(setName) {
+        let touched = false;
+        [...REGEN_STATE.keys()].forEach((k) => {
+          if (k.startsWith(setName + "::")) { REGEN_STATE.delete(k); touched = true; }
+        });
+        if (touched) { saveRegenMarks(); paintRailRow(setName); }
       }
       function regenChipsFor(setName) {
         const out = [];
@@ -4061,6 +4090,89 @@ ANTI-REPETITION (TITLE)
          manual click and the background prefetch would fetch the same image
          twice in parallel; and skipped images returned before the progress
          callback, which is why the bar's numbers were wrong. */
+      /* ---------------------------------------------------------------
+         DISK LAYER (IndexedDB) — the cache that survives a tab reload.
+         ---------------------------------------------------------------
+         Blob URLs die with the tab by nature; the bytes now also live in
+         IndexedDB keyed "set::slot". The manager checks disk before network,
+         so after a reload every previously-downloaded image rehydrates
+         locally with zero fetches. Bytes leave the disk only when the
+         LISTING leaves review — completed (pipeline consumes the approval
+         and moves the folder) or deleted (reject / needs-review, which also
+         move it) — plus a generous LRU safety valve so the store cannot grow
+         unbounded. Memory-pressure trims do NOT touch the disk; that is the
+         entire point of having two layers. Every call is best-effort: in
+         private browsing or with IDB unavailable, the panel just behaves as
+         before. */
+      const IDB_NAME = "lgReviewImageCache", IDB_MAX_SETS = 80;
+      let __idb = null;
+      function idbOpen() {
+        if (__idb) return __idb;
+        __idb = new Promise((res) => {
+          try {
+            const req = indexedDB.open(IDB_NAME, 1);
+            req.onupgradeneeded = () => {
+              const db = req.result;
+              if (!db.objectStoreNames.contains("img"))  db.createObjectStore("img");   // "set::slot" -> {blob, at}
+              if (!db.objectStoreNames.contains("meta")) db.createObjectStore("meta");  // setName -> lastUsed
+            };
+            req.onsuccess = () => res(req.result);
+            req.onerror = () => res(null);
+          } catch (_) { res(null); }
+        });
+        return __idb;
+      }
+      async function idbOp(store, mode, fn) {
+        const db = await idbOpen(); if (!db) return null;
+        return new Promise((res) => {
+          try {
+            const r = fn(db.transaction(store, mode).objectStore(store));
+            r.onsuccess = () => res(r.result === undefined ? true : r.result);
+            r.onerror = () => res(null);
+          } catch (_) { res(null); }
+        });
+      }
+      const idbGetImg  = (key)      => idbOp("img", "readonly",  (o) => o.get(key));
+      const idbPutImg  = (key, val) => idbOp("img", "readwrite", (o) => o.put(val, key));
+      const idbDelImg  = (key)      => idbOp("img", "readwrite", (o) => o.delete(key));
+      const idbImgKeys = ()         => idbOp("img", "readonly",  (o) => o.getAllKeys());
+      const idbTouch   = (setName)  => idbOp("meta", "readwrite", (o) => o.put(Date.now(), setName));
+      const idbMetaAll = async () => {
+        const keys = await idbOp("meta", "readonly", (o) => o.getAllKeys()) || [];
+        const out = [];
+        for (const k of keys) out.push({ setName: k, at: (await idbOp("meta", "readonly", (o) => o.get(k))) || 0 });
+        return out;
+      };
+      async function idbPurgeSet(setName) {
+        try {
+          const keys = (await idbImgKeys()) || [];
+          for (const k of keys) if (String(k).startsWith(setName + "::")) await idbDelImg(k);
+          await idbOp("meta", "readwrite", (o) => o.delete(setName));
+        } catch (_) {}
+      }
+      // Persist a freshly-downloaded image. The manager holds an object URL,
+      // so re-derive the Blob from it; failures (quota, private mode) only
+      // cost persistence, never the session.
+      function idbStoreFrom(key, blobUrl) {
+        try {
+          fetch(blobUrl).then(r => r.blob())
+            .then(b => idbPutImg(key, { blob: b, at: Date.now() }))
+            .catch(() => {});
+        } catch (_) {}
+      }
+      // LRU safety valve, enforced once per panel open.
+      async function idbEnforceCap(keepNames) {
+        try {
+          const keep = new Set(keepNames || []);
+          const meta = (await idbMetaAll()).filter(m => !keep.has(m.setName));
+          const over = (meta.length + keep.size) - IDB_MAX_SETS;
+          if (over <= 0) return;
+          meta.sort((a, b) => a.at - b.at);
+          for (const m of meta.slice(0, over)) await idbPurgeSet(m.setName);
+          console.log(`[review] disk cache trimmed: ${over} old set(s) removed.`);
+        } catch (_) {}
+      }
+
       const IMG_JOBS = new Map();   // "set::slot" -> { s, pr }
 
       function fetchSlotManaged(setName, s) {
@@ -4073,6 +4185,21 @@ ANTI-REPETITION (TITLE)
         if (existing && existing.s === s) return existing.pr;
         const pr = (async () => {
           try {
+            // Disk first: a reload should cost zero network.
+            const rec = await idbGetImg(key);
+            if (rec && rec.blob) {
+              const cur0 = slotsCache.get(setName);
+              if (cur0 && cur0.includes(s)) {
+                s.blobUrl = URL.createObjectURL(rec.blob);
+                const grid0 = document.getElementById("rvGrid");
+                if (grid0 && grid0.dataset.set === setName) {
+                  const img0 = grid0.querySelector(`.rv-tile[data-slot="${s.slot}"] img`);
+                  if (img0 && img0.dataset.set === setName) img0.src = s.blobUrl;
+                }
+                if (Number(s.slot) === 1) paintRailRow(setName);
+              }
+              return;
+            }
             const blobUrl = await Promise.race([
               fetchImageViaChunkedProxy(s.url),
               new Promise((_, rej) => setTimeout(() => rej(new Error("image fetch timed out")), 45000))
@@ -4082,6 +4209,7 @@ ANTI-REPETITION (TITLE)
             const cur = slotsCache.get(setName);
             if (!cur || !cur.includes(s)) { try { URL.revokeObjectURL(blobUrl); } catch (_) {} return; }
             s.blobUrl = blobUrl;
+            idbStoreFrom(key, blobUrl);            // survives the tab from here on
             const grid = document.getElementById("rvGrid");
             if (grid && grid.dataset.set === setName) {
               const img = grid.querySelector(`.rv-tile[data-slot="${s.slot}"] img`);
@@ -4145,9 +4273,14 @@ ANTI-REPETITION (TITLE)
 
       // Explicit teardown. Blob URLs are not garbage — they are entries in a
       // process-wide table that only revokeObjectURL clears.
-      function releaseSlots(setName) {
+      /*  purge=false (default): memory-pressure eviction — blob URLs are
+          revoked but the BYTES STAY ON DISK, so the set rehydrates locally.
+          purge=true: the listing has left review (completed or deleted) and
+          its bytes leave the disk with it. */
+      function releaseSlots(setName, purge) {
         slotsInFlight.delete(setName);
         hydrateInFlight.delete(setName);
+        if (purge) { idbPurgeSet(setName); clearRegenMarks(setName); }   // listing gone → markers gone
         // Abandon this set's download jobs; their in-flight guards make the
         // stragglers harmless and a reload starts from a clean slate.
         [...IMG_JOBS.keys()].forEach(k => { if (k.startsWith(setName + "::")) IMG_JOBS.delete(k); });
@@ -4159,7 +4292,9 @@ ANTI-REPETITION (TITLE)
         });
         slotsCache.delete(setName);
       }
-      function releaseAllSlots() { [...slotsCache.keys()].forEach(releaseSlots); slotsCache.clear(); }
+      // Memory only — forEach(releaseSlots) would smuggle the index in as
+      // `purge`, silently wiping the disk for every set but the first.
+      function releaseAllSlots() { [...slotsCache.keys()].forEach((n) => releaseSlots(n)); slotsCache.clear(); }
 
       // Called on close: free the images of everything decided this session.
       // Deferred to close deliberately — evicting the moment Approve is
@@ -4208,7 +4343,7 @@ ANTI-REPETITION (TITLE)
       function sweepDecidedFromCache() {
         [...slotsCache.keys()].forEach((name) => {
           const st = get(name).status;
-          if (st === RV_STATUS.REJECT || st === RV_STATUS.REVIEW) releaseSlots(name);
+          if (st === RV_STATUS.REJECT || st === RV_STATUS.REVIEW) releaseSlots(name, true);
         });
       }
 
@@ -4313,6 +4448,10 @@ ANTI-REPETITION (TITLE)
           setsTotal: list.length
         });
         report();
+        // Disk LRU bookkeeping: every listing in this batch counts as used,
+        // and the cap sweep never touches the batch it protects.
+        list.forEach(r => idbTouch(r.setName));
+        idbEnforceCap(list.map(r => r.setName));
         if (!todo.length) return { cached: cached.length, fetched: 0 };
         console.log(`[review] cache: ${cached.length} listing(s) already in memory, fetching ${todo.length}.`);
 
@@ -4866,9 +5005,9 @@ ANTI-REPETITION (TITLE)
               progress. Swap this slot's bytes in place and repaint nothing
               else. */
           await refreshOneSlot(r, slot);
+          // The marker stays until the listing is completed or deleted — the
+          // operator asked for a durable record of what was regenerated.
           setRegenState(r.setName, slot, "done");
-          // Clear the "done" marker after a beat so the list settles back.
-          setTimeout(() => setRegenState(r.setName, slot, null), 8000);
           toast(`Slot ${slot} regenerated`);
         } catch (e) {
           console.warn("Regenerate failed:", e);
@@ -4956,6 +5095,9 @@ ANTI-REPETITION (TITLE)
 
         const old = entry.blobUrl;
         entry.blobUrl = "";
+        entry.failed = false;
+        // The image on the server just changed; the persisted copy is stale.
+        await idbDelImg(`${r.setName}::${slot}`);
         try {
           entry.url = (await entry.ref.getDownloadURL()) + "&cb=" + Date.now();
         } catch (e) { console.warn("[regen] could not refresh slot URL:", e && e.message); }
@@ -4963,6 +5105,7 @@ ANTI-REPETITION (TITLE)
         try {
           const fresh = await fetchImageViaChunkedProxy(entry.url);
           entry.blobUrl = fresh;
+          idbStoreFrom(`${r.setName}::${slot}`, fresh);
           if (old) { try { URL.revokeObjectURL(old); } catch (_) {} }
         } catch (e) {
           console.warn("[regen] blob refresh failed, using the direct URL:", e && e.message);
@@ -5034,14 +5177,14 @@ ANTI-REPETITION (TITLE)
           toast("Flagged — moving to Needs_Review in the background");
           const dest = `${RV_NEEDS_REVIEW}/${r.setName}`;
           const ok = await moveSet(r, dest);
-          if (ok) { r.setRef = storage.ref(dest); releaseSlots(r.setName); save(r.setName, { path: dest }); }
+          if (ok) { r.setRef = storage.ref(dest); releaseSlots(r.setName, true); save(r.setName, { path: dest }); }
           toast(ok ? "Flagged for further review" : "Flagged — folder move failed, status recorded");
           return;
         }
         if (was === RV_STATUS.REVIEW && status !== RV_STATUS.REVIEW) {
           const dest = `${RV_COMPLETED}/${r.setName}`;
           const ok = await moveSet(r, dest);
-          if (ok) { r.setRef = storage.ref(dest); releaseSlots(r.setName); save(r.setName, { path: dest }); }
+          if (ok) { r.setRef = storage.ref(dest); releaseSlots(r.setName, true); save(r.setName, { path: dest }); }
           toast(ok ? "Flag cleared — returned to the queue" : "Flag cleared — folder move failed");
           return;
         }
@@ -5066,7 +5209,7 @@ ANTI-REPETITION (TITLE)
         toast("Rejected — moving folder in the background");
         const dest = `${RV_REJECTED}/${r.setName}`;
         const ok = await moveSet(r, dest);
-        if (ok) { r.setRef = storage.ref(dest); releaseSlots(r.setName); save(r.setName, { path: dest }); }
+        if (ok) { r.setRef = storage.ref(dest); releaseSlots(r.setName, true); save(r.setName, { path: dest }); }
         if (!ok) toast("Rejected — folder move failed, status recorded");
       }
       async function restoreSet(r) {
@@ -5074,7 +5217,7 @@ ANTI-REPETITION (TITLE)
         paintDetail();
         const dest = `${RV_COMPLETED}/${r.setName}`;
         const ok = await moveSet(r, dest);
-        if (ok) { r.setRef = storage.ref(dest); releaseSlots(r.setName); save(r.setName, { path: dest }); }
+        if (ok) { r.setRef = storage.ref(dest); releaseSlots(r.setName, true); save(r.setName, { path: dest }); }
         toast(ok ? "Restored to the queue" : "Restored — folder move failed");
       }
       async function postJsonRV(body) {
@@ -5226,7 +5369,7 @@ ANTI-REPETITION (TITLE)
                // Exposed so the pipeline can mark a slot regenerating even
                // when the panel is not the thing driving it.
                setRegenState: (setName, slot, status) => setRegenState(setName, slot, status),
-               releaseSet: (setName) => releaseSlots(setName),
+               releaseSet: (setName) => releaseSlots(setName, true),   // consumed → completed
                cacheStats: () => ({ sets: slotsCache.size,
                                     images: [...slotsCache.values()].reduce((n, o) => n + o.filter(x => x.blobUrl).length, 0) }),
                statusOf: (n) => get(n).status, decisionOf: (n) => ({ ...get(n) }) };
