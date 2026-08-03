@@ -3889,7 +3889,24 @@ ANTI-REPETITION (TITLE)
           } catch (e) { console.warn("Review save failed (kept locally):", e && e.message); }
         };
         clearTimeout(writeTimers.get(setName));
-        if (immediate) flush(); else writeTimers.set(setName, setTimeout(flush, 450));
+        // Remember the flush so it can be forced later (on close / before a
+        // re-seed). Without this, an edit made within the 450ms debounce of
+        // closing the modal never reached Firestore and reset on reopen.
+        pendingFlush.set(setName, flush);
+        if (immediate) { pendingFlush.delete(setName); flush(); }
+        else writeTimers.set(setName, setTimeout(() => { pendingFlush.delete(setName); flush(); }, 450));
+      }
+
+      // Force every debounced write out now, and wait for them. Called on
+      // close and before a re-seed so nothing in flight is lost.
+      const pendingFlush = new Map();
+      async function flushAllWrites() {
+        const jobs = [];
+        writeTimers.forEach((t) => clearTimeout(t));
+        writeTimers.clear();
+        pendingFlush.forEach((flush) => { try { jobs.push(flush()); } catch (_) {} });
+        pendingFlush.clear();
+        try { await Promise.all(jobs); } catch (_) {}
       }
 
       function subscribe() {
@@ -5283,6 +5300,9 @@ ANTI-REPETITION (TITLE)
       function close(outcome) {
         overlay.classList.remove("open");
         if (unsub) { try { unsub(); } catch (_) {} unsub = null; }
+        // Push out any debounced edits before we tear down — otherwise a
+        // change made in the last ~450ms is lost and reappears reset on reopen.
+        flushAllWrites();
         /*  Free the images of everything decided, and keep the rest. Done on
             CLOSE rather than at the moment Approve is pressed — evicting then
             would blank the very set still on screen. Cancel sweeps too: a
@@ -5325,6 +5345,9 @@ ANTI-REPETITION (TITLE)
         trimCache(CACHE_MAX_SETS, rows.map(r => r.setName));
         // Seed from Firestore so prior decisions show immediately.
         try {
+          // A prior close may have raced; make sure every pending write has
+          // landed before we read, so the seed reflects the latest edits.
+          await flushAllWrites();
           const snaps = await Promise.all(rows.map(r => fsdb.collection(RV_COLL).doc(r.setName).get().catch(() => null)));
           snaps.forEach((s, i) => {
             const d = s && s.exists ? s.data() : null;
