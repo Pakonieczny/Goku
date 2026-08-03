@@ -3857,6 +3857,11 @@ ANTI-REPETITION (TITLE)
       // Debounced so typing in a textarea does not fire a write per keystroke,
       // while the in-memory state (and therefore the UI) updates instantly.
       const writeTimers = new Map();
+      const RV_MIRROR_KEY = "lgReviewDecisions.v1";
+      function readDecisionMirror() {
+        try { const m = JSON.parse(localStorage.getItem(RV_MIRROR_KEY) || "{}"); return (m && typeof m === "object") ? m : {}; }
+        catch (_) { return {}; }
+      }
       function save(setName, patch, { immediate = false } = {}) {
         const cur = { ...get(setName), ...patch, setName, updatedAt: Date.now() };
         state.set(setName, cur);
@@ -3872,6 +3877,17 @@ ANTI-REPETITION (TITLE)
           }
         } catch (_) {}
         const flush = async () => {
+          /*  Mirror to localStorage FIRST, unconditionally. Firestore is the
+              sync channel between terminals; localStorage is the guarantee
+              that this terminal's own edits survive a reload even when the
+              Firestore write is rejected (rules) or offline. */
+          try {
+            const mir = readDecisionMirror();
+            mir[setName] = { setName, status: cur.status, description: cur.description || "",
+              titleOverride: cur.titleOverride || "", order: cur.order || null,
+              excluded: cur.excluded || [], zoom: cur.zoom || {}, updatedAt: cur.updatedAt };
+            localStorage.setItem(RV_MIRROR_KEY, JSON.stringify(mir));
+          } catch (_) {}
           try {
             await fsdb.collection(RV_COLL).doc(setName).set({
               setName, status: cur.status, description: cur.description || "",
@@ -3886,7 +3902,17 @@ ANTI-REPETITION (TITLE)
                   one automatic zoom" effect. */
               client: (window.CLIENT_ID || ""), updatedAt: cur.updatedAt
             }, { merge: true });
-          } catch (e) { console.warn("Review save failed (kept locally):", e && e.message); }
+          } catch (e) {
+            console.warn("Review save failed (kept locally):", e && e.message);
+            // Silent failure here is how edits "mysteriously reset" — say it
+            // once, with the likely fix, instead of resetting quietly later.
+            if (!window.__rvSaveWarned) {
+              window.__rvSaveWarned = true;
+              window.M?.toast?.({ html: "Decisions are saving to this device only — Firestore rejected the write "
+                + "(check the ListingGen_Review rule). Edits persist here but other terminals won't see them.",
+                displayLength: 8000, classes: "red" });
+            }
+          }
         };
         clearTimeout(writeTimers.get(setName));
         // Remember the flush so it can be forced later (on close / before a
@@ -4297,7 +4323,12 @@ ANTI-REPETITION (TITLE)
       function releaseSlots(setName, purge) {
         slotsInFlight.delete(setName);
         hydrateInFlight.delete(setName);
-        if (purge) { idbPurgeSet(setName); clearRegenMarks(setName); }   // listing gone → markers gone
+        if (purge) {
+          idbPurgeSet(setName); clearRegenMarks(setName);
+          // The decision mirror follows the same rule: completed or deleted
+          // means gone, everywhere.
+          try { const m = readDecisionMirror(); delete m[setName]; localStorage.setItem(RV_MIRROR_KEY, JSON.stringify(m)); } catch (_) {}
+        }
         // Abandon this set's download jobs; their in-flight guards make the
         // stragglers harmless and a reload starts from a clean slate.
         [...IMG_JOBS.keys()].forEach(k => { if (k.startsWith(setName + "::")) IMG_JOBS.delete(k); });
@@ -5348,10 +5379,25 @@ ANTI-REPETITION (TITLE)
           // A prior close may have raced; make sure every pending write has
           // landed before we read, so the seed reflects the latest edits.
           await flushAllWrites();
+          /*  Seed = the NEWEST of three sources, by updatedAt:
+                · in-memory state   (this session's edits — survives close)
+                · the Firestore doc (other terminals' edits)
+                · the local mirror  (this device's edits across reloads)
+              The old seed trusted Firestore unconditionally; when a write had
+              been rejected or hadn't landed, reopening replaced fresh local
+              edits with the stale doc — zoom and pan "resetting themselves". */
+          const mirror = readDecisionMirror();
           const snaps = await Promise.all(rows.map(r => fsdb.collection(RV_COLL).doc(r.setName).get().catch(() => null)));
           snaps.forEach((s, i) => {
-            const d = s && s.exists ? s.data() : null;
-            state.set(rows[i].setName, d ? { ...blank(rows[i].setName), ...d } : { ...blank(rows[i].setName), description: rows[i].description || "" });
+            const name = rows[i].setName;
+            const remote = s && s.exists ? s.data() : null;
+            const local  = state.get(name) || null;
+            const mine   = mirror[name] || null;
+            const best = [remote, local, mine].filter(Boolean)
+              .sort((a, b) => Number(b.updatedAt || 0) - Number(a.updatedAt || 0))[0] || null;
+            state.set(name, best
+              ? { ...blank(name), ...best }
+              : { ...blank(name), description: rows[i].description || "" });
           });
         } catch (_) {
           rows.forEach(r => state.set(r.setName, { ...blank(r.setName), description: r.description || "" }));
