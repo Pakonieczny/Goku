@@ -5108,12 +5108,18 @@ ANTI-REPETITION (TITLE)
               fails with "not found" and (confusingly) blames
               input_storage_path, because it uses that message for both
               images. Resolve it to wherever the file lives now. */
-          const resolvedCharm = await resolveCharmPath(charmPath);
+          let resolvedCharm = await resolveCharmPath(charmPath);
           if (!resolvedCharm) {
-            throw new Error(`the source charm recorded for this set no longer exists in Storage `
-              + `(${charmPath.split("/").pop()}) — it was most likely consumed or moved after the set was generated`);
+            /*  Not fatal: Storage rules can hide the Used pools from this
+                anonymous client even though the file exists. The generator
+                function resolves the same candidates server-side with admin
+                access, so send the recorded path and let it find the charm. */
+            console.warn(`[regen] charm not visible from the browser (${charmPath.split("/").pop()}) — `
+              + `sending the recorded path; the generator resolves relocations server-side`);
+            resolvedCharm = charmPath;
+          } else if (resolvedCharm !== charmPath) {
+            console.log(`[regen] charm relocated: ${charmPath} -> ${resolvedCharm}`);
           }
-          if (resolvedCharm !== charmPath) console.log(`[regen] charm relocated: ${charmPath} -> ${resolvedCharm}`);
 
           if (txt) txt.textContent = "Picking reference…";
           const refPath = await randomRef(cat, plan.folder);
@@ -5237,7 +5243,19 @@ ANTI-REPETITION (TITLE)
           found = original;
         } else {
           const file = original.split("/").pop();
-          try {
+          /*  Deterministic candidates first — this is the generator's own
+              consumption move (batch_collect), filename preserved:
+                New_Charms_Earrings → Used_Earring_Charm_Pool
+                New_Charms          → Used_Necklace_Charm_Pool
+              The directory sweep stays as a net for anything hand-moved. */
+          const CM = "listing-generator-1/Charm_Maker/";
+          for (const cand of [CM + "Used_Earring_Charm_Pool/" + file,
+                              CM + "Used_Necklace_Charm_Pool/" + file,
+                              CM + "New_Charms_Earrings/" + file,
+                              CM + "New_Charms/" + file]) {
+            if (await storageExists(cand)) { found = cand; break; }
+          }
+          if (!found) try {
             const root = await storage.ref("listing-generator-1/Charm_Maker").listAll();
             for (const dir of root.prefixes) {
               if (await storageExists(`${dir.fullPath}/${file}`)) { found = `${dir.fullPath}/${file}`; break; }
