@@ -2746,14 +2746,42 @@ async function _handlerImpl(event) {
           CM + "Used_Necklace_Charm_Pool/" + fname,
           CM + "New_Charms_Earrings/" + fname,
           CM + "New_Charms/" + fname];
-        let lastErr = null;
         for (const cand of candidates) {
           try { img1 = await storagePathToBuffer(cand);
             if (cand !== basePath1) console.log(`[edits] charm relocated: ${basePath1} -> ${cand}`);
             break;
-          } catch (e) { lastErr = e; }
+          } catch (_) { /* try the next candidate */ }
         }
-        if (!img1) throw lastErr || new Error("input_storage_path not found: " + basePath1);
+
+        /*  DEFINITIVE SEARCH. Named candidates cover the known moves, but the
+            Charm_Maker tree also holds Completed_Approved_Charm_Sets,
+            Generated_Charm_Sets, Charm_Templates and Reference_Line_Art_Image,
+            and folders can be added at any time. Rather than keep guessing
+            names, walk the whole subtree once and match on filename — the
+            admin SDK sees everything regardless of Storage rules. Bounded by
+            being a single prefix listing, and only reached when every named
+            candidate has already missed. */
+        if (!img1) {
+          try {
+            const bucket = getBucket();
+            const [files] = await bucket.getFiles({ prefix: CM });
+            const hit = files.find((f) => f.name === CM + fname || f.name.endsWith("/" + fname));
+            if (hit) {
+              img1 = await storagePathToBuffer(hit.name);
+              console.log(`[edits] charm found by search: ${basePath1} -> ${hit.name}`);
+            } else {
+              // Report the folders that DO exist, so a genuine miss is
+              // actionable instead of just "not found".
+              const folders = [...new Set(files
+                .map((f) => f.name.slice(CM.length).split("/")[0])
+                .filter(Boolean))].slice(0, 25);
+              throw new Error(`charm "${fname}" is not anywhere under Charm_Maker. `
+                + `Folders present: ${folders.join(", ") || "(none)"}`);
+            }
+          } catch (e) {
+            throw new Error("input_charm_storage_path unresolved: " + (e && e.message ? e.message : basePath1));
+          }
+        }
       }
 
       const images = [
