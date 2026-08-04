@@ -2728,7 +2728,33 @@ async function _handlerImpl(event) {
       const effectiveSlot = Number.isFinite(Number(slotIndex)) && Number(slotIndex) >= 0 ? Number(slotIndex) : 0;
 
       const img0 = await storagePathToBuffer(basePath0);
-      const img1 = basePath1 ? await storagePathToBuffer(basePath1) : null;
+      /*  CHARM RELOCATION FALLBACK (server-side, rules-immune).
+          batch_collect moves consumed charms — filename preserved — from
+            New_Charms_Earrings → Used_Earring_Charm_Pool
+            New_Charms          → Used_Necklace_Charm_Pool
+          so the path a set's manifest recorded at generation time is often
+          stale by regeneration time. The browser tries to resolve this first,
+          but Storage rules can hide the Used pools from anonymous clients;
+          the admin SDK here sees everything, so this is the reliable layer.
+          Candidates are tried in order; first hit wins. */
+      let img1 = null;
+      if (basePath1) {
+        const fname = basePath1.split("/").pop();
+        const CM = "listing-generator-1/Charm_Maker/";
+        const candidates = [basePath1,
+          CM + "Used_Earring_Charm_Pool/" + fname,
+          CM + "Used_Necklace_Charm_Pool/" + fname,
+          CM + "New_Charms_Earrings/" + fname,
+          CM + "New_Charms/" + fname];
+        let lastErr = null;
+        for (const cand of candidates) {
+          try { img1 = await storagePathToBuffer(cand);
+            if (cand !== basePath1) console.log(`[edits] charm relocated: ${basePath1} -> ${cand}`);
+            break;
+          } catch (e) { lastErr = e; }
+        }
+        if (!img1) throw lastErr || new Error("input_storage_path not found: " + basePath1);
+      }
 
       const images = [
         { buffer: img0.buffer, mime: img0.mime, filename: filenameForMime("image0", img0.mime) },
