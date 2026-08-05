@@ -3,8 +3,17 @@
 <head>
   <meta charset="UTF-8">
   <title>Etsy Listing Generator & Shop Listings</title>
-  <link rel="icon" type="image/png" href="assets/favicon.png">
-  <link href="https://fonts.googleapis.com/icon?family=Material+Icons" rel="stylesheet">
+<!-- ══ Tab icon ═══════════════════════════════════════════════════════════
+     Part of the Brites station suite: one velvet tile, one solid gold mark,
+     drawn so the silhouette still reads at 16px where fine detail cannot.
+     A spark: this is where a listing gets made — AI draft, photo analysis, publish.
+     Inlined as data URIs so the app stays a single self-contained file. SVG is
+     primary; the PNGs cover older Safari, bookmark managers and iPad. -->
+<link rel="icon" type="image/svg+xml" href="data:image/svg+xml,%3Csvg%20xmlns%3D%22http%3A%2F%2Fwww.w3.org%2F2000%2Fsvg%22%20viewBox%3D%220%200%20100%20100%22%3E%3Crect%20width%3D%22100%22%20height%3D%22100%22%20rx%3D%2220%22%20fill%3D%22%23221f1b%22%2F%3E%3Cpath%20d%3D%22M50%2010c4%2022%2014%2032%2036%2040-22%208-32%2018-36%2040-4-22-14-32-36-40%2022-8%2032-18%2036-40Z%22%20fill%3D%22%23caa861%22%2F%3E%3C%2Fsvg%3E">
+<link rel="alternate icon" type="image/png" sizes="32x32" href="data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAACAAAAAgBAMAAACBVGfHAAAAGFBMVEXKqGGcgk07MyUjHxsiHxsiHxohHxoUExAmkvl3AAAAyElEQVR42mWSQW4CMQxFX6xZ0xQOwCRcAHE5bol6ASbDAUpdqeu4iyRD0nplP33H31bcNSe/UkJsP0/2rVprMjsVFrpIyLNkVmVJGAH/QZ3wVkFuio/8p0VtBFltHcACqQemkLUDi4KlF8gJ4HNtIN9K+30FJngu1ZTdLWw+thDYX3zJ3SmUN+RSwGluUyQAHOaXj+jBhc6Y8yC+3yVCGJYT7+bxHt7VZGrgpxmryvdWtxbn25F1BFHiCB6CH5Y9Ty5+2fYdjsIvFig+r/es2bwAAAAASUVORK5CYII=">
+<link rel="apple-touch-icon" sizes="180x180" href="data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAALQAAAC0BAMAAADP4xsBAAAAGFBMVEXKqGG+nlyQeEhZTDEwKiAjHxsiHxsiHxoNRN9wAAADpUlEQVR42u3bsXLTQBAA0NWJIkOlKFBApcQuoHOipGKYAfsTaKn5O/4AmZ6xbHc0NlYHBbavC43vKGI7li3pdk97MzBzV2QSRXna7O6dTsok+ASuhgBPe9rTnva0p/FDFc5oLf9H2mGuHUa9WDmjpfZ0acZIXTiiNYD09GFbA6wc0RJAO6ILZ7SStBVbkKpIquO/Qf/Yf2Cn5T50droAAFAu6M1D1IUDWh/EzkxvC7h2QG/bbsVP75Ks+Gm1jVpP2elVqQdZ6cXukyU3/djPiptW+3UJnWxB6+pSapjoRUVBeejDuwv2ToOlKyvKQo9r8t6eLudgIznpEoZsPxw9LH8556M3hc3zoyDOl4eMjLloPTlZBiUTfdoRaspEV/z6cx56M8Uds6DzqoNzDro6wNWUgc6ruyZvT9dl1ZxtE60z2m9DoOe1c3rztR2txjZXRdG5tLusmf49afzu1J42xTWS1nRuyKYa2tLN6QAAWE7s6M3QvJKPpja0yhDrvR4VdFp/Qd0AVU6mgxFyj7T8TKW/TQA5lkMaPUPLALMhhZ4NAVrbTypn2RhIYwZ9ZNRUGWCWoaJW2QLIYy4H0fGxMD2eg1kBFuP+59PIQM+zX2A17hfwoikhOh+D7VD5elAftcq+Q4uxLkpJYf0zhK6POujq+z/WcND5eNZQxpdna1s7SN/8aeyQ+JWUVnL89rWpr8Wltmm/i9vEPBvFXUDvwM4At4bc9qlyd4BdVLtEu/p8Ae3tmrMFtLbrzq2bjd1rdG/0qZuFO6R98YG+xUkT1NNyarF7Eqf3jYrZfZvY7PnCPkLu2e1Un703Jvradn/dMaRb9K237mJgSEdk/ywTNnbgRa/NE1jaEJe4afVw15RNYyUMPfC89udDU/8Yn9FrK5m2frMQ9mjHKfuQtOb+zfCqpTq8uMdAV4fdAQ66KmxzpnF7vhuroFF0eDIlxTsmOjhZSWJgouHq+Fo3bHR4NNtFwkYfF7IDfHRcKmTQY6TLGQgjRrqckSvgpA9PCxJeOqH2B/7h7pI4Xwj0VeVVWGix7wrRY6YfaxcAM/2Yhg47vS9exE7vko1ONZ7eJRudasJLi4jW1RR629nnDuhtJhIH9EMdhQs6iGhVpLx7SmhVpNCXtCpS6IA0F0m0INxhqHS0qyU7DRGpQai0cEQn+JsXlY5JDUKiKYkm08jdHp0WUeAqavD0MX3ujI4jZzS4owNwR7uLmnA7B/+/SZ72tKc97Wn4Cwh/9B4QfPXbAAAAAElFTkSuQmCC">
+<meta name="theme-color" content="#221f1b">
+<link href="https://fonts.googleapis.com/icon?family=Material+Icons" rel="stylesheet">
   <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/materialize/1.0.0/css/materialize.min.css">
   <script src="https://cdn.jsdelivr.net/npm/piexifjs@1.0.4/piexif.min.js"></script>
   <script src="https://cdn.jsdelivr.net/npm/sortablejs@1.14.0/Sortable.min.js"></script>
