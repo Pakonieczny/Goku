@@ -3696,6 +3696,168 @@ ANTI-REPETITION (TITLE)
         return combined;
     }
 
+    // =====================================================================
+    // CHARM DESIGN NOTES — PNG-embedded metadata reader
+    // ---------------------------------------------------------------------
+    // The Charm Maker embeds a tailored merchandising description INTO every
+    // generated charm PNG (iTXt chunks: Description / CharmTitle /
+    // CharmConcept) at generation time. This module reads those notes back
+    // for the set currently being listed and exposes them to the content
+    // generators (vision identification, key phrases, title, description) as
+    // SUPPLEMENTARY context — they enrich and fill in blanks; they never
+    // override the image or the operator-approved Listing Description.
+    // Everything here is best-effort: any failure leaves the pipeline
+    // behaving exactly as before, with no notes.
+    // =====================================================================
+    (function initCharmDesignNotes() {
+        function extractPngTextMetadata(ab) {
+            try {
+                const d = new DataView(ab);
+                if (d.getUint32(0) !== 0x89504e47 || d.getUint32(4) !== 0x0d0a1a0a) return null;
+                const bytes = new Uint8Array(ab);
+                const td = new TextDecoder("utf-8");
+                const out = {};
+                let off = 8;
+                while (off + 8 <= bytes.length) {
+                    const len = d.getUint32(off);
+                    const type = String.fromCharCode(bytes[off + 4], bytes[off + 5], bytes[off + 6], bytes[off + 7]);
+                    const dataStart = off + 8;
+                    if (dataStart + len > bytes.length) break;
+                    if (type === "tEXt" || type === "iTXt") {
+                        const data = bytes.subarray(dataStart, dataStart + len);
+                        const z = data.indexOf(0);
+                        if (z > 0) {
+                            const keyword = String.fromCharCode.apply(null, data.subarray(0, z));
+                            let text = null;
+                            if (type === "tEXt") {
+                                text = td.decode(data.subarray(z + 1));
+                            } else {
+                                // iTXt: compFlag(1) compMethod(1) langTag\0 translated\0 text
+                                let p = z + 1;
+                                const compressed = data[p]; p += 2;
+                                let j = p; while (j < data.length && data[j] !== 0) j++; p = j + 1; // language tag
+                                j = p; while (j < data.length && data[j] !== 0) j++; p = j + 1;      // translated keyword
+                                if (!compressed) text = td.decode(data.subarray(p));
+                            }
+                            if (text && text.trim()) out[keyword] = text.trim();
+                        }
+                    }
+                    if (type === "IEND") break;
+                    off = dataStart + len + 4;
+                }
+                return Object.keys(out).length ? out : null;
+            } catch (_) { return null; }
+        }
+        window.extractPngTextMetadata = extractPngTextMetadata;
+
+        async function fetchArrayBuffer(url) {
+            try {
+                const res = await fetch(url);
+                if (res.ok) return await res.arrayBuffer();
+            } catch (_) {}
+            try {
+                const res = await fetch("/.netlify/functions/corsProxy?url=" + encodeURIComponent(url));
+                if (res.ok) return await res.arrayBuffer();
+            } catch (_) {}
+            return null;
+        }
+
+        async function readManifestForNotes(setRef) {
+            try {
+                const url = await setRef.child("manifest.json").getDownloadURL();
+                const ab = await fetchArrayBuffer(url + "&cb=" + Date.now());
+                if (!ab) return null;
+                return JSON.parse(new TextDecoder().decode(new Uint8Array(ab)));
+            } catch (_) { return null; }
+        }
+
+        // The manifest records where the charm WAS when the set was built;
+        // collections and approvals move charms into Used pools afterwards,
+        // so try the recorded path first and the Used-pool twin second.
+        function charmPathCandidates(p) {
+            const c = [p];
+            if (p.includes("/Charm_Maker/New_Charms_Earrings/")) {
+                c.push(p.replace("/Charm_Maker/New_Charms_Earrings/", "/Charm_Maker/Used_Earring_Charm_Pool/"));
+            } else if (p.includes("/Charm_Maker/New_Charms/")) {
+                c.push(p.replace("/Charm_Maker/New_Charms/", "/Charm_Maker/Used_Necklace_Charm_Pool/"));
+            }
+            return c;
+        }
+
+        const notesCache = new Map(); // charmPath -> notes | null
+        window.__charmDesignNotes = null;
+
+        async function readPngNotes(charmPath) {
+            for (const candidate of charmPathCandidates(charmPath)) {
+                try {
+                    const url = await storage.ref(candidate).getDownloadURL();
+                    const ab = await fetchArrayBuffer(url);
+                    if (!ab) continue;
+                    const meta = extractPngTextMetadata(ab);
+                    if (meta && meta.Description) {
+                        let concept = null;
+                        try { concept = meta.CharmConcept ? JSON.parse(meta.CharmConcept) : null; } catch (_) {}
+                        return {
+                            description: meta.Description,
+                            title: meta.CharmTitle || (concept && concept.title) || null,
+                            concept,
+                            source: "png:" + candidate,
+                        };
+                    }
+                } catch (_) { /* try next candidate */ }
+            }
+            return null;
+        }
+
+        window.loadCharmDesignNotesForSet = async function (setRef, setName) {
+            window.__charmDesignNotes = null;
+            try {
+                const manifest = await readManifestForNotes(setRef);
+                if (!manifest) return null;
+                const charmPath = manifest.sourceCharm ||
+                    (manifest.slots || []).map((s) => s && s.newCharm).find(Boolean) || null;
+
+                let notes = null;
+                if (charmPath) {
+                    if (notesCache.has(charmPath)) notes = notesCache.get(charmPath);
+                    else { notes = await readPngNotes(charmPath); notesCache.set(charmPath, notes); }
+                }
+                // Manifest-level fallback (charm-maker manifests also carry the
+                // same text as imageDescriptions).
+                if (!notes && manifest.imageDescriptions && manifest.imageDescriptions.necklace) {
+                    notes = {
+                        description: String(manifest.imageDescriptions.necklace),
+                        title: (manifest.charmConcept && manifest.charmConcept.title) || null,
+                        concept: manifest.charmConcept || null,
+                        source: "manifest",
+                    };
+                }
+                if (notes) {
+                    notes.setName = setName || null;
+                    window.__charmDesignNotes = notes;
+                    console.log(`[charm-notes] loaded for ${setName || "set"} (${notes.source})${notes.title ? ` — "${notes.title}"` : ""}`);
+                }
+                return notes;
+            } catch (e) {
+                console.warn("[charm-notes] unavailable:", e && e.message);
+                return null;
+            }
+        };
+
+        // Formatted supplementary block for AI prompts. Empty string when no
+        // notes are loaded, so call sites can append it unconditionally.
+        window.charmNotesContextBlock = function () {
+            const n = window.__charmDesignNotes;
+            if (!n || !n.description) return "";
+            return (
+                `CHARM DESIGN NOTES (embedded by the charm's designer — supplementary context ONLY):\n` +
+                `"""\n${String(n.description).slice(0, 2500)}\n"""\n` +
+                `Use these notes to sharpen subject identification and to enrich buyer intent, occasions, emotional nuance and search phrasing. ` +
+                `They FILL IN BLANKS — they never override what is visibly true in the image or what the operator-approved Listing Description states; on any conflict, the image and the Listing Description win.`
+            );
+        };
+    })();
+
     // Prepare one candidate: primary image (Slot_1) hydrated through the
     // chunked proxy (CORS-safe for both display and canvas crop), zoomed
     // crop, then the same two-word charm identification the legacy path
@@ -3728,6 +3890,10 @@ ANTI-REPETITION (TITLE)
                 console.warn("Batch prepare: crop failed for", cand.setName, "- using unzoomed image:", e && e.message);
                 imgData = rawUrl;
             }
+            // Load THIS candidate set's embedded designer notes right before
+            // its vision call, so the identification prompt carries the right
+            // set's context (window.__charmDesignNotes is per-set state).
+            try { await window.loadCharmDesignNotesForSet?.(cand.setRef, cand.setName); } catch (_) {}
             const focal = await getTwoWordCharmDescriptionFromImage(imgData);
             result.aiFailed = !focal;
             result.description = composeCombinedDescription(cand.setName, focal);
@@ -7193,7 +7359,9 @@ ANTI-REPETITION (TITLE)
                   4. NEVER use ANY of these exact words: ${forbiddenWords}. Warmth comes from specificity, never from vague praise adjectives.
                   5. Disregard the chain, background, model, or scale.
                   6. Every word must be concrete, visually true, and something a real shopper would type into a search box.
-                  7. Output plain text, 2 to 3 words, no punctuation.`;
+                  7. Output plain text, 2 to 3 words, no punctuation.
+
+                  ${(typeof window.charmNotesContextBlock === "function" ? window.charmNotesContextBlock() : "")}`;
                           
                 const payload = {
                     model: window.modelName || "gpt-5.4-mini",
@@ -7507,6 +7675,12 @@ ANTI-REPETITION (TITLE)
             // chime, and continue only after the operator approves all.
             // The single-set gate below remains as the fallback if batch
             // construction fails, so the pipeline can never be stranded.
+            // Best-effort: read the designer's embedded notes from this set's
+            // charm PNG (and manifest fallback) BEFORE any content generation,
+            // so the vision ID, key phrases, title and description generators
+            // can all draw on them as supplementary context.
+            try { await window.loadCharmDesignNotesForSet?.(setRef, setName); } catch (_) {}
+
             let approvedDesc = consumeBatchApprovedDescription(setName);
             if (approvedDesc == null) {
                 approvedDesc = await runBatchReviewGate(setRef, setName);
@@ -16297,6 +16471,8 @@ https://www.etsy.com/your/shops/me/listing-editor/edit/1822973998
       const prompt = `
     Listing Description: "${question}"
 
+    ${(typeof window.charmNotesContextBlock === "function" ? window.charmNotesContextBlock() : "")}
+
     Keyword Rules:
     ${keywordRules}
 
@@ -17193,6 +17369,7 @@ https://www.etsy.com/your/shops/me/listing-editor/edit/1822973998
     Etsy Link: "${etsyLink}"
     Listing Description: "${rawDescription}"
     Key Phrases: "${keyPhrases}"
+    ${(typeof window.charmNotesContextBlock === "function" ? window.charmNotesContextBlock() : "")}
     --- Rules for TITLE ---
     ${rulesText}
     NON-NEGOTIABLE: Never use “silhouette,” “canine,” or other clinical/taxonomic category language. Use familiar shopper vocabulary and the most accurate visible pose, such as “Standing Dog Charm Necklace.” Write this as desirable jewelry with strong natural Etsy keyword value—not as an image classification or inventory label.
@@ -17293,6 +17470,7 @@ https://www.etsy.com/your/shops/me/listing-editor/edit/1822973998
     Etsy Link: "${etsyLink}"
     Listing Description: "${rawDescription}"
     Key Phrases: "${keyPhrases}"
+    ${(typeof window.charmNotesContextBlock === "function" ? window.charmNotesContextBlock() : "")}
     --- Rules for DESCRIPTION ---
     ${rulesText}
     NON-NEGOTIABLE: Never use “silhouette,” “canine,” or other clinical/taxonomic category language. Use familiar shopper vocabulary and the strongest accurate visible pose. Write polished jewelry merchandising copy that builds desirability, personal relevance, styling appeal, and natural keyword value while remaining factual.
