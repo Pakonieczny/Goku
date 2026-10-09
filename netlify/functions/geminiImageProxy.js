@@ -277,6 +277,9 @@ async function allocNextSet(activeCategory) {
   return { setN, outputBasePath };
 }
 
+// A review-panel set folder: one set-name segment inside a status folder.
+const REVIEW_SET_RE = /^listing-generator-1\/Generated_Listing_Sets\/(Completed|Approved|Rejected|Needs_Review)_Listing_Sets\/[A-Za-z0-9_-]+$/i;
+
 function assertAllowedOutputBase(base) {
   const b = String(base || "").trim();
   // Must be: listing-generator-1/{Category}/Ready_To_List/Set_N
@@ -295,7 +298,7 @@ function assertAllowedOutputBase(base) {
       Deliberately still narrow: the four known review folders, one path
       segment for the set name, and that segment may not contain slashes or
       dots, so no traversal and no escape from Generated_Listing_Sets. */
-  const isReviewSet = /^listing-generator-1\/Generated_Listing_Sets\/(Completed|Approved|Rejected|Needs_Review)_Listing_Sets\/[A-Za-z0-9_-]+$/i.test(b);
+  const isReviewSet = REVIEW_SET_RE.test(b);
 
   if (!isSet && !isDeriv && !isReviewSet) {
     throw new Error("output_base_path not allowed: " + b);
@@ -2766,9 +2769,28 @@ async function _handlerImpl(event) {
             const bucket = getBucket();
             const [files] = await bucket.getFiles({ prefix: CM });
             const hit = files.find((f) => f.name === CM + fname || f.name.endsWith("/" + fname));
+            // STEM FALLBACK. A charm re-import keeps the design but re-stamps the
+            // "<timestamp>_<index>_" prefix, so the exact name can vanish. Accept
+            // ONLY a file whose stem (name minus that prefix) is identical, in a
+            // live charm pool; never a different design. Newest prefix wins.
+            const stem = fname.replace(/^\d{10,}_\d+_/, "");
+            const POOLS = ["New_Charms", "New_Charms_Earrings", "Used_Necklace_Charm_Pool", "Used_Earring_Charm_Pool"];
+            const pfx = (f) => Number((f.name.split("/").pop().match(/^(\d{10,})_/) || [0, 0])[1]);
+            const upd = (f) => Date.parse(f.metadata && f.metadata.updated) || 0;
+            const stemHit = hit ? null : files
+              .filter((f) => {
+                const rel = f.name.slice(CM.length).split("/");
+                const leaf = rel[rel.length - 1];
+                return f.name.startsWith(CM) && rel.length > 1 && POOLS.includes(rel[0])
+                  && /\.(png|jpe?g|webp)$/i.test(leaf) && leaf.replace(/^\d{10,}_\d+_/, "") === stem;
+              })
+              .sort((a, b) => pfx(b) - pfx(a) || upd(b) - upd(a) || (a.name < b.name ? 1 : -1))[0];
             if (hit) {
               img1 = await storagePathToBuffer(hit.name);
               console.log(`[edits] charm found by search: ${basePath1} -> ${hit.name}`);
+            } else if (stemHit) {
+              img1 = await storagePathToBuffer(stemHit.name);
+              console.log(`[edits] charm found by name stem: ${basePath1} -> ${stemHit.name}`);
             } else {
               // Report the folders that DO exist, so a genuine miss is
               // actionable instead of just "not found".
@@ -2776,7 +2798,7 @@ async function _handlerImpl(event) {
                 .map((f) => f.name.slice(CM.length).split("/")[0])
                 .filter(Boolean))].slice(0, 25);
               throw new Error(`charm "${fname}" is not anywhere under Charm_Maker. `
-                + `Folders present: ${folders.join(", ") || "(none)"}`);
+                + `Folders present: ${folders.join(", ") || "(none)"}. Stem searched: ${stem}`);
             }
           } catch (e) {
             throw new Error("input_charm_storage_path unresolved: " + (e && e.message ? e.message : basePath1));
@@ -2862,6 +2884,76 @@ async function _handlerImpl(event) {
     // a signal to fall back to the legacy browser-mediated flow so
     // approvals never get stuck on a deploy lag.
     if (kind === "move_set_to_completed") {
+      // Relocation form (Review overlay: reject / restore / needs-review).
+      // { source_base_path, output_base_path } moves one whole set folder
+      // between two status folders under Generated_Listing_Sets, keeping the
+      // set name. Copy-then-delete per file, so a failed copy never loses its
+      // source; copy() carries the object's metadata (download token), so
+      // getDownloadURL() keeps working at the new path. Re-runnable.
+      const relSrc = String(body?.source_base_path || "").trim();
+      if (relSrc) {
+        const relDst = String(output_base_path || "").trim();
+        if (!relDst) return json(400, { error: { message: "output_base_path is required" } });
+        if (!REVIEW_SET_RE.test(relSrc) || !REVIEW_SET_RE.test(relDst)) {
+          return json(400, { error: { message: "source_base_path and output_base_path must be review set folders" } });
+        }
+        const [, , srcStatus, srcSet] = relSrc.split("/");
+        const [, , dstStatus, dstSet] = relDst.split("/");
+        if (srcStatus.toLowerCase() === dstStatus.toLowerCase() || srcSet !== dstSet) {
+          return json(400, { error: { message: "must move a set between two different status folders, keeping its set name" } });
+        }
+
+        const bucket = admin.storage().bucket();
+        // Trailing slash matters: Set_33/ must not also match Set_330/.
+        const srcPrefix = relSrc + "/";
+        const dstPrefix = relDst + "/";
+
+        let listed;
+        try {
+          const [f] = await bucket.getFiles({ prefix: srcPrefix });
+          listed = f;
+        } catch (e) {
+          return json(500, { ok: false, error: { message: `getFiles failed: ${e?.message || e}` } });
+        }
+        // Folder placeholders ("…/") hold no data: never copied, dropped from
+        // the source afterwards so the emptied folder stops showing there.
+        const placeholders = listed.filter((f) => f.name.endsWith("/"));
+        const files = listed.filter((f) => !f.name.endsWith("/"));
+
+        let moved = 0;
+        const errors = [];
+        for (const f of files) {
+          const filename = f.name.slice(srcPrefix.length);
+          try {
+            await f.copy(bucket.file(dstPrefix + filename));
+            await f.delete(); // only reached once the copy has succeeded
+            moved++;
+          } catch (e) {
+            errors.push({ file: filename, error: String(e?.message || e) });
+          }
+        }
+        if (!errors.length) {
+          for (const p of placeholders) {
+            try { await p.delete(); } catch (_) { /* best-effort tidy */ }
+          }
+        }
+
+        if (errors.length) {
+          return json(500, {
+            ok: false,
+            moved,
+            errors: errors.slice(0, 20),
+            srcPrefix,
+            dstPrefix,
+            error: { message: `${errors.length} file(s) failed to move; their sources were left in place (first: ${errors[0].file}: ${errors[0].error})` },
+          });
+        }
+        const result = { ok: true, moved, errors: [], srcPrefix, dstPrefix };
+        // No files under the source: an earlier call already relocated the set.
+        if (!files.length) result.alreadyMoved = true;
+        return json(200, result);
+      }
+
       const cat = normalizeCategory(activeCategory);
       if (!GENERATABLE_CATEGORIES.has(cat)) {
         return json(400, { error: { message: "activeCategory not generatable" } });
