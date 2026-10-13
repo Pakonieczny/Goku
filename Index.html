@@ -19332,6 +19332,49 @@ const ListingCopy = (function () {
   }
 
   // ------------------------------------------------- Shopify / Google fields
+  // Generated in three independent parts so each can be shown, edited and re-generated on its own:
+  //   titles      -> title, seo_title, meta_description, google_title
+  //   description -> description_html
+  //   tags        -> tags, theme_keywords
+  const SHOPIFY_PARTS = {
+    titles: ["title", "seo_title", "meta_description", "google_title"],
+    description: ["description_html"],
+    tags: ["tags", "theme_keywords"]
+  };
+  const SHOPIFY_RULES = {
+    title: (f) => `- title: 4-7 words, natural Title Case product name: the design plus the product type. For this category the product noun is "${f.typeNoun}". No metal names, lengths, commas, pipes.`,
+    seo_title: () => "- seo_title: at most 60 characters. Design + product type + one key trait. No store name, no ALL CAPS.",
+    meta_description: () => "- meta_description: 120-155 characters, plain sentence(s) starting with the key facts (what it is, metals). No quotes, no hype.",
+    google_title: (f) => "- google_title: at most 150 characters, the first 70 must stand alone. Plain Merchant Center style for ONE variant: design + product type, exact material (e.g. 14K Solid Gold, Sterling Silver), flat charm" + (f.chain && f.chain.beaded ? ", beady/ball chain" : "") + ". No gift, sale, shipping, promo words, no ALL CAPS, no symbols.",
+    description_html: () => "- description_html: 500-1000 characters of visible text. Two short <p> paragraphs then one <ul> with 4 <li> bullets. Key facts (what it is, flat charm, metals) in the first 160 characters. Warm, concise, no emojis, no claims not in the facts.",
+    tags: (f) => "- tags: 10-14 lowercase tags (subject, style, occasion, recipient). No metal names. Never call the charm bead/beaded/pearl" + (f.chain && f.chain.beaded ? "; tags like beady chain or ball chain necklace are allowed." : "; no bead/pearl words."),
+    theme_keywords: () => "- theme_keywords: 3-6 single lowercase words naming the subject/theme."
+  };
+
+  function shopifyRequest(o) {
+    const f = o.facts, part = o.part || "all";
+    const keys = part === "all" ? [].concat(SHOPIFY_PARTS.titles, SHOPIFY_PARTS.description, SHOPIFY_PARTS.tags) : SHOPIFY_PARTS[part];
+    const arr = k => (k === "tags" || k === "theme_keywords");
+    const schema = "{" + keys.map(k => `"${k}":${arr(k) ? '["..."]' : '"..."'}`).join(",") + "}";
+    const user = [
+      "You are generating fields for a LIVE Shopify product at Brites Jewelry (handmade personalized charm jewelry, britesjewelry.com). The copy must also feed Google Shopping / Merchant Center cleanly.",
+      factsBlock(f),
+      o.hasImage ? IMAGE_NOTE : "",
+      `- Etsy title (context only, do NOT copy its style): ${o.etsyTitle || ""}`,
+      o.productTitle ? `- Shopify product title already chosen: ${o.productTitle}` : "",
+      o.keyPhrases ? `- Key phrases: ${o.keyPhrases}` : "",
+      "",
+      "Return STRICT JSON only, no fences:",
+      schema,
+      "",
+      "RULES:",
+      keys.map(k => SHOPIFY_RULES[k](f)).join("\n"),
+      o.problems && o.problems.length ? `YOUR PREVIOUS ATTEMPT WAS REJECTED because: ${o.problems.join("; ")}. Fix every point.` : "",
+      o.notes || ""
+    ].filter(x => x !== "").join("\n");
+    return { system: "Return STRICT JSON only.", user, maxTokens: 6000, label: "Shopify " + part };
+  }
+
   function truncWords(s, n) {
     const t = String(s || "").replace(/\s+/g, " ").trim();
     if (t.length <= n) return t;
@@ -19340,31 +19383,7 @@ const ListingCopy = (function () {
     return (sp > n * 0.6 ? cut.slice(0, sp) : cut.slice(0, n)).replace(/[\s,;:\-|]+$/, "");
   }
   const stripHtml = h => String(h || "").replace(/<[^>]*>/g, " ").replace(/\s+/g, " ").trim();
-
-  function shopifyRequest(o) {
-    const f = o.facts;
-    const user = [
-      "You are generating fields for a LIVE Shopify product at Brites Jewelry (handmade personalized charm jewelry, britesjewelry.com). The copy must also feed Google Shopping / Merchant Center cleanly.",
-      factsBlock(f),
-      `- Etsy title (context only, do NOT copy its style): ${o.etsyTitle || ""}`,
-      o.keyPhrases ? `- Key phrases: ${o.keyPhrases}` : "",
-      "",
-      "Return STRICT JSON only, no fences:",
-      '{"title":"...","seo_title":"...","meta_description":"...","google_title":"...","description_html":"...","tags":["..."],"theme_keywords":["..."]}',
-      "",
-      "RULES:",
-      `- title: 4-7 words, natural Title Case product name: the design plus the product type. For this category the product noun is "${f.typeNoun}". No metal names, lengths, commas, pipes.`,
-      "- seo_title: at most 60 characters. Design + product type + one key trait. No store name, no ALL CAPS.",
-      "- meta_description: 120-155 characters, plain sentence(s) starting with the key facts (what it is, metals). No quotes, no hype.",
-      "- google_title: at most 150 characters, the first 70 must stand alone. Plain Merchant Center style for ONE variant: design + product type, exact material (e.g. 14K Solid Gold, Sterling Silver), flat charm" + (f.chain && f.chain.beaded ? ", ball chain" : "") + ". No gift, sale, shipping, promo words, no ALL CAPS, no symbols.",
-      "- description_html: 500-1000 characters of visible text. Two short <p> paragraphs then one <ul> with 4 <li> bullets. Key facts (what it is, flat charm, metals) in the first 160 characters. Warm, concise, no emojis, no claims not in the facts.",
-      "- tags: 10-14 lowercase tags (subject, style, occasion, recipient). No metal names. Never call the charm bead/beaded/pearl" + (f.chain && f.chain.beaded ? "; tags like beady chain or ball chain necklace are allowed." : "; no bead/pearl words."),
-      "- theme_keywords: 3-6 single lowercase words naming the subject/theme.",
-      o.problems && o.problems.length ? `YOUR PREVIOUS ATTEMPT WAS REJECTED because: ${o.problems.join("; ")}. Fix every point.` : "",
-      o.notes || ""
-    ].filter(x => x !== "").join("\n");
-    return { system: "Return STRICT JSON only.", user, maxTokens: 8000, label: "Shopify fields" };
-  }
+  const METAL_IN_TITLE = /[,|]|\b(sterling|silver|gold|filled|10k|14k)\b/i;
 
   function parseJson(t) {
     const s = String(t || "").replace(/```json|```/g, "").trim();
@@ -19385,63 +19404,84 @@ const ListingCopy = (function () {
     };
   }
 
-  function validateShopify(x, f) {
+  function validateShopifyPart(x, f, part) {
     const p = [];
     if (!x || typeof x !== "object") return ["response was not a JSON object"];
-    const title = String(x.title || "").trim();
-    const wcount = title.split(/\s+/).filter(Boolean).length;
-    if (wcount < 3 || wcount > 8) p.push("title must be 4-7 words");
-    if (/[,|]|\b(sterling|silver|gold|filled|10k|14k)\b/i.test(title)) p.push("title must not contain commas, pipes or metal names");
-    ["title", "seo_title", "meta_description", "google_title"].forEach(k => {
-      commonProblems(String(x[k] || ""), f).forEach(m => p.push(`${k} ${m}`));
-    });
-    commonProblems(stripHtml(x.description_html), f).forEach(m => p.push(`description_html ${m}`));
-    (x.tags || []).forEach(tg => { if (findBeadMisuse(tg, f)) p.push(`tag "${tg}" uses a bead/pearl word`); });
-    if (stripHtml(x.description_html).length < 300) p.push("description_html is too short (500-1000 characters)");
-    if (!String(x.google_title || "").trim()) p.push("google_title missing");
-    if (SALE.test(String(x.google_title || "")) || /\bgift\b/i.test(String(x.google_title || ""))) p.push("google_title has gift/sale wording");
-    if (!String(x.seo_title || "").trim()) p.push("seo_title missing");
-    if (!String(x.meta_description || "").trim()) p.push("meta_description missing");
+    if (part === "titles") {
+      const title = String(x.title || "").trim();
+      const wcount = title.split(/\s+/).filter(Boolean).length;
+      if (wcount < 3 || wcount > 8) p.push("title must be 4-7 words");
+      if (METAL_IN_TITLE.test(title)) p.push("title must not contain commas, pipes or metal names");
+      ["title", "seo_title", "meta_description", "google_title"].forEach(k => {
+        if (!String(x[k] || "").trim()) p.push(`${k} missing`);
+        commonProblems(String(x[k] || ""), f).forEach(m => p.push(`${k} ${m}`));
+      });
+      if (SALE.test(String(x.google_title || "")) || /\bgift\b/i.test(String(x.google_title || ""))) p.push("google_title has gift/sale wording");
+    } else if (part === "description") {
+      const txt = stripHtml(x.description_html);
+      if (txt.length < 300) p.push("description_html is too short (500-1000 characters)");
+      commonProblems(txt, f).forEach(m => p.push(`description_html ${m}`));
+    } else if (part === "tags") {
+      const tags = Array.isArray(x.tags) ? x.tags : [];
+      if (tags.length < 5) p.push("fewer than 5 tags");
+      tags.forEach(tg => { if (findBeadMisuse(tg, f)) p.push(`tag "${tg}" uses a bead/pearl word`); });
+    }
     return p;
   }
 
-  function normalizeShopify(x) {
-    const o = Object.assign({}, x);
-    o.title = String(o.title || "").trim();
-    o.seo_title = truncWords(repairTitle(o.seo_title), 60);
-    o.meta_description = truncWords(String(o.meta_description || "").replace(/["“”]/g, ""), 155);
-    o.google_title = truncWords(repairTitle(o.google_title), 150);
-    o.tags = Array.isArray(o.tags) ? o.tags.map(s => String(s).toLowerCase().trim()).filter(Boolean).slice(0, 14) : [];
-    o.theme_keywords = Array.isArray(o.theme_keywords) ? o.theme_keywords : [];
+  function normalizeShopify(x, keys) {
+    const o = {};
+    keys.forEach(k => {
+      let v = x[k];
+      if (k === "title") v = String(v || "").trim();
+      else if (k === "seo_title") v = truncWords(repairTitle(v), 60);
+      else if (k === "meta_description") v = truncWords(String(v || "").replace(/["“”]/g, ""), 155);
+      else if (k === "google_title") v = truncWords(repairTitle(v), 150);
+      else if (k === "tags") v = Array.isArray(v) ? v.map(s => String(s).toLowerCase().trim()).filter(Boolean).slice(0, 14) : [];
+      else if (k === "theme_keywords") v = Array.isArray(v) ? v : [];
+      o[k] = v;
+    });
     return o;
   }
 
-  async function runShopify(o) {
-    const f = o.facts;
+  // One part, with validation, retry and per-field salvage. Returns { values, fallback, attempts, log }.
+  async function runShopifyPart(o) {
+    const f = o.facts, part = o.part, keys = SHOPIFY_PARTS[part], log = [];
     let problems = [], parsed = null;
     for (let a = 1; a <= (o.maxAttempts || 2); a++) {
       let x = null;
-      try { x = parseJson(await o.callText(shopifyRequest({ facts: f, etsyTitle: o.etsyTitle, keyPhrases: o.keyPhrases, notes: o.notes, problems }))); } catch (e) { problems = ["response was not valid JSON"]; continue; }
-      parsed = x ? normalizeShopify(x) : null;
-      problems = parsed ? validateShopify(parsed, f) : ["response was not valid JSON"];
-      if (!problems.length) return Object.assign(parsed, { fallback: false });
+      try { x = parseJson(await o.callText(Object.assign(shopifyRequest({ facts: f, part, etsyTitle: o.etsyTitle, productTitle: o.productTitle, keyPhrases: o.keyPhrases, notes: o.notes, problems, hasImage: !!o.image }), o.image ? { image: o.image } : {}))); }
+      catch (e) { problems = ["response was not valid JSON"]; log.push({ attempt: a, problems }); continue; }
+      parsed = x ? normalizeShopify(x, keys) : null;
+      problems = parsed ? validateShopifyPart(parsed, f, part) : ["response was not valid JSON"];
+      log.push({ attempt: a, problems });
+      if (!problems.length) return { values: parsed, fallback: false, attempts: a, log };
     }
-    // Keep what is safe: fields that individually pass; fall back for the rest.
-    const fb = shopifyFallback(f);
-    if (parsed) {
-      const keep = {};
-      ["title", "seo_title", "meta_description", "google_title", "description_html"].forEach(k => {
-        const probe = k === "description_html" ? stripHtml(parsed[k]) : String(parsed[k] || "");
-        keep[k] = (probe && !commonProblems(probe, f).length) ? parsed[k] : fb[k];
-      });
-      if (/[,|]|\b(sterling|silver|gold|filled|10k|14k)\b/i.test(keep.title)) keep.title = fb.title;
-      keep.tags = (parsed.tags || []).filter(t => !findBeadMisuse(t, f));
-      keep.theme_keywords = parsed.theme_keywords && parsed.theme_keywords.length ? parsed.theme_keywords : fb.theme_keywords;
-      return Object.assign(keep, { fallback: true, partial: true });
-    }
-    return fb;
+    const fb = shopifyFallback(f), values = {};
+    keys.forEach(k => {
+      const v = parsed && parsed[k];
+      if (k === "tags") values[k] = (v || []).filter(t => !findBeadMisuse(t, f));
+      else if (k === "theme_keywords") values[k] = v && v.length ? v : fb[k];
+      else {
+        const probe = k === "description_html" ? stripHtml(v) : String(v || "");
+        let ok = probe && !commonProblems(probe, f).length;
+        if (k === "title" && METAL_IN_TITLE.test(String(v || ""))) ok = false;
+        if (k === "google_title" && (SALE.test(probe) || /\bgift\b/i.test(probe))) ok = false;
+        values[k] = ok ? v : fb[k];
+      }
+    });
+    return { values, fallback: true, attempts: log.length, log };
   }
 
+  async function runShopify(o) {
+    const base = { callText: o.callText, facts: o.facts, etsyTitle: o.etsyTitle, keyPhrases: o.keyPhrases, notes: o.notes, image: o.image, maxAttempts: o.maxAttempts };
+    const t = await runShopifyPart(Object.assign({}, base, { part: "titles" }));
+    const [d, g] = await Promise.all([
+      runShopifyPart(Object.assign({}, base, { part: "description", productTitle: t.values.title })),
+      runShopifyPart(Object.assign({}, base, { part: "tags", productTitle: t.values.title }))
+    ]);
+    return Object.assign({}, t.values, d.values, g.values, { fallback: t.fallback || d.fallback || g.fallback, parts: { titles: t, description: d, tags: g } });
+  }
 
   // ------------------------------------------------------- review report
   // Objective weakness signals over logged generations. It cannot judge what sells; it finds output
@@ -19521,8 +19561,8 @@ const ListingCopy = (function () {
     repairTitle, validateEtsyTitle, fallbackTitle, mostSimilar, SIMILARITY_LIMIT, patternFor,
     cleanTags, validateDescription, sanitizeDescription, fallbackDescription, capDescription,
     titleRequest, descriptionRequest, tagsRequest, shopifyRequest,
-    validateShopify, normalizeShopify, shopifyFallback,
-    runTitle, runDescription, runTags, runShopify, reviewReport
+    validateShopifyPart, normalizeShopify, shopifyFallback, SHOPIFY_PARTS,
+    runTitle, runDescription, runTags, runShopify, runShopifyPart, reviewReport
   };
 })();
 if (typeof window !== "undefined") window.ListingCopy = ListingCopy;
@@ -24258,15 +24298,196 @@ https://www.etsy.com/your/shops/me/listing-editor/edit/1822973998
       } catch (_) {}
     }
 
+    // ── Listing Copy panel: shows how each Etsy and Shopify section was generated ──
+    // Etsy rows are read-only status (the text lives in the Etsy fields above). Shopify rows are the
+    // real, editable fields the Shopify upload uses; each group generates and re-generates on its own.
+    window.__copyState = window.__copyState || {};
+    const COPY_ROWS = [
+      ["etsy_title", "Etsy title"], ["etsy_desc", "Etsy description"], ["etsy_tags", "Etsy tags"]
+    ];
+    function ensureCopyPanel() {
+      if (document.getElementById("copyPanel")) return;
+      if (!document.getElementById("copyPanelCss")) {
+        const st = document.createElement("style");
+        st.id = "copyPanelCss";
+        st.textContent = `
+          #copyPanel{margin:10px 0;border:1px solid #ddd;border-radius:6px;background:#fff;font-size:13px}
+          #copyPanel h6{margin:0;padding:8px 12px;cursor:pointer;font-size:14px;font-weight:600}
+          #copyPanel.collapsed #cpBody{display:none}
+          #copyPanel .cp-sec{padding:4px 12px;font-weight:600;color:#555;border-top:1px solid #eee;margin-top:4px}
+          #copyPanel .cp-row{display:flex;align-items:center;gap:8px;padding:3px 12px}
+          #copyPanel .cp-lbl{width:150px;flex:0 0 150px}
+          #copyPanel .cp-dot{width:9px;height:9px;border-radius:50%;background:#bbb;flex:0 0 9px}
+          #copyPanel .cp-dot.working{background:#1e88e5;animation:cpPulse 1s infinite}
+          #copyPanel .cp-dot.ok{background:#2e7d32}
+          #copyPanel .cp-dot.retry{background:#f9a825}
+          #copyPanel .cp-dot.fallback,#copyPanel .cp-dot.error{background:#c62828}
+          @keyframes cpPulse{50%{opacity:.3}}
+          #copyPanel .cp-msg{color:#666;flex:1}
+          #copyPanel .cp-regen{padding:0 10px;height:24px;line-height:24px;font-size:12px}
+          #copyPanel .cp-field{padding:2px 12px 2px 28px}
+          #copyPanel .cp-field label{display:flex;justify-content:space-between;color:#777;font-size:12px}
+          #copyPanel .cp-field textarea{width:100%;height:auto;min-height:0;max-height:none;margin:0;padding:4px 6px;border:1px solid #ddd;border-radius:3px;font-size:13px;resize:vertical;box-sizing:border-box}
+        `;
+        document.head.appendChild(st);
+      }
+      const fld = (id, label, rows, max) => `<div class="cp-field"><label for="${id}"><span>${label}</span><span id="${id}Count"></span></label><textarea id="${id}" rows="${rows}" data-max="${max || 0}"></textarea></div>`;
+      const grp = (key, label) => `<div class="cp-row"><span class="cp-dot" id="cpDot_${key}"></span><span class="cp-lbl">${label}</span><span class="cp-msg" id="cpMsg_${key}">not generated yet</span><button type="button" class="btn-small waves-effect waves-light cp-regen" id="cpRegen_${key}">Re-Gen</button></div>`;
+      const p = document.createElement("div");
+      p.id = "copyPanel";
+      p.className = localStorage.getItem("cpPanelOpen") === "0" ? "collapsed" : "";
+      p.innerHTML = `
+        <h6 id="cpHeader" title="Click to expand / collapse">Listing Copy — how each section was generated</h6>
+        <div id="cpBody">
+          <div class="cp-sec">ETSY</div>
+          ${COPY_ROWS.map(([k, l]) => `<div class="cp-row"><span class="cp-dot" id="cpDot_${k}"></span><span class="cp-lbl">${l}</span><span class="cp-msg" id="cpMsg_${k}">not generated yet</span></div>`).join("")}
+          <div class="cp-sec">SHOPIFY (editable; the upload uses these fields)</div>
+          ${grp("sh_titles", "Titles")}
+          ${fld("scTitle", "Product title (4-7 words)", 1)}
+          ${fld("scSeo", "SEO title", 1, 60)}
+          ${fld("scMeta", "Meta description", 2, 155)}
+          ${fld("scGoogle", "Google feed title", 1, 150)}
+          ${grp("sh_description", "Description")}
+          ${fld("scDesc", "Description (HTML)", 6)}
+          ${grp("sh_tags", "Tags")}
+          ${fld("scTags", "Tags (comma separated)", 2)}
+        </div>`;
+      // Dashboard layout: the "Generated Output" card (next to the Etsy title/description). The Shopify
+      // Uploads host is hidden in that layout, so it must not be used here.
+      const host = document.getElementById("dCardOutput") || document.getElementById("belowSearch") || document.body;
+      host.appendChild(p);
+      p.querySelector("#cpHeader").addEventListener("click", () => {
+        const open = p.classList.toggle("collapsed") === false;
+        try { localStorage.setItem("cpPanelOpen", open ? "1" : "0"); } catch (_) {}
+      });
+      p.querySelectorAll("textarea").forEach(t => t.addEventListener("input", () => updateCopyCount(t)));
+      ["sh_titles", "sh_description", "sh_tags"].forEach(k => {
+        p.querySelector("#cpRegen_" + k).addEventListener("click", async (e) => {
+          const b = e.currentTarget; b.disabled = true;
+          try { await generateShopifyCopy([k.replace("sh_", "")]); } catch (err) { console.warn(err); }
+          finally { b.disabled = false; }
+        });
+      });
+      // Replay any status set before the panel existed.
+      Object.keys(window.__copyState).forEach(k => setCopyStatus(k, window.__copyState[k].state, window.__copyState[k].msg));
+    }
+    function updateCopyCount(t) {
+      const c = document.getElementById(t.id + "Count"), max = Number(t.getAttribute("data-max")) || 0;
+      if (!c) return;
+      c.textContent = max ? `${t.value.length}/${max}` : (t.value ? String(t.value.length) : "");
+      c.style.color = max && t.value.length > max ? "#c62828" : "";
+    }
+    function setCopyField(id, value) {
+      const t = document.getElementById(id);
+      if (!t) return;
+      t.value = value == null ? "" : String(value);
+      updateCopyCount(t);
+    }
+    // state: working | ok | retry | fallback | error
+    function setCopyStatus(section, state, msg) {
+      window.__copyState[section] = { state, msg };
+      ensureCopyPanel();
+      const dot = document.getElementById("cpDot_" + section), m = document.getElementById("cpMsg_" + section);
+      if (dot) dot.className = "cp-dot " + state;
+      if (m) m.textContent = msg || "";
+    }
+    // One-line status from a generator result: "passed checks · 2 tries · photo used · 94 chars"
+    function copyStatusLine(res, extra, hadImage) {
+      const tries = res.attempts + (res.attempts === 1 ? " try" : " tries");
+      const head = res.fallback ? "checks failed, plain safe version used" : (res.repaired ? "passed after sentence repair" : "passed checks");
+      const state = res.fallback ? "fallback" : (res.attempts > 1 || res.repaired ? "retry" : "ok");
+      return { state, msg: [head, tries, hadImage ? "photo used" : "text only", extra].filter(Boolean).join(" · ") };
+    }
+
+    // Shopify copy: three independent parts. Context = Etsy title + key phrases; photo is attached like Etsy.
+    async function generateShopifyCopy(parts, categoryOverride) {
+      parts = parts && parts.length ? parts : ["titles", "description", "tags"];
+      ensureCopyPanel();
+      const etsyTitle = (document.getElementById("listingTitle")?.value || "").trim();
+      const focal = (document.getElementById("listingDescInput")?.value || "").trim();
+      const skp = (document.getElementById("searchKeyPhrases")?.value || "").trim().slice(0, 1200);
+      const facts = categoryOverride ? ListingCopy.buildFacts({ listingDesc: focal, category: categoryOverride }) : currentListingFacts();
+      const img = await copyImage();
+      const base = { callText: copyCallText, facts, etsyTitle, keyPhrases: skp, notes: copyNotesBlock(), image: img };
+      const etsyTags = () => (typeof buildEtsyTagsFromOverlay === "function" ? buildEtsyTagsFromOverlay(skp) : []).map(t => t.toLowerCase()).slice(0, 14);
+
+      const runPart = async (part) => {
+        const sec = "sh_" + part;
+        setCopyStatus(sec, "working", "generating…");
+        let res;
+        try {
+          res = await ListingCopy.runShopifyPart(Object.assign({}, base, { part, productTitle: document.getElementById("scTitle")?.value || "" }));
+        } catch (e) {
+          // Network/API failure: keep the pipeline moving with safe fallbacks, and say so.
+          const fb = ListingCopy.shopifyFallback(facts);
+          res = { values: {}, fallback: true, attempts: 0 };
+          ListingCopy.SHOPIFY_PARTS[part].forEach(k => { res.values[k] = fb[k]; });
+          setCopyStatus(sec, "error", "model call failed (" + String((e && e.message) || e).slice(0, 80) + "); plain safe version used");
+          applyShopifyPart(part, res.values, etsyTags);
+          return res;
+        }
+        applyShopifyPart(part, res.values, etsyTags);
+        const extra = part === "titles" ? `${(res.values.seo_title || "").length}/60 SEO` : part === "description" ? `${String(res.values.description_html || "").replace(/<[^>]*>/g, " ").trim().length} chars` : `${(res.values.tags || []).length} tags`;
+        const st = copyStatusLine(res, extra, !!img);
+        setCopyStatus(sec, st.state, st.msg);
+        return res;
+      };
+
+      if (parts.includes("titles")) await runPart("titles");
+      await Promise.all(parts.filter(x => x !== "titles").map(runPart));
+      window.__shopifyCopyKey = `${facts.motif}|${facts.category}|${etsyTitle}`;
+    }
+    function applyShopifyPart(part, v, etsyTags) {
+      if (part === "titles") {
+        setCopyField("scTitle", v.title); setCopyField("scSeo", v.seo_title);
+        setCopyField("scMeta", v.meta_description); setCopyField("scGoogle", v.google_title);
+      } else if (part === "description") {
+        setCopyField("scDesc", v.description_html);
+      } else if (part === "tags") {
+        const tags = (v.tags && v.tags.length >= 5) ? v.tags : etsyTags();
+        setCopyField("scTags", tags.join(", "));
+        window.__shopifyTheme = v.theme_keywords || [];
+      }
+    }
+    // Used by the Shopify upload: reuse what is in the panel (including the user's edits) when it belongs
+    // to this listing, otherwise generate it now (visibly) first.
+    window.shopifyCopyForUpload = async function (category) {
+      const facts = ListingCopy.buildFacts({ listingDesc: (document.getElementById("listingDescInput")?.value || "").trim(), category });
+      const key = `${facts.motif}|${facts.category}|${(document.getElementById("listingTitle")?.value || "").trim()}`;
+      const val = id => (document.getElementById(id)?.value || "").trim();
+      ensureCopyPanel();
+      if (window.__shopifyCopyKey !== key || !val("scTitle") || !val("scDesc") || !val("scTags")) {
+        await generateShopifyCopy(["titles", "description", "tags"], category);
+      }
+      return {
+        title: val("scTitle"), seo_title: val("scSeo"), meta_description: val("scMeta"), google_title: val("scGoogle"),
+        description_html: val("scDesc"),
+        tags: val("scTags").split(",").map(t => t.trim()).filter(Boolean).slice(0, 14),
+        theme_keywords: window.__shopifyTheme || []
+      };
+    };
+    window.generateShopifyCopy = generateShopifyCopy;
+
     async function getInitialPhrases(question, keywordRules) {
       const facts = currentListingFacts();
-      const img = await copyImage();
-      const res = await ListingCopy.runTags({
-        callText: copyCallText, facts, rules: keywordRules, notes: copyNotesBlock(), want: 13, image: img
-      });
-      if (res.rejected.length) console.log("Key phrases rejected by validation:", res.rejected);
-      logCopyReview("tags", facts, { list: res.tags, rejected: res.rejected, image: !!img });
-      return res.tags;
+      setCopyStatus("etsy_tags", "working", "generating…");
+      try {
+        const img = await copyImage();
+        const res = await ListingCopy.runTags({
+          callText: copyCallText, facts, rules: keywordRules, notes: copyNotesBlock(), want: 13, image: img
+        });
+        if (res.rejected.length) console.log("Key phrases rejected by validation:", res.rejected);
+        logCopyReview("tags", facts, { list: res.tags, rejected: res.rejected, image: !!img });
+        const reasons = {};
+        res.rejected.forEach(x => { reasons[x.reason] = (reasons[x.reason] || 0) + 1; });
+        const why = Object.entries(reasons).map(([k, v]) => `${k} x${v}`).join(", ");
+        setCopyStatus("etsy_tags", res.tags.length >= 13 ? (res.rejected.length ? "retry" : "ok") : "fallback",
+          [`${res.tags.length} of 13 valid tags`, res.rejected.length ? `${res.rejected.length} rejected (${why})` : "none rejected", img ? "photo used" : "text only"].join(" · "));
+        return res.tags;
+      } catch (e) {
+        setCopyStatus("etsy_tags", "error", String((e && e.message) || e).slice(0, 120));
+        throw e;
+      }
     }
 
     async function regenerateSinglePhrase(question, keywordRules, currentValid, maxAttempts = 5) {
@@ -25081,6 +25302,8 @@ https://www.etsy.com/your/shops/me/listing-editor/edit/1822973998
 
     document.getElementById("generateBtn").addEventListener("click", async () => {
       await Promise.all([generateTitleOnly(), generateDescriptionOnly()]);
+      // Manual flow: also prepare the Shopify copy so it can be reviewed/edited before "To Shopify".
+      try { await generateShopifyCopy(); } catch (e) { console.warn("Shopify copy generation failed:", e); }
     });
 
     // Re-Gen buttons: run each generator independently
@@ -25118,9 +25341,11 @@ https://www.etsy.com/your/shops/me/listing-editor/edit/1822973998
       let rulesText = document.getElementById("titleRulesTextarea").value;
       document.getElementById("listingTitle").value = "Generating title...";
       toggleSpinner("titleSpinner", true);   // blue spinner
+      setCopyStatus("etsy_title", "working", "generating…");
 
       try {
         const facts = currentListingFacts();
+        const titleImg = await copyImage();
         const res = await ListingCopy.runTitle({
           callText: copyCallText,
           facts,
@@ -25129,12 +25354,13 @@ https://www.etsy.com/your/shops/me/listing-editor/edit/1822973998
           notes: copyNotesBlock(),
           recent: recentCopyTitles(),
           salt: Date.now(),         // Re-Gen picks a different structure each press
-          image: await copyImage()
+          image: titleImg
         });
         const output = enforceOutlawedCharmWord(res.title);
         document.getElementById("listingTitle").value = output;
         updateTitleCount(output);
         rememberCopyTitle(output, facts.motif);
+        { const st = copyStatusLine(res, `${output.length} chars`, !!titleImg); setCopyStatus("etsy_title", st.state, st.msg); }
         logCopyReview("title", facts, { text: output, attempts: res.attempts, fallback: res.fallback, problems: [].concat(...res.log.map(l => l.problems)) });
         if (res.fallback) {
           console.warn("Title fell back to the plain template after failed validation:", res.log);
@@ -25145,6 +25371,7 @@ https://www.etsy.com/your/shops/me/listing-editor/edit/1822973998
       } catch (error) {
         const msg = (error && error.message) ? error.message : String(error);
         document.getElementById("listingTitle").value = "Error: " + msg;
+        setCopyStatus("etsy_title", "error", msg.slice(0, 120));
       } finally {
         toggleSpinner("titleSpinner", false);
       }
@@ -25161,10 +25388,12 @@ https://www.etsy.com/your/shops/me/listing-editor/edit/1822973998
       const out = document.getElementById("listingDescription");
       out.value = "Generating description...";
       toggleSpinner("descriptionSpinner", true);   // blue spinner
+      setCopyStatus("etsy_desc", "working", "generating…");
 
       const facts = currentListingFacts();
       try {
         const curTitle = (document.getElementById("listingTitle")?.value || "").trim();
+        const descImg = await copyImage();
         const res = await ListingCopy.runDescription({
           callText: copyCallText,
           facts,
@@ -25172,8 +25401,9 @@ https://www.etsy.com/your/shops/me/listing-editor/edit/1822973998
           keyPhrases,
           notes: copyNotesBlock(),
           title: /^(generating |error:|no title)/i.test(curTitle) ? "" : curTitle,
-          image: await copyImage()
+          image: descImg
         });
+        { const st = copyStatusLine(res, `${res.text.split(/\s+/).length} words`, !!descImg); setCopyStatus("etsy_desc", st.state, st.msg); }
         logCopyReview("description", facts, { text: res.text, attempts: res.attempts, fallback: res.fallback, repaired: !!res.repaired, problems: [].concat(...res.log.map(l => l.problems)) });
         if (res.fallback) {
           console.warn("Description fell back to the plain template after failed validation:", res.log);
@@ -25183,6 +25413,7 @@ https://www.etsy.com/your/shops/me/listing-editor/edit/1822973998
       } catch (error) {
         console.error(error);
         M.toast({ html: "API Error while generating description." });
+        setCopyStatus("etsy_desc", "error", String((error && error.message) || error).slice(0, 120) + " (plain safe description used)");
         out.value = ListingCopy.fallbackDescription(facts);
       } finally {
         toggleSpinner("descriptionSpinner", false);
@@ -26134,27 +26365,14 @@ async function callOpenAI(payload, opts = {}) {
       // every AI prompt live in ListingCopy.CATS (mirrors buildMatrix() in
       // shopifyListingUpload.js). "Beady" names the CHAIN, never the charm.
       async function generateShopifyFields(category) {
-        const etsyTitle = (document.getElementById("listingTitle")?.value || "").trim();
-        const focal = (document.getElementById("listingDescInput")?.value || "").trim();
+        // Generated (and shown/editable) in the Listing Copy panel; the upload uses whatever is there.
         const skp = (document.getElementById("searchKeyPhrases")?.value || "").trim().slice(0, 1200);
-        const facts = ListingCopy.buildFacts({ listingDesc: focal, category });
+        const focal = (document.getElementById("listingDescInput")?.value || "").trim();
         try {
-          const res = await ListingCopy.runShopify({
-            callText: copyCallText,   // gpt-6.1-sol, reasoning effort "high"
-            facts,
-            etsyTitle,
-            keyPhrases: skp,
-            notes: copyNotesBlock()
-          });
-          if (res.fallback) console.warn("Shopify fields: some model output failed validation; safe fallbacks used for those fields.", res);
-          if (res && res.title) {
-            // Tags: keep the model's if usable, else the Etsy tags that already passed validation.
-            if (!res.tags || res.tags.length < 5) {
-              res.tags = (typeof buildEtsyTagsFromOverlay === "function" ? buildEtsyTagsFromOverlay(skp) : []).map(t => t.toLowerCase()).slice(0, 14);
-            }
-            return res;
-          }
+          const res = await window.shopifyCopyForUpload(category);
+          if (res && res.title && res.description_html) return res;
         } catch (e) { console.warn("Shopify field generation failed; using fallbacks.", e); }
+        const facts = ListingCopy.buildFacts({ listingDesc: focal, category });
         const fb = ListingCopy.shopifyFallback(facts);
         fb.tags = (typeof buildEtsyTagsFromOverlay === "function" ? buildEtsyTagsFromOverlay(skp) : []).map(t => t.toLowerCase()).slice(0, 14);
         return fb;

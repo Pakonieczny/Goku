@@ -271,6 +271,33 @@ const stub = (replies) => { let i = 0; const calls = []; const fn = async (req) 
     assert.strictEqual(L.reviewReport([]).weak.length, 0);
   });
 
+  await t("Shopify parts generate independently: a bad description does not touch the titles or tags", async () => {
+    const titles = { title: "Christmas Ornament Charm Necklace", seo_title: "Christmas Ornament Charm Necklace", meta_description: "Flat Christmas ornament charm necklace in sterling silver, gold filled or solid gold on a beady chain.", google_title: "Christmas Ornament Charm Necklace, Sterling Silver, Flat Charm" };
+    const goodDesc = { description_html: "<p>" + "A flat Christmas ornament charm cut from sheet metal and finished by hand. ".repeat(4) + "</p>" };
+    const badDesc = { description_html: "<p>" + "A pine bead charm with festive bead accents. ".repeat(10) + "</p>" };
+    const tags = { tags: ["christmas ornament", "holiday charm", "beady chain", "xmas jewelry", "bauble charm"], theme_keywords: ["christmas"] };
+    const seen = [];
+    const call = async (req) => { seen.push(req.label); return JSON.stringify(/Shopify titles/.test(req.label) ? titles : /Shopify description/.test(req.label) ? badDesc : tags); };
+    const r = await L.runShopify({ callText: call, facts: f, etsyTitle: "" });
+    assert.deepStrictEqual(Array.from(seen).sort(), ["Shopify description", "Shopify description", "Shopify tags", "Shopify titles"]);
+    assert.strictEqual(r.parts.titles.fallback, false);
+    assert.strictEqual(r.parts.tags.fallback, false);
+    assert.strictEqual(r.parts.description.fallback, true);
+    assert(!/bead/i.test(r.description_html.replace(/beaded ball chain/gi, "")));
+    assert.strictEqual(r.title, "Christmas Ornament Charm Necklace");
+    assert.strictEqual(L.shopifyRequest({ facts: f, part: "tags" }).user.includes("description_html"), false);
+    assert.strictEqual(L.runShopifyPart && L.SHOPIFY_PARTS.titles.length, 4);
+  });
+
+  await t("Index.html: Listing Copy panel lives in the Generated Output card (not the hidden Shopify host) and upload reads it", () => {
+    const panel = html.match(/async function generateShopifyCopy[\s\S]*?\n    function applyShopifyPart/)[0];
+    assert(/runShopifyPart/.test(panel));
+    const mk = html.match(/function ensureCopyPanel\(\) \{[\s\S]*?host\.appendChild\(p\);/)[0];
+    assert(/getElementById\("dCardOutput"\)/.test(mk) && !/getElementById\("dShopifyUploadsHost"\)/.test(mk));
+    assert(/window\.shopifyCopyForUpload\(category\)/.test(html));
+    for (const id of ["etsy_title", "etsy_desc", "etsy_tags", "sh_titles", "sh_description", "sh_tags"]) assert(html.includes(id), id);
+  });
+
   await t("fallback title/description/shopify fields are valid and bead-free for every category and several designs", () => {
     for (const cat of Object.keys(L.CATS)) for (const motif of ["Christmas Ornament", "Westie Terrier", "Sea Turtle", "Sunflower", "Crescent Moon"]) {
       const fx = L.buildFacts({ category: cat, listingDesc: motif });
