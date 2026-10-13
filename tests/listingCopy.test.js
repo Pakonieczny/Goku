@@ -85,7 +85,7 @@ const stub = (replies) => { let i = 0; const calls = []; const fn = async (req) 
     assert.strictEqual(JSON.stringify(L.cleanTags(tg, b).tags), JSON.stringify(["beady chain necklace", "beaded chain", "ball chain necklace"]));
     assert.strictEqual(L.cleanTags(tg, r).tags.length, 1);
     assert(/MAY and should use "beady chain"/.test(L.factsBlock(b)));
-    assert(/beady chain necklace/.test(L.tagsRequest({ facts: b, rules: "" }).user));
+    assert(/encouraged where natural: beady chain,/.test(L.tagsRequest({ facts: b, rules: "" }).user));
   });
 
   await t("Paul's junk keywords are rejected, good ones kept", () => {
