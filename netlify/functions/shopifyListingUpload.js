@@ -857,6 +857,18 @@ async function createShopifyProduct(job) {
     productOptions,
     variants: setVariants
   };
+  // Optional SEO fields (Shopify search-result title/description) and a separate
+  // Google Merchant Center feed title, stored as brites.google_title for feed
+  // mapping. Only sent when the browser supplied them, so older queued jobs are
+  // unaffected.
+  if (p.seoTitle || p.seoDescription) {
+    input.seo = {};
+    if (p.seoTitle) input.seo.title = p.seoTitle;
+    if (p.seoDescription) input.seo.description = p.seoDescription;
+  }
+  if (p.googleTitle) {
+    input.metafields = [{ namespace: "brites", key: "google_title", type: "single_line_text_field", value: p.googleTitle }];
+  }
 
   // IDEMPOTENT RESUME: persist the productId the moment creation succeeds.
   // Previously it was only saved on FULL success, so a failure in any later
@@ -1661,6 +1673,9 @@ async function enqueue(payload, requestId) {
       category: payload.category,
       title: String(payload.title).trim().slice(0, 255),
       descriptionHtml: String(payload.descriptionHtml || "").slice(0, 60000),
+      seoTitle: String(payload.seoTitle || "").replace(/\s+/g, " ").trim().slice(0, 70),
+      seoDescription: String(payload.seoDescription || "").replace(/\s+/g, " ").trim().slice(0, 320),
+      googleTitle: String(payload.googleTitle || "").replace(/\s+/g, " ").trim().slice(0, 150),
       tags: (payload.tags || []).slice(0, 40),
       themeKeywords: (payload.themeKeywords || []).slice(0, 12),
       productType: payload.productType || null,
