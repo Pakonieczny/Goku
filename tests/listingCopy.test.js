@@ -23,6 +23,17 @@ const stub = (replies) => { let i = 0; const calls = []; const fn = async (req) 
     assert.strictEqual(L.MODEL.effort, "high");
   });
 
+  await t("image prompts: Beady slot-1 prompt has the bead proportion rule (about 20% smaller beads, thicker wire); Regular and other Beady slots are untouched", () => {
+    const grab = (name, next) => { const i = html.indexOf("    const " + name + " ="); const j = html.indexOf("    const " + next + " =", i); assert(i > 0 && j > i, name); return html.slice(i, j); };
+    const slot1 = grab("DEFAULT_PROMPT", "SLOT4_PROMPT");
+    assert(/BEADED CHAIN PROPORTION/.test(slot1));
+    assert(/about 20% SMALLER in diameter/.test(slot1) && /about 120% of the reference thickness/.test(slot1));
+    assert(/EXCEPT for the bead size and wire thickness/.test(slot1));
+    assert(/must NOT change the charm size/.test(slot1));
+    for (const [n, nx] of [["REGULAR_DEFAULT_PROMPT", "REGULAR_SLOT4_PROMPT"], ["SLOT4_PROMPT", "SLOT5_PROMPT"], ["SLOT5_PROMPT", "SLOT7_PROMPT"]]) assert(!/BEADED CHAIN PROPORTION/.test(grab(n, nx)), n + " should be unchanged");
+    assert.strictEqual((html.match(/BEADED CHAIN PROPORTION \(APPLIES ONLY/g) || []).length, 1);
+  });
+
   await t("effort tiers: title/description high; tags and Shopify parts medium", () => {
     const fx = L.buildFacts({ listingDesc: "Pine Tree Charm Beady Necklace" });
     assert.strictEqual(L.titleRequest({ facts: fx, rules: "" }).effort, undefined);      // falls back to MODEL.effort = high
