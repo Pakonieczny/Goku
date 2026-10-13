@@ -23,10 +23,19 @@ const stub = (replies) => { let i = 0; const calls = []; const fn = async (req) 
     assert.strictEqual(L.MODEL.effort, "high");
   });
 
+  await t("effort tiers: title/description high; tags and Shopify parts medium", () => {
+    const fx = L.buildFacts({ listingDesc: "Pine Tree Charm Beady Necklace" });
+    assert.strictEqual(L.titleRequest({ facts: fx, rules: "" }).effort, undefined);      // falls back to MODEL.effort = high
+    assert.strictEqual(L.descriptionRequest({ facts: fx, rules: "" }).effort, undefined);
+    assert.strictEqual(L.tagsRequest({ facts: fx, rules: "" }).effort, "medium");
+    for (const part of ["titles", "description", "tags"]) assert.strictEqual(L.shopifyRequest({ facts: fx, part }).effort, "medium");
+    assert(/effort: req\.effort \|\| ListingCopy\.MODEL\.effort/.test(html));
+  });
+
   await t("Index.html: copy calls use the copy model, not window.modelName, and send no unverified params", () => {
     const call = html.match(/async function copyCallText\(req\) \{[\s\S]*?\n    \}/)[0];
     assert(/model: ListingCopy\.MODEL\.model/.test(call));
-    assert(/reasoning: \{ effort: ListingCopy\.MODEL\.effort \}/.test(call));
+    assert(/reasoning: \{ effort: req\.effort \|\| ListingCopy\.MODEL\.effort \}/.test(call));
     assert(!/verbosity/.test(call));
     for (const fn of ["generateTitleOnly", "generateDescriptionOnly", "getInitialPhrases", "regenerateSinglePhrase", "generateShopifyFields"]) {
       const i = html.indexOf("async function " + fn);

@@ -18871,7 +18871,10 @@ const ListingCopy = (function () {
   "use strict";
 
   // Copy-generation model. Vision / alt-text / other calls keep window.modelName.
-  const MODEL = { model: "gpt-6.1-sol", effort: "high" };
+  const MODEL = { model: "gpt-6.1-sol", effort: "high", effortLight: "medium" };
+  // Etsy title + description carry the main ranking text, so they get the full effort. Tags and the three
+  // Shopify parts are more mechanical (facts + validators do much of the work), so they run lighter to cut
+  // cost and latency.
 
   // ---------------------------------------------------------------- facts
   const CATS = {
@@ -19188,7 +19191,7 @@ const ListingCopy = (function () {
     ].filter(x => x !== "").join("\n");
     return {
       system: "Generate concise, varied, accurate Etsy tags. No duplicates. Each tag 20 characters or fewer. Output only the tags, one per line.",
-      user, maxTokens: 8000, label: "Key phrases"
+      user, maxTokens: 8000, label: "Key phrases", effort: MODEL.effortLight
     };
   }
 
@@ -19372,7 +19375,7 @@ const ListingCopy = (function () {
       o.problems && o.problems.length ? `YOUR PREVIOUS ATTEMPT WAS REJECTED because: ${o.problems.join("; ")}. Fix every point.` : "",
       o.notes || ""
     ].filter(x => x !== "").join("\n");
-    return { system: "Return STRICT JSON only.", user, maxTokens: 6000, label: "Shopify " + part };
+    return { system: "Return STRICT JSON only.", user, maxTokens: 6000, label: "Shopify " + part, effort: MODEL.effortLight };
   }
 
   function truncWords(s, n) {
@@ -24218,7 +24221,7 @@ https://www.etsy.com/your/shops/me/listing-editor/edit/1822973998
           }
         ],
         max_output_tokens: req.maxTokens,   // reasoning tokens count against this cap
-        reasoning: { effort: ListingCopy.MODEL.effort }
+        reasoning: { effort: req.effort || ListingCopy.MODEL.effort }
       });
       // High-effort reasoning is slow: longer timeout, fewer blind retries (each retry is a paid call).
       const opts = { timeoutMs: 240000, maxRetries: 2 };
