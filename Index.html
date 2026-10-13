@@ -19079,6 +19079,15 @@ const ListingCopy = (function () {
   function patternFor(facts, salt) { return PATTERNS[hashStr(facts.motif + "|" + (salt || "")) % PATTERNS.length]; }
 
   // ------------------------------------------------------------ prompts
+  // Style / search vocabulary per jewelry type, so titles lean toward how this type is actually searched and worn.
+  const STYLE_CUES = {
+    necklace: "Worn on a chain; shoppers search charm necklace, pendant necklace, dainty necklace, layering necklace.",
+    studs: "Earrings worn at the lobe; shoppers search stud earrings, charm studs, tiny studs, everyday studs.",
+    hoops: "Hoop/huggie earrings carrying a charm; shoppers search huggie hoop earrings, charm hoops, small hoop earrings.",
+    charm: "Charm only, no chain included; it fits necklaces and huggie hoops. Shoppers search necklace charm, charm for necklace, add-on charm.",
+    bracelet: "Worn on the wrist; shoppers search charm bracelet, dainty bracelet, layering bracelet."
+  };
+
   function factsBlock(f) {
     return [
       "FACTS ABOUT THIS ONE PIECE (authoritative; never contradict, never add features not listed):",
@@ -19092,6 +19101,7 @@ const ListingCopy = (function () {
         : "- Chain: none included.",
       `- Metals offered: ${f.metals.join("; ")}. Gold filled is NOT solid gold: use the word "solid" only with 10K or 14K gold.`,
       `- Engraving: ${f.engraving ? "optional back engraving is offered" : "not offered; do not mention engraving or personalization"}`,
+      `- Style cues for this jewelry type: ${STYLE_CUES[f.kind]} Use this vocabulary where it is accurate; do not copy it as a list.`,
       "- We do not sell brooches, lockets, rings, anklets, strands or anything not listed above."
     ].join("\n");
   }

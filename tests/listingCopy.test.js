@@ -217,6 +217,15 @@ const stub = (replies) => { let i = 0; const calls = []; const fn = async (req) 
     assert(L.validateEtsyTitle("Sea Turtle Hoop Earrings, Sterling Silver, Rose Gold, Flat Charm", h).some(p => /rose gold/.test(p)));
   });
 
+  await t("facts carry a style cue matched to the jewelry type", () => {
+    const cue = (d) => L.factsBlock(L.buildFacts({ listingDesc: d })).match(/Style cues[^\n]*/)[0];
+    assert(/charm necklace/.test(cue("Owl Charm Regular Necklace")));
+    assert(/stud earrings/.test(cue("Owl Charm Stud Earrings")));
+    assert(/huggie hoop/.test(cue("Owl Charm Hoop Earrings")));
+    assert(/no chain included/.test(cue("Owl charm")));
+    assert(/charm bracelet/.test(cue("Owl Charm Bracelets")));
+  });
+
   await t("fallback title/description/shopify fields are valid and bead-free for every category and several designs", () => {
     for (const cat of Object.keys(L.CATS)) for (const motif of ["Christmas Ornament", "Westie Terrier", "Sea Turtle", "Sunflower", "Crescent Moon"]) {
       const fx = L.buildFacts({ category: cat, listingDesc: motif });
