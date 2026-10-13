@@ -19096,7 +19096,7 @@ const ListingCopy = (function () {
       "- Form of the charm: FLAT metal charm cut from sheet metal. It has NO beads, NO pearls, NO stones, NO beadwork. Never describe the charm as beaded.",
       f.chain
         ? (f.chain.beaded
-            ? "- Chain: beaded ball chain. The word \"beaded\"/\"ball chain\" may describe the CHAIN only, never the charm."
+            ? "- Chain: beaded (beady) ball chain. You MAY and should use \"beady chain\", \"beaded chain\" or \"ball chain\" for the chain, in the title, tags and description. The words describe the CHAIN only, never the charm."
             : "- Chain: type not specified, so just say \"chain\". Do NOT say beaded, ball or bead chain.")
         : "- Chain: none included.",
       `- Metals offered: ${f.metals.join("; ")}. Gold filled is NOT solid gold: use the word "solid" only with 10K or 14K gold.`,
@@ -19170,7 +19170,9 @@ const ListingCopy = (function () {
       "",
       `Generate exactly ${need} Etsy tags, each 20 characters or fewer, one per line, no numbering.`,
       "- Real buyer search phrases for this exact piece: design synonyms and variants, design + product type, style, recipient, occasion that truly fits.",
-      "- Do NOT use the words bead, beaded, pearl in any tag. Do not invent product types.",
+      f.chain && f.chain.beaded
+        ? "- Never use bead/beaded/pearl for the charm. Tags naming the chain are allowed and encouraged where natural: beady chain, beaded chain necklace, ball chain necklace. Do not invent product types."
+        : "- Do NOT use the words bead, beaded, pearl in any tag. Do not invent product types.",
       "- Do not repeat the metal or color attributes (those are set as structured fields). No duplicates.",
       o.accepted && o.accepted.length ? `Already accepted (do not repeat or restate): ${o.accepted.join(", ")}` : "",
       o.rejected && o.rejected.length ? `Rejected, avoid: ${o.rejected.map(r => `${r.tag} (${r.reason})`).join("; ")}` : "",
@@ -19201,7 +19203,7 @@ const ListingCopy = (function () {
       let why = null;
       if (t.length > 20) why = "over 20 characters";
       else if (ATTRIBUTE_TAG.test(t)) why = "repeats a material attribute";
-      else if (findBeadMisuse(t, null)) why = "bead/pearl word";
+      else if (findBeadMisuse(t, facts)) why = "bead/pearl word";
       else if (CLINICAL.test(t)) why = "clinical word";
       else if (NOT_SOLD.test(t) && !(facts.kind === "bracelet")) why = "product we do not sell";
       else if (CLAIMS.test(t)) why = "unprovable claim";
@@ -19348,7 +19350,7 @@ const ListingCopy = (function () {
       "- meta_description: 120-155 characters, plain sentence(s) starting with the key facts (what it is, metals). No quotes, no hype.",
       "- google_title: at most 150 characters, the first 70 must stand alone. Plain Merchant Center style for ONE variant: design + product type, exact material (e.g. 14K Solid Gold, Sterling Silver), flat charm" + (f.chain && f.chain.beaded ? ", ball chain" : "") + ". No gift, sale, shipping, promo words, no ALL CAPS, no symbols.",
       "- description_html: 500-1000 characters of visible text. Two short <p> paragraphs then one <ul> with 4 <li> bullets. Key facts (what it is, flat charm, metals) in the first 160 characters. Warm, concise, no emojis, no claims not in the facts.",
-      "- tags: 10-14 lowercase tags (subject, style, occasion, recipient). No metal names. No bead/pearl words.",
+      "- tags: 10-14 lowercase tags (subject, style, occasion, recipient). No metal names. Never call the charm bead/beaded/pearl" + (f.chain && f.chain.beaded ? "; tags like beady chain or ball chain necklace are allowed." : "; no bead/pearl words."),
       "- theme_keywords: 3-6 single lowercase words naming the subject/theme.",
       o.problems && o.problems.length ? `YOUR PREVIOUS ATTEMPT WAS REJECTED because: ${o.problems.join("; ")}. Fix every point.` : "",
       o.notes || ""
@@ -19386,7 +19388,7 @@ const ListingCopy = (function () {
       commonProblems(String(x[k] || ""), f).forEach(m => p.push(`${k} ${m}`));
     });
     commonProblems(stripHtml(x.description_html), f).forEach(m => p.push(`description_html ${m}`));
-    (x.tags || []).forEach(tg => { if (findBeadMisuse(tg, null)) p.push(`tag "${tg}" uses a bead/pearl word`); });
+    (x.tags || []).forEach(tg => { if (findBeadMisuse(tg, f)) p.push(`tag "${tg}" uses a bead/pearl word`); });
     if (stripHtml(x.description_html).length < 300) p.push("description_html is too short (500-1000 characters)");
     if (!String(x.google_title || "").trim()) p.push("google_title missing");
     if (SALE.test(String(x.google_title || "")) || /\bgift\b/i.test(String(x.google_title || ""))) p.push("google_title has gift/sale wording");
@@ -19425,7 +19427,7 @@ const ListingCopy = (function () {
         keep[k] = (probe && !commonProblems(probe, f).length) ? parsed[k] : fb[k];
       });
       if (/[,|]|\b(sterling|silver|gold|filled|10k|14k)\b/i.test(keep.title)) keep.title = fb.title;
-      keep.tags = (parsed.tags || []).filter(t => !findBeadMisuse(t, null));
+      keep.tags = (parsed.tags || []).filter(t => !findBeadMisuse(t, f));
       keep.theme_keywords = parsed.theme_keywords && parsed.theme_keywords.length ? parsed.theme_keywords : fb.theme_keywords;
       return Object.assign(keep, { fallback: true, partial: true });
     }

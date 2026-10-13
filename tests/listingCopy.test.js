@@ -56,7 +56,7 @@ const stub = (replies) => { let i = 0; const calls = []; const fn = async (req) 
   await t("prompts never carry the raw 'Beady Necklace' string, and state the flat-charm fact", () => {
     const f = L.buildFacts({ listingDesc: "Christmas Ornament Charm Beady Necklace" });
     for (const req of [L.titleRequest({ facts: f, rules: "" }), L.descriptionRequest({ facts: f, rules: "" }), L.tagsRequest({ facts: f, rules: "" }), L.shopifyRequest({ facts: f })]) {
-      assert(!/beady/i.test(req.user), "beady leaked into prompt");
+      assert(!/Charm Beady Necklace|Beady Necklace/i.test(req.user), "raw category string leaked into prompt");
       assert(/FLAT metal charm/.test(req.user));
     }
     const reg = L.titleRequest({ facts: L.buildFacts({ listingDesc: "X Charm Regular Necklace" }), rules: "" });
@@ -73,6 +73,19 @@ const stub = (replies) => { let i = 0; const calls = []; const fn = async (req) 
     assert.strictEqual(L.findBeadMisuse("flat pine tree charm on a beaded chain", beady), null);
     assert.strictEqual(L.findBeadMisuse("flat pine tree charm on a ball chain", reg), null);
     assert(L.findBeadMisuse("flat pine tree charm on a beaded chain", reg), "beaded chain is false on a regular necklace");
+  });
+
+  await t("beady chain wording is allowed for Beady necklaces (title, tags, Shopify tags), not for others", () => {
+    const b = L.buildFacts({ listingDesc: "Pine Tree Charm Beady Necklace" });
+    const r = L.buildFacts({ listingDesc: "Pine Tree Charm Regular Necklace" });
+    assert.strictEqual(L.validateEtsyTitle("Pine Tree Charm Necklace on Beady Chain, Sterling Silver, Gold Filled, Flat Pendant", b).length, 0);
+    assert.strictEqual(L.validateEtsyTitle("Pine Tree Beaded Chain Necklace, Sterling Silver, Flat Charm", b).length, 0);
+    assert(L.validateEtsyTitle("Pine Tree Charm Necklace on Beady Chain, Sterling Silver, Flat Pendant", r).length > 0);
+    const tg = "beady chain necklace\nbeaded chain\nball chain necklace\npine bead charm\nbeady pine pendant";
+    assert.strictEqual(JSON.stringify(L.cleanTags(tg, b).tags), JSON.stringify(["beady chain necklace", "beaded chain", "ball chain necklace"]));
+    assert.strictEqual(L.cleanTags(tg, r).tags.length, 1);
+    assert(/MAY and should use "beady chain"/.test(L.factsBlock(b)));
+    assert(/beady chain necklace/.test(L.tagsRequest({ facts: b, rules: "" }).user));
   });
 
   await t("Paul's junk keywords are rejected, good ones kept", () => {
