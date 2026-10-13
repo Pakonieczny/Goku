@@ -19088,6 +19088,8 @@ const ListingCopy = (function () {
     bracelet: "Worn on the wrist; shoppers search charm bracelet, dainty bracelet, layering bracelet."
   };
 
+  const IMAGE_NOTE = "IMAGE: a zoomed photo of this exact charm is attached. Use it ONLY to name its true visible shape, pose and details (for example wings spread, curled tail, round bauble with a cap). Ignore the background, model and chain. The charm is flat metal: never describe its surface as beads. The FACTS win on material and product type; the photo wins on visible shape.";
+
   function factsBlock(f) {
     return [
       "FACTS ABOUT THIS ONE PIECE (authoritative; never contradict, never add features not listed):",
@@ -19111,6 +19113,7 @@ const ListingCopy = (function () {
     const recent = (o.avoid || []).slice(0, 6).map(r => `  - ${r.title}`).join("\n");
     const user = [
       factsBlock(f),
+      o.hasImage ? IMAGE_NOTE : "",
       "",
       "ETSY TITLE STANDARDS (Etsy Seller Handbook):",
       "- Name the item plainly; most important traits first (design, product type, material, form). Target 60-100 characters, hard max 140.",
@@ -19140,6 +19143,7 @@ const ListingCopy = (function () {
     const f = o.facts;
     const user = [
       factsBlock(f),
+      o.hasImage ? IMAGE_NOTE : "",
       "",
       `ETSY TITLE (do not copy or restate it): ${o.title || "(none yet)"}`,
       "",
@@ -19167,6 +19171,7 @@ const ListingCopy = (function () {
     const f = o.facts, need = o.need || 13;
     const user = [
       factsBlock(f),
+      o.hasImage ? IMAGE_NOTE : "",
       "",
       `Generate exactly ${need} Etsy tags, each 20 characters or fewer, one per line, no numbering.`,
       "- Real buyer search phrases for this exact piece: design synonyms and variants, design + product type, style, recipient, occasion that truly fits.",
@@ -19267,7 +19272,8 @@ const ListingCopy = (function () {
     let problems = [], previous = "";
     const maxAttempts = o.maxAttempts || 3;
     for (let a = 1; a <= maxAttempts; a++) {
-      const req = titleRequest({ facts, rules: o.rules, keyPhrases: o.keyPhrases, notes: o.notes, avoid: o.recent, salt: o.salt || a, problems, previous });
+      const req = titleRequest({ facts, rules: o.rules, keyPhrases: o.keyPhrases, notes: o.notes, avoid: o.recent, salt: o.salt || a, problems, previous, hasImage: !!o.image });
+      if (o.image) req.image = o.image;
       let raw = (await o.callText(req)) || "";
       let t = repairTitle(raw.split(/\n/).find(x => x.trim()) || "");
       let probs = validateEtsyTitle(t, facts);
@@ -19292,7 +19298,8 @@ const ListingCopy = (function () {
     let problems = [];
     const maxAttempts = o.maxAttempts || 3;
     for (let a = 1; a <= maxAttempts; a++) {
-      const req = descriptionRequest({ facts, rules: o.rules, keyPhrases: o.keyPhrases, notes: o.notes, title: o.title, problems });
+      const req = descriptionRequest({ facts, rules: o.rules, keyPhrases: o.keyPhrases, notes: o.notes, title: o.title, problems, hasImage: !!o.image });
+      if (o.image) req.image = o.image;
       const raw = String((await o.callText(req)) || "").replace(/\s+/g, " ").trim();
       const probs = validateDescription(raw, facts, o.title);
       log.push({ attempt: a, problems: probs });
@@ -19314,7 +19321,8 @@ const ListingCopy = (function () {
     let accepted = [], rejectedAll = [];
     for (let round = 0; round < (o.maxRounds || 3) && accepted.length < want; round++) {
       const need = want - accepted.length;
-      const req = tagsRequest({ facts, rules: o.rules, notes: o.notes, need: round === 0 ? want : need + 2, accepted, rejected: rejectedAll.slice(-8) });
+      const req = tagsRequest({ facts, rules: o.rules, notes: o.notes, need: round === 0 ? want : need + 2, accepted, rejected: rejectedAll.slice(-8), hasImage: !!o.image && round === 0 });
+      if (o.image && round === 0) req.image = o.image;
       const raw = await o.callText(req);
       const res = cleanTags(raw, facts, accepted);
       accepted = res.tags.slice(0, want);
@@ -19434,6 +19442,78 @@ const ListingCopy = (function () {
     return fb;
   }
 
+
+  // ------------------------------------------------------- review report
+  // Objective weakness signals over logged generations. It cannot judge what sells; it finds output
+  // that is structurally weak or repetitive so rules can be tightened with evidence.
+  // record = { t, motif, category, title:{text,attempts,fallback,problems[]}, description:{text,attempts,fallback,repaired,problems[]},
+  //            tags:{list[], rejected:[{tag,reason}]} }
+  function reviewReport(records) {
+    const recs = (records || []).filter(Boolean), n = recs.length;
+    const pct = (a, b) => (b ? Math.round((100 * a) / b) + "%" : "n/a");
+    const out = [], weak = [];
+    const count = (arr) => arr.reduce((m, k) => (m[k] = (m[k] || 0) + 1, m), {});
+    const top = (m, k, min) => Object.entries(m).filter(e => e[1] >= (min || 1)).sort((a, b) => b[1] - a[1]).slice(0, k).map(e => `${e[0]} x${e[1]}`).join(", ") || "none";
+    const reasonKey = s => String(s).replace(/"[^"]*"/g, "").replace(/\d+/g, "N").slice(0, 60).trim();
+
+    const T = recs.filter(r => r.title), D = recs.filter(r => r.description), G = recs.filter(r => r.tags);
+    out.push(`Listings logged: ${n}`);
+
+    // titles
+    out.push("", "TITLES");
+    out.push(`- fallback used: ${pct(T.filter(r => r.title.fallback).length, T.length)}; needed retries: ${pct(T.filter(r => r.title.attempts > 1).length, T.length)}`);
+    const lens = T.map(r => r.title.text.length);
+    out.push(`- length avg ${lens.length ? Math.round(lens.reduce((a, b) => a + b, 0) / lens.length) : 0}; under 50: ${lens.filter(x => x < 50).length}; over 110: ${lens.filter(x => x > 110).length}`);
+    out.push(`- most common rejection reasons: ${top(count([].concat(...T.map(r => (r.title.problems || []).map(reasonKey)))), 5)}`);
+    if (T.length >= 5) {
+      const common = {};
+      T.forEach(r => {
+        const mw = new Set(contentWords(r.motif).map(stem));
+        new Set(contentWords(r.title.text).map(stem).filter(w => !mw.has(w) && !/\d/.test(w))).forEach(w => { common[w] = (common[w] || 0) + 1; });
+      });
+      const shared = Object.entries(common).filter(e => e[1] >= Math.ceil(T.length * 0.6)).map(e => e[0]);
+      out.push(`- words in 60%+ of titles (besides the design): ${shared.join(", ") || "none"}`);
+    }
+    let simPairs = 0;
+    for (let i = 0; i < T.length; i++) for (let j = i + 1; j < T.length; j++) {
+      if (mostSimilar(T[i].title.text, T[i].motif, [{ title: T[j].title.text, motif: T[j].motif }]).score >= SIMILARITY_LIMIT) simPairs++;
+    }
+    out.push(`- near-duplicate title pairs: ${simPairs}`);
+
+    // descriptions
+    out.push("", "DESCRIPTIONS");
+    out.push(`- fallback used: ${pct(D.filter(r => r.description.fallback).length, D.length)}; needed retries: ${pct(D.filter(r => r.description.attempts > 1).length, D.length)}; sentence-repaired: ${D.filter(r => r.description.repaired).length}`);
+    const openers = count(D.map(r => words(r.description.text).slice(0, 4).join(" ")));
+    out.push(`- repeated 4-word openings: ${top(openers, 5, 2)}`);
+    out.push(`- most common rejection reasons: ${top(count([].concat(...D.map(r => (r.description.problems || []).map(reasonKey)))), 5)}`);
+
+    // tags
+    out.push("", "TAGS");
+    const rej = [].concat(...G.map(r => (r.tags.rejected || []).map(x => x.reason)));
+    out.push(`- rejected by validation: ${top(count(rej), 6)}`);
+    const tagUse = count([].concat(...G.map(r => Array.from(new Set((r.tags.list || []).map(x => x.toLowerCase()))))));
+    if (G.length >= 5) out.push(`- tags on 50%+ of listings (too generic?): ${top(tagUse, 8, Math.ceil(G.length * 0.5))}`);
+    out.push(`- listings with fewer than 13 tags: ${G.filter(r => (r.tags.list || []).length < 13).length}`);
+
+    // per-listing weak flags
+    recs.forEach(r => {
+      const why = [];
+      if (r.title && r.title.fallback) why.push("title used fallback");
+      if (r.title && r.title.attempts >= 3) why.push("title needed 3 tries");
+      if (r.title && r.title.text.length < 50) why.push("title short");
+      if (r.description && r.description.fallback) why.push("description used fallback");
+      if (r.tags) {
+        const l = r.tags.list || [];
+        if (l.length < 13) why.push(`only ${l.length} tags`);
+        if (l.filter(x => words(x).length === 1).length >= 4) why.push("4+ one-word tags");
+      }
+      if (why.length) weak.push(`${r.motif || "?"} (${r.category || "?"}): ${why.join("; ")}`);
+    });
+    out.push("", `WEAK LISTINGS (${weak.length})`);
+    weak.slice(0, 25).forEach(w => out.push("- " + w));
+    return { text: out.join("\n"), weak };
+  }
+
   // ------------------------------------------------------------- exports
   return {
     MODEL, CATS, normCategory, motifFrom, buildFacts, factsBlock,
@@ -19442,7 +19522,7 @@ const ListingCopy = (function () {
     cleanTags, validateDescription, sanitizeDescription, fallbackDescription, capDescription,
     titleRequest, descriptionRequest, tagsRequest, shopifyRequest,
     validateShopify, normalizeShopify, shopifyFallback,
-    runTitle, runDescription, runTags, runShopify
+    runTitle, runDescription, runTags, runShopify, reviewReport
   };
 })();
 if (typeof window !== "undefined") window.ListingCopy = ListingCopy;
@@ -24086,18 +24166,64 @@ https://www.etsy.com/your/shops/me/listing-editor/edit/1822973998
     // Per-piece facts, banned-word rules, validation, repair and the
     // near-duplicate guard live in ListingCopy (script#listingCopyLib above).
     async function copyCallText(req) {
-      const payload = {
+      const build = (withImage) => ({
         model: ListingCopy.MODEL.model,
         input: [
           { role: "system", content: req.system },
-          { role: "user", content: req.user }
+          {
+            role: "user",
+            content: withImage
+              ? [{ type: "input_text", text: req.user }, { type: "input_image", image_url: req.image }]
+              : req.user
+          }
         ],
         max_output_tokens: req.maxTokens,   // reasoning tokens count against this cap
         reasoning: { effort: ListingCopy.MODEL.effort }
-      };
+      });
       // High-effort reasoning is slow: longer timeout, fewer blind retries (each retry is a paid call).
-      return callOpenAIForText(payload, req.label, { timeoutMs: 240000, maxRetries: 2 });
+      const opts = { timeoutMs: 240000, maxRetries: 2 };
+      if (!req.image) return callOpenAIForText(build(false), req.label, opts);
+      try {
+        return await callOpenAIForText(build(true), req.label, opts);
+      } catch (e) {
+        // A 400 means the request itself was refused (e.g. image input unsupported): retry text-only once.
+        if (e && e.status === 400) {
+          console.warn(`${req.label}: image input rejected (${e.message}); retrying without the image.`);
+          return callOpenAIForText(build(false), req.label, opts);
+        }
+        throw e;
+      }
     }
+
+    // Zoomed photo of the charm (same crop the identification step uses). "" when unavailable.
+    async function copyImage() {
+      try { return (typeof imageDataForVisionZoomed === "function" && (await imageDataForVisionZoomed(0))) || ""; }
+      catch (_) { return ""; }
+    }
+
+    // Review log: one record per generation, used by copyReviewReport() to find weak output.
+    const COPY_LOG_KEY = "lc_review_log_v1";
+    function logCopyReview(kind, facts, data) {
+      try {
+        const all = JSON.parse(localStorage.getItem(COPY_LOG_KEY) || "[]");
+        let rec = all[all.length - 1];
+        if (!rec || rec.motif !== facts.motif || Date.now() - rec.t > 30 * 60 * 1000 || rec[kind]) {
+          rec = { t: Date.now(), motif: facts.motif, category: facts.category };
+          all.push(rec);
+        }
+        rec[kind] = data;
+        localStorage.setItem(COPY_LOG_KEY, JSON.stringify(all.slice(-60)));
+      } catch (_) {}
+    }
+    // Run copyReviewReport() in the browser console: prints the report and copies it to the clipboard.
+    window.copyReviewReport = function () {
+      let recs = [];
+      try { recs = JSON.parse(localStorage.getItem(COPY_LOG_KEY) || "[]"); } catch (_) {}
+      const rep = ListingCopy.reviewReport(recs);
+      console.log(rep.text);
+      try { navigator.clipboard.writeText(rep.text); } catch (_) {}
+      return rep.text;
+    };
 
     // Facts for the piece currently in the form. The category comes from the
     // automation queue when one is running (authoritative), otherwise from the
@@ -24134,10 +24260,12 @@ https://www.etsy.com/your/shops/me/listing-editor/edit/1822973998
 
     async function getInitialPhrases(question, keywordRules) {
       const facts = currentListingFacts();
+      const img = await copyImage();
       const res = await ListingCopy.runTags({
-        callText: copyCallText, facts, rules: keywordRules, notes: copyNotesBlock(), want: 13
+        callText: copyCallText, facts, rules: keywordRules, notes: copyNotesBlock(), want: 13, image: img
       });
       if (res.rejected.length) console.log("Key phrases rejected by validation:", res.rejected);
+      logCopyReview("tags", facts, { list: res.tags, rejected: res.rejected, image: !!img });
       return res.tags;
     }
 
@@ -25000,12 +25128,14 @@ https://www.etsy.com/your/shops/me/listing-editor/edit/1822973998
           keyPhrases,
           notes: copyNotesBlock(),
           recent: recentCopyTitles(),
-          salt: Date.now()          // Re-Gen picks a different structure each press
+          salt: Date.now(),         // Re-Gen picks a different structure each press
+          image: await copyImage()
         });
         const output = enforceOutlawedCharmWord(res.title);
         document.getElementById("listingTitle").value = output;
         updateTitleCount(output);
         rememberCopyTitle(output, facts.motif);
+        logCopyReview("title", facts, { text: output, attempts: res.attempts, fallback: res.fallback, problems: [].concat(...res.log.map(l => l.problems)) });
         if (res.fallback) {
           console.warn("Title fell back to the plain template after failed validation:", res.log);
           M.toast({ html: "Title: model output failed checks, used a plain safe title. Press Re-Gen to try again." });
@@ -25041,8 +25171,10 @@ https://www.etsy.com/your/shops/me/listing-editor/edit/1822973998
           rules: rulesText,
           keyPhrases,
           notes: copyNotesBlock(),
-          title: /^(generating |error:|no title)/i.test(curTitle) ? "" : curTitle
+          title: /^(generating |error:|no title)/i.test(curTitle) ? "" : curTitle,
+          image: await copyImage()
         });
+        logCopyReview("description", facts, { text: res.text, attempts: res.attempts, fallback: res.fallback, repaired: !!res.repaired, problems: [].concat(...res.log.map(l => l.problems)) });
         if (res.fallback) {
           console.warn("Description fell back to the plain template after failed validation:", res.log);
           M.toast({ html: "Description: model output failed checks, used a plain safe description. Press Re-Gen to try again." });

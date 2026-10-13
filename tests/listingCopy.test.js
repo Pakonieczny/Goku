@@ -239,6 +239,38 @@ const stub = (replies) => { let i = 0; const calls = []; const fn = async (req) 
     assert(/charm bracelet/.test(cue("Owl Charm Bracelets")));
   });
 
+  await t("image is attached to title/description/first tag round only when provided, and noted in the prompt", async () => {
+    const seen = [];
+    const spy = async (req) => { seen.push(req); return "Christmas Ornament Charm Necklace, Sterling Silver, Gold Filled, Flat Pendant, Ball Chain"; };
+    await L.runTitle({ callText: spy, facts: f, rules: "", recent: [], image: "data:image/jpeg;base64,AAAA" });
+    assert.strictEqual(seen[0].image, "data:image/jpeg;base64,AAAA");
+    assert(/IMAGE: a zoomed photo/.test(seen[0].user));
+    seen.length = 0;
+    await L.runTitle({ callText: spy, facts: f, rules: "", recent: [], image: "" });
+    assert(!seen[0].image && !/IMAGE:/.test(seen[0].user));
+    // Index.html: text-only retry on a 400, and the image helper exists
+    assert(/e\.status === 400/.test(html) && /async function copyImage\(\)/.test(html));
+  });
+
+  await t("reviewReport flags fallbacks, short titles, shared words, repeated openings, generic tags", () => {
+    const mk = (i, over) => Object.assign({ t: i, motif: "Design" + i, category: "Beady_Necklace",
+      title: { text: `Design${i} Charm Necklace, Sterling Silver, Gold Filled, Flat Pendant, Ball Chain`, attempts: 1, fallback: false, problems: [] },
+      description: { text: "A flat charm cut from sheet metal and more words here.", attempts: 1, fallback: false, problems: [] },
+      tags: { list: ["charm necklace", "dainty charm", "gift idea", "flat charm", "layering piece", "a", "b", "c", "d", "e", "f", "g", "h"], rejected: [{ tag: "x bead", reason: "bead/pearl word" }] } }, over || {});
+    const recs = [mk(1), mk(2), mk(3), mk(4), mk(5, { title: { text: "Owl Necklace", attempts: 3, fallback: true, problems: ["uses the word \"beaded\"."] } })];
+    const rep = L.reviewReport(recs);
+    assert(/Listings logged: 5/.test(rep.text));
+    assert(/fallback used: 20%/.test(rep.text));
+    assert(/near-duplicate title pairs: [1-9]/.test(rep.text));
+    assert(/words in 60%\+ of titles[^\n]*sterling/.test(rep.text));
+    assert(/repeated 4-word openings: a flat charm cut x5/.test(rep.text));
+    assert(/bead\/pearl word x5/.test(rep.text));
+    assert(/tags on 50%\+ of listings[^\n]*charm necklace/.test(rep.text));
+    assert(rep.weak.some(w => /Design5/.test(w) || /\?|Design/.test(w)));
+    assert(rep.weak.some(w => /title used fallback/.test(w) && /title short/.test(w)));
+    assert.strictEqual(L.reviewReport([]).weak.length, 0);
+  });
+
   await t("fallback title/description/shopify fields are valid and bead-free for every category and several designs", () => {
     for (const cat of Object.keys(L.CATS)) for (const motif of ["Christmas Ornament", "Westie Terrier", "Sea Turtle", "Sunflower", "Crescent Moon"]) {
       const fx = L.buildFacts({ category: cat, listingDesc: motif });
