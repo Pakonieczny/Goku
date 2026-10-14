@@ -83,6 +83,13 @@ const stub = (replies) => { let i = 0; const calls = []; const fn = async (req) 
     assert(/Restarting \$\{nr\.setName\}/.test(html));
   });
 
+  await t("scan cannot hang: finished-sets listing is background-only, waiting-folder listing has a timeout + ledger fallback, archived check is per set", () => {
+    assert(/window\.__processedListing = approvedRef\.listAll\(\)/.test(html), "done pile refreshed in the background");
+    assert(/folder listing timed out"\)\), 15000\)/.test(html) && /waitingNames/.test(html), "bounded listing with ledger fallback");
+    assert(/archived = await approvedRef\.child\(setName\)\.listAll\(\)/.test(html), "exact per-set archived check");
+    assert(/Scanning: listing waiting folders \(\$\{Math\.round/.test(html), "status shows elapsed seconds");
+  });
+
   await t("effort tiers: title/description use MODEL.effort; tags and Shopify parts use the light tier", () => {
     const fx = L.buildFacts({ listingDesc: "Pine Tree Charm Beady Necklace" });
     assert.strictEqual(L.titleRequest({ facts: fx, rules: "" }).effort, undefined);      // falls back to MODEL.effort

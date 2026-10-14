@@ -11628,23 +11628,32 @@ ANTI-REPETITION (TITLE)
             // Listed_Sets path is intentionally not polled here because its
             // current Storage rules reject browser reads (403).
             const approvedRef = storage.ref('listing-generator-1/Generated_Listing_Sets/Approved_Listing_Sets');
-            let processedNames = [];
-            // The done pile only grows and is slow to list (thousands of folders). Re-list it at most once a minute;
-            // sets finished meanwhile are excluded by the ledger and the archiving list anyway.
-            if (window.__processedCache && Date.now() - window.__processedCache.at < 60000) {
-                processedNames = window.__processedCache.names;
-            } else {
-                try {
-                    if (window.autoProcessingEnabled && !window.isProcessingSet) updateFirebaseStatus("Scanning: listing finished sets...", "working");
-                    const approvedRes = await approvedRef.listAll();
-                    processedNames = approvedRes.prefixes.map(p => p.name.replace(/\/$/, ""));
-                    window.__processedCache = { at: Date.now(), names: processedNames };
-                } catch(e) { }
+            // The finished-sets pile only ever grows (thousands of folders) and is slow to list, so it NEVER blocks the
+            // scan: the last known listing is used and refreshed in the background. Whether a chosen set is already
+            // archived is checked exactly, for that one set, just before it is claimed (see the candidate loop).
+            let processedNames = (window.__processedCache && window.__processedCache.names) || [];
+            if ((!window.__processedCache || Date.now() - window.__processedCache.at > 300000) && !window.__processedListing) {
+                window.__processedListing = approvedRef.listAll()
+                    .then((rr) => { window.__processedCache = { at: Date.now(), names: rr.prefixes.map(p => p.name.replace(/\/$/, "")) }; })
+                    .catch(() => {})
+                    .then(() => { window.__processedListing = null; });
             }
 
             const listRef = storage.ref('listing-generator-1/Generated_Listing_Sets/Completed_Listing_Sets');
-            if (window.autoProcessingEnabled && !window.isProcessingSet) updateFirebaseStatus("Scanning: listing waiting folders...", "working");
-            const res = await listRef.listAll();
+            // Waiting folders: bounded. A hung or very slow listing falls back to what the ledger already knows
+            // (approved/interrupted sets), so the scan can never sit there for minutes.
+            const __tList = Date.now();
+            const __tick = setInterval(() => {
+                if (window.autoProcessingEnabled && !window.isProcessingSet) updateFirebaseStatus(`Scanning: listing waiting folders (${Math.round((Date.now() - __tList) / 1000)}s)...`, "working");
+            }, 1000);
+            let res;
+            try {
+                res = await Promise.race([listRef.listAll(), new Promise((_, rej) => setTimeout(() => rej(new Error("folder listing timed out")), 15000))]);
+            } catch (e) {
+                console.warn("Waiting-folder listing failed; using the ledger's approved/interrupted sets instead:", e && e.message);
+                const names = (window.PipeGuard && window.PipeGuard.waitingNames) ? window.PipeGuard.waitingNames() : [];
+                res = { prefixes: names.map((n) => storage.ref('listing-generator-1/Generated_Listing_Sets/Completed_Listing_Sets/' + n)) };
+            } finally { clearInterval(__tick); }
 
             // 2. Filter folders (prefixes): skip anything already approved.
             const newSets = res.prefixes.filter(p => {
@@ -11901,6 +11910,13 @@ ANTI-REPETITION (TITLE)
                                 }
                             }
                             continue; 
+                        }
+
+                        // Already archived? (the finished-sets listing may be stale or still loading, so ask for THIS set exactly)
+                        if (!processedNames.includes(setName)) {
+                            let archived = null;
+                            try { archived = await approvedRef.child(setName).listAll(); } catch (_) {}
+                            if (archived && archived.items && archived.items.length) { processedNames.push(setName); continue; }
                         }
 
                         // DURABLE PIPELINE: own the set BEFORE any work on it. The claim
@@ -14205,6 +14221,12 @@ ANTI-REPETITION (TITLE)
           return e ? { setName: e.setName, category: e.category || "" } : null;
         } catch (_) { return null; }
       }
+      /*  Names of the approved/interrupted sets the ledger knows about (used when the storage listing cannot be had). */
+      function waitingNames() {
+        const l = L();
+        if (!l) return [];
+        try { return l.list((e) => (e.state === "queued" || e.state === "claimed" || e.state === "uploading" || !!e.recoverWhy) && eligibility(e.setName).ok).map((e) => e.setName); } catch (_) { return []; }
+      }
       /*  How many approved or interrupted sets are waiting to be (re)started: queued, claimed or mid-upload in the ledger. */
       function waitingCount() {
         const l = L();
@@ -14345,7 +14367,7 @@ ANTI-REPETITION (TITLE)
       return {
         claim, begin, eligibility, isBusy, prioritise, hasReservedId, reservedId, runTail, reconcileArchived,
         pickListingId, noteEnqueued, releaseUnusedId, jobMayRun, jobGate, nextJob, retryLater, jobVerdict, lockJob, onJobProgress, onJobDone, afterJob,
-        noteSkip, priorPricing, priorStages, armPricing, resume, boot, hasWorkWaiting, waitingCount, nextResumable, restoreAuto, effectiveMeta,
+        noteSkip, priorPricing, priorStages, armPricing, resume, boot, hasWorkWaiting, waitingCount, waitingNames, nextResumable, restoreAuto, effectiveMeta,
         __test: { handles, cool, effectiveMeta, jGet, jAll, isTail, inferFromEntry, shopifyRequestId, isLeader: () => leader, setLeader: (v) => { leader = !!v; },
           restoreAuto, writeIntent, finishCheapTails, becomeLeader, takenIdFor, installQueueBoxes, notMine, setBootPending: (v) => { bootPending = !!v; } }
       };
