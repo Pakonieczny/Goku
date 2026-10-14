@@ -90,6 +90,11 @@ const stub = (replies) => { let i = 0; const calls = []; const fn = async (req) 
     assert(/Scanning: listing waiting folders \(\$\{Math\.round/.test(html), "status shows elapsed seconds");
   });
 
+  await t("scan never waits on archiving or one bad folder", () => {
+    assert(/if \(!window\.__reconcileRunning\) \{/.test(html) && !/await window\.PipeGuard\.reconcileArchived\(processedNames\)/.test(html), "reconcileArchived is detached and single-flight");
+    assert(/folder listing failed \(\$\{listErr/.test(html) && /Trying again in 10 minutes/.test(html), "a failing folder listing skips that candidate");
+  });
+
   await t("effort tiers: title/description use MODEL.effort; tags and Shopify parts use the light tier", () => {
     const fx = L.buildFacts({ listingDesc: "Pine Tree Charm Beady Necklace" });
     assert.strictEqual(L.titleRequest({ facts: fx, rules: "" }).effort, undefined);      // falls back to MODEL.effort

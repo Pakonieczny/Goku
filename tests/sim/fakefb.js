@@ -60,7 +60,7 @@
   // Storage: window.__storage maps a folder path -> { prefixes: [names], items: [names] }; every listAll is logged in window.__listCalls.
   window.__storage = window.__storage || {}; window.__listCalls = window.__listCalls || [];
   const sref = (path) => { path = path || ''; return { name: path.split('/').pop(), fullPath: path, child: (n) => sref(path ? path + '/' + n : n), put: () => Promise.resolve({ ref: sref(path) }), getDownloadURL: () => Promise.resolve('about:blank'),
-    listAll: () => { window.__listCalls.push(path); if (window.__hang && window.__hang[path]) return new Promise(() => {}); const e = window.__storage[path] || { prefixes: [], items: [] }; return Promise.resolve({ prefixes: e.prefixes.map(n => sref(path + '/' + n)), items: e.items.map(n => sref(path + '/' + n)) }); }, delete: () => Promise.resolve() }; };
+    listAll: () => { window.__listCalls.push(path); if (window.__hang && window.__hang[path]) return new Promise(() => {}); if (window.__fail && window.__fail[path]) return Promise.reject(Object.assign(new Error('HTTP 500'), { code: 'storage/unknown' })); const e = window.__storage[path] || { prefixes: [], items: [] }; return Promise.resolve({ prefixes: e.prefixes.map(n => sref(path + '/' + n)), items: e.items.map(n => sref(path + '/' + n)) }); }, delete: () => Promise.resolve() }; };
   window.firebase = { initializeApp() {}, apps: [1], auth: () => auth, firestore: fsFn, storage: () => ({ ref: (p) => sref(p) }), app: () => ({}) };
   window.firebase.firestore.FieldValue = FieldValue; window.firebase.firestore.Timestamp = Timestamp; window.firebase.firestore.FieldPath = fsFn.FieldPath;
   window.firebase.auth.Auth = { Persistence: { LOCAL: 'local', SESSION: 'session', NONE: 'none' } };

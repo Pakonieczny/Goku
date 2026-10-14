@@ -11666,7 +11666,12 @@ ANTI-REPETITION (TITLE)
             // (the tab died between the archive and the final write) only needs
             // its last bookkeeping step — no listing work, no Etsy calls.
             if (window.PipeGuard && window.autoProcessingEnabled && (!window.PipeControl || window.PipeControl.mayRun("scan"))) {
-                try { await window.PipeGuard.reconcileArchived(processedNames); } catch (_) {}
+                // Finishing the archive of half-moved sets downloads and re-uploads every image and retries on storage errors,
+                // which took MINUTES here and held the whole scan (so nothing started). It runs on its own, one at a time.
+                if (!window.__reconcileRunning) {
+                    window.__reconcileRunning = true;
+                    Promise.resolve(window.PipeGuard.reconcileArchived(processedNames)).catch(() => {}).then(() => { window.__reconcileRunning = false; });
+                }
             }
             
             // Use the shared routeFolderName() helper to avoid substring
@@ -11881,7 +11886,16 @@ ANTI-REPETITION (TITLE)
                         // writes a manifest.json next to the slot images;
                         // exclude it from the count so the threshold reflects
                         // image slots only.
-                        const setFiles = (__pre.has(setName) ? await __pre.get(setName) : null) || await setRef.listAll();
+                        let setFiles = __pre.has(setName) ? await __pre.get(setName) : null;
+                        if (!setFiles) {
+                            try { setFiles = await setRef.listAll(); }
+                            catch (listErr) {
+                                // Storage answered with an error (e.g. HTTP 500) for this one folder: skip it for now, keep scanning.
+                                console.warn(`Skipping ${setName}: folder listing failed (${listErr && listErr.message}). Trying again in 10 minutes.`);
+                                window.__incompleteSetsTracker[setName] = now;
+                                continue;
+                            }
+                        }
                         const imageItems = setFiles.items.filter(
                           (it) => !/manifest\.json$/i.test(it.name)
                         );
