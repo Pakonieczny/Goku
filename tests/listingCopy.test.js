@@ -116,6 +116,15 @@ const stub = (replies) => { let i = 0; const calls = []; const fn = async (req) 
     assert(/plain safe version used \(\$\{reason\}\)|plain safe version used \(/.test(html), "panel names the reason");
   });
 
+  await t("version check: build id in Index.html matches assets/build.json; stale pages reload when idle and never take over", () => {
+    const id = html.match(/window\.APP_BUILD = "([0-9T]+)";/);
+    assert(id, "APP_BUILD present");
+    const file = JSON.parse(fs.readFileSync(path.join(__dirname, "..", "assets", "build.json"), "utf8"));
+    assert.strictEqual(file.build, id[1], "run scripts/stamp-build.sh before committing");
+    assert(/if \(window\.__staleBuild\) return;/.test(html), "a stale page never auto-takes over");
+    assert(/setInterval\(check, 120000\)/.test(html) && /reloadGuardOk/.test(html));
+  });
+
   await t("effort tiers: title/description use MODEL.effort; tags and Shopify parts use the light tier", () => {
     const fx = L.buildFacts({ listingDesc: "Pine Tree Charm Beady Necklace" });
     assert.strictEqual(L.titleRequest({ facts: fx, rules: "" }).effort, undefined);      // falls back to MODEL.effort

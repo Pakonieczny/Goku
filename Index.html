@@ -56,6 +56,60 @@
 })();
 </script>
 <!-- TIMER_SHIM_END -->
+<!-- APP_BUILD_START -->
+<script id="appBuild">
+// Version check. Several computers (and long-lived tabs) run this page, and a computer can now take work over from
+// another automatically, so a tab still running OLD code could end up doing the work. Every tab compares its build with
+// the deployed one (a tiny file, every 2 minutes) and, as soon as it is idle, reloads itself. A stale tab never takes
+// control from another computer.
+window.APP_BUILD = "20261014T015642";
+(function () {
+  var URL_ = function () { return window.APP_BUILD_URL || ("assets/build.json?t=" + Date.now()); };
+  function idle() {
+    try {
+      if (window.isProcessingSet) return false;
+      var jobs = JSON.parse(localStorage.getItem("etsyUploadJobs") || "[]") || [];
+      for (var i = 0; i < jobs.length; i++) { var j = JSON.parse(localStorage.getItem("etsyJob:" + jobs[i]) || "null"); if (j && j.status === "RUNNING") return false; }
+      if (window.__descriptionApproval && window.__descriptionApproval.pending) return false;
+      var a = document.activeElement;
+      if (a && /^(INPUT|TEXTAREA|SELECT)$/.test(a.tagName) && String(a.value || "").trim()) return false;   // someone is typing
+      return true;
+    } catch (_) { return false; }
+  }
+  function reloadGuardOk() {
+    try {
+      var r = JSON.parse(sessionStorage.getItem("lgBuildReloads") || "[]").filter(function (t) { return Date.now() - t < 600000; });
+      if (r.length >= 3) return false;                      // never loop
+      r.push(Date.now()); sessionStorage.setItem("lgBuildReloads", JSON.stringify(r)); return true;
+    } catch (_) { return true; }
+  }
+  var tickT = 0;
+  function whenIdleReload() {
+    if (!window.__staleBuild) return;
+    if (idle() && reloadGuardOk()) { (window.__reloadPage || function () { location.reload(); })(); return; }
+    clearTimeout(tickT); tickT = setTimeout(whenIdleReload, 5000);
+  }
+  async function check() {
+    try {
+      var r = await fetch(URL_(), { cache: "no-store" });
+      if (!r.ok) return { ok: false };
+      var j = await r.json();
+      if (j && j.build && String(j.build) !== String(window.APP_BUILD)) {
+        if (!window.__staleBuild) { try { if (window.M && M.toast) M.toast({ html: "A new version is available. This page refreshes when it is idle." }); } catch (_) {} }
+        window.__staleBuild = String(j.build);
+        whenIdleReload();
+        return { ok: true, stale: true };
+      }
+      return { ok: true, stale: false };
+    } catch (_) { return { ok: false }; }
+  }
+  window.__buildCheckNow = check;
+  setTimeout(check, 20000);
+  setInterval(check, 120000);
+  document.addEventListener("visibilitychange", function () { if (!document.hidden) check(); });
+})();
+</script>
+<!-- APP_BUILD_END -->
   <title>Etsy Listing Generator & Shop Listings</title>
 <!-- ══ Tab icon ═══════════════════════════════════════════════════════════
      Part of the Brites station suite: one velvet tile, one solid gold mark,
@@ -14976,6 +15030,7 @@ ANTI-REPETITION (TITLE)
           const r = role();
           if ((r !== "follower" && r !== "solo") || yielding) return;
           if (r === "solo" && !claimable()) return;                                  // no cloud: nothing to take over from
+          if (window.__staleBuild) return;                       // an out-of-date page never takes work over (it reloads itself when idle)
           const c = ctrl();
           const dead = !c || !c.alive;
           const hiddenCtl = false;     // a background tab is not a stopped tab (its timers run in a worker), so it is never taken from
