@@ -34,6 +34,13 @@ const stub = (replies) => { let i = 0; const calls = []; const fn = async (req) 
     assert.strictEqual((html.match(/BEADED CHAIN PROPORTION \(APPLIES ONLY/g) || []).length, 1);
   });
 
+  await t("Etsy upload no longer calls the pricing functions", () => {
+    assert(!/fetch[A-Za-z]*\(\s*"\/\.netlify\/functions\/etsyPricingApply/.test(html), "pricing call still present");
+    assert(!/runPricingWatcher|Pricing failed — see Pricing Console/.test(html));
+    assert(/Stage 4 \(Etsy pricing \/ variation rebuild\): REMOVED/.test(html));
+    assert(/save\(\{ status: "DONE", stage: "DONE"/.test(html));
+  });
+
   await t("effort tiers: title/description high; tags and Shopify parts medium", () => {
     const fx = L.buildFacts({ listingDesc: "Pine Tree Charm Beady Necklace" });
     assert.strictEqual(L.titleRequest({ facts: fx, rules: "" }).effort, undefined);      // falls back to MODEL.effort = high
