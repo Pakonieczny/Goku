@@ -95,6 +95,27 @@ const stub = (replies) => { let i = 0; const calls = []; const fn = async (req) 
     assert(/folder listing failed \(\$\{listErr/.test(html) && /Trying again in 10 minutes/.test(html), "a failing folder listing skips that candidate");
   });
 
+  await t("Shopify description: plain HTML answer accepted, JSON-wrapped and broken-JSON answers still read, reason shown on fallback", async () => {
+    const f = L.buildFacts({ listingDesc: "Arrowhead Charm Beady Necklace" });
+    const body = "<p>" + "A flat arrowhead charm cut from sheet metal and finished by hand, hanging from a beaded ball chain. ".repeat(3) + "</p><ul><li>Sterling silver, gold filled or solid gold</li><li>Handmade</li><li>Back engraving</li><li>Gift ready</li></ul>";
+    const run = (answer) => L.runShopifyPart({ part: "description", facts: f, callText: async () => answer });
+    let r = await run(body);
+    assert.strictEqual(r.fallback, false); assert(/arrowhead/i.test(r.values.description_html));
+    r = await run("```html\n" + body + "\n```");
+    assert.strictEqual(r.fallback, false);
+    r = await run(JSON.stringify({ description_html: body }));
+    assert.strictEqual(r.fallback, false);
+    r = await run('{"description_html": "<p>' + "A flat arrowhead charm cut from sheet metal. ".repeat(6) + '</p>\n<ul>\n<li>Handmade</li>\n</ul>"}');          // raw line breaks inside the JSON string
+    assert.strictEqual(r.fallback, false, JSON.stringify(r.log));
+    r = await run("");
+    assert.strictEqual(r.fallback, true); assert(/returned nothing/.test(r.log[0].problems[0]));
+    r = await run("<p>" + "This is a pine bead charm with festive bead accents and more words here. ".repeat(4) + "</p>");
+    assert.strictEqual(r.fallback, true); assert(/bead/.test(r.log[0].problems[0]));
+    const calls = []; await L.runShopifyPart({ part: "description", facts: f, callText: async (req) => { calls.push(req); return body; } });
+    assert(/Return ONLY the product description as HTML/.test(calls[0].user) && !/STRICT JSON/.test(calls[0].user));
+    assert(/plain safe version used \(\$\{reason\}\)|plain safe version used \(/.test(html), "panel names the reason");
+  });
+
   await t("effort tiers: title/description use MODEL.effort; tags and Shopify parts use the light tier", () => {
     const fx = L.buildFacts({ listingDesc: "Pine Tree Charm Beady Necklace" });
     assert.strictEqual(L.titleRequest({ facts: fx, rules: "" }).effort, undefined);      // falls back to MODEL.effort

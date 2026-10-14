@@ -19540,7 +19540,7 @@ const ListingCopy = (function () {
     const f = o.facts, part = o.part || "all";
     const keys = part === "all" ? [].concat(SHOPIFY_PARTS.titles, SHOPIFY_PARTS.description, SHOPIFY_PARTS.tags) : SHOPIFY_PARTS[part];
     const arr = k => (k === "tags" || k === "theme_keywords");
-    const schema = "{" + keys.map(k => `"${k}":${arr(k) ? '["..."]' : '"..."'}`).join(",") + "}";
+    const schema = part === "description" ? "" : "{" + keys.map(k => `"${k}":${arr(k) ? '["..."]' : '"..."'}`).join(",") + "}";
     const user = [
       "You are generating fields for a LIVE Shopify product at Brites Jewelry (handmade personalized charm jewelry, britesjewelry.com). The copy must also feed Google Shopping / Merchant Center cleanly.",
       factsBlock(f),
@@ -19549,7 +19549,9 @@ const ListingCopy = (function () {
       o.productTitle ? `- Shopify product title already chosen: ${o.productTitle}` : "",
       o.keyPhrases ? `- Key phrases: ${o.keyPhrases}` : "",
       "",
-      "Return STRICT JSON only, no fences:",
+      part === "description"
+        ? "Return ONLY the product description as HTML (the <p> paragraphs and the <ul> list). No JSON, no code fences, no commentary."
+        : "Return STRICT JSON only, no fences:",
       schema,
       "",
       "RULES:",
@@ -19557,7 +19559,7 @@ const ListingCopy = (function () {
       o.problems && o.problems.length ? `YOUR PREVIOUS ATTEMPT WAS REJECTED because: ${o.problems.join("; ")}. Fix every point.` : "",
       o.notes || ""
     ].filter(x => x !== "").join("\n");
-    return { system: "Return STRICT JSON only.", user, maxTokens: 5000, label: "Shopify " + part, effort: MODEL.effortLight };
+    return { system: part === "description" ? "Return ONLY the HTML description." : "Return STRICT JSON only.", user, maxTokens: 5000, label: "Shopify " + part, effort: MODEL.effortLight };
   }
 
   function truncWords(s, n) {
@@ -19570,9 +19572,16 @@ const ListingCopy = (function () {
   const stripHtml = h => String(h || "").replace(/<[^>]*>/g, " ").replace(/\s+/g, " ").trim();
   const METAL_IN_TITLE = /[,|]|\b(sterling|silver|gold|filled|10k|14k)\b/i;
 
+  // Tolerant: code fences, text around the object, and raw line breaks / tabs inside strings (the usual way HTML in a
+  // JSON string breaks) are all repaired before giving up.
   function parseJson(t) {
     const s = String(t || "").replace(/```json|```/g, "").trim();
-    try { return JSON.parse(s); } catch (_) { const m = s.match(/\{[\s\S]*\}/); return m ? JSON.parse(m[0]) : null; }
+    const tries = [s];
+    const m = s.match(/\{[\s\S]*\}/);
+    if (m && m[0] !== s) tries.push(m[0]);
+    for (const c of tries.slice()) tries.push(c.replace(/[\r\n\t]+/g, " "));
+    for (const c of tries) { try { return JSON.parse(c); } catch (_) {} }
+    return null;
   }
 
   function shopifyFallback(f) {
@@ -19604,7 +19613,7 @@ const ListingCopy = (function () {
       if (SALE.test(String(x.google_title || "")) || /\bgift\b/i.test(String(x.google_title || ""))) p.push("google_title has gift/sale wording");
     } else if (part === "description") {
       const txt = stripHtml(x.description_html);
-      if (txt.length < 300) p.push("description_html is too short (500-1000 characters)");
+      if (txt.length < 150) p.push("description_html is too short (500-1000 characters)");
       commonProblems(txt, f).forEach(m => p.push(`description_html ${m}`));
     } else if (part === "tags") {
       const tags = Array.isArray(x.tags) ? x.tags : [];
@@ -19634,11 +19643,18 @@ const ListingCopy = (function () {
     const f = o.facts, part = o.part, keys = SHOPIFY_PARTS[part], log = [];
     let problems = [], parsed = null;
     for (let a = 1; a <= (o.maxAttempts || 1); a++) {
-      let x = null;
-      try { x = parseJson(await o.callText(Object.assign(shopifyRequest({ facts: f, part, etsyTitle: o.etsyTitle, productTitle: o.productTitle, keyPhrases: o.keyPhrases, notes: o.notes, problems, hasImage: !!o.image }), o.image ? { image: o.image } : {}))); }
-      catch (e) { problems = ["response was not valid JSON"]; log.push({ attempt: a, problems }); continue; }
+      let x = null, raw = "";
+      try {
+        raw = String(await o.callText(Object.assign(shopifyRequest({ facts: f, part, etsyTitle: o.etsyTitle, productTitle: o.productTitle, keyPhrases: o.keyPhrases, notes: o.notes, problems, hasImage: !!o.image }), o.image ? { image: o.image } : {})) || "");
+      } catch (e) { problems = ["the model call failed: " + String((e && e.message) || e).slice(0, 100)]; log.push({ attempt: a, problems }); continue; }
+      if (part === "description") {
+        // Plain HTML is what is asked for; an answer wrapped in JSON is still understood.
+        const j = /^\s*(```(?:json)?\s*)?\{/.test(raw) ? parseJson(raw) : null;
+        const html = (j && typeof j.description_html === "string" ? j.description_html : raw).replace(/```html|```/g, "").trim();
+        x = html ? { description_html: html } : null;
+      } else x = parseJson(raw);
       parsed = x ? normalizeShopify(x, keys) : null;
-      problems = parsed ? validateShopifyPart(parsed, f, part) : ["response was not valid JSON"];
+      problems = parsed ? validateShopifyPart(parsed, f, part) : [raw.trim() ? "the answer could not be read" : "the model returned nothing"];
       log.push({ attempt: a, problems });
       if (!problems.length) return { values: parsed, fallback: false, attempts: a, log };
     }
@@ -24400,9 +24416,9 @@ https://www.etsy.com/your/shops/me/listing-editor/edit/1822973998
       if (m) m.textContent = msg || "";
     }
     // One-line status from a generator result: "passed checks · 2 tries · photo used · 94 chars"
-    function copyStatusLine(res, extra, hadImage) {
+    function copyStatusLine(res, extra, hadImage, reason) {
       const tries = res.attempts + (res.attempts === 1 ? " try" : " tries");
-      const head = res.fallback ? "empty answer, plain safe version used" : (res.repaired ? "generated, cleaned locally" : "generated");
+      const head = res.fallback ? (reason ? `plain safe version used (${reason})` : "empty answer, plain safe version used") : (res.repaired ? "generated, cleaned locally" : "generated");
       const state = res.fallback ? "fallback" : (res.repaired ? "retry" : "ok");
       return { state, msg: [head, tries, hadImage ? "photo used" : "text only", extra].filter(Boolean).join(" · ") };
     }
@@ -24436,7 +24452,9 @@ https://www.etsy.com/your/shops/me/listing-editor/edit/1822973998
         }
         applyShopifyPart(part, res.values, etsyTags);
         const extra = part === "titles" ? `${(res.values.seo_title || "").length}/60 SEO` : part === "description" ? `${String(res.values.description_html || "").replace(/<[^>]*>/g, " ").trim().length} chars` : `${(res.values.tags || []).length} tags`;
-        const st = copyStatusLine(res, extra, !!img);
+        // Say WHY a part fell back (the last check that failed), not a generic "empty answer".
+        const why = res.fallback && res.log && res.log.length ? String((res.log[res.log.length - 1].problems || [])[0] || "").slice(0, 90) : "";
+        const st = copyStatusLine(res, extra, !!img, why);
         setCopyStatus(sec, st.state, st.msg);
         return res;
       };
