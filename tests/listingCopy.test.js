@@ -50,22 +50,6 @@ const stub = (replies) => { let i = 0; const calls = []; const fn = async (req) 
     new vm.Script(shim);
   });
 
-  await t("speed: retries run at low effort, at most 2 attempts per title/description, token caps and timeouts tightened", async () => {
-    const f = L.buildFacts({ listingDesc: "Christmas Ornament Charm Beady Necklace" });
-    const efforts = [];
-    const spy = async (req) => { efforts.push(req.effort); return "Beaded Ornament Necklace Bead Charm"; };   // always invalid
-    const r = await L.runTitle({ callText: spy, facts: f, rules: "", recent: [] });
-    assert.strictEqual(efforts.length, 2);
-    assert.strictEqual(efforts[0], undefined);          // first attempt: default (medium)
-    assert.strictEqual(efforts[1], "low");              // retry: low
-    assert.strictEqual(r.fallback, true);
-    const d = [];
-    await L.runDescription({ callText: async (req) => { d.push(req.effort); return "bad bead bead."; }, facts: f, rules: "", title: "x" });
-    assert.strictEqual(d.length, 2); assert.strictEqual(d[1], "low");
-    assert(L.titleRequest({ facts: f, rules: "" }).maxTokens <= 3000 && L.tagsRequest({ facts: f, rules: "" }).maxTokens <= 3000);
-    assert(/timeoutMs: 90000, maxRetries: 1/.test(html));
-  });
-
   await t("effort tiers: title/description medium (retries low); tags and Shopify parts low", () => {
     const fx = L.buildFacts({ listingDesc: "Pine Tree Charm Beady Necklace" });
     assert.strictEqual(L.titleRequest({ facts: fx, rules: "" }).effort, undefined);      // falls back to MODEL.effort = medium
@@ -185,83 +169,6 @@ const stub = (replies) => { let i = 0; const calls = []; const fn = async (req) 
     assert(L.repairTitle("Pine Tree Charm Necklace, " + "Sterling Silver, ".repeat(20)).length <= 140);
   });
 
-  await t("runTitle: bad first answer is rejected with feedback, good second is used", async () => {
-    const call = stub(["Beaded Christmas Ornament Necklace, Pine Bead Charm, Perfect Gift", "Christmas Ornament Charm Necklace, Sterling Silver or 14K Gold Filled, Flat Holiday Pendant, Ball Chain"]);
-    const r = await L.runTitle({ callText: call, facts: f, rules: "", recent: [] });
-    assert.strictEqual(r.fallback, false);
-    assert.strictEqual(r.attempts, 2);
-    assert(/REJECTED/.test(call.calls[1].user) && /beaded/i.test(call.calls[1].user));
-    assert(!/bead/i.test(r.title));
-  });
-
-  await t("runTitle: model that keeps failing gets the plain deterministic title, never banned words", async () => {
-    const r = await L.runTitle({ callText: stub(["Beaded Ornament Necklace Bead Charm"]), facts: f, rules: "", recent: [] });
-    assert.strictEqual(r.fallback, true);
-    assert.strictEqual(L.validateEtsyTitle(r.title, f).length, 0, L.validateEtsyTitle(r.title, f).join("|"));
-    assert(r.title.startsWith("Christmas Ornament Charm Necklace"));
-  });
-
-  await t("diversity guard: replica of a recent title is retried with the recent titles shown", async () => {
-    const recentTitle = "Pine Tree Charm Necklace, Sterling Silver, Gold Filled, 10K or 14K Solid Gold, Flat Pendant, Ball Chain";
-    const call = stub([
-      "Christmas Ornament Charm Necklace, Sterling Silver, Gold Filled, 10K or 14K Solid Gold, Flat Pendant, Ball Chain",
-      "14K Solid Gold Christmas Ornament Necklace Charm, Flat Round Bauble, Also in Sterling Silver"
-    ]);
-    const r = await L.runTitle({ callText: call, facts: f, rules: "", recent: [{ title: recentTitle, motif: "Pine Tree" }] });
-    assert.strictEqual(r.attempts, 2);
-    assert(/near-duplicate/.test(call.calls[1].user));
-    assert(call.calls[0].user.includes(recentTitle), "recent title should be shown to the model up front");
-    assert.notStrictEqual(r.title, "Christmas Ornament Charm Necklace, Sterling Silver, Gold Filled, 10K or 14K Solid Gold, Flat Pendant, Ball Chain");
-  });
-
-  await t("diversity guard: a template-y stub over 6 different pieces yields 6 non-duplicate titles", async () => {
-    const motifs = ["Westie Terrier", "Sunflower", "Hummingbird", "Pine Tree", "Sea Turtle", "Crescent Moon"];
-    const recent = [];
-    const out = [];
-    for (const motif of motifs) {
-      const facts = L.buildFacts({ listingDesc: `${motif} Charm Beady Necklace` });
-      // A lazy "model": first answer always the same template, second answer a different structure.
-      const lazy = `${motif} Charm Necklace, Sterling Silver, Gold Filled, 10K or 14K Solid Gold, Flat Pendant, Ball Chain`;
-      const varied = [`${motif} Necklace Charm in 14K Solid Gold, Flat Cutout`, `Flat ${motif} Charm Necklace, Gold Filled or Sterling Silver`, `10K Solid Gold ${motif} Pendant Necklace, Flat Charm`, `${motif} Charm Necklace on Ball Chain, Dainty Flat Shape, Solid Gold`, `Sterling Silver ${motif} Pendant, Flat Charm for Everyday Wear, Ball Chain`, `${motif} Necklace for Layering, Gold Filled or 14K Solid Gold, Flat Charm`][out.length];
-      const r = await L.runTitle({ callText: stub([lazy, varied, varied]), facts, rules: "", recent });
-      recent.unshift({ title: r.title, motif });
-      out.push(r.title);
-    }
-    for (let i = 0; i < out.length; i++) for (let j = i + 1; j < out.length; j++) {
-      const s = L.mostSimilar(out[i], motifs[i], [{ title: out[j], motif: motifs[j] }]).score;
-      assert(s < L.SIMILARITY_LIMIT, `titles ${i}/${j} too similar (${s}): ${out[i]} // ${out[j]}`);
-    }
-  });
-
-  await t("runDescription: beaded wording retried; last-attempt sentence repair; fallback is bead-free", async () => {
-    const good = "A flat Christmas ornament charm cut from sheet metal, with a rounded cap and a clean, polished face. It hangs from a beaded ball chain that sits close at the collarbone, so it layers easily with other necklaces. A thoughtful choice for anyone who keeps a little holiday spirit all year round, and back engraving is available.";
-    const bad = "This Christmas ornament charm has festive bead accents and a pine bead. " + good;
-    const call = stub([bad, good]);
-    const r = await L.runDescription({ callText: call, facts: f, rules: "", title: "x" });
-    assert.strictEqual(r.attempts, 2); assert(!r.fallback);
-    assert(!/pine bead|festive bead|bead accents/i.test(r.text));
-    // repair path
-    const r2 = await L.runDescription({ callText: stub([bad]), facts: f, rules: "", title: "x" });
-    assert(r2.repaired, "should sentence-repair on last attempt");
-    assert(!/festive bead|pine bead/i.test(r2.text));
-    // fallback path
-    const r3 = await L.runDescription({ callText: stub(["Beaded beads beads. Pearl bead."]), facts: f, rules: "", title: "x" });
-    assert(r3.fallback);
-    assert(L.validateDescription(r3.text, f, "").filter(p => !/only \d+ chars/.test(p)).length === 0, L.validateDescription(r3.text, f, "").join("|"));
-    assert(!L.findBeadMisuse(r3.text, f));
-  });
-
-  await t("runTags: rejected tags are topped up in extra rounds; result has 13 valid tags", async () => {
-    const r1 = "christmas ornament\nornament charm\nbeaded necklace\npine bead\nsnow brooch\nholiday decor\nxmas decoration charm necklace\nflat bauble pendant\ntree trimming charm\nsanta locket\nwinter holiday\nround ornament\nseasonal jewelry";
-    const r2 = "xmas jewelry\nchristmas gift idea\nbauble style\ntree hanger look\nfestive pendant";
-    const call = stub([r1, r2]);
-    const r = await L.runTags({ callText: call, facts: f, rules: "" });
-    assert.strictEqual(r.tags.length, 13);
-    assert(r.tags.every(x => x.length <= 20 && !/bead|brooch|locket/.test(x)));
-    assert.strictEqual(new Set(r.tags.map(x => x.toLowerCase())).size, 13);
-    assert(/Rejected, avoid/.test(call.calls[1].user));
-  });
-
   await t("runShopify: valid JSON passes; lengths trimmed; bead copy replaced; bad JSON falls back", async () => {
     const good = { title: "Christmas Ornament Charm Necklace", seo_title: "Christmas Ornament Charm Necklace, Flat Charm in Gold or Silver Metals", meta_description: "Flat Christmas ornament charm necklace in sterling silver, gold filled or solid gold. Handmade in small batches, with optional back engraving, on a ball chain. " + "x".repeat(40), google_title: "Christmas Ornament Charm Necklace, Sterling Silver, Flat Charm, Ball Chain", description_html: "<p>" + "A flat Christmas ornament charm cut from sheet metal and finished by hand. ".repeat(3) + "</p><ul><li>Sterling silver, gold filled or solid gold</li><li>Handmade</li><li>Optional back engraving</li><li>Gift ready</li></ul>", tags: ["christmas", "ornament"], theme_keywords: ["christmas"] };
     const ok = await L.runShopify({ callText: stub([JSON.stringify(good)]), facts: f, etsyTitle: "" });
@@ -323,24 +230,6 @@ const stub = (replies) => { let i = 0; const calls = []; const fn = async (req) 
     assert.strictEqual(L.reviewReport([]).weak.length, 0);
   });
 
-  await t("Shopify parts generate independently: a bad description does not touch the titles or tags", async () => {
-    const titles = { title: "Christmas Ornament Charm Necklace", seo_title: "Christmas Ornament Charm Necklace", meta_description: "Flat Christmas ornament charm necklace in sterling silver, gold filled or solid gold on a beady chain.", google_title: "Christmas Ornament Charm Necklace, Sterling Silver, Flat Charm" };
-    const goodDesc = { description_html: "<p>" + "A flat Christmas ornament charm cut from sheet metal and finished by hand. ".repeat(4) + "</p>" };
-    const badDesc = { description_html: "<p>" + "A pine bead charm with festive bead accents. ".repeat(10) + "</p>" };
-    const tags = { tags: ["christmas ornament", "holiday charm", "beady chain", "xmas jewelry", "bauble charm"], theme_keywords: ["christmas"] };
-    const seen = [];
-    const call = async (req) => { seen.push(req.label); return JSON.stringify(/Shopify titles/.test(req.label) ? titles : /Shopify description/.test(req.label) ? badDesc : tags); };
-    const r = await L.runShopify({ callText: call, facts: f, etsyTitle: "" });
-    assert.deepStrictEqual(Array.from(seen).sort(), ["Shopify description", "Shopify description", "Shopify tags", "Shopify titles"]);
-    assert.strictEqual(r.parts.titles.fallback, false);
-    assert.strictEqual(r.parts.tags.fallback, false);
-    assert.strictEqual(r.parts.description.fallback, true);
-    assert(!/bead/i.test(r.description_html.replace(/beaded ball chain/gi, "")));
-    assert.strictEqual(r.title, "Christmas Ornament Charm Necklace");
-    assert.strictEqual(L.shopifyRequest({ facts: f, part: "tags" }).user.includes("description_html"), false);
-    assert.strictEqual(L.runShopifyPart && L.SHOPIFY_PARTS.titles.length, 4);
-  });
-
   await t("Index.html: Listing Copy panel lives in the Generated Output card (not the hidden Shopify host) and upload reads it", () => {
     const panel = html.match(/async function generateShopifyCopy[\s\S]*?\n    function applyShopifyPart/)[0];
     assert(/runShopifyPart/.test(panel));
@@ -348,6 +237,47 @@ const stub = (replies) => { let i = 0; const calls = []; const fn = async (req) 
     assert(/getElementById\("dCardOutput"\)/.test(mk) && !/getElementById\("dShopifyUploadsHost"\)/.test(mk));
     assert(/window\.shopifyCopyForUpload\(category\)/.test(html));
     for (const id of ["etsy_title", "etsy_desc", "etsy_tags", "sh_titles", "sh_description", "sh_tags"]) assert(html.includes(id), id);
+  });
+
+  await t("ONE model call per section: title, description, tags, each Shopify part", async () => {
+    const f = L.buildFacts({ listingDesc: "Christmas Ornament Charm Beady Necklace" });
+    const n = { title: 0, desc: 0, tags: 0 };
+    await L.runTitle({ callText: async () => { n.title++; return "Beaded Christmas Ornament Necklace, Pine Bead Charm, Perfect Gift"; }, facts: f, rules: "", recent: [] });
+    await L.runDescription({ callText: async () => { n.desc++; return "bad bead bead."; }, facts: f, rules: "", title: "x" });
+    await L.runTags({ callText: async () => { n.tags++; return "beaded necklace\npine bead"; }, facts: f, rules: "" });
+    assert.deepStrictEqual(JSON.stringify(n), JSON.stringify({ title: 1, desc: 1, tags: 1 }));
+    const seen = [];
+    await L.runShopify({ callText: async (req) => { seen.push(req.label); return "not json"; }, facts: f, etsyTitle: "" });
+    assert.strictEqual(JSON.stringify(seen.sort()), JSON.stringify(["Shopify description", "Shopify tags", "Shopify titles"]));
+  });
+
+  await t("no-wait cleanup: bead words scrubbed locally from the title, chain wording kept; offending sentences dropped; tags filtered", async () => {
+    const f = L.buildFacts({ listingDesc: "Pine Tree Charm Beady Necklace" });
+    const r = await L.runTitle({ callText: async () => "Beaded Pine Tree Charm Necklace on Beaded Chain, Sterling Silver, Flat Pendant", facts: f, rules: "", recent: [] });
+    assert(!/Beaded Pine/.test(r.title) && /on Beaded Chain/.test(r.title), r.title);
+    assert.strictEqual(r.attempts, 1); assert.strictEqual(r.fallback, false);
+    const keepSentence = "A flat pine tree charm cut from sheet metal, hanging from a beady ball chain at the collarbone, easy to layer with other necklaces for everyday wear.";
+    const d = await L.runDescription({ callText: async () => "This pine charm has festive bead accents. " + keepSentence + " It suits tree lovers and anyone who enjoys the outdoors.", facts: f, rules: "", title: "x" });
+    assert(!/festive bead/.test(d.text) && /flat pine tree charm/.test(d.text) && d.repaired && !d.fallback);
+    const tg = await L.runTags({ callText: async () => "pine tree charm\nbeaded necklace\npine bead\nbeady chain necklace\nsnow brooch\nevergreen pendant\nforest lover gift", facts: f, rules: "" });
+    assert.strictEqual(JSON.stringify(tg.tags), JSON.stringify(["pine tree charm", "beady chain necklace", "evergreen pendant", "forest lover gift"]));
+    // empty model answer -> plain template, still one call
+    const e = await L.runTitle({ callText: async () => "", facts: f, rules: "", recent: [] });
+    assert.strictEqual(e.fallback, true);
+  });
+
+  await t("diversity is prompt-only now: recent titles are shown to the model, no re-call", async () => {
+    const f = L.buildFacts({ listingDesc: "Christmas Ornament Charm Beady Necklace" });
+    const calls = [];
+    await L.runTitle({ callText: async (req) => { calls.push(req); return "Christmas Ornament Charm Necklace, Sterling Silver, Flat Pendant, Ball Chain"; }, facts: f, rules: "", recent: [{ title: "Pine Tree Charm Necklace, Sterling Silver, Flat Pendant, Ball Chain", motif: "Pine Tree" }] });
+    assert.strictEqual(calls.length, 1);
+    assert(calls[0].user.includes("Pine Tree Charm Necklace, Sterling Silver, Flat Pendant, Ball Chain"));
+  });
+
+  await t("speed settings: medium/low effort, no validation re-calls, tight token caps and timeout", () => {
+    const f = L.buildFacts({ listingDesc: "Christmas Ornament Charm Beady Necklace" });
+    assert(L.titleRequest({ facts: f, rules: "" }).maxTokens <= 3000 && L.tagsRequest({ facts: f, rules: "" }).maxTokens <= 3000);
+    assert(/timeoutMs: 60000, maxRetries: 1/.test(html));
   });
 
   await t("fallback title/description/shopify fields are valid and bead-free for every category and several designs", () => {

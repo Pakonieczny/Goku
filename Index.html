@@ -19333,70 +19333,57 @@ const ListingCopy = (function () {
   }
 
   // ------------------------------------------------------------ generators
+  // ONE model call per section, no re-calls. Whatever the model returns is used after instant, local,
+  // zero-cost cleanup (no extra network round trips): bead words scrubbed, offending sentences dropped,
+  // bad tags filtered. Only an empty result falls back to the plain template.
+
+  // Remove bead/pearl words that describe the charm (chain wording on a beady necklace is kept).
+  function scrubBeads(text, facts) {
+    let t = String(text || "");
+    const keep = [];
+    if (facts && facts.chain && facts.chain.beaded) t = t.replace(CHAIN_OK, m => { keep.push(m); return "\u0001" + (keep.length - 1) + "\u0001"; });
+    t = t.replace(/\b(?:beads?|beaded|beady|beading|beadwork|pearls?|pearled)\b\s*/gi, "");
+    t = t.replace(/\u0001(\d+)\u0001/g, (_, i) => keep[Number(i)]);
+    return t.replace(/\s{2,}/g, " ").replace(/\s+([,:;.])/g, "$1").trim();
+  }
+
   async function runTitle(o) {
-    const facts = o.facts, log = [];
-    let problems = [], previous = "";
-    const maxAttempts = o.maxAttempts || 2;
-    for (let a = 1; a <= maxAttempts; a++) {
-      const req = titleRequest({ facts, rules: o.rules, keyPhrases: o.keyPhrases, notes: o.notes, avoid: o.recent, salt: o.salt || a, problems, previous, hasImage: !!o.image });
-      if (o.image) req.image = o.image;
-      if (a > 1) req.effort = MODEL.effortLight;      // a retry carries exact feedback: no need to think hard again
-      let raw = (await o.callText(req)) || "";
-      let t = repairTitle(raw.split(/\n/).find(x => x.trim()) || "");
-      let probs = validateEtsyTitle(t, facts);
-      if (!probs.length) {
-        const sim = mostSimilar(t, facts.motif, o.recent);
-        if (sim.score >= SIMILARITY_LIMIT) probs = [`is a near-duplicate of "${sim.title}" (same template; change structure and wording)`];
-      }
-      log.push({ attempt: a, title: t, problems: probs });
-      if (!probs.length) return { title: t, fallback: false, attempts: a, log };
-      problems = probs; previous = t;
-    }
-    // Out of attempts. A near-duplicate-only failure is still a safe title; keep it. Anything else -> fallback.
-    const last = log[log.length - 1];
-    if (last.title && last.problems.every(p => /near-duplicate/.test(p)) && !validateEtsyTitle(last.title, facts).length) {
-      return { title: last.title, fallback: false, attempts: log.length, log, warning: "near-duplicate kept" };
-    }
-    return { title: fallbackTitle(facts), fallback: true, attempts: log.length, log };
+    const facts = o.facts;
+    const req = titleRequest({ facts, rules: o.rules, keyPhrases: o.keyPhrases, notes: o.notes, avoid: o.recent, salt: o.salt || 1, hasImage: !!o.image });
+    if (o.image) req.image = o.image;
+    const raw = (await o.callText(req)) || "";
+    let t = repairTitle(scrubBeads(raw.split(/\n/).find(x => x.trim()) || "", facts));
+    const fallback = !t;
+    if (fallback) t = fallbackTitle(facts);
+    // Informational only (review log); nothing here triggers another model call.
+    const problems = validateEtsyTitle(t, facts);
+    return { title: t, fallback, attempts: 1, log: [{ attempt: 1, title: t, problems }] };
   }
 
   async function runDescription(o) {
-    const facts = o.facts, log = [];
-    let problems = [];
-    const maxAttempts = o.maxAttempts || 2;
-    for (let a = 1; a <= maxAttempts; a++) {
-      const req = descriptionRequest({ facts, rules: o.rules, keyPhrases: o.keyPhrases, notes: o.notes, title: o.title, problems, hasImage: !!o.image });
-      if (o.image) req.image = o.image;
-      if (a > 1) req.effort = MODEL.effortLight;
-      const raw = String((await o.callText(req)) || "").replace(/\s+/g, " ").trim();
-      const probs = validateDescription(raw, facts, o.title);
-      log.push({ attempt: a, problems: probs });
-      if (!probs.length) return { text: capDescription(raw, 650), fallback: false, attempts: a, log };
-      problems = probs;
-      // Hard-rule violations get sentence-level repair on the final attempt.
-      if (a === maxAttempts) {
-        const clean = sanitizeDescription(raw, facts);
-        if (clean.length >= 150 && !validateDescription(clean, facts, o.title).length) {
-          return { text: capDescription(clean, 650), fallback: false, attempts: a, log, repaired: true };
-        }
-      }
+    const facts = o.facts;
+    const req = descriptionRequest({ facts, rules: o.rules, keyPhrases: o.keyPhrases, notes: o.notes, title: o.title, hasImage: !!o.image });
+    if (o.image) req.image = o.image;
+    const raw = String((await o.callText(req)) || "").replace(/\s+/g, " ").trim();
+    const probs = validateDescription(raw, facts, o.title);
+    let text = raw, repaired = false;
+    if (commonProblems(raw, facts).length || SUBJECTIVE.test(raw)) {
+      const clean = sanitizeDescription(raw, facts);       // drops only the offending sentences
+      if (clean.length >= 60) { text = clean; repaired = true; }
+      else text = "";
     }
-    return { text: fallbackDescription(facts), fallback: true, attempts: log.length, log };
+    const fallback = !text;
+    if (fallback) text = fallbackDescription(facts);
+    return { text: capDescription(text, 650), fallback, repaired, attempts: 1, log: [{ attempt: 1, problems: probs }] };
   }
 
   async function runTags(o) {
     const want = o.want || 13, facts = o.facts;
-    let accepted = [], rejectedAll = [];
-    for (let round = 0; round < (o.maxRounds || 2) && accepted.length < want; round++) {
-      const need = want - accepted.length;
-      const req = tagsRequest({ facts, rules: o.rules, notes: o.notes, need: round === 0 ? want : need + 2, accepted, rejected: rejectedAll.slice(-8), hasImage: !!o.image && round === 0 });
-      if (o.image && round === 0) req.image = o.image;
-      const raw = await o.callText(req);
-      const res = cleanTags(raw, facts, accepted);
-      accepted = res.tags.slice(0, want);
-      rejectedAll = rejectedAll.concat(res.rejected);
-    }
-    return { tags: accepted, rejected: rejectedAll };
+    // Ask for a few extra so locally rejected tags (too long, duplicates, bead words) still leave 13.
+    const req = tagsRequest({ facts, rules: o.rules, notes: o.notes, need: want + 3, hasImage: !!o.image });
+    if (o.image) req.image = o.image;
+    const res = cleanTags(await o.callText(req), facts, []);
+    return { tags: res.tags.slice(0, want), rejected: res.rejected };
   }
 
   // ------------------------------------------------- Shopify / Google fields
@@ -19516,7 +19503,7 @@ const ListingCopy = (function () {
   async function runShopifyPart(o) {
     const f = o.facts, part = o.part, keys = SHOPIFY_PARTS[part], log = [];
     let problems = [], parsed = null;
-    for (let a = 1; a <= (o.maxAttempts || 2); a++) {
+    for (let a = 1; a <= (o.maxAttempts || 1); a++) {
       let x = null;
       try { x = parseJson(await o.callText(Object.assign(shopifyRequest({ facts: f, part, etsyTitle: o.etsyTitle, productTitle: o.productTitle, keyPhrases: o.keyPhrases, notes: o.notes, problems, hasImage: !!o.image }), o.image ? { image: o.image } : {}))); }
       catch (e) { problems = ["response was not valid JSON"]; log.push({ attempt: a, problems }); continue; }
@@ -19625,7 +19612,7 @@ const ListingCopy = (function () {
   // ------------------------------------------------------------- exports
   return {
     MODEL, CATS, normCategory, motifFrom, buildFacts, factsBlock,
-    findBeadMisuse, commonProblems,
+    findBeadMisuse, commonProblems, scrubBeads,
     repairTitle, validateEtsyTitle, fallbackTitle, mostSimilar, SIMILARITY_LIMIT, patternFor,
     cleanTags, validateDescription, sanitizeDescription, fallbackDescription, capDescription,
     titleRequest, descriptionRequest, tagsRequest, shopifyRequest,
@@ -24097,8 +24084,8 @@ https://www.etsy.com/your/shops/me/listing-editor/edit/1822973998
         max_output_tokens: req.maxTokens,   // reasoning tokens count against this cap
         reasoning: { effort: req.effort || ListingCopy.MODEL.effort }
       });
-      // A hung call is abandoned after 90 s and retried once (each retry is a paid call).
-      const opts = { timeoutMs: 90000, maxRetries: 1 };
+      // A hung call is abandoned after 60 s and retried once on network/server errors only.
+      const opts = { timeoutMs: 60000, maxRetries: 1 };
       if (!req.image) return callOpenAIForText(build(false), req.label, opts);
       try {
         return await callOpenAIForText(build(true), req.label, opts);
