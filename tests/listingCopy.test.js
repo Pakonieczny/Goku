@@ -41,6 +41,14 @@ const stub = (replies) => { let i = 0; const calls = []; const fn = async (req) 
     assert(/save\(\{ status: "DONE", stage: "DONE"/.test(html));
   });
 
+  await t("timer shim: present, first script in <head>, covers set/clear Timeout/Interval, holds a Web Lock", () => {
+    const head = html.slice(0, html.indexOf("</head>"));
+    assert(head.indexOf('<script id="timerShim">') > 0 && head.indexOf("<script") === head.indexOf('<script id="timerShim">'), "shim must be the first script");
+    const shim = html.match(/<script id="timerShim">([\s\S]*?)<\/script>/)[1];
+    for (const k of ["window.setTimeout =", "window.setInterval =", "window.clearTimeout =", "window.clearInterval =", "new Worker(", "navigator.locks.request"]) assert(shim.includes(k), k);
+    new vm.Script(shim);
+  });
+
   await t("effort tiers: title/description high; tags and Shopify parts medium", () => {
     const fx = L.buildFacts({ listingDesc: "Pine Tree Charm Beady Necklace" });
     assert.strictEqual(L.titleRequest({ facts: fx, rules: "" }).effort, undefined);      // falls back to MODEL.effort = high

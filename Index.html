@@ -2,6 +2,60 @@
 <html>
 <head>
   <meta charset="UTF-8">
+<!-- TIMER_SHIM_START -->
+<script id="timerShim">
+// Background-tab keepalive. Browsers throttle a hidden tab's setTimeout/setInterval to ~1/second, and to
+// ~1/minute after 5 minutes, which crawled the whole pipeline when the tab was not in front. Timers that
+// run in a Web Worker are not throttled that way, so every page timer is driven by one worker and the
+// callback still runs on the page. A Web Lock held for the life of the tab also stops Chrome from freezing
+// it. Falls back to the native timers untouched if a Worker cannot be created.
+(function () {
+  try {
+    if (window.__lgTimerShim || typeof Worker === "undefined" || typeof Blob === "undefined" || !window.URL || !URL.createObjectURL) return;
+    var src =
+      "var t=new Map();" +
+      "onmessage=function(e){var d=e.data;" +
+      "if(d.c==='s'){var id=d.id;var f=function(){postMessage(id)};" +
+      "t.set(id,d.r?setInterval(f,d.ms):setTimeout(function(){t.delete(id);f()},d.ms));}" +
+      "else if(d.c==='x'){var h=t.get(d.id);if(h!==undefined){clearTimeout(h);clearInterval(h);t.delete(d.id);}}};";
+    var worker = new Worker(URL.createObjectURL(new Blob([src], { type: "text/javascript" })));
+    var nativeST = window.setTimeout.bind(window), nativeSI = window.setInterval.bind(window);
+    var nativeCT = window.clearTimeout.bind(window), nativeCI = window.clearInterval.bind(window);
+    var cbs = new Map(), next = 1000000;
+    worker.onmessage = function (e) {
+      var r = cbs.get(e.data);
+      if (!r) return;
+      if (!r.rep) cbs.delete(e.data);
+      try { r.fn.apply(window, r.args); } catch (err) { queueMicrotask(function () { throw err; }); }
+    };
+    worker.onerror = function () { /* worker died: later timers simply keep working natively below */ };
+    function make(rep, nativeFn) {
+      return function (fn, ms) {
+        if (typeof fn !== "function") return nativeFn.apply(window, arguments);   // string callbacks: native
+        var id = next++;
+        cbs.set(id, { fn: fn, args: Array.prototype.slice.call(arguments, 2), rep: rep });
+        worker.postMessage({ c: "s", id: id, ms: Math.max(0, Number(ms) || 0), r: rep });
+        return id;
+      };
+    }
+    function clear(nativeClear) {
+      return function (id) {
+        if (cbs.has(id)) { cbs.delete(id); worker.postMessage({ c: "x", id: id }); } else nativeClear(id);
+      };
+    }
+    window.setTimeout = make(false, nativeST);
+    window.setInterval = make(true, nativeSI);
+    window.clearTimeout = clear(nativeCT);
+    window.clearInterval = clear(nativeCI);
+    window.__lgTimerShim = true;
+    // Chrome freezes long-hidden tabs unless they hold a Web Lock.
+    if (navigator.locks && navigator.locks.request) {
+      navigator.locks.request("lg-tab-keepalive-" + Math.random().toString(36).slice(2), function () { return new Promise(function () {}); }).catch(function () {});
+    }
+  } catch (e) { /* keep native timers */ }
+})();
+</script>
+<!-- TIMER_SHIM_END -->
   <title>Etsy Listing Generator & Shop Listings</title>
 <!-- ══ Tab icon ═══════════════════════════════════════════════════════════
      Part of the Brites station suite: one velvet tile, one solid gold mark,
