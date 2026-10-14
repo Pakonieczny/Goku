@@ -50,6 +50,16 @@ const stub = (replies) => { let i = 0; const calls = []; const fn = async (req) 
     new vm.Script(shim);
   });
 
+  await t("photo alt text: ONE vision call per pass (first photo), rest derived from slot roles; both callers use it", () => {
+    const fn = html.match(/async function analyzeListingPhotos\(workIdx, onProgress\) \{[\s\S]*?\n    window\.analyzeListingPhotos/)[0];
+    assert((fn.match(/analyzeAndEmbedMetadata\(/g) || []).length === 1, "exactly one vision call site");
+    assert(/window\.LG_PROMPTS && window\.LG_PROMPTS\.SLOT_MAP/.test(fn));
+    assert(/j < 2 \|\| !folder\) \? "alternate view"/.test(fn));
+    assert(!/runPool\(workIdx, METADATA_CONCURRENCY/.test(html), "old 8-call pool removed");
+    assert((html.match(/await analyzeListingPhotos\(workIdx/g) || []).length === 2, "analyze button + duplicate flow");
+    assert(!/for \(const i of workIdx\) \{\s*await metadataHandler\.analyzeAndEmbedMetadata/.test(html), "old sequential 8-call loop removed");
+  });
+
   await t("effort tiers: title/description use MODEL.effort; tags and Shopify parts use the light tier", () => {
     const fx = L.buildFacts({ listingDesc: "Pine Tree Charm Beady Necklace" });
     assert.strictEqual(L.titleRequest({ facts: fx, rules: "" }).effort, undefined);      // falls back to MODEL.effort

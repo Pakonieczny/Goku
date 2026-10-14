@@ -23002,6 +23002,53 @@ https://www.etsy.com/your/shops/me/listing-editor/edit/1822973998
     function resetDuplicateProgress(){ window._dupPct = 0; setDuplicateProgress(0); }
     function showDuplicateProgress(show){ const w = document.getElementById("duplicateListingProgress"); if (w) w.style.display = show ? "block" : "none"; }
 
+    // ── Photo alt text: ONE vision call per pass ─────────────────────────────────
+    // Only the first photo is sent to the vision model. Every other photo's alt text is built from that
+    // result plus the photo's role. The slots are fixed by the generator (see window.LG_PROMPTS.SLOT_MAP), so the role is
+    // known without looking: size guide, back engraving, care guide and so on. Cells 0 and 1 are swapped
+    // in the variant pass, so they get the neutral "alternate view" instead of a role that could be wrong.
+    const PHOTO_ROLE = {
+      Primary_Models: "worn on model", Background_AI_Images: "styled photo", Charm_Size_Guide: "charm size guide",
+      Back_Engraving: "back engraving", Secondary_Models: "worn on model, second view",
+      Necklace_Size_Guide: "necklace length guide", Product_Shots: "product close-up",
+      Product_Shots_2: "product close-up, second view", Care_Metal_Guide: "metal options and care guide"
+    };
+    async function analyzeListingPhotos(workIdx, onProgress) {
+      const idx = (workIdx || []).slice();
+      if (!idx.length) return { ok: true, calls: 0 };
+      window.photoMeta = window.photoMeta || [];
+      const first = idx[0];
+      const desc = (document.getElementById("listingDescInput")?.value || "").trim();
+      let base = "", err = null;
+      try { base = String((await metadataHandler.analyzeAndEmbedMetadata(first)) || "").trim(); }
+      catch (e) { err = e; }
+      if (!base) base = String(window.photoMeta[first] || "").trim() || desc || "Jewelry photo";
+      base = base.replace(/\s+/g, " ").replace(/[.\s]+$/, "");
+      window.photoMeta[first] = base.slice(0, 200);
+      if (onProgress) onProgress(1, idx.length);
+
+      let folders = [];
+      try {
+        const cat = window.__activeAutomationCategory || (window.ListingCopy ? ListingCopy.normCategory(desc) : "");
+        const SM = window.LG_PROMPTS && window.LG_PROMPTS.SLOT_MAP;
+        if (SM && SM[cat]) folders = SM[cat].map(x => x.folder);
+      } catch (_) {}
+      idx.slice(1).forEach((j, n) => {
+        const folder = folders[j];
+        const role = (j < 2 || !folder) ? "alternate view" : (PHOTO_ROLE[folder] || String(folder).replace(/_/g, " ").toLowerCase());
+        const room = Math.max(20, 200 - role.length - 3);
+        window.photoMeta[j] = (base.slice(0, room).replace(/[\s,;:.-]+$/, "") + " - " + role).slice(0, 200);
+        if (onProgress) onProgress(n + 2, idx.length);
+      });
+      const ta = document.getElementById("metadataTextarea");
+      if (ta) {
+        const lines = [0, 1, 2, 3, 4, 5, 6, 7].map(i => `${i + 1}. ${window.photoMeta[i] || ""}`.trim()).join("\n").trim();
+        if (lines) ta.value = lines;
+      }
+      return { ok: !err, error: err, calls: 1 };
+    }
+    window.analyzeListingPhotos = analyzeListingPhotos;
+
     document.getElementById("analyzeMetadataBtn").addEventListener("click", async () => {
       try {
         // start: show bar, hide check
@@ -23024,30 +23071,15 @@ https://www.etsy.com/your/shops/me/listing-editor/edit/1822973998
         if (window.M?.toast) M.toast({ html: "Committing visible crops…" });
         await cropPreviewsForIndices(workIdx);
 
-        // PERFORMANCE: these vision calls ran one-at-a-time — 8 sequential
-        // round-trips, the second-largest block of wall-clock in the pipeline.
-        // They are independent per image (each embeds metadata into its own
-        // slot), so a bounded pool is a pure latency win with no ordering
-        // requirement. Concurrency is deliberately modest to stay well inside
-        // provider rate limits, and each item keeps its own error handling:
-        // one image failing to analyze leaves the others intact, exactly as
-        // before, and the progress bar still advances per completion.
+        // ONE vision call (first photo); the rest of the alt text is derived (see analyzeListingPhotos).
         resetMetadataProgress();
-        let done = 0;
-        const METADATA_CONCURRENCY = 4;
-        const metaRun = await runPool(workIdx, METADATA_CONCURRENCY, async (i) => {
-          const out = await metadataHandler.analyzeAndEmbedMetadata(i);
-          done++;
-          setMetadataProgress((done / total) * 100);
-          return out;
-        });
-        const metaFailed = metaRun.results.filter(r => r && !r.ok);
-        if (metaFailed.length) {
-          console.warn(`Metadata: ${metaFailed.length}/${total} image(s) failed to analyze.`, metaFailed[0].error);
-          window.__DIAG?.log?.("metadata-partial", { failed: metaFailed.length, total, first: String(metaFailed[0].error?.message || metaFailed[0].error).slice(0, 120) });
+        const metaRun = await analyzeListingPhotos(workIdx, (n, t) => setMetadataProgress((n / t) * 100));
+        if (!metaRun.ok) {
+          console.warn("Metadata: the first-photo analysis failed; alt text falls back to the listing description.", metaRun.error);
+          window.__DIAG?.log?.("metadata-partial", { failed: 1, total: workIdx.length, first: String(metaRun.error?.message || metaRun.error).slice(0, 120) });
         }
         setMetadataProgress(100);
-        if (window.M?.toast) M.toast({ html: `Analyzed metadata for ${total} image${total !== 1 ? "s" : ""} (cells 0–7).` });
+        if (window.M?.toast) M.toast({ html: `Analyzed the first photo and set alt text for ${total} image${total !== 1 ? "s" : ""}.` });
       } catch (e) {
         console.error(e);
         if (window.M?.toast) M.toast({ html: "Metadata analyze error: " + (e?.message || e) });
@@ -23533,25 +23565,7 @@ https://www.etsy.com/your/shops/me/listing-editor/edit/1822973998
         // 5) Re-analyze images (cells 0–7 only), progress from 80% → 100%
         const slots   = [0,1,2,3,4,5,6,7];
         const workIdx = slots.filter(i => !!(window.previewImages && window.previewImages[i]));
-        const count   = workIdx.length;
-        let done = 0;
-
-        for (const i of workIdx) {
-          await metadataHandler.analyzeAndEmbedMetadata(i);
-
-          // Keep the metadata textarea in sync with cells 0–7
-          const metaTA = document.getElementById("metadataTextarea");
-          if (metaTA) {
-            const lines = slots
-              .map(idx => `${idx + 1}. ${window.photoMeta[idx] || ""}`.trim())
-              .join("\n").trim();
-            if (lines) metaTA.value = lines;
-          }
-
-          done++;
-          const pct = 80 + Math.round((done * 20) / Math.max(1, count));
-          setDuplicateProgress(pct);
-        }
+        await analyzeListingPhotos(workIdx, (n, t) => setDuplicateProgress(80 + Math.round((n * 20) / Math.max(1, t))));
 
         setDuplicateProgress(100);
         showDuplicateProgress(false);
