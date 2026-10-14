@@ -24258,8 +24258,8 @@ https://www.etsy.com/your/shops/me/listing-editor/edit/1822973998
     // One-line status from a generator result: "passed checks · 2 tries · photo used · 94 chars"
     function copyStatusLine(res, extra, hadImage) {
       const tries = res.attempts + (res.attempts === 1 ? " try" : " tries");
-      const head = res.fallback ? "checks failed, plain safe version used" : (res.repaired ? "passed after sentence repair" : "passed checks");
-      const state = res.fallback ? "fallback" : (res.attempts > 1 || res.repaired ? "retry" : "ok");
+      const head = res.fallback ? "empty answer, plain safe version used" : (res.repaired ? "generated, cleaned locally" : "generated");
+      const state = res.fallback ? "fallback" : (res.repaired ? "retry" : "ok");
       return { state, msg: [head, tries, hadImage ? "photo used" : "text only", extra].filter(Boolean).join(" · ") };
     }
 
@@ -24345,7 +24345,7 @@ https://www.etsy.com/your/shops/me/listing-editor/edit/1822973998
         const reasons = {};
         res.rejected.forEach(x => { reasons[x.reason] = (reasons[x.reason] || 0) + 1; });
         const why = Object.entries(reasons).map(([k, v]) => `${k} x${v}`).join(", ");
-        setCopyStatus("etsy_tags", res.tags.length >= 13 ? (res.rejected.length ? "retry" : "ok") : "fallback",
+        setCopyStatus("etsy_tags", res.tags.length >= 13 ? "ok" : (res.tags.length >= 8 ? "retry" : "fallback"),
           [`${res.tags.length} of 13 valid tags`, res.rejected.length ? `${res.rejected.length} rejected (${why})` : "none rejected", img ? "photo used" : "text only"].join(" · "));
         return res.tags;
       } catch (e) {
