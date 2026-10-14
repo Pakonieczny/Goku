@@ -6183,8 +6183,8 @@ ANTI-REPETITION (TITLE)
         const spChip = document.getElementById("shopifyQueueStatus");
         const budgetEl = document.getElementById("railShopifyBudget");
         if (spChip && budgetEl) {
-          const m = String(spChip.textContent || "").match(/(\d+)\/(\d+)\s*today/);
-          budgetEl.textContent = m ? `${m[1]}/${m[2]} today` : "—";
+          const m = String(spChip.textContent || "").match(/(\d+)\/(\d+)\s*(?:today|in 24h)/);
+          budgetEl.textContent = m ? `${m[1]}/${m[2]} in 24h` : "—";
         }
         const catCounts = {};
         last7.forEach(r => { const c = (r.category || "?").replace(/_/g, " "); catCounts[c] = (catCounts[c] || 0) + 1; });
@@ -25972,9 +25972,9 @@ async function callOpenAI(payload, opts = {}) {
             const paused = !!(b.paused && (j.queued || 0) > 0);
             const mins = Math.max(1, Math.ceil((Number(b.resetsInMs) || 0) / 60000));
             const resumes = mins >= 60 ? `${Math.floor(mins / 60)}h ${mins % 60}m` : `${mins}m`;
-            el.textContent = `Shopify Q:${j.queued ?? "?"}` + (j.failed ? ` ✗${j.failed}` : "") + (paused ? " · paused" : "") + ` · ${b.used ?? "?"}/${b.ceiling ?? 950} today` + (paused ? ` · resumes in ${resumes}` : "");
+            el.textContent = `Shopify Q:${j.queued ?? "?"}` + (j.failed ? ` ✗${j.failed}` : "") + (paused ? " · paused" : "") + ` · ${b.used ?? "?"}/${b.ceiling ?? 950} in 24h` + (paused ? ` · resumes in ${resumes}` : "");
             el.classList.toggle("warn", !!j.failed || paused || (b.remaining !== undefined && b.remaining < 50));
-            el.title = `Queued: ${j.queued} | Uploading: ${j.uploading} | Failed: ${j.failed} | Done: ${j.done}\nVariant budget today: ${b.used}/${b.ceiling} (resets midnight Toronto)` + (b.paused && j.queued ? "\nPaused: Shopify limits new variants per day and the next product needs " + (b.nextNeeds || "more") + " but only " + (b.remaining ?? 0) + " are left. The queue resumes by itself after the reset." : "") + (j.failed ? "\nClick to retry failed jobs." : "");
+            el.title = `Queued: ${j.queued} | Uploading: ${j.uploading} | Failed: ${j.failed} | Done: ${j.done}\nVariant budget (rolling 24 h): ${b.used}/${b.ceiling}` + (b.paused && j.queued ? "\nPaused: Shopify limits new variants per day and the next product needs " + (b.nextNeeds || "more") + " but only " + (b.remaining ?? 0) + " are left. The queue resumes by itself as soon as enough of the last 24 hours ages out." : "") + (j.failed ? "\nClick to retry failed jobs." : "");
           }
           const c = document.getElementById("spCounts");
           if (c) c.innerHTML = `<span>Done ${j.done ?? 0}</span><span class="sp-q">Queued ${j.queued ?? 0}</span>` +

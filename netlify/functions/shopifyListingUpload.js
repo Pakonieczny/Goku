@@ -442,42 +442,40 @@ function buildMatrix(category, tier, baseSku) {
 
 function torontoDateKey() { return budgetKit.torontoDateKey(new Date()); }
 
-// Reserve a job's variants exactly once. The reservation marker and the
-// aggregate budget counter are written in the same transaction, so a killed
-// worker can resume without charging the same job twice.
+// Reserve a job's variants exactly once, in a ROLLING 24 h window (see _shopifyBudget.js). The reservation entry and the
+// job marker are written in the same transaction, so a killed worker can resume without charging the same job twice.
 async function reserveBudgetForJob(jobRef, n) {
   const budgetRef = db.collection(META).doc("budget");
   return db.runTransaction(async (tx) => {
     const [jobSnap, budgetSnap] = await Promise.all([tx.get(jobRef), tx.get(budgetRef)]);
     if (!jobSnap.exists) return { granted: false, missing: true };
     const job = jobSnap.data();
-    const key = torontoDateKey();
+    const now = Date.now();
+    const entries = budgetKit.entriesFromDoc(budgetSnap.exists ? budgetSnap.data() : null, now);
 
-    // A created product already consumed Shopify's variant allowance, even
-    // when the job is resuming on a later day. Never reserve it again.
-    if (job.productId || job.budgetReservedDay === key) {
-      return { granted: true, alreadyReserved: true, dateKey: job.budgetReservedDay || key };
+    // A created product already consumed Shopify's variant allowance, even when the job resumes later. Never reserve it again.
+    if (job.productId || entries.some((e) => e.j === jobRef.id)) {
+      return { granted: true, alreadyReserved: true };
     }
 
-    let used = 0;
-    if (budgetSnap.exists && budgetSnap.data().dateKey === key) used = budgetSnap.data().used || 0;
-    if (used + n > DAILY_SAFETY_CEILING) return { granted: false, budget: true, dateKey: key };
+    const used = budgetKit.usedIn(entries, now);
+    if (used + n > DAILY_SAFETY_CEILING) return { granted: false, budget: true };
 
+    const next = entries.concat([{ t: now, n, j: jobRef.id }]);
     tx.set(budgetRef, {
-      dateKey: key, used: used + n,
-      limit: DAILY_VARIANT_LIMIT, ceiling: DAILY_SAFETY_CEILING
-    }, { merge: true });
+      entries: next, used: used + n, dateKey: torontoDateKey(),
+      limit: DAILY_VARIANT_LIMIT, ceiling: DAILY_SAFETY_CEILING, updatedAtMs: now
+    });   // full replace: drops the old calendar-day fields
     tx.set(jobRef, {
-      budgetReservedDay: key,
+      budgetReservedDay: torontoDateKey(),
       budgetReservedVariants: n,
-      budgetReservedAtMs: Date.now()
+      budgetReservedAtMs: now
     }, { merge: true });
-    return { granted: true, alreadyReserved: false, dateKey: key };
+    return { granted: true, alreadyReserved: false };
   });
 }
 
-// Refund only jobs that failed before Shopify created a product. Later-stage
-// failures still consumed the real Shopify variant allowance.
+// Refund only jobs that failed before Shopify created a product. Later-stage failures still consumed the real allowance.
 async function refundBudgetForJob(jobRef) {
   const budgetRef = db.collection(META).doc("budget");
   await db.runTransaction(async (tx) => {
@@ -485,11 +483,13 @@ async function refundBudgetForJob(jobRef) {
     if (!jobSnap.exists) return;
     const job = jobSnap.data();
     if (job.productId || !job.budgetReservedDay) return;
-    const key = torontoDateKey();
-    if (budgetSnap.exists && budgetSnap.data().dateKey === key && job.budgetReservedDay === key) {
+    const now = Date.now();
+    if (budgetSnap.exists) {
+      const entries = budgetKit.entriesFromDoc(budgetSnap.data(), now).filter((e) => e.j !== jobRef.id);
       tx.set(budgetRef, {
-        used: Math.max(0, (budgetSnap.data().used || 0) - (job.budgetReservedVariants || job.variantCount || 0))
-      }, { merge: true });
+        entries, used: budgetKit.usedIn(entries, now), dateKey: torontoDateKey(),
+        limit: DAILY_VARIANT_LIMIT, ceiling: DAILY_SAFETY_CEILING, updatedAtMs: now
+      });
     }
     tx.set(jobRef, {
       budgetReservedDay: null,
@@ -498,11 +498,20 @@ async function refundBudgetForJob(jobRef) {
     }, { merge: true });
   });
 }
+// What leaves the server: no per-job reservation entries or id sets.
+function publicBudget(b) {
+  return { dateKey: b.dateKey, used: b.used, ceiling: b.ceiling, remaining: b.remaining, window: b.window };
+}
+// Rolling-window snapshot: what is used in the last 24 h, what is left, and the reservations (job ids) still counted.
 async function budgetSnapshot() {
   const snap = await db.collection(META).doc("budget").get();
-  const key = torontoDateKey();
-  const used = (snap.exists && snap.data().dateKey === key) ? (snap.data().used || 0) : 0;
-  return { dateKey: key, used, ceiling: DAILY_SAFETY_CEILING, remaining: Math.max(0, DAILY_SAFETY_CEILING - used) };
+  const now = Date.now();
+  const entries = budgetKit.entriesFromDoc(snap.exists ? snap.data() : null, now);
+  const used = budgetKit.usedIn(entries, now);
+  return {
+    dateKey: torontoDateKey(), used, ceiling: DAILY_SAFETY_CEILING, remaining: Math.max(0, DAILY_SAFETY_CEILING - used),
+    window: "rolling 24 h", entries, reservedIds: new Set(entries.map((e) => e.j))
+  };
 }
 
 // Online Store publication id, cached in Firestore (stable per shop).
@@ -1071,7 +1080,7 @@ async function runRelink(handle) {
   }
 }
 exports._relink = { runRelink, normalizeHandle, db, admin };
-exports._drain = { drain, budgetSnapshot };
+exports._drain = { drain, budgetSnapshot, reserveBudgetForJob, refundBudgetForJob, publicBudget };
 // The PDP "Complete the set" module reads product metafield brites.set:
 // a JSON array of partners [{h: handle, f: form, t: short title}]. The
 // verified master (charmSetsData.js on goldenspike) is an offline snapshot —
@@ -1811,7 +1820,7 @@ async function drain() {
       if (!sorted.length) break;
       // Oldest job that FITS what is left of today's budget (a large job at the head no longer strands the allowance).
       const bud = await budgetSnapshot();
-      const fit = budgetKit.pickFit(sorted.map((d) => ({ doc: d, data: d.data() })), bud.remaining, bud.dateKey);
+      const fit = budgetKit.pickFit(sorted.map((d) => ({ id: d.id, doc: d, data: d.data() })), bud.remaining, bud.reservedIds);
       if (!fit) { out.stoppedFor = "budget"; break; }
       const docSnap = fit.doc;
 
@@ -1937,21 +1946,25 @@ async function status() {
     budgetSnapshot()
   ]);
   const queued = q.data().count;
-  // "Paused until tomorrow" only matters when the day's allowance is nearly gone (the biggest product needs ~40
-  // variants), so the extra read of the queue is skipped otherwise and cached for a minute.
-  budget.paused = false; budget.resetsInMs = budgetKit.msUntilTorontoMidnight(new Date()); budget.nextNeeds = 0;
+  // "Paused" only matters when the allowance is nearly used (the biggest product needs ~40 variants), so the extra read of
+  // the queue is skipped otherwise and cached for a minute.
+  const pub = { dateKey: budget.dateKey, used: budget.used, ceiling: budget.ceiling, remaining: budget.remaining, window: budget.window,
+    paused: false, resetsInMs: 0, nextNeeds: 0 };
   if (queued > 0 && budget.remaining < 60) {
-    if (!status._cache || Date.now() - status._cache.at > 60000 || status._cache.key !== budget.dateKey + ":" + budget.used + ":" + queued) {
+    const key = budget.used + ":" + queued + ":" + (budget.entries[0] ? budget.entries[0].t : 0);
+    if (!status._cache || Date.now() - status._cache.at > 60000 || status._cache.key !== key) {
       const qs = await db.collection(QCOL).where("status", "==", "QUEUED").limit(150).get();
-      const jobs = qs.docs.map((x) => ({ data: x.data() }));
-      status._cache = { at: Date.now(), key: budget.dateKey + ":" + budget.used + ":" + queued,
-        paused: !budgetKit.pickFit(jobs, budget.remaining, budget.dateKey), needs: budgetKit.smallestNeed(jobs, budget.dateKey) };
+      const jobs = qs.docs.map((x) => ({ id: x.id, data: x.data() }));
+      const need = budgetKit.smallestNeed(jobs, budget.reservedIds);
+      status._cache = { at: Date.now(), key, needs: need,
+        paused: !budgetKit.pickFit(jobs, budget.remaining, budget.reservedIds),
+        resetsInMs: budgetKit.msUntilFits(budget.entries, need, budget.ceiling, Date.now()) };
     }
-    budget.paused = status._cache.paused; budget.nextNeeds = status._cache.needs;
+    pub.paused = status._cache.paused; pub.nextNeeds = status._cache.needs; pub.resetsInMs = status._cache.resetsInMs;
   }
   return {
     queued, uploading: u.data().count,
-    failed: f.data().count, done: d.data().count, budget
+    failed: f.data().count, done: d.data().count, budget: pub
   };
 }
 
@@ -2011,11 +2024,11 @@ exports.handler = async (event) => {
       // exceeds the sync limit — hand it to the background drain (15-min
       // budget) and return immediately. The client polls job status.
       const background = await triggerBackgroundDrain();
-      return out(200, { ...res, background, budget: await budgetSnapshot() });
+      return out(200, { ...res, background, budget: publicBudget(await budgetSnapshot()) });
     }
     if (op === "drain") {
       const background = await triggerBackgroundDrain();
-      return out(200, { ok: true, background, budget: await budgetSnapshot() });
+      return out(200, { ok: true, background, budget: publicBudget(await budgetSnapshot()) });
     }
     if (op === "status") {
       const res = await status();
@@ -2026,13 +2039,13 @@ exports.handler = async (event) => {
     if (op === "retryFailed") {
       const r = await retryFailed();
       const background = await triggerBackgroundDrain();
-      return out(200, { ...r, background, budget: await budgetSnapshot() });
+      return out(200, { ...r, background, budget: publicBudget(await budgetSnapshot()) });
     }
     if (op === "retryJob") {
       const r = await retryJob(body.jobId);
       if (!r.ok) return out(r.error === "Job not found" ? 404 : 400, r);
       const background = r.alreadyDone ? false : await triggerBackgroundDrain();
-      return out(200, { ...r, background, budget: await budgetSnapshot() });
+      return out(200, { ...r, background, budget: publicBudget(await budgetSnapshot()) });
     }
     if (op === "resetSetLinks") {
       // Fully clear one product's set AND its backlink on every partner —

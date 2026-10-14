@@ -7,7 +7,7 @@
 // trigger this function and return immediately; the client reads results
 // from job status polling.
 
-const { drain, budgetSnapshot } = require("./shopifyListingUpload.js")._drain;
+const { drain, budgetSnapshot, publicBudget } = require("./shopifyListingUpload.js")._drain;
 
 async function triggerContinuation() {
   const base = (process.env.URL || process.env.DEPLOY_PRIME_URL || process.env.DEPLOY_URL || "").replace(/\/$/, "");
@@ -41,7 +41,7 @@ exports.handler = async function () {
         locked: !!drained.locked,
         stoppedFor: drained.stoppedFor || null,
         moreQueued: !!drained.moreQueued,
-        budget
+        budget: publicBudget(budget)
       }));
 
     // A single background invocation has a 15-minute hard limit. If the
