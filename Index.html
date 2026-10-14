@@ -18934,10 +18934,10 @@ const ListingCopy = (function () {
   "use strict";
 
   // Copy-generation model. Vision / alt-text / other calls keep window.modelName.
-  const MODEL = { model: "gpt-6.1-sol", effort: "high", effortLight: "medium" };
-  // Etsy title + description carry the main ranking text, so they get the full effort. Tags and the three
-  // Shopify parts are more mechanical (facts + validators do much of the work), so they run lighter to cut
-  // cost and latency.
+  const MODEL = { model: "gpt-6.1-sol", effort: "medium", effortLight: "low" };
+  // Speed first. Etsy title + description (first attempt) run at `effort`; tags, the three Shopify parts and
+  // every RETRY (which already carries exact feedback) run at `effortLight`. Raise `effort` to "high" for
+  // more polish at the price of much longer waits. The facts block and validators do most of the quality work.
 
   // ---------------------------------------------------------------- facts
   const CATS = {
@@ -19201,7 +19201,7 @@ const ListingCopy = (function () {
     ].filter(x => x !== "").join("\n");
     return {
       system: "You are an expert Etsy jewelry SEO copywriter. Write one accurate, plain, buyer-searchable title for the specific piece described. Output only the title.",
-      user, maxTokens: 6000, label: "Title"
+      user, maxTokens: 3000, label: "Title"
     };
   }
 
@@ -19229,7 +19229,7 @@ const ListingCopy = (function () {
     ].filter(x => x !== "").join("\n");
     return {
       system: "You are an expert jewelry copywriter. Write factual, specific, buyer-friendly product copy for the exact piece described. Output only the description.",
-      user, maxTokens: 6000, label: "Description"
+      user, maxTokens: 3000, label: "Description"
     };
   }
 
@@ -19254,7 +19254,7 @@ const ListingCopy = (function () {
     ].filter(x => x !== "").join("\n");
     return {
       system: "Generate concise, varied, accurate Etsy tags. No duplicates. Each tag 20 characters or fewer. Output only the tags, one per line.",
-      user, maxTokens: 8000, label: "Key phrases", effort: MODEL.effortLight
+      user, maxTokens: 3000, label: "Key phrases", effort: MODEL.effortLight
     };
   }
 
@@ -19336,10 +19336,11 @@ const ListingCopy = (function () {
   async function runTitle(o) {
     const facts = o.facts, log = [];
     let problems = [], previous = "";
-    const maxAttempts = o.maxAttempts || 3;
+    const maxAttempts = o.maxAttempts || 2;
     for (let a = 1; a <= maxAttempts; a++) {
       const req = titleRequest({ facts, rules: o.rules, keyPhrases: o.keyPhrases, notes: o.notes, avoid: o.recent, salt: o.salt || a, problems, previous, hasImage: !!o.image });
       if (o.image) req.image = o.image;
+      if (a > 1) req.effort = MODEL.effortLight;      // a retry carries exact feedback: no need to think hard again
       let raw = (await o.callText(req)) || "";
       let t = repairTitle(raw.split(/\n/).find(x => x.trim()) || "");
       let probs = validateEtsyTitle(t, facts);
@@ -19362,10 +19363,11 @@ const ListingCopy = (function () {
   async function runDescription(o) {
     const facts = o.facts, log = [];
     let problems = [];
-    const maxAttempts = o.maxAttempts || 3;
+    const maxAttempts = o.maxAttempts || 2;
     for (let a = 1; a <= maxAttempts; a++) {
       const req = descriptionRequest({ facts, rules: o.rules, keyPhrases: o.keyPhrases, notes: o.notes, title: o.title, problems, hasImage: !!o.image });
       if (o.image) req.image = o.image;
+      if (a > 1) req.effort = MODEL.effortLight;
       const raw = String((await o.callText(req)) || "").replace(/\s+/g, " ").trim();
       const probs = validateDescription(raw, facts, o.title);
       log.push({ attempt: a, problems: probs });
@@ -19385,7 +19387,7 @@ const ListingCopy = (function () {
   async function runTags(o) {
     const want = o.want || 13, facts = o.facts;
     let accepted = [], rejectedAll = [];
-    for (let round = 0; round < (o.maxRounds || 3) && accepted.length < want; round++) {
+    for (let round = 0; round < (o.maxRounds || 2) && accepted.length < want; round++) {
       const need = want - accepted.length;
       const req = tagsRequest({ facts, rules: o.rules, notes: o.notes, need: round === 0 ? want : need + 2, accepted, rejected: rejectedAll.slice(-8), hasImage: !!o.image && round === 0 });
       if (o.image && round === 0) req.image = o.image;
@@ -19438,7 +19440,7 @@ const ListingCopy = (function () {
       o.problems && o.problems.length ? `YOUR PREVIOUS ATTEMPT WAS REJECTED because: ${o.problems.join("; ")}. Fix every point.` : "",
       o.notes || ""
     ].filter(x => x !== "").join("\n");
-    return { system: "Return STRICT JSON only.", user, maxTokens: 6000, label: "Shopify " + part, effort: MODEL.effortLight };
+    return { system: "Return STRICT JSON only.", user, maxTokens: 4000, label: "Shopify " + part, effort: MODEL.effortLight };
   }
 
   function truncWords(s, n) {
@@ -24095,8 +24097,8 @@ https://www.etsy.com/your/shops/me/listing-editor/edit/1822973998
         max_output_tokens: req.maxTokens,   // reasoning tokens count against this cap
         reasoning: { effort: req.effort || ListingCopy.MODEL.effort }
       });
-      // High-effort reasoning is slow: longer timeout, fewer blind retries (each retry is a paid call).
-      const opts = { timeoutMs: 240000, maxRetries: 2 };
+      // A hung call is abandoned after 90 s and retried once (each retry is a paid call).
+      const opts = { timeoutMs: 90000, maxRetries: 1 };
       if (!req.image) return callOpenAIForText(build(false), req.label, opts);
       try {
         return await callOpenAIForText(build(true), req.label, opts);
@@ -24347,7 +24349,7 @@ https://www.etsy.com/your/shops/me/listing-editor/edit/1822973998
       const facts = currentListingFacts();
       setCopyStatus("etsy_tags", "working", "generating…");
       try {
-        const img = await copyImage();
+        const img = "";   // tags run text-only: faster, and the title/description calls already see the photo
         const res = await ListingCopy.runTags({
           callText: copyCallText, facts, rules: keywordRules, notes: copyNotesBlock(), want: 13, image: img
         });

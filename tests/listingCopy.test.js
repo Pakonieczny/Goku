@@ -18,9 +18,10 @@ const t = async (name, fn) => { try { await fn(); passed++; console.log("ok   " 
 const stub = (replies) => { let i = 0; const calls = []; const fn = async (req) => { calls.push(req); const r = replies[Math.min(i++, replies.length - 1)]; return typeof r === "function" ? r(req) : r; }; fn.calls = calls; return fn; };
 
 (async () => {
-  await t("model is gpt-6.1-sol with reasoning effort high", () => {
+  await t("model is gpt-6.1-sol with medium effort (light tier low) for speed", () => {
     assert.strictEqual(L.MODEL.model, "gpt-6.1-sol");
-    assert.strictEqual(L.MODEL.effort, "high");
+    assert.strictEqual(L.MODEL.effort, "medium");
+    assert.strictEqual(L.MODEL.effortLight, "low");
   });
 
   await t("image prompts: Beady slot-1 prompt has the bead proportion rule (about 20% smaller beads, thicker wire); Regular and other Beady slots are untouched", () => {
@@ -49,12 +50,28 @@ const stub = (replies) => { let i = 0; const calls = []; const fn = async (req) 
     new vm.Script(shim);
   });
 
-  await t("effort tiers: title/description high; tags and Shopify parts medium", () => {
+  await t("speed: retries run at low effort, at most 2 attempts per title/description, token caps and timeouts tightened", async () => {
+    const f = L.buildFacts({ listingDesc: "Christmas Ornament Charm Beady Necklace" });
+    const efforts = [];
+    const spy = async (req) => { efforts.push(req.effort); return "Beaded Ornament Necklace Bead Charm"; };   // always invalid
+    const r = await L.runTitle({ callText: spy, facts: f, rules: "", recent: [] });
+    assert.strictEqual(efforts.length, 2);
+    assert.strictEqual(efforts[0], undefined);          // first attempt: default (medium)
+    assert.strictEqual(efforts[1], "low");              // retry: low
+    assert.strictEqual(r.fallback, true);
+    const d = [];
+    await L.runDescription({ callText: async (req) => { d.push(req.effort); return "bad bead bead."; }, facts: f, rules: "", title: "x" });
+    assert.strictEqual(d.length, 2); assert.strictEqual(d[1], "low");
+    assert(L.titleRequest({ facts: f, rules: "" }).maxTokens <= 3000 && L.tagsRequest({ facts: f, rules: "" }).maxTokens <= 3000);
+    assert(/timeoutMs: 90000, maxRetries: 1/.test(html));
+  });
+
+  await t("effort tiers: title/description medium (retries low); tags and Shopify parts low", () => {
     const fx = L.buildFacts({ listingDesc: "Pine Tree Charm Beady Necklace" });
-    assert.strictEqual(L.titleRequest({ facts: fx, rules: "" }).effort, undefined);      // falls back to MODEL.effort = high
+    assert.strictEqual(L.titleRequest({ facts: fx, rules: "" }).effort, undefined);      // falls back to MODEL.effort = medium
     assert.strictEqual(L.descriptionRequest({ facts: fx, rules: "" }).effort, undefined);
-    assert.strictEqual(L.tagsRequest({ facts: fx, rules: "" }).effort, "medium");
-    for (const part of ["titles", "description", "tags"]) assert.strictEqual(L.shopifyRequest({ facts: fx, part }).effort, "medium");
+    assert.strictEqual(L.tagsRequest({ facts: fx, rules: "" }).effort, "low");
+    for (const part of ["titles", "description", "tags"]) assert.strictEqual(L.shopifyRequest({ facts: fx, part }).effort, "low");
     assert(/effort: req\.effort \|\| ListingCopy\.MODEL\.effort/.test(html));
   });
 
