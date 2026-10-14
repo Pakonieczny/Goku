@@ -74,6 +74,15 @@ const stub = (replies) => { let i = 0; const calls = []; const fn = async (req) 
     assert(/function waitingCount\(\)/.test(html) && /const allBlocked = t\.ready === 0 && waiting === 0;/.test(html), "Start Auto enabled when approved/interrupted sets are waiting");
   });
 
+  await t("restart is immediate: fast path for interrupted sets, Start Auto kicks a scan, scan caches and prefetches", () => {
+    assert(/async function fastResumeInterrupted\(\)/.test(html) && /function nextResumable\(\)/.test(html));
+    assert(/started = await fastResumeInterrupted\(\)/.test(html) && /return checkFirebaseForSetsFull\(\)/.test(html));
+    assert(/window\.__scanAt\(50\);? ?\}? ?catch/.test(html) || /else window\.__scanAt\(50\)/.test(html), "Start Auto triggers a scan at once");
+    assert(/Date\.now\(\) - window\.__processedCache\.at < 60000/.test(html), "finished-sets listing cached 60 s");
+    assert(/orderedSets\.slice\(0, 6\)\.forEach/.test(html), "candidate folders listed in parallel");
+    assert(/Restarting \$\{nr\.setName\}/.test(html));
+  });
+
   await t("effort tiers: title/description use MODEL.effort; tags and Shopify parts use the light tier", () => {
     const fx = L.buildFacts({ listingDesc: "Pine Tree Charm Beady Necklace" });
     assert.strictEqual(L.titleRequest({ facts: fx, rules: "" }).effort, undefined);      // falls back to MODEL.effort

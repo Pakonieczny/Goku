@@ -11435,6 +11435,7 @@ ANTI-REPETITION (TITLE)
                   this.classList.remove("stopped", "red", "darken-1");
                   this.classList.add("running", "green", "darken-2");
                   updateFirebaseStatus("Auto Started", "active");
+                  try { if (window.__isScanningFB) window.__scanKickPending = true; else window.__scanAt(50); } catch (_) {}   // start now, not at the next 15 s tick
                   M.toast({ html: `Auto started — source: ${window.scopeLabel(window.__autoScope)}` +
                     (window.__autoBatchLimit ? ` · batch of ${window.__autoBatchLimit}` : " · until drained") });
                   if (typeof window.updateRailBatch === "function") window.updateRailBatch();
@@ -11562,7 +11563,44 @@ ANTI-REPETITION (TITLE)
         clearTimeout(window.__scanTimer); window.__scanTimer = setTimeout(checkFirebaseForSets, ms);
     }
     window.__scanAt = __scanAt;
+    const COMPLETED_SETS_PATH = 'listing-generator-1/Generated_Listing_Sets/Completed_Listing_Sets';
+    /*  Restart an INTERRUPTED set at once. The ledger already knows which set it is and the ID it reserved, so nothing needs
+        scanning: one folder check, one claim, and the sequence resumes where it stopped. Anything unusual (folder moved, claim
+        refused) falls through to the normal scan. Returns true when a set was started. */
+    async function fastResumeInterrupted() {
+        if (!window.autoProcessingEnabled || window.isProcessingSet || !window.PipeGuard || typeof window.PipeGuard.nextResumable !== "function") return false;
+        if (window.PipeControl && !window.PipeControl.mayRun("scan")) return false;
+        const nr = window.PipeGuard.nextResumable();
+        if (!nr) return false;
+        window.__fastResumeTried = window.__fastResumeTried || {};
+        if ((window.__fastResumeTried[nr.setName] || 0) > Date.now()) return false;          // failed a moment ago: the normal scan decides
+        window.__fastResumeTried[nr.setName] = Date.now() + 60000;
+        window.__isScanningFB = true;
+        updateFirebaseStatus(`Restarting ${nr.setName}...`, "working");
+        const setRef = storage.ref(COMPLETED_SETS_PATH + "/" + nr.setName);
+        let images = 0;
+        try { images = (await setRef.listAll()).items.filter((it) => !/manifest\.json$/i.test(it.name)).length; } catch (_) {}
+        if (images < 7) { window.__isScanningFB = false; return false; }                      // folder gone or incomplete: normal scan
+        const got = await window.PipeGuard.claim(nr.setName, "scan");
+        if (!got.ok) { window.__isScanningFB = false; return false; }
+        window.__isScanningFB = false;
+        delete window.__fastResumeTried[nr.setName];
+        if (got.tailOnly) await window.PipeGuard.runTail(setRef, nr.setName, got);
+        else await runFullAutomationSequence(setRef, nr.setName, got);
+        return true;
+    }
     async function checkFirebaseForSets() {
+        if (window.isProcessingSet || window.__isScanningFB) {
+             if (!window.isProcessingSet) __scanAt(15000);
+             return;
+        }
+        let started = false;
+        try { started = await fastResumeInterrupted(); }
+        catch (e) { console.warn("Fast restart failed; scanning instead:", e && e.message); window.__isScanningFB = false; }
+        if (started) { __scanAt(750); return; }
+        return checkFirebaseForSetsFull();
+    }
+    async function checkFirebaseForSetsFull() {
         // Prevent concurrent polling or polling while processing
         if (window.isProcessingSet || window.__isScanningFB) {
              if (!window.isProcessingSet) __scanAt(15000);
@@ -11591,12 +11629,21 @@ ANTI-REPETITION (TITLE)
             // current Storage rules reject browser reads (403).
             const approvedRef = storage.ref('listing-generator-1/Generated_Listing_Sets/Approved_Listing_Sets');
             let processedNames = [];
-            try {
-                const approvedRes = await approvedRef.listAll();
-                processedNames = approvedRes.prefixes.map(p => p.name.replace(/\/$/, ""));
-            } catch(e) { }
+            // The done pile only grows and is slow to list (thousands of folders). Re-list it at most once a minute;
+            // sets finished meanwhile are excluded by the ledger and the archiving list anyway.
+            if (window.__processedCache && Date.now() - window.__processedCache.at < 60000) {
+                processedNames = window.__processedCache.names;
+            } else {
+                try {
+                    if (window.autoProcessingEnabled && !window.isProcessingSet) updateFirebaseStatus("Scanning: listing finished sets...", "working");
+                    const approvedRes = await approvedRef.listAll();
+                    processedNames = approvedRes.prefixes.map(p => p.name.replace(/\/$/, ""));
+                    window.__processedCache = { at: Date.now(), names: processedNames };
+                } catch(e) { }
+            }
 
             const listRef = storage.ref('listing-generator-1/Generated_Listing_Sets/Completed_Listing_Sets');
+            if (window.autoProcessingEnabled && !window.isProcessingSet) updateFirebaseStatus("Scanning: listing waiting folders...", "working");
             const res = await listRef.listAll();
 
             // 2. Filter folders (prefixes): skip anything already approved.
@@ -11760,6 +11807,11 @@ ANTI-REPETITION (TITLE)
                     // is stuck instead of a generic "waiting" message.
                     const skippedIncomplete = [];
 
+                    // Check the first candidates' folders in parallel (read-only): the loop below used to wait for each
+                    // folder listing one after another before it could find a ready set.
+                    const __pre = new Map();
+                    orderedSets.slice(0, 6).forEach((sr) => { __pre.set(sr.name.replace(/\/$/, ""), sr.listAll().catch(() => null)); });
+
                     // Loop through available new sets to find one that is completely ready
                     for (const setRef of orderedSets) {
                         const setName = setRef.name.replace(/\/$/, "");
@@ -11820,7 +11872,7 @@ ANTI-REPETITION (TITLE)
                         // writes a manifest.json next to the slot images;
                         // exclude it from the count so the threshold reflects
                         // image slots only.
-                        const setFiles = await setRef.listAll();
+                        const setFiles = (__pre.has(setName) ? await __pre.get(setName) : null) || await setRef.listAll();
                         const imageItems = setFiles.items.filter(
                           (it) => !/manifest\.json$/i.test(it.name)
                         );
@@ -14142,6 +14194,17 @@ ANTI-REPETITION (TITLE)
           return l.list((e) => (e.state === "queued" || e.state === "claimed" || e.state === "uploading" || !!e.recoverWhy) && eligibility(e.setName).ok).length > 0;
         } catch (_) { return false; }
       }
+      /*  The next INTERRUPTED set (claimed or mid-upload, its owner gone or this computer's own earlier page): the scanner restarts it
+          directly, without listing the storage folders first. */
+      function nextResumable() {
+        const l = L();
+        if (!l) return null;
+        try {
+          const manual = window.__manuallySkippedSets;
+          const e = l.list((x) => (x.state === "claimed" || x.state === "uploading") && eligibility(x.setName).recover && !handles.has(x.setName) && !(manual && manual.has && manual.has(x.setName)))[0];
+          return e ? { setName: e.setName, category: e.category || "" } : null;
+        } catch (_) { return null; }
+      }
       /*  How many approved or interrupted sets are waiting to be (re)started: queued, claimed or mid-upload in the ledger. */
       function waitingCount() {
         const l = L();
@@ -14282,7 +14345,7 @@ ANTI-REPETITION (TITLE)
       return {
         claim, begin, eligibility, isBusy, prioritise, hasReservedId, reservedId, runTail, reconcileArchived,
         pickListingId, noteEnqueued, releaseUnusedId, jobMayRun, jobGate, nextJob, retryLater, jobVerdict, lockJob, onJobProgress, onJobDone, afterJob,
-        noteSkip, priorPricing, priorStages, armPricing, resume, boot, hasWorkWaiting, waitingCount, restoreAuto, effectiveMeta,
+        noteSkip, priorPricing, priorStages, armPricing, resume, boot, hasWorkWaiting, waitingCount, nextResumable, restoreAuto, effectiveMeta,
         __test: { handles, cool, effectiveMeta, jGet, jAll, isTail, inferFromEntry, shopifyRequestId, isLeader: () => leader, setLeader: (v) => { leader = !!v; },
           restoreAuto, writeIntent, finishCheapTails, becomeLeader, takenIdFor, installQueueBoxes, notMine, setBootPending: (v) => { bootPending = !!v; } }
       };

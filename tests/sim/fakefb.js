@@ -57,8 +57,11 @@
   const fsFn = () => fs; fsFn.FieldValue = FieldValue; fsFn.Timestamp = Timestamp; fsFn.FieldPath = { documentId: () => DOCID };
   const user = { uid: 'u-sim', isAnonymous: true };
   const auth = { currentUser: user, onAuthStateChanged(cb) { setTimeout(() => cb(user), 20); return () => {}; }, signInAnonymously() { return Promise.resolve({ user }); }, onIdTokenChanged(cb) { setTimeout(() => cb(user), 20); return () => {}; } };
-  const sref = () => ({ child: () => sref(), put: () => Promise.resolve({ ref: sref() }), getDownloadURL: () => Promise.resolve('about:blank'), listAll: () => Promise.resolve({ items: [], prefixes: [] }), delete: () => Promise.resolve(), name: '', fullPath: '' });
-  window.firebase = { initializeApp() {}, apps: [1], auth: () => auth, firestore: fsFn, storage: () => ({ ref: sref }), app: () => ({}) };
+  // Storage: window.__storage maps a folder path -> { prefixes: [names], items: [names] }; every listAll is logged in window.__listCalls.
+  window.__storage = window.__storage || {}; window.__listCalls = window.__listCalls || [];
+  const sref = (path) => { path = path || ''; return { name: path.split('/').pop(), fullPath: path, child: (n) => sref(path ? path + '/' + n : n), put: () => Promise.resolve({ ref: sref(path) }), getDownloadURL: () => Promise.resolve('about:blank'),
+    listAll: () => { window.__listCalls.push(path); const e = window.__storage[path] || { prefixes: [], items: [] }; return Promise.resolve({ prefixes: e.prefixes.map(n => sref(path + '/' + n)), items: e.items.map(n => sref(path + '/' + n)) }); }, delete: () => Promise.resolve() }; };
+  window.firebase = { initializeApp() {}, apps: [1], auth: () => auth, firestore: fsFn, storage: () => ({ ref: (p) => sref(p) }), app: () => ({}) };
   window.firebase.firestore.FieldValue = FieldValue; window.firebase.firestore.Timestamp = Timestamp; window.firebase.firestore.FieldPath = fsFn.FieldPath;
   window.firebase.auth.Auth = { Persistence: { LOCAL: 'local', SESSION: 'session', NONE: 'none' } };
 })();
