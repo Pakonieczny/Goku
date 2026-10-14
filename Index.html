@@ -3129,7 +3129,8 @@ ANTI-REPETITION (TITLE)
     const ListingLedger = (function () {
       const COLL = "ListingGen_Config";
       const ID_LEDGER = "ledger~", ID_CLAIM = "idclaim~";
-      const LEASE_MS = 180000, BEAT_MS = 60000, TICK_MS = 15000, PAGE_DEAD_MS = 150000;
+      // Timings tightened so a closed computer is replaced within about a minute (timers no longer throttle in a hidden tab):
+      const LEASE_MS = 60000, BEAT_MS = 15000, TICK_MS = 15000, PAGE_DEAD_MS = 45000;
       const MAX_ATTEMPTS = 5, RECENT_MS = 3 * 86400000, STALL_MS = 2 * 3600000;
       const TX_DOCS = 100, PENDING_CAP = 2000, READY_MS = 8000, TX_TIMEOUT_MS = 25000, DENIED_COOLDOWN_MS = 60000;
       const LS_CACHE = "lgLedgerCache.v1", LS_PEND = "lgLedgerPending.v1", LS_PAGES = "lgLedgerPages.v1",
@@ -4261,7 +4262,7 @@ ANTI-REPETITION (TITLE)
       const COALESCE_MS = 400, MIN_GAP_MS = 1000, SLOW_GAP_MS = 2000, CHECKPOINT_MS = 25000, SWEEP_HOT_MS = 5000;
       const VAL_MAX = 20000, DOC_WARN = 120000, DOC_MAX = 160000, IMG_MAX = 120000, CMD_ARGS_MAX = 2000;
       const CMD_TTL = 120000, CMD_WAIT = 15000, HIDDEN_DETACH_MS = 120000, WRITE_TIMEOUT = 12000, USER_ACT_MS = 15000;
-      const SETTLE_MS = 15000, PROBE_MS = 20000, PAGE_DEAD_MS = 75000;   // a page of this browser that has not stamped lgLivePages for 75 s (hidden tabs are throttled to 1/min) is dead
+      const SETTLE_MS = 15000, PROBE_MS = 8000, PAGE_DEAD_MS = 20000;   // a page of this browser that has not stamped lgLivePages for 75 s (hidden tabs are throttled to 1/min) is dead
       const LS_LABEL = "lgLiveLabel.v1", LS_SINCE = "lgLiveSince.v1", LS_PAGES = "lgLivePages.v1";
 
       // ---- small utilities --------------------------------------------------
@@ -4393,7 +4394,9 @@ ANTI-REPETITION (TITLE)
       // ---- roles --------------------------------------------------------------------
       const isMine = (d) => !!d && d.owner === TID && d.page === PAGE;
       const leaseLive = (d, t) => !!d && !!d.owner && Number(d.leaseUntilMs) > (t == null ? now() : t) - 1500;
-      const ctrlView = (d) => d ? { id: d.owner, label: d.label || d.owner, hint: d.hint || "", page: d.page, leaseUntilMs: Number(d.leaseUntilMs) || 0, mode: d.mode || "idle", epoch: d.epoch | 0, since: d.since || 0, live: leaseLive(d) } : null;
+      // The controller doc was written by an earlier page of THIS browser that is gone (a closed or reloaded tab): free at once.
+      const ownDead = (d) => !!d && d.owner === TID && d.page !== PAGE && pageDead(d.page);
+      const ctrlView = (d) => d ? { id: d.owner, label: d.label || d.owner, hint: d.hint || "", page: d.page, leaseUntilMs: Number(d.leaseUntilMs) || 0, mode: d.mode || "idle", epoch: d.epoch | 0, since: d.since || 0, live: leaseLive(d) && !ownDead(d) } : null;
       function computeRole() {
         if (S.deniedW || S.deniedR) return "denied";
         if (S.detached && S.role !== "connecting") return S.role;              // hidden page without listeners: its view is frozen, not "expired"
@@ -4410,7 +4413,7 @@ ANTI-REPETITION (TITLE)
         return "solo";
       }
       function currentInfo(prev, why) {
-        const d = S.ctrl, live = leaseLive(d) && !S.suspect;
+        const d = S.ctrl, live = leaseLive(d) && !S.suspect && !ownDead(d);
         const run = !!d && (d.mode === "auto" || d.mode === "manual");
         const orphaned = !!d && !live && !isMine(d) && run && (S.role === "solo" || S.role === "connecting");
         return { role: S.role, prev: prev || "", why: why || "", controller: live && d.owner ? ctrlView(d) : null, last: d ? ctrlView(d) : null, orphaned, unresponsive: !!S.suspect,
@@ -4698,7 +4701,7 @@ ANTI-REPETITION (TITLE)
       }
 
       // ---- the lease: claim, renew, hand over ----------------------------------------------------
-      const leaseFor = (run, viewers) => (run ? (viewers ? { lease: 60000, beat: 25000 } : { lease: 300000, beat: 150000 }) : (viewers ? { lease: 180000, beat: 90000 } : { lease: 900000, beat: 0 }));
+      const leaseFor = (run, viewers) => (run ? { lease: 30000, beat: 10000 } : (viewers ? { lease: 180000, beat: 90000 } : { lease: 900000, beat: 0 }));   // a running pipeline always renews every 15 s, watched or not, so a dead computer is noticed within 30 s
       function leasePolicy() {
         const run = !!(S.ctrl && (S.ctrl.mode === "auto" || S.ctrl.mode === "manual"));
         return leaseFor(run, S.viewersN > 0);
@@ -5357,11 +5360,11 @@ ANTI-REPETITION (TITLE)
         }
         if (S.role === "follower") {
           const c = cv || {};
-          return { sig: "fol|" + c.id + "|" + c.label + "|" + (off ? 1 : 0) + "|" + errH + note, dot: off ? "warn" : "ok", html: "<span>Mirroring <b>" + lbl(c.label) + "</b> · " + (off ? "paused" : "live") + "</span>" + off + errH + note, btn: "Take over", title: "You see what " + (c.label || "that computer") + " sees" + (c.hint ? " (" + c.hint + ")" : "") + ". Take over to work from this computer." };
+          return { sig: "fol|" + c.id + "|" + c.label + "|" + (off ? 1 : 0) + "|" + errH + note, dot: off ? "warn" : "ok", html: "<span>Mirroring <b>" + lbl(c.label) + "</b> · " + (off ? "paused" : "live") + "</span>" + off + errH + note, title: "You see what " + (c.label || "that computer") + " sees" + (c.hint ? " (" + c.hint + ")" : "") + ". Take over to work from this computer." };
         }
         const last = S.info && S.info.last, orphan = S.info && S.info.orphaned;
-        if (orphan) return { sig: "orph|" + (last && last.label), dot: "bad", html: "<span><b>" + lbl(last && last.label) + "</b> stopped while working</span>" + off + note, btn: "Take over", title: "The computer that was running the pipeline stopped responding." };
-        if (S.ctrl && Number(S.ctrl.updatedMs) > now() - 30 * 60000) return { sig: "idle|" + (last && last.label) + "|" + (off ? 1 : 0) + note, dot: "off", html: "<span>No computer is working</span>" + off + note, btn: "Start here", title: "Nobody is controlling the shared workspace. Clicking in the page also starts here." };
+        if (orphan) return { sig: "orph|" + (last && last.label), dot: "bad", html: "<span><b>" + lbl(last && last.label) + "</b> stopped while working · continuing here automatically</span>" + off + note, title: "The computer that was running the pipeline stopped responding; this computer takes the work over automatically." };
+        if (S.ctrl && Number(S.ctrl.updatedMs) > now() - 30 * 60000) return { sig: "idle|" + (last && last.label) + "|" + (off ? 1 : 0) + note, dot: "off", html: "<span>No computer is working</span>" + off + note, title: "Nobody is controlling the shared workspace. Clicking in the page also starts here." };
         if (off) return { sig: "solo-off", dot: "warn", html: '<span class="lm-chip warn">Offline</span><span class="lm-sub">live sync paused</span>', title: "" };
         return { sig: "hide", hidden: true };
       }
@@ -5455,7 +5458,7 @@ ANTI-REPETITION (TITLE)
         onLost: (fn) => { lostSubs.add(fn); return () => lostSubs.delete(fn); },
         onError: (fn) => { errSubs.add(fn); return () => errSubs.delete(fn); },
         onViewers: (fn) => { viewerSubs.add(fn); return () => viewerSubs.delete(fn); },
-        controller: () => { const d = S.ctrl; return d && d.owner && leaseLive(d) && !S.suspect ? ctrlView(d) : null; },
+        controller: () => { const d = S.ctrl; return d && d.owner && leaseLive(d) && !S.suspect && !ownDead(d) ? ctrlView(d) : null; },
         viewers: viewersNow,
         info: () => Object.assign({}, S.info, { role: S.role, cloud: S.cloud, viewers: S.viewersN, me: { id: TID, label: terminal.label, page: PAGE } }),
         register, touch, touchAll, publish, remove, get, getMeta, onChange, edit,
@@ -11112,7 +11115,7 @@ ANTI-REPETITION (TITLE)
         if (batchHint) {
           const t = totals();
           const runnable = choice ? (() => { const c = counts(choice); return Math.min(c.folders, c.ids); })()
-                                  : Math.min(t.folders, t.ids);
+                                  : Math.max(Math.min(t.folders, t.ids), waitingSets());
           if (batch === 0) {
             batchHint.innerHTML = `Runs until the source is drained — <b>${runnable}</b> listing${runnable === 1 ? "" : "s"} can run right now.`;
           } else if (runnable === 0) {
@@ -11223,11 +11226,16 @@ ANTI-REPETITION (TITLE)
         });
       }
 
+      // Approved or interrupted sets already in the ledger can always be restarted, even when no section has both
+      // folders and fresh Listing IDs (an interrupted set already holds the ID it reserved).
+      const waitingSets = () => { try { return (window.PipeGuard && window.PipeGuard.waitingCount) ? Number(window.PipeGuard.waitingCount()) || 0 : 0; } catch (_) { return 0; } };
+
       function paint() {
         if (!listEl) return;
         const t = totals();
+        const waiting = waitingSets();
         const rows = [];
-        const allBlocked = t.ready === 0;
+        const allBlocked = t.ready === 0 && waiting === 0;
         rows.push(`
           <button type="button" class="dscope${choice === null ? " sel" : ""}${allBlocked ? " blocked" : ""}" data-scope="">
             <span class="dscope__radio"></span>
@@ -11235,7 +11243,9 @@ ANTI-REPETITION (TITLE)
               <span class="dscope__name">All categories</span>
               <span class="dscope__why">${allBlocked
                 ? "Nothing runnable — no section has both folders and IDs."
-                : `Drains in priority order · ${t.ready} section${t.ready === 1 ? "" : "s"} ready now`}</span>
+                : (t.ready === 0
+                    ? `${waiting} approved or interrupted set${waiting === 1 ? "" : "s"} waiting — they restart first`
+                    : `Drains in priority order · ${t.ready} section${t.ready === 1 ? "" : "s"} ready now${waiting ? ` · ${waiting} interrupted/approved set${waiting === 1 ? "" : "s"} resume first` : ""}`)}</span>
             </span>
             <span class="dscope__nums">
               <span class="dscope__num${t.folders ? "" : " zero"}">${t.folders} folders</span>
@@ -14132,6 +14142,12 @@ ANTI-REPETITION (TITLE)
           return l.list((e) => (e.state === "queued" || e.state === "claimed" || e.state === "uploading" || !!e.recoverWhy) && eligibility(e.setName).ok).length > 0;
         } catch (_) { return false; }
       }
+      /*  How many approved or interrupted sets are waiting to be (re)started: queued, claimed or mid-upload in the ledger. */
+      function waitingCount() {
+        const l = L();
+        if (!l) return 0;
+        try { return l.list((e) => (e.state === "queued" || e.state === "claimed" || e.state === "uploading" || !!e.recoverWhy) && eligibility(e.setName).ok).length; } catch (_) { return 0; }
+      }
       /*  `jobsLeft`: Etsy jobs of this browser's queue that resume() just picked up (their sequence died). */
       async function restoreAuto(jobsLeft, remote) {
         // LIVE MIRROR control: `remote` = the Auto-Pilot intent of the computer this one took the pipeline over from (ctl.auto);
@@ -14266,7 +14282,7 @@ ANTI-REPETITION (TITLE)
       return {
         claim, begin, eligibility, isBusy, prioritise, hasReservedId, reservedId, runTail, reconcileArchived,
         pickListingId, noteEnqueued, releaseUnusedId, jobMayRun, jobGate, nextJob, retryLater, jobVerdict, lockJob, onJobProgress, onJobDone, afterJob,
-        noteSkip, priorPricing, priorStages, armPricing, resume, boot, hasWorkWaiting, restoreAuto, effectiveMeta,
+        noteSkip, priorPricing, priorStages, armPricing, resume, boot, hasWorkWaiting, waitingCount, restoreAuto, effectiveMeta,
         __test: { handles, cool, effectiveMeta, jGet, jAll, isTail, inferFromEntry, shopifyRequestId, isLeader: () => leader, setLeader: (v) => { leader = !!v; },
           restoreAuto, writeIntent, finishCheapTails, becomeLeader, takenIdFor, installQueueBoxes, notMine, setBootPending: (v) => { bootPending = !!v; } }
       };
@@ -14315,11 +14331,11 @@ ANTI-REPETITION (TITLE)
       "use strict";
       const KEY_RUN = "ctl.run", KEY_AUTO = "ctl.auto", KEY_FOCAL = "ctl.focal", KEY_HIDDEN = "ctl.hidden";
       const HIDE_ANNOUNCE_MS = 60000;      // a controller tab hidden this long says so (timers of hidden tabs are throttled)
-      const WAIT_RELEASE_MS = 200000;      // longest a new controller waits for the old one's claim (lease 180 s + margin)
+      const WAIT_RELEASE_MS = 75000;       // longest a new controller waits for the old one's claim (lease 60 s + margin)
       const YIELD_MAX_MS = 240000;         // longest a controller that lost the pipeline keeps finishing its step
       const PARK_MAX_MS = 600000;          // longest a controller waits for the live connection to come back
       const CMD_TTL_MS = 120000;           // a command older than this is never executed
-      const AUTO_COOLDOWN_MS = 90000;      // a page does not auto-take-over twice within this time
+      const AUTO_COOLDOWN_MS = 10000;      // a page does not auto-take-over twice within this time
       const FOCAL_FRESH_MS = 6 * 3600000, FOCAL_MAX = 60;
       const INTENT_TTL_MS = 24 * 3600000;  // the F1 rule: an Auto-Pilot intent older than this is never restored
       const WATCH_MS = 5000;               // local-only watchdog tick
@@ -14391,6 +14407,7 @@ ANTI-REPETITION (TITLE)
         return !!(job && job.setName && window.isProcessingSet && window.__currentProcessingSetName === job.setName);
       }
       function isHandoffSet(name) { return !!(handoff && !handoff.used && handoff.set && handoff.set === name); }
+      const USER_ACTION = { "create-listing": 1, start: 1, action: 1, user: 1, manual: 1 };
       let ensuring = 0, lastEnsure = 0;
       function ensureControl(why) {
         if (ensuring || Date.now() - lastEnsure < 3000) return;
@@ -14410,7 +14427,16 @@ ANTI-REPETITION (TITLE)
           r = role();
           if (r === "controller" || r === "denied") return { ok: true };
           if (r === "solo" && !claimable()) return { ok: true };                  // no cloud: works as before
-          if (r === "follower") { const c = ctrl(); if (c && c.alive && !c.mine) return { ok: false, reason: "follower", by: c.label }; }
+          if (r === "follower") {
+            const c = ctrl();
+            if (c && c.alive && !c.mine) {
+              if (USER_ACTION[why]) {                         // a person pressed a work button here: this computer takes over by itself
+                const res = await takeOver(why, { polite: true });
+                return res && res.ok ? { ok: true } : { ok: false, reason: (res && res.reason) || "no-answer" };
+              }
+              return { ok: false, reason: "follower", by: c.label };
+            }
+          }
           if (r === "connecting") { await sleep(500); continue; }
           if (typeof l.takeOver !== "function") return { ok: true };
           let res; try { res = await l.takeOver({ reason: why || "start", ifFree: true }); } catch (e) { res = { ok: false, reason: String(e && e.message || e) }; }
@@ -14434,7 +14460,9 @@ ANTI-REPETITION (TITLE)
           const c = ctrl();
           if (c && c.alive && !c.mine) {
             try {
-              const rr = await Promise.race([l.command("take-over-request", { reason }), sleep(YIELD_MAX_MS / 4)]);
+              // A live controller answers within a second or two. A closed or frozen one never does, so after 4 s the
+              // claim goes ahead without it (it learns from its listener and stops at its next safe boundary).
+              const rr = await Promise.race([l.command("take-over-request", { reason }), sleep(4000)]);
               const a = rr && rr.ok && rr.ack && rr.ack.result && rr.ack.result.auto;
               if (a && a.on) preAdopt = a;
             } catch (_) {}
@@ -14458,7 +14486,7 @@ ANTI-REPETITION (TITLE)
       }
       function explainBlocked() {
         const c = ctrl(), r = role();
-        if (r === "follower") toast(c && c.alive ? `This computer is mirroring ${esc(c.label)} — press Take over to work here.` : "No computer is working — press Take over to work here.");
+        if (r === "follower") toast(c && c.alive ? `Switching to this computer from ${esc(c.label)}…` : "Switching to this computer…");
         else if (r === "connecting") toast("Connecting to the live workspace…");
         else if (yielding) toast("Handing the pipeline over to another computer…");
       }
@@ -14812,7 +14840,8 @@ ANTI-REPETITION (TITLE)
       }
       function isHidden() { try { return document.visibilityState === "hidden" || !!document.hidden; } catch (_) { return false; } }
       function onVisibility() {
-        if (isHidden()) {
+        if (isHidden()) { return; }     // a hidden controller keeps working at full speed; nobody takes over from it
+        if (false) {
           clearTimeout(hideTimer);
           hideTimer = setTimeout(() => {
             hideTimer = 0;
@@ -14846,28 +14875,29 @@ ANTI-REPETITION (TITLE)
         try {
           modeSync();
           const r = role();
-          if ((r !== "follower" && r !== "solo") || isHidden() || yielding) return;
+          if ((r !== "follower" && r !== "solo") || yielding) return;
           if (r === "solo" && !claimable()) return;                                  // no cloud: nothing to take over from
-          const c = ctrl(), hid = val(KEY_HIDDEN);
+          const c = ctrl();
           const dead = !c || !c.alive;
-          const hiddenCtl = !!(c && c.alive && !c.mine && hid && hid.on && hid.by === c.id);
+          const hiddenCtl = false;     // a background tab is not a stopped tab (its timers run in a worker), so it is never taken from
           if (!dead && !hiddenCtl) { if (autoTakeTimer) { clearTimeout(autoTakeTimer); autoTakeTimer = 0; } return; }
           // Auto-Pilot was on - the controller's own published intent, or this browser's - and not older than the F1 rule allows
           const auto = val(KEY_AUTO), age = auto && auto.on ? Date.now() - (Number(auto.at) || 0) : Infinity;
-          if (!((age < INTENT_TTL_MS) || localIntentOn())) return;
+          // ...or the dead computer was visibly RUNNING the pipeline when it stopped (info().orphaned): that alone says "continue"
+          if (!((age < INTENT_TTL_MS) || localIntentOn() || info().orphaned)) return;
           if (!unfinishedWork()) return;
-          if (Date.now() - lastAutoTake < AUTO_COOLDOWN_MS || Date.now() - lastAutoTry < 3000 || autoTakeTimer) return;
+          if (Date.now() - lastAutoTake < AUTO_COOLDOWN_MS || Date.now() - lastAutoTry < 2000 || autoTakeTimer) return;
           let h = 0; const id = myId(); for (let i = 0; i < id.length; i++) h = (h * 31 + id.charCodeAt(i)) >>> 0;
           autoTakeTimer = setTimeout(async () => {                                   // a spread so several followers rarely race
             autoTakeTimer = 0;
             const r2 = role();
-            if ((r2 !== "follower" && r2 !== "solo") || isHidden() || yielding) return;
+            if ((r2 !== "follower" && r2 !== "solo") || yielding) return;
             const c2 = ctrl(); if (c2 && c2.alive && !c2.mine && !(hiddenCtl && val(KEY_HIDDEN) && val(KEY_HIDDEN).on)) return;
             lastAutoTry = Date.now();
             const res = dead ? await acquire("controller-lost") : await takeOver("controller-hidden");
             if (res.ok) lastAutoTake = Date.now();                                    // the 90 s pause is for a take-over that happened, not for one that was refused
             else warn("auto takeover refused:", res.reason);
-          }, 300 + (h % 2200));
+          }, 200 + (h % 800));
         } catch (_) {}
       }
       /*  Wait (bounded) until every set another computer holds under a live lease has been given back. The old controller
@@ -14896,6 +14926,7 @@ ANTI-REPETITION (TITLE)
         handoff = h;
         const run = freshRun(), auto = val(KEY_AUTO);
         if (preAdopt) { if (!autoOn()) pendingAdopt = preAdopt; preAdopt = null; }      // the old controller's acknowledgement carried it
+        if (!pendingAdopt && !(auto && auto.on) && !autoOn() && info && info.last && info.last.mode === "auto" && info.last.id !== myId()) pendingAdopt = { on: true, scope: "", batch: 0, done: 0, at: Date.now() };   // the old computer was running Auto-Pilot but never published the flag
         if (!pendingAdopt && auto && auto.on && !autoOn()) pendingAdopt = auto;        // from the first moment: the document keeps saying "Auto on" until this page adopts or declines it
         try {                                                                           // the Workspace mirror (agent W) shows Auto on: the same intent
           const wa = window.WsMirror && typeof window.WsMirror.autoState === "function" ? window.WsMirror.autoState() : null;
@@ -28020,12 +28051,23 @@ async function callOpenAI(payload, opts = {}) {
     }, function () {});
   }
   function installFollowerGate() {
+    // A work button pressed on a computer that is only mirroring: this computer simply becomes the working one
+    // (no button, no prompt) and the click is carried out here as soon as it is.
+    var switching = false;
     document.addEventListener("click", function (e) {
       if (!isFollower() || suppressed()) return;
       var t = e.target, b = t && t.closest ? t.closest(BLOCK) : null;
       if (!b) return;
       e.preventDefault(); e.stopImmediatePropagation();
-      toast("This computer is mirroring " + ctlLabel() + ". Take over to run this here.");
+      if (switching) return;
+      switching = true;
+      var pc = window.PipeControl, l = lm();
+      var go = pc && typeof pc.takeOver === "function" ? pc.takeOver("action", { polite: true }) : (l && l.takeOver ? l.takeOver({ reason: "action" }) : Promise.resolve({ ok: false }));
+      Promise.resolve(go).then(function (res) {
+        switching = false;
+        if (res && res.ok) { setTimeout(function () { if (!isFollower()) b.click(); }, 300); }
+        else toast("Switching to this computer did not complete yet. Press the button again.");
+      }, function () { switching = false; });
     }, true);
     document.addEventListener("keydown", function (e) {
       if (!isFollower() || e.key !== "Enter" || !e.target || e.target.id !== "listingDescInput") return;

@@ -60,6 +60,20 @@ const stub = (replies) => { let i = 0; const calls = []; const fn = async (req) 
     assert(!/for \(const i of workIdx\) \{\s*await metadataHandler\.analyzeAndEmbedMetadata/.test(html), "old sequential 8-call loop removed");
   });
 
+  await t("no manual takeover anywhere: no buttons, automatic and fast failover, restart of interrupted sets", () => {
+    assert(!/btn: "Take over"|btn: "Start here"/.test(html), "bar buttons removed");
+    assert(!/press Take over|Take over to run this here|Take over to work here/.test(html), "no 'press Take over' messages");
+    assert(/Switching to this computer/.test(html));
+    assert(/sleep\(4000\)\]\);/.test(html) && !/sleep\(YIELD_MAX_MS \/ 4\)/.test(html), "polite wait capped at 4 s");
+    assert(/run \? \{ lease: 30000, beat: 10000 \}/.test(html), "running lease 30 s / beat 10 s");
+    assert(/const LEASE_MS = 60000, BEAT_MS = 15000/.test(html));
+    assert(/const SETTLE_MS = 15000, PROBE_MS = 8000, PAGE_DEAD_MS = 20000/.test(html));
+    assert(/const ownDead = \(d\) =>/.test(html), "a closed tab of this browser is free at once");
+    assert(/info\(\)\.orphaned\)\) return;/.test(html), "a dead computer that was running is enough to continue");
+    assert(/const hiddenCtl = false;/.test(html), "a background tab is never taken from");
+    assert(/function waitingCount\(\)/.test(html) && /const allBlocked = t\.ready === 0 && waiting === 0;/.test(html), "Start Auto enabled when approved/interrupted sets are waiting");
+  });
+
   await t("effort tiers: title/description use MODEL.effort; tags and Shopify parts use the light tier", () => {
     const fx = L.buildFacts({ listingDesc: "Pine Tree Charm Beady Necklace" });
     assert.strictEqual(L.titleRequest({ facts: fx, rules: "" }).effort, undefined);      // falls back to MODEL.effort
