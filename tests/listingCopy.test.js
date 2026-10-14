@@ -18,9 +18,9 @@ const t = async (name, fn) => { try { await fn(); passed++; console.log("ok   " 
 const stub = (replies) => { let i = 0; const calls = []; const fn = async (req) => { calls.push(req); const r = replies[Math.min(i++, replies.length - 1)]; return typeof r === "function" ? r(req) : r; }; fn.calls = calls; return fn; };
 
 (async () => {
-  await t("model is gpt-6.1-sol with medium effort (light tier low) for speed", () => {
+  await t("model is gpt-6.1-sol with low effort (the pre-change speed) ", () => {
     assert.strictEqual(L.MODEL.model, "gpt-6.1-sol");
-    assert.strictEqual(L.MODEL.effort, "medium");
+    assert.strictEqual(L.MODEL.effort, "low");
     assert.strictEqual(L.MODEL.effortLight, "low");
   });
 
@@ -50,9 +50,9 @@ const stub = (replies) => { let i = 0; const calls = []; const fn = async (req) 
     new vm.Script(shim);
   });
 
-  await t("effort tiers: title/description medium (retries low); tags and Shopify parts low", () => {
+  await t("effort tiers: title/description use MODEL.effort; tags and Shopify parts use the light tier", () => {
     const fx = L.buildFacts({ listingDesc: "Pine Tree Charm Beady Necklace" });
-    assert.strictEqual(L.titleRequest({ facts: fx, rules: "" }).effort, undefined);      // falls back to MODEL.effort = medium
+    assert.strictEqual(L.titleRequest({ facts: fx, rules: "" }).effort, undefined);      // falls back to MODEL.effort
     assert.strictEqual(L.descriptionRequest({ facts: fx, rules: "" }).effort, undefined);
     assert.strictEqual(L.tagsRequest({ facts: fx, rules: "" }).effort, "low");
     for (const part of ["titles", "description", "tags"]) assert.strictEqual(L.shopifyRequest({ facts: fx, part }).effort, "low");
@@ -274,9 +274,9 @@ const stub = (replies) => { let i = 0; const calls = []; const fn = async (req) 
     assert(calls[0].user.includes("Pine Tree Charm Necklace, Sterling Silver, Flat Pendant, Ball Chain"));
   });
 
-  await t("speed settings: medium/low effort, no validation re-calls, tight token caps and timeout", () => {
+  await t("speed settings: low effort, no validation re-calls, tight token caps and timeout", () => {
     const f = L.buildFacts({ listingDesc: "Christmas Ornament Charm Beady Necklace" });
-    assert(L.titleRequest({ facts: f, rules: "" }).maxTokens <= 3000 && L.tagsRequest({ facts: f, rules: "" }).maxTokens <= 3000);
+    assert(L.titleRequest({ facts: f, rules: "" }).maxTokens <= 4000 && L.tagsRequest({ facts: f, rules: "" }).maxTokens <= 4000);
     assert(/timeoutMs: 60000, maxRetries: 1/.test(html));
   });
 

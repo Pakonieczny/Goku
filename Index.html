@@ -18934,10 +18934,10 @@ const ListingCopy = (function () {
   "use strict";
 
   // Copy-generation model. Vision / alt-text / other calls keep window.modelName.
-  const MODEL = { model: "gpt-6.1-sol", effort: "medium", effortLight: "low" };
-  // Speed first. Etsy title + description (first attempt) run at `effort`; tags, the three Shopify parts and
-  // every RETRY (which already carries exact feedback) run at `effortLight`. Raise `effort` to "high" for
-  // more polish at the price of much longer waits. The facts block and validators do most of the quality work.
+  const MODEL = { model: "gpt-6.1-sol", effort: "low", effortLight: "low" };
+  // Speed first: "low" is what the app ran before this change. Raise `effort` (title + description) or
+  // `effortLight` (tags + Shopify) to "medium"/"high" for more polish at the price of much longer waits and
+  // a higher risk of hitting the openaiProxy function time limit.
 
   // ---------------------------------------------------------------- facts
   const CATS = {
@@ -19201,7 +19201,7 @@ const ListingCopy = (function () {
     ].filter(x => x !== "").join("\n");
     return {
       system: "You are an expert Etsy jewelry SEO copywriter. Write one accurate, plain, buyer-searchable title for the specific piece described. Output only the title.",
-      user, maxTokens: 3000, label: "Title"
+      user, maxTokens: 4000, label: "Title"
     };
   }
 
@@ -19229,7 +19229,7 @@ const ListingCopy = (function () {
     ].filter(x => x !== "").join("\n");
     return {
       system: "You are an expert jewelry copywriter. Write factual, specific, buyer-friendly product copy for the exact piece described. Output only the description.",
-      user, maxTokens: 3000, label: "Description"
+      user, maxTokens: 4000, label: "Description"
     };
   }
 
@@ -19254,7 +19254,7 @@ const ListingCopy = (function () {
     ].filter(x => x !== "").join("\n");
     return {
       system: "Generate concise, varied, accurate Etsy tags. No duplicates. Each tag 20 characters or fewer. Output only the tags, one per line.",
-      user, maxTokens: 3000, label: "Key phrases", effort: MODEL.effortLight
+      user, maxTokens: 4000, label: "Key phrases", effort: MODEL.effortLight
     };
   }
 
@@ -19427,7 +19427,7 @@ const ListingCopy = (function () {
       o.problems && o.problems.length ? `YOUR PREVIOUS ATTEMPT WAS REJECTED because: ${o.problems.join("; ")}. Fix every point.` : "",
       o.notes || ""
     ].filter(x => x !== "").join("\n");
-    return { system: "Return STRICT JSON only.", user, maxTokens: 4000, label: "Shopify " + part, effort: MODEL.effortLight };
+    return { system: "Return STRICT JSON only.", user, maxTokens: 5000, label: "Shopify " + part, effort: MODEL.effortLight };
   }
 
   function truncWords(s, n) {
