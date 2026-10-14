@@ -43,6 +43,7 @@
 
 const admin = require("./firebaseAdmin");
 const db = admin.firestore();
+const budgetKit = require("./_shopifyBudget");
 
 const API_VERSION = process.env.SHOPIFY_API_VERSION || "2025-10";
 const DAILY_VARIANT_LIMIT = 1000;   // Shopify hard limit (50K+ variant stores)
@@ -439,9 +440,7 @@ function buildMatrix(category, tier, baseSku) {
 
 /* ------------------------------ helpers ------------------------------ */
 
-function torontoDateKey() {
-  return new Intl.DateTimeFormat("en-CA", { timeZone: "America/Toronto", year: "numeric", month: "2-digit", day: "2-digit" }).format(new Date());
-}
+function torontoDateKey() { return budgetKit.torontoDateKey(new Date()); }
 
 // Reserve a job's variants exactly once. The reservation marker and the
 // aggregate budget counter are written in the same transaction, so a killed
@@ -1806,10 +1805,15 @@ async function drain() {
     // for a later 30-minute cron pass.
     while (Date.now() - t0 <= DRAIN_TIME_BUDGET_MS) {
       const snap = await db.collection(QCOL).where("status", "==", "QUEUED").limit(150).get();
-      const docSnap = snap.docs
+      const sorted = snap.docs
         .slice()
-        .sort((a, b) => (a.data().createdAtMs || 0) - (b.data().createdAtMs || 0))[0];
-      if (!docSnap) break;
+        .sort((a, b) => (a.data().createdAtMs || 0) - (b.data().createdAtMs || 0));
+      if (!sorted.length) break;
+      // Oldest job that FITS what is left of today's budget (a large job at the head no longer strands the allowance).
+      const bud = await budgetSnapshot();
+      const fit = budgetKit.pickFit(sorted.map((d) => ({ doc: d, data: d.data() })), bud.remaining, bud.dateKey);
+      if (!fit) { out.stoppedFor = "budget"; break; }
+      const docSnap = fit.doc;
 
       // The lease serializes workers globally; the per-job transaction is a
       // second guard against an expired lease or an old deployed worker.
@@ -1932,8 +1936,21 @@ async function status() {
     db.collection(QCOL).where("status", "==", "DONE").count().get(),
     budgetSnapshot()
   ]);
+  const queued = q.data().count;
+  // "Paused until tomorrow" only matters when the day's allowance is nearly gone (the biggest product needs ~40
+  // variants), so the extra read of the queue is skipped otherwise and cached for a minute.
+  budget.paused = false; budget.resetsInMs = budgetKit.msUntilTorontoMidnight(new Date()); budget.nextNeeds = 0;
+  if (queued > 0 && budget.remaining < 60) {
+    if (!status._cache || Date.now() - status._cache.at > 60000 || status._cache.key !== budget.dateKey + ":" + budget.used + ":" + queued) {
+      const qs = await db.collection(QCOL).where("status", "==", "QUEUED").limit(150).get();
+      const jobs = qs.docs.map((x) => ({ data: x.data() }));
+      status._cache = { at: Date.now(), key: budget.dateKey + ":" + budget.used + ":" + queued,
+        paused: !budgetKit.pickFit(jobs, budget.remaining, budget.dateKey), needs: budgetKit.smallestNeed(jobs, budget.dateKey) };
+    }
+    budget.paused = status._cache.paused; budget.nextNeeds = status._cache.needs;
+  }
   return {
-    queued: q.data().count, uploading: u.data().count,
+    queued, uploading: u.data().count,
     failed: f.data().count, done: d.data().count, budget
   };
 }

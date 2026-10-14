@@ -25969,9 +25969,12 @@ async function callOpenAI(payload, opts = {}) {
           const j = await r.json();
           const b = j.budget || {};
           if (el) {
-            el.textContent = `Shopify Q:${j.queued ?? "?"}` + (j.failed ? ` ✗${j.failed}` : "") + ` · ${b.used ?? "?"}/${b.ceiling ?? 950} today`;
-            el.classList.toggle("warn", !!j.failed || (b.remaining !== undefined && b.remaining < 50));
-            el.title = `Queued: ${j.queued} | Uploading: ${j.uploading} | Failed: ${j.failed} | Done: ${j.done}\nVariant budget today: ${b.used}/${b.ceiling} (resets midnight Toronto)` + (j.failed ? "\nClick to retry failed jobs." : "");
+            const paused = !!(b.paused && (j.queued || 0) > 0);
+            const mins = Math.max(1, Math.ceil((Number(b.resetsInMs) || 0) / 60000));
+            const resumes = mins >= 60 ? `${Math.floor(mins / 60)}h ${mins % 60}m` : `${mins}m`;
+            el.textContent = `Shopify Q:${j.queued ?? "?"}` + (j.failed ? ` ✗${j.failed}` : "") + (paused ? " · paused" : "") + ` · ${b.used ?? "?"}/${b.ceiling ?? 950} today` + (paused ? ` · resumes in ${resumes}` : "");
+            el.classList.toggle("warn", !!j.failed || paused || (b.remaining !== undefined && b.remaining < 50));
+            el.title = `Queued: ${j.queued} | Uploading: ${j.uploading} | Failed: ${j.failed} | Done: ${j.done}\nVariant budget today: ${b.used}/${b.ceiling} (resets midnight Toronto)` + (b.paused && j.queued ? "\nPaused: Shopify limits new variants per day and the next product needs " + (b.nextNeeds || "more") + " but only " + (b.remaining ?? 0) + " are left. The queue resumes by itself after the reset." : "") + (j.failed ? "\nClick to retry failed jobs." : "");
           }
           const c = document.getElementById("spCounts");
           if (c) c.innerHTML = `<span>Done ${j.done ?? 0}</span><span class="sp-q">Queued ${j.queued ?? 0}</span>` +
