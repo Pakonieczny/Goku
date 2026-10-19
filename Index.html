@@ -62,7 +62,7 @@
 // another automatically, so a tab still running OLD code could end up doing the work. Every tab compares its build with
 // the deployed one (a tiny file, every 2 minutes) and, as soon as it is idle, reloads itself. A stale tab never takes
 // control from another computer.
-window.APP_BUILD = "20261014T015642";
+window.APP_BUILD = "20261019T003126";
 (function () {
   var URL_ = function () { return window.APP_BUILD_URL || ("assets/build.json?t=" + Date.now()); };
   function idle() {
@@ -80,6 +80,12 @@ window.APP_BUILD = "20261014T015642";
     try {
       var r = JSON.parse(sessionStorage.getItem("lgBuildReloads") || "[]").filter(function (t) { return Date.now() - t < 600000; });
       if (r.length >= 3) return false;                      // never loop
+      // A reload that did not bring the page up to the deployed build (an old copy is still being served) is not repeated for an
+      // hour: every reload re-attaches every listener and re-reads every result set, so a mismatch that cannot be cured would do
+      // that 3 times every 10 minutes for as long as the tab stays open.
+      var t = JSON.parse(sessionStorage.getItem("lgBuildTarget") || "null");
+      if (t && t.build === window.__staleBuild && Date.now() - t.at < 3600000) return false;
+      sessionStorage.setItem("lgBuildTarget", JSON.stringify({ build: window.__staleBuild, at: Date.now() }));
       r.push(Date.now()); sessionStorage.setItem("lgBuildReloads", JSON.stringify(r)); return true;
     } catch (_) { return true; }
   }
@@ -14234,8 +14240,15 @@ ANTI-REPETITION (TITLE)
 
       // ---- Auto-Pilot remembers that it was running -----------------------------------------------------
       let autoVal = false;
-      function writeIntent() {
-        try { window.PipeControl && window.PipeControl.autoChanged(); } catch (_) {}      // LIVE MIRROR control: Auto-Pilot is part of the shared state (ctl.auto)
+      let sharedIntentAt = 0;
+      function writeIntent(periodic) {
+        /*  COST: autoChanged() moves ctl.auto.at, and every move is a write of the shared state document that every other open page
+            reads. The 30 s refresh used to do that every time (2,880 writes and (pages - 1) x 2,880 reads a day, with nothing changed);
+            the shared copy only has to stay younger than INTENT_FRESH_MS (15 min), so the refresh passes it on every 5 min. */
+        if (!periodic || Date.now() - sharedIntentAt >= 5 * 60 * 1000) {
+          sharedIntentAt = Date.now();
+          try { window.PipeControl && window.PipeControl.autoChanged(); } catch (_) {}      // LIVE MIRROR control: Auto-Pilot is part of the shared state (ctl.auto)
+        }
         if (!autoVal) { ls.del(INTENT); return; }
         ls.set(INTENT, JSON.stringify({ on: true, scope: window.__autoScope || null, batch: window.__autoBatchLimit || null, done: window.__autoBatchDone || 0, at: Date.now(), page: PAGE }));
       }
@@ -14256,7 +14269,7 @@ ANTI-REPETITION (TITLE)
           const orig = window.noteBatchListingDone;
           if (typeof orig === "function") window.noteBatchListingDone = function () { const r = orig.apply(this, arguments); writeIntent(); return r; };
         } catch (_) {}
-        setInterval(() => { if (autoVal) writeIntent(); }, 30000);
+        setInterval(() => { if (autoVal) writeIntent(true); }, 30000);
       }
       async function ensureEtsy() {
         try {
@@ -25835,6 +25848,7 @@ async function callOpenAI(payload, opts = {}) {
           if (e.target.closest("button")) return;
           const open = p.classList.toggle("collapsed") === false;
           localStorage.setItem("spPanelOpen", open ? "1" : "0");
+          if (open) refreshShopifyStatus();   // the job list is only fetched while the panel is open
         });
         // Filter wiring — re-render from the cached job list, no refetch.
         p.querySelector("#spSearch").addEventListener("input", (e) => {
@@ -26033,13 +26047,33 @@ async function callOpenAI(payload, opts = {}) {
       window.__renderRecentTest = renderRecent; // exposed for diagnostics
 
       // ---- status chip + panel refresh + periodic drain ----
-      async function refreshShopifyStatus() {
+      /*  COST. Every status call is answered from Firestore by the server (four counts and the budget document, plus ONE READ
+          PER JOB listed when `recent` is asked for), and every open tab used to ask three times a minute, hidden or not. So the
+          job list is requested only while something shows it (panel open) or needs it (an upload in progress, to spot a stuck
+          one); a hidden tab asks every 5 minutes instead of every minute; the 60 s and 2 min timers share one answer; and a
+          drain is not kicked while the status says the daily budget has nothing that fits (it would stop at once). */
+      const SP_HIDDEN_GAP = 5 * 60 * 1000;
+      let spLast = { at: 0, j: null }, spInflight = null;
+      const spDue = () => !document.hidden || Date.now() - spLast.at >= SP_HIDDEN_GAP;
+      const spPaused = (j) => { j = j || spLast.j; return !!(j && j.budget && j.budget.paused && (j.queued || 0) > 0); };
+      function refreshShopifyStatus(o) {
+        if (o && o.maxAgeMs) {                                   // periodic callers share one answer; an explicit refresh always asks
+          if (spInflight) return spInflight;
+          if (spLast.j && Date.now() - spLast.at < o.maxAgeMs) return Promise.resolve(spLast.j);
+          return (spInflight = fetchShopifyStatus().finally(() => { spInflight = null; }));
+        }
+        return fetchShopifyStatus();
+      }
+      async function fetchShopifyStatus() {
         const el = document.getElementById("shopifyQueueStatus");
         ensurePanel();
         try {
-          const r = await fetch(FN + "?op=status&recent=60");
+          const pn = document.getElementById("shopifyPanel");
+          const wantRecent = !spLast.j || !pn || !pn.classList.contains("collapsed") || (spLast.j.uploading || 0) > 0;
+          const r = await fetch(FN + "?op=status" + (wantRecent ? "&recent=60" : ""));
           if (!r.ok) throw new Error("HTTP " + r.status);
           const j = await r.json();
+          spLast = { at: Date.now(), j };
           const b = j.budget || {};
           if (el) {
             const paused = !!(b.paused && (j.queued || 0) > 0);
@@ -26111,13 +26145,28 @@ async function callOpenAI(payload, opts = {}) {
       // listings were enqueued. The browser never serializes product
       // completion: Firestore already owns every payload before Auto-Pilot
       // advances, and this map only mirrors server truth into Statistics.
+      /*  COST. A poll is answered from Firestore by the server (about one read per job in the window plus a few), and it ran every
+          6 s in every open tab, hidden or not, for as long as ANY watcher existed - a job that waits hours for the daily Shopify
+          budget, or one the server no longer knows, kept every tab polling all night. Now: 6 s only while something is changing
+          (a new watcher, a status change); after 10 unchanged polls 15 s, after 20 30 s, after 40 60 s; a hidden tab at most once a minute; the
+          window asked for is sized to the watchers; a watcher the server cannot find after 3 exact lookups is dropped for this
+          page; old PENDING rows with no job are retried every 5 min and given up after 3 tries. */
       const shopifyWatchers = new Map();
       let watcherPollInFlight = false;
       let legacyPendingReconcileAt = 0;
       let legacyPendingReconcileInFlight = false;
+      let legacyGapMs = 30 * 1000;
+      let watcherQuiet = 0, watcherNextAt = 0;
+      const watcherGaveUp = new Set();
+      const legacyTries = new Map();
+      function watcherGap() {
+        const g = watcherQuiet < 10 ? 6000 : watcherQuiet < 20 ? 15000 : watcherQuiet < 40 ? 30000 : 60000;
+        return document.hidden ? Math.max(g, 60000) : g;
+      }
 
       function trackShopifyJob(meta) {
         if (!meta || !meta.jobId || !meta.statsDocId) return;
+        if (!shopifyWatchers.has(String(meta.jobId))) { watcherQuiet = 0; watcherNextAt = 0; }
         const old = shopifyWatchers.get(String(meta.jobId)) || {};
         shopifyWatchers.set(String(meta.jobId), {
           ...old,
@@ -26133,6 +26182,7 @@ async function callOpenAI(payload, opts = {}) {
         const nextStatus = job.status === "DONE" ? "LIVE" : String(job.status || "QUEUED");
         if (nextStatus === watcher.lastStatus && job.status !== "DONE" && job.status !== "FAILED") return;
         watcher.lastStatus = nextStatus;
+        watcherQuiet = 0;                                         // something changed: poll at full speed again
         const title = job.title || watcher.title || "";
         const url = job.handle ? ("https://britesjewelry.com/products/" + job.handle) : "";
         await window.ListingStats?.updateShopify(watcher.statsDocId, {
@@ -26161,12 +26211,13 @@ async function callOpenAI(payload, opts = {}) {
       async function reconcileLegacyPendingRows(rows, recent) {
         const pending = (rows || []).filter(r =>
           r && r.shopify && r.shopify.status === "PENDING" &&
-          !r.shopify.jobId && r.shopify.title
+          !r.shopify.jobId && r.shopify.title && (legacyTries.get(r.id) || 0) < 3
         );
         if (!pending.length || legacyPendingReconcileInFlight ||
-            Date.now() - legacyPendingReconcileAt < 30 * 1000) return;
+            Date.now() - legacyPendingReconcileAt < legacyGapMs) return;
         legacyPendingReconcileAt = Date.now();
         legacyPendingReconcileInFlight = true;
+        let adopted = 0;
         try {
           let jobs = recent;
           if (!Array.isArray(jobs)) {
@@ -26185,11 +26236,11 @@ async function callOpenAI(payload, opts = {}) {
               return Math.abs(Number(a.createdAtMs || 0) - at) - Math.abs(Number(b.createdAtMs || 0) - at);
             });
             const job = candidates[0];
-            if (!job) continue;
+            if (!job) { legacyTries.set(row.id, (legacyTries.get(row.id) || 0) + 1); continue; }
             // Only adopt a plausible time-neighbour; repeated product titles
             // from another day must never be attached to this Statistics row.
-            if (row.tsMs && Math.abs(Number(job.createdAtMs || 0) - Number(row.tsMs)) > 2 * 60 * 60 * 1000) continue;
-            claimed.add(job.id);
+            if (row.tsMs && Math.abs(Number(job.createdAtMs || 0) - Number(row.tsMs)) > 2 * 60 * 60 * 1000) { legacyTries.set(row.id, (legacyTries.get(row.id) || 0) + 1); continue; }
+            claimed.add(job.id); adopted++;
             const nextStatus = job.status === "DONE" ? "LIVE" : String(job.status || "QUEUED");
             await window.ListingStats?.updateShopify(row.id, {
               status: nextStatus,
@@ -26211,14 +26262,23 @@ async function callOpenAI(payload, opts = {}) {
           // Legacy rows remain visible as Pending and will be retried by the
           // next shared poll; current-version jobs never depend on matching.
         } finally {
+          legacyGapMs = adopted ? 30 * 1000 : 5 * 60 * 1000;      // nothing matched: ask again in 5 min (each ask reads 150 jobs)
           legacyPendingReconcileInFlight = false;
         }
       }
 
       window.resumeShopifyWatchers = function resumeShopifyWatchers(rows) {
+        // A watcher whose row already shows the outcome (another tab mirrored it) has nothing left to do.
+        if (shopifyWatchers.size) {
+          const byRow = new Map((rows || []).map(r => [r && r.id, r]));
+          shopifyWatchers.forEach((w, id) => {
+            const rs = (byRow.get(w.statsDocId) || {}).shopify;
+            if (rs && String(rs.jobId) === id && (rs.url || rs.status === "LIVE" || rs.status === "FAILED")) shopifyWatchers.delete(id);
+          });
+        }
         (rows || []).forEach(row => {
           const sp = row && row.shopify;
-          if (!sp || !sp.jobId || sp.url || sp.status === "LIVE" || sp.status === "FAILED") return;
+          if (!sp || !sp.jobId || sp.url || sp.status === "LIVE" || sp.status === "FAILED" || watcherGaveUp.has(String(sp.jobId))) return;
           trackShopifyJob({
             jobId: sp.jobId,
             statsDocId: row.id,
@@ -26230,43 +26290,53 @@ async function callOpenAI(payload, opts = {}) {
         reconcileLegacyPendingRows(rows || []);
       };
 
-      async function pollShopifyWatchers() {
+      async function pollShopifyWatchers(force) {
         if (watcherPollInFlight) return;
         const rows = window.__listingStatsRows || [];
-        if (!shopifyWatchers.size && !rows.some(r => r.shopify && r.shopify.status === "PENDING" && !r.shopify.jobId)) return;
+        const legacyDue = Date.now() - legacyPendingReconcileAt >= legacyGapMs &&
+          rows.some(r => r.shopify && r.shopify.status === "PENDING" && !r.shopify.jobId && r.shopify.title && (legacyTries.get(r.id) || 0) < 3);
+        if (!shopifyWatchers.size && !legacyDue) return;
+        if (force !== true && Date.now() < watcherNextAt) return;      // cost: see the note above (backoff, hidden tab)
         watcherPollInFlight = true;
         try {
-          const r = await fetch(FN + "?op=status&recent=150");
-          if (!r.ok) throw new Error("HTTP " + r.status);
-          const j = await r.json();
-          const jobs = j.recent || [];
-          const byId = new Map(jobs.map(job => [String(job.id), job]));
-          for (const watcher of Array.from(shopifyWatchers.values())) {
-            let job = byId.get(watcher.jobId);
-            // Exact lookup is a scale-safe fallback when the job is older
-            // than the recent-150 panel window.
-            if (!job && Date.now() - Number(watcher.lastExactAt || 0) > 60 * 1000) {
-              watcher.lastExactAt = Date.now();
-              try {
-                const er = await fetch(FN + "?op=status&jobId=" + encodeURIComponent(watcher.jobId));
-                const ej = await er.json();
-                job = ej.job || null;
-              } catch (_) {}
-            }
-            if (!job) continue;
-            await mirrorShopifyJob(watcher, job);
-            if (job.status === "QUEUED" &&
-                Date.now() - Number(job.createdAtMs || watcher.createdAtMs) > 30 * 1000) {
-              kickShopifyDrain("queued-job-watchdog");
-            } else if (job.status === "UPLOADING" && job.startedAtMs &&
-                Date.now() - Number(job.startedAtMs) > 18 * 60 * 1000) {
-              kickShopifyDrain("stale-upload-watchdog");
+          if (shopifyWatchers.size) {
+            const r = await fetch(FN + "?op=status&recent=" + Math.min(150, 20 + 2 * shopifyWatchers.size));
+            if (!r.ok) throw new Error("HTTP " + r.status);
+            const j = await r.json();
+            const jobs = j.recent || [];
+            const byId = new Map(jobs.map(job => [String(job.id), job]));
+            for (const watcher of Array.from(shopifyWatchers.values())) {
+              let job = byId.get(watcher.jobId);
+              // Exact lookup is a scale-safe fallback when the job is older
+              // than the recent-jobs window.
+              if (!job && Date.now() - Number(watcher.lastExactAt || 0) > 60 * 1000) {
+                watcher.lastExactAt = Date.now();
+                try {
+                  const er = await fetch(FN + "?op=status&jobId=" + encodeURIComponent(watcher.jobId));
+                  const ej = await er.json();
+                  job = ej.job || null;
+                  // the server does not know this job (three times in a row): stop asking for it, for this page
+                  if (er.ok && ej && ej.job === null && (watcher.misses = (watcher.misses || 0) + 1) >= 3) {
+                    shopifyWatchers.delete(watcher.jobId); watcherGaveUp.add(watcher.jobId); continue;
+                  }
+                } catch (_) {}
+              }
+              if (!job) continue;
+              await mirrorShopifyJob(watcher, job);
+              if (job.status === "QUEUED" && !spPaused() &&
+                  Date.now() - Number(job.createdAtMs || watcher.createdAtMs) > 30 * 1000) {
+                kickShopifyDrain("queued-job-watchdog");
+              } else if (job.status === "UPLOADING" && job.startedAtMs &&
+                  Date.now() - Number(job.startedAtMs) > 18 * 60 * 1000) {
+                kickShopifyDrain("stale-upload-watchdog");
+              }
             }
           }
-          await reconcileLegacyPendingRows(rows, jobs);
+          await reconcileLegacyPendingRows(rows);                      // asks for its own wider window, at most every 30 s / 5 min
         } catch (_) {
           // The next shared tick retries; Shopify processing is server-side.
         } finally {
+          watcherQuiet++; watcherNextAt = Date.now() + watcherGap();
           watcherPollInFlight = false;
         }
       }
@@ -26274,7 +26344,7 @@ async function callOpenAI(payload, opts = {}) {
       setInterval(pollShopifyWatchers, 6000);
       setTimeout(() => {
         window.resumeShopifyWatchers(window.__listingStatsRows || []);
-        pollShopifyWatchers();
+        pollShopifyWatchers(true);
       }, 3000);
 
       document.getElementById("shopifyQueueStatus")?.addEventListener("click", async () => {
@@ -26291,19 +26361,23 @@ async function callOpenAI(payload, opts = {}) {
           job.status === "UPLOADING" && job.startedAtMs &&
           Date.now() - Number(job.startedAtMs) > 18 * 60 * 1000
         );
-        if (j && (j.queued > 0 || staleUploading)) kickShopifyDrain("startup-queue-recovery", true);
+        if (j && ((j.queued > 0 && !spPaused(j)) || staleUploading)) kickShopifyDrain("startup-queue-recovery", true);
       }, 2500);
-      setInterval(refreshShopifyStatus, 60 * 1000);
+      setInterval(() => { if (spDue()) refreshShopifyStatus({ maxAgeMs: 30 * 1000 }); }, 60 * 1000);
+      document.addEventListener("visibilitychange", () => {
+        if (!document.hidden && Date.now() - spLast.at > 60 * 1000) refreshShopifyStatus({ maxAgeMs: 30 * 1000 });
+      });
       // Two-minute safety net only when work is actually queued. The server
       // lease makes this safe across tabs and the background worker normally
       // drains new arrivals immediately.
       setInterval(async () => {
-        const j = await refreshShopifyStatus();
+        if (!spDue()) return;
+        const j = await refreshShopifyStatus({ maxAgeMs: 30 * 1000 });     // the 60 s timer's answer, not a second call
         const staleUploading = j && (j.recent || []).some(job =>
           job.status === "UPLOADING" && job.startedAtMs &&
           Date.now() - Number(job.startedAtMs) > 18 * 60 * 1000
         );
-        if (j && (j.queued > 0 || staleUploading)) kickShopifyDrain("two-minute-queue-safety");
+        if (j && ((j.queued > 0 && !spPaused(j)) || staleUploading)) kickShopifyDrain("two-minute-queue-safety");
       }, 2 * 60 * 1000);
 
       // ---- category inference ----
@@ -26577,7 +26651,7 @@ async function callOpenAI(payload, opts = {}) {
           // could not resolve its own site URL, the browser starts it
           // directly; otherwise the shared watchdog remains a cheap backup.
           if (j.background === false) kickShopifyDrain("post-enqueue-fallback", true);
-          pollShopifyWatchers();
+          pollShopifyWatchers(true);
           refreshShopifyStatus();
           return { queued: true, jobId: j.jobId, title: fields.title };
         } finally { busy = false; }
@@ -26786,7 +26860,7 @@ async function callOpenAI(payload, opts = {}) {
       document.addEventListener("visibilitychange", () => {
         if (!document.hidden) primeEtsyApiUsage();
       });
-      setInterval(refreshApiUsage, 15000);
+      setInterval(() => { if (!document.hidden) refreshApiUsage(); }, 15000);   // two Firestore reads per call on the server: nobody is looking at a hidden tab's meter (it refreshes when shown, above)
       setInterval(() => {
         if (!document.hidden) primeEtsyApiUsage();
       }, 5 * 60 * 1000);
