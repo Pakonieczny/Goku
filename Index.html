@@ -62,7 +62,7 @@
 // another automatically, so a tab still running OLD code could end up doing the work. Every tab compares its build with
 // the deployed one (a tiny file, every 2 minutes) and, as soon as it is idle, reloads itself. A stale tab never takes
 // control from another computer.
-window.APP_BUILD = "20261014T015642";
+window.APP_BUILD = "20261019T005930";
 (function () {
   var URL_ = function () { return window.APP_BUILD_URL || ("assets/build.json?t=" + Date.now()); };
   function idle() {
@@ -4309,6 +4309,10 @@ ANTI-REPETITION (TITLE)
        ══════════════════════════════════════════════════════════════════════ */
     const LiveMirror = (function () {
       "use strict";
+      /*  EXPERIMENT (Firestore cost A/B). false = the multi-computer live connection is OFF: this module attaches no listener, reads and
+          writes no live~* document and runs no network timer; the role is the existing "denied" one ("this computer works on its own"),
+          every method below stays callable. true = exactly the behaviour described above. */
+      const LIVE_SYNC_ENABLED = false;  // EXPERIMENT: multi-computer live connection switched off. Set to true to restore.
       const COLL = "ListingGen_Config";
       const ID_CTRL = "live~ctrl", ID_STATE = "live~state~", ID_IMG = "live~img~", ID_PRES = "live~presence~", ID_MAIL = "live~mail";
       const NSS = ["ws", "img", "rv", "ctl"];
@@ -5363,7 +5367,8 @@ ANTI-REPETITION (TITLE)
                 }, () => { s.un = null; if (imgSubs.get(sl) === s) setTimeout(start, 5000); });
               } catch (_) {}
             };
-            if (S.authReady) start(); else s.pending = start;
+            if (!LIVE_SYNC_ENABLED) { /* switched off: the watcher is remembered, no listener is ever attached */ }
+            else if (S.authReady) start(); else s.pending = start;
           }
           s.fns.add(fn);
           const c = imgCache.get(sl); if (c) setTimeout(() => { try { fn({ d: c.d, m: c.m, t: c.t, b: c.b }, sl); } catch (_) {} }, 0);
@@ -5399,6 +5404,7 @@ ANTI-REPETITION (TITLE)
       }
       function barModel() {
         const lbl = (x) => esc(x || "another computer");
+        if (!LIVE_SYNC_ENABLED) return { sig: "off", dot: "off", html: '<span class="lm-chip">Live sync switched off</span><span class="lm-sub"> · this computer works on its own</span>', title: "The multi-computer live connection is switched off (LIVE_SYNC_ENABLED in Index.html), so computers are not mirrored. Everything else works as before." };
         if (S.deniedW || S.deniedR) return { sig: "denied", dot: "bad", html: '<span class="lm-chip">Live sync unavailable</span><span class="lm-sub">this computer works on its own</span>', title: "The database rules do not allow the shared live documents, so computers are not mirrored. Everything else works as before." };
         const err = S.errors.length && Date.now() - S.errors[S.errors.length - 1].at < 15000 ? S.errors[S.errors.length - 1] : null;
         const errH = err && (err.kind === "doc-full" || err.kind === "rejected" || err.kind === "img-too-large") ? '<span class="lm-chip warn" title="' + esc(err.msg) + '">Some live data is too large to mirror</span>' : "";
@@ -5475,6 +5481,17 @@ ANTI-REPETITION (TITLE)
 
       // ---- start ------------------------------------------------------------------------------------------------------
       const cfg = { autoClaim: true, trustSynthetic: false };
+      /*  Switched off (LIVE_SYNC_ENABLED = false): no wire(), no sweep timer, no auth wait, no listener, no lease/presence. The existing "denied"
+          role carries the page; evalRole resolves `ready` and draws the chip. */
+      function startOff() {
+        S.deniedW = true; S.deniedR = true;
+        try {
+          styleOnce(); mountBar();
+          document.addEventListener("DOMContentLoaded", () => renderBar());
+          window.addEventListener("load", () => renderBar());      // #dColumn is built by a later block; renderBar re-mounts the chip into it
+        } catch (_) {}
+        evalRole("switched-off");
+      }
       function afterAuth(fn) {
         let done = false;
         const go = () => { if (done) return; done = true; S.authReady = true; try { fn(); } catch (e) { warn("start failed:", e && e.message); } };
@@ -5487,6 +5504,7 @@ ANTI-REPETITION (TITLE)
         } catch (_) { go(); }
       }
       function start() {
+        if (!LIVE_SYNC_ENABLED) return startOff();
         try {
           S.visible = document.visibilityState !== "hidden"; S.onlineNav = navigator.onLine !== false;
           wire(); styleOnce(); mountBar(); renderBar();
