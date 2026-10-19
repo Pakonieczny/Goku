@@ -905,6 +905,7 @@ async function createShopifyProduct(job) {
           handle: recoveredProduct.handle,
           recoveredProductAtMs: Date.now()
         }, { merge: true });
+        await bumpQueueRev();
         console.warn(`Recovered job ${job.id} from Shopify marker ${queueMarker}; product creation will not repeat.`);
       }
     } catch (e) {
@@ -930,6 +931,7 @@ async function createShopifyProduct(job) {
     job.handle = product.handle;
     try {
       await db.collection(QCOL).doc(job.id).set({ productId: product.id, handle: product.handle }, { merge: true });
+      await bumpQueueRev();
     } catch (e) { console.warn("Couldn't persist productId for resume:", e.message); }
 
     // Media — always mediaUserErrors, never userErrors, on product media mutations.
@@ -1642,6 +1644,75 @@ async function ensureSetLinks(product, job) {
   };
 }
 
+/* ------------------------- queue revision (cheap polling) -------------------------
+ * Every open tab polls ?op=status every 6-60 s. One answer used to cost ~65-155 reads (4 count()s, the budget doc, the
+ * newest 60-150 job docs) although the queue changes a few times per listing. Each write that changes what status shows
+ * (a job doc or the budget) now bumps ONE tiny doc, META/queueRev; the read-only views stay on the warm instance and are
+ * re-used while that doc is unchanged (1 read per poll, ~0 when polls arrive within REV_MEMO_MS). The same token lets a
+ * drain that was blocked by the daily budget skip re-reading the queue until something changes or budget frees up.
+ * Fail-open: no rev (read failed) or nothing cached = the old full read. A writer that does not bump (a hand edit in the
+ * console, an older deployed instance) shows up within the max ages below. The counts+budget view is also re-read every
+ * minute because its budget numbers move with the clock (the paused/resumes-in text was already cached for 60 s). */
+const REV_DOC = "queueRev";
+const REV_MEMO_MS = 2000;
+const STATUS_MAX_AGE_MS = 60 * 1000;
+const LIST_MAX_AGE_MS = 5 * 60 * 1000;
+const DRAIN_BLOCK_MAX_AGE_MS = 5 * 60 * 1000;
+let _revMemo = null;       // { at, p }: the rev read, shared by polls that arrive within REV_MEMO_MS
+const _qc = new Map();     // view name -> { rev, at, n?, p }
+let _drainBlock = null;    // what the last budget-blocked drain saw: { rev, at, jobs, entries, reservedIds }
+
+function readQueueRev(fresh) {
+  const now = Date.now();
+  if (!fresh && _revMemo && now - _revMemo.at < REV_MEMO_MS) return _revMemo.p;
+  const p = db.collection(META).doc(REV_DOC).get()
+    .then((s) => (s.exists ? String((s.data() || {}).rev || "") : "none"))
+    .catch((e) => { console.warn("queueRev read failed:", e && e.message); return null; });
+  const memo = { at: now, p };
+  _revMemo = memo;
+  p.then((v) => { if (v === null && _revMemo === memo) _revMemo = null; });
+  return p;
+}
+
+async function bumpQueueRev() {
+  _revMemo = null; _qc.clear(); _drainBlock = null;
+  try {
+    await db.collection(META).doc(REV_DOC).set({ rev: Date.now().toString(36) + Math.random().toString(36).slice(2, 8), atMs: Date.now() });
+  } catch (e) { console.warn("queueRev bump failed:", e && e.message); }
+}
+
+// One cached view (shared object: callers copy before changing it). Concurrent callers share the one in-flight load.
+async function queueView(name, load, maxAgeMs) {
+  const rev = await readQueueRev();
+  if (rev === null) return load();
+  const hit = _qc.get(name);
+  if (hit && hit.rev === rev && Date.now() - hit.at < maxAgeMs) return hit.p;
+  const ent = { rev, at: Date.now(), p: load() };
+  _qc.set(name, ent);
+  ent.p.catch(() => { if (_qc.get(name) === ent) _qc.delete(name); });
+  return ent.p;
+}
+
+function rememberDrainBlock(rev, bud, sorted) {
+  if (rev === null) return;
+  _drainBlock = {
+    rev, at: Date.now(), entries: bud.entries, reservedIds: bud.reservedIds,
+    jobs: sorted.map((d) => { const j = d.data(); return { id: d.id, data: { variantCount: j.variantCount, productId: j.productId } }; })
+  };
+}
+// True only when the queue and budget docs are unchanged since a drain found that no queued job fits what is left, and
+// still none fits now (the rolling window moves with time, so the remaining allowance is recomputed).
+async function drainStillBlocked() {
+  const b = _drainBlock;
+  if (!b || Date.now() - b.at > DRAIN_BLOCK_MAX_AGE_MS) return false;
+  try {
+    const rev = await readQueueRev(true);
+    if (rev === null || rev !== b.rev) return false;
+    const remaining = Math.max(0, DAILY_SAFETY_CEILING - budgetKit.usedIn(b.entries, Date.now()));
+    return !budgetKit.pickFit(b.jobs, remaining, b.reservedIds);
+  } catch (_) { return false; }
+}
+
 /* ------------------------------ queue + drain ------------------------------ */
 
 function validatePayload(p) {
@@ -1715,6 +1786,7 @@ async function enqueue(payload, requestId) {
       status: "QUEUED"
     };
   });
+  if (!saved.deduped) await bumpQueueRev();
   return { ok: true, jobId: ref.id, ...saved };
 }
 
@@ -1790,6 +1862,7 @@ async function recoverStaleUploads() {
     });
     if (didRecover) recovered++;
   }
+  if (recovered) await bumpQueueRev();
   return recovered;
 }
 
@@ -1800,6 +1873,12 @@ async function drain() {
     uploaded: [], skipped: 0, failed: [], recovered: 0,
     stoppedFor: null, locked: false, moreQueued: false
   };
+  // Nothing changed since a drain found every queued job over the daily allowance, and still none fits: skip the lease,
+  // the stale-upload sweep and the queue read (~60-150 reads + 2 writes per kick, from every tab's safety-net timer).
+  if (await drainStillBlocked()) {
+    out.stoppedFor = "budget"; out.moreQueued = true; out.cachedBlock = true;
+    return out;
+  }
   if (!await acquireDrainLease(owner)) {
     out.locked = true;
     out.stoppedFor = "active-worker";
@@ -1813,6 +1892,7 @@ async function drain() {
     // worker is busy are picked up in the same invocation instead of waiting
     // for a later 30-minute cron pass.
     while (Date.now() - t0 <= DRAIN_TIME_BUDGET_MS) {
+      const revSeen = await readQueueRev(true);   // read BEFORE the queue, so a later change always shows as a new rev
       const snap = await db.collection(QCOL).where("status", "==", "QUEUED").limit(150).get();
       const sorted = snap.docs
         .slice()
@@ -1821,6 +1901,7 @@ async function drain() {
       // Oldest job that FITS what is left of today's budget (a large job at the head no longer strands the allowance).
       const bud = await budgetSnapshot();
       const fit = budgetKit.pickFit(sorted.map((d) => ({ id: d.id, doc: d, data: d.data() })), bud.remaining, bud.reservedIds);
+      if (!fit) rememberDrainBlock(revSeen, bud, sorted);
       if (!fit) { out.stoppedFor = "budget"; break; }
       const docSnap = fit.doc;
 
@@ -1848,9 +1929,11 @@ async function drain() {
           startedAtMs: null,
           workerId: null
         }, { merge: true });
+        await bumpQueueRev();
         out.stoppedFor = reservation.missing ? "missing-job" : "budget";
         break;
       }
+      await bumpQueueRev();   // UPLOADING and the new reservation are now what status must show
 
       try {
         const result = await createShopifyProduct(job);
@@ -1882,6 +1965,7 @@ async function drain() {
         }, { merge: true });
         out.failed.push({ jobId: job.id, error: String(e && e.message || e).slice(0, 200) });
       }
+      await bumpQueueRev();   // DONE / FAILED (and a refunded reservation)
 
       if (!await renewDrainLease(owner)) {
         out.stoppedFor = "lease-lost";
@@ -1925,9 +2009,23 @@ function publicJob(id, j) {
 
 // Last N jobs, newest first — everything the UI panel shows per listing:
 // title, tier, variant count, price range, collections, live handle, error.
-async function recentJobs(n) {
-  const snap = await db.collection(QCOL).orderBy("createdAtMs", "desc").limit(n || 12).get();
+async function loadRecentJobs(n) {
+  const snap = await db.collection(QCOL).orderBy("createdAtMs", "desc").limit(n).get();
   return snap.docs.map(d => publicJob(d.id, d.data()));
+}
+// Served from the queue-revision cache while nothing changed; a cached longer list answers a shorter request.
+async function recentJobs(n) {
+  n = n || 12;
+  const rev = await readQueueRev();
+  const hit = rev === null ? null : _qc.get("recent");
+  if (hit && hit.rev === rev && hit.n >= n && Date.now() - hit.at < LIST_MAX_AGE_MS) return (await hit.p).slice(0, n);
+  const p = loadRecentJobs(n);
+  if (rev !== null) {
+    const ent = { rev, at: Date.now(), n, p };
+    _qc.set("recent", ent);
+    p.catch(() => { if (_qc.get("recent") === ent) _qc.delete("recent"); });
+  }
+  return (await p).slice(0, n);
 }
 
 async function exactJob(jobId) {
@@ -1937,7 +2035,8 @@ async function exactJob(jobId) {
   return snap.exists ? publicJob(snap.id, snap.data()) : null;
 }
 
-async function status() {
+function status() { return queueView("status", loadStatus, STATUS_MAX_AGE_MS); }
+async function loadStatus() {
   const [q, u, f, d, budget] = await Promise.all([
     db.collection(QCOL).where("status", "==", "QUEUED").count().get(),
     db.collection(QCOL).where("status", "==", "UPLOADING").count().get(),
@@ -1952,15 +2051,17 @@ async function status() {
     paused: false, resetsInMs: 0, nextNeeds: 0 };
   if (queued > 0 && budget.remaining < 60) {
     const key = budget.used + ":" + queued + ":" + (budget.entries[0] ? budget.entries[0].t : 0);
-    if (!status._cache || Date.now() - status._cache.at > 60000 || status._cache.key !== key) {
-      const qs = await db.collection(QCOL).where("status", "==", "QUEUED").limit(150).get();
-      const jobs = qs.docs.map((x) => ({ id: x.id, data: x.data() }));
+    if (!loadStatus._cache || Date.now() - loadStatus._cache.at > 60000 || loadStatus._cache.key !== key) {
+      const jobs = await queueView("queuedJobs", async () => {   // only what smallestNeed/pickFit read, kept until the queue changes
+        const qs = await db.collection(QCOL).where("status", "==", "QUEUED").limit(150).get();
+        return qs.docs.map((x) => { const j = x.data(); return { id: x.id, data: { variantCount: j.variantCount, productId: j.productId } }; });
+      }, LIST_MAX_AGE_MS);
       const need = budgetKit.smallestNeed(jobs, budget.reservedIds);
-      status._cache = { at: Date.now(), key, needs: need,
+      loadStatus._cache = { at: Date.now(), key, needs: need,
         paused: !budgetKit.pickFit(jobs, budget.remaining, budget.reservedIds),
         resetsInMs: budgetKit.msUntilFits(budget.entries, need, budget.ceiling, Date.now()) };
     }
-    pub.paused = status._cache.paused; pub.nextNeeds = status._cache.needs; pub.resetsInMs = status._cache.resetsInMs;
+    pub.paused = loadStatus._cache.paused; pub.nextNeeds = loadStatus._cache.needs; pub.resetsInMs = loadStatus._cache.resetsInMs;
   }
   return {
     queued, uploading: u.data().count,
@@ -1978,6 +2079,7 @@ async function retryFailed() {
     }, { merge: true });
     n++;
   }
+  if (n) await bumpQueueRev();
   return { requeued: n };
 }
 
@@ -1985,7 +2087,7 @@ async function retryJob(jobId) {
   const id = cleanRequestId(jobId);
   if (!id) return { ok: false, error: "Invalid jobId" };
   const ref = db.collection(QCOL).doc(id);
-  return db.runTransaction(async (tx) => {
+  const res = await db.runTransaction(async (tx) => {
     const snap = await tx.get(ref);
     if (!snap.exists) return { ok: false, error: "Job not found" };
     const status = snap.data().status;
@@ -1997,6 +2099,8 @@ async function retryJob(jobId) {
     }, { merge: true });
     return { ok: true, requeued: 1 };
   });
+  if (res.requeued) await bumpQueueRev();
+  return res;
 }
 
 /* ------------------------------ handler ------------------------------ */
@@ -2031,7 +2135,8 @@ exports.handler = async (event) => {
       return out(200, { ok: true, background, budget: publicBudget(await budgetSnapshot()) });
     }
     if (op === "status") {
-      const res = await status();
+      if (q.fresh) _revMemo = null;                    // ?fresh=1: an explicit refresh must see a write another instance just made
+      const res = Object.assign({}, await status());   // the cached view is shared: decorate a copy
       if (q.recent) res.recent = await recentJobs(Number(q.recent) || 12);
       if (q.jobId) res.job = await exactJob(q.jobId);
       return out(200, res);
@@ -2103,6 +2208,7 @@ exports.handler = async (event) => {
         status: "DONE", completedAtMs: Date.now(),
         note: "marked done manually (sync invocation was gateway-killed after create)"
       }, { merge: true });
+      await bumpQueueRev();
       return out(200, { ok: true, jobId });
     }
     if (op === "linkSet") {

@@ -32,7 +32,7 @@ async function triggerContinuation() {
 exports.handler = async function () {
   try {
     const drained = await drain();
-    const budget = await budgetSnapshot();
+    const budget = drained.cachedBlock ? null : await budgetSnapshot();   // a skipped (still budget-blocked) pass reads nothing more
     console.log("shopifyDrain-background:",
       JSON.stringify({
         uploaded: (drained.uploaded || []).length,
@@ -41,7 +41,7 @@ exports.handler = async function () {
         locked: !!drained.locked,
         stoppedFor: drained.stoppedFor || null,
         moreQueued: !!drained.moreQueued,
-        budget: publicBudget(budget)
+        budget: budget ? publicBudget(budget) : null
       }));
 
     // A single background invocation has a 15-minute hard limit. If the
