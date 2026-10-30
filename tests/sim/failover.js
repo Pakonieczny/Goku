@@ -10,8 +10,10 @@ const which = process.argv[2] || 'all';
   const browser = await chromium.launch({ args: ['--no-sandbox'] });
   async function world() {
     const store = new Store(), dead = new Set();
-    async function computer() {
+    async function computer(o) {
       const c = await browser.newContext();
+      // A computer that can publish to Etsy (only those take the pipeline over by themselves); computer({ etsy: false }) cannot.
+      if (!o || o.etsy !== false) await c.addInitScript(() => { try { if (!localStorage.getItem('etsyRefreshToken')) localStorage.setItem('etsyRefreshToken', 'sim-refresh'); } catch (_) {} });
       await c.exposeBinding('__fs', async (src, op, json) => { if (dead.has(src.page)) return new Promise(() => {}); return JSON.stringify(store.op(op, JSON.parse(json))); });
       await c.addInitScript(FAKE);
       await c.route(/^(?!file:)/, r => r.abort());

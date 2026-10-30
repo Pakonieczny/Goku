@@ -62,7 +62,7 @@
 // another automatically, so a tab still running OLD code could end up doing the work. Every tab compares its build with
 // the deployed one (a tiny file, every 2 minutes) and, as soon as it is idle, reloads itself. A stale tab never takes
 // control from another computer.
-window.APP_BUILD = "20261019T003126";
+window.APP_BUILD = "20261030T151627";
 (function () {
   var URL_ = function () { return window.APP_BUILD_URL || ("assets/build.json?t=" + Date.now()); };
   function idle() {
@@ -134,10 +134,10 @@ window.APP_BUILD = "20261019T003126";
   <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/cropperjs/1.5.13/cropper.min.css" />
   <script src="https://cdnjs.cloudflare.com/ajax/libs/cropperjs/1.5.13/cropper.min.js"></script>
   
-  <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-app-compat.js"></script>
-  <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-auth-compat.js"></script>
-  <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-firestore-compat.js"></script>
-  <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-storage-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/10.14.1/firebase-app-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/10.14.1/firebase-auth-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/10.14.1/firebase-firestore-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/10.14.1/firebase-storage-compat.js"></script>
 
   <style>
     html, body {
@@ -3043,6 +3043,10 @@ ANTI-REPETITION (TITLE)
     //     synced live so every terminal shows identical, accurate queues.
     // ══════════════════════════════════════════════════════════════════
     const fsdb = firebase.firestore();
+    /*  CONNECTION: the streaming channel to Firestore kept dying on this shop's network (QUIC resets every ~15 min, then a
+        400 on the dead session). Auto-detect long polling falls back to plain long-poll requests when streaming misbehaves,
+        the same setting the charm sorter runs on. Must be set before the first Firestore call. */
+    try { fsdb.settings({ experimentalAutoDetectLongPolling: true, merge: true }); } catch (e) { console.warn("Firestore settings not applied:", e && e.message); }
     const STATS_COLL = "ListingGen_Stats";
     const QUEUES_DOC = fsdb.collection("ListingGen_Config").doc("queues");
     const CLIENT_ID = (localStorage.getItem("lgClientId") ||
@@ -3453,6 +3457,19 @@ ANTI-REPETITION (TITLE)
         return R(bump(d, c), res);
       };
       T.idrelease = function (cur, a, c) { return R(null, { ok: true, idOp: { kind: "free", listingId: str(a.listingId) } }); };
+      /*  retry = a person says "try this set again now" (Health & Recovery): the cooldown and the failed-attempt count go,
+          a failed set (or an interrupted one whose lease has lapsed) is queued again. Its meta - reserved listing id, stage
+          flags, what is already published - is KEPT, so nothing is repeated or published twice. Never touches a set that
+          is done, withdrawn, or held under a live lease. */
+      T.retry = function (cur, a, c) {
+        if (!cur) return R(null, { ok: false, reason: "not-found" });
+        if (cur.state === "done" || cur.state === "reset") return R(null, { ok: false, reason: cur.state });
+        if ((cur.state === "claimed" || cur.state === "uploading") && cur.claim && leaseLive(cur.claim, c)) return R(null, { ok: false, reason: "held" });
+        const d = clone(cur);
+        if (d.state !== "queued") { d.state = "queued"; d.claim = null; }
+        d.attempts = 0; d.retryAt = 0; d.lastError = "";
+        return R(bump(d, c), { ok: true, state: "queued" });
+      };
 
       // ---- cache, overlay and views ------------------------------------------
       const remote = new Map();       // name -> doc: what the server last told us (or last session's cache)
@@ -4013,6 +4030,13 @@ ANTI-REPETITION (TITLE)
       const complete = (name, token, o) => run("complete", name, Object.assign({}, o || {}, { token }));
       const release = (name, token, o) => run("release", name, { token, error: o && o.error, retry: !o || o.retry !== false, cooldownMs: o && o.cooldownMs });
       const heartbeat = (name, token) => run("heartbeat", name, { token }, { deferrable: false });
+      async function retryNow(names) {
+        const out = { retried: [], skipped: [] };
+        const list = [...new Set((Array.isArray(names) ? names : []).map(str).filter(Boolean))];
+        const rs = await Promise.all(list.map((n) => run("retry", n, {})));
+        rs.forEach((r, i) => { if (r && r.ok) out.retried.push(list[i]); else out.skipped.push({ name: list[i], reason: (r && r.reason) || "error" }); });
+        return out;
+      }
 
       function localResetEffects(name, review) {
         try { const z = jget(LS_ZOOM, {}); if (z && name in z) { delete z[name]; sset(LS_ZOOM, JSON.stringify(z)); } } catch (_) {}
@@ -4233,7 +4257,7 @@ ANTI-REPETITION (TITLE)
       return {
         __version: 1, ready, cloudState, pendingWrites: () => pending.length,
         list, get, onChange: (fn) => { listeners.add(fn); return () => listeners.delete(fn); },
-        enqueue, claim, stage, complete, release, claimListingId, releaseListingId, resetMany, recoverable, history,
+        enqueue, claim, stage, complete, release, claimListingId, releaseListingId, resetMany, recoverable, history, retryNow,
         heartbeat, holds: (n) => (held.get(String(n)) || {}).token || null,
         onCloudState: (fn) => { cloudSubs.add(fn); return () => cloudSubs.delete(fn); },
         onRecoverable: (fn) => { recSubs.add(fn); return () => recSubs.delete(fn); },
@@ -4245,6 +4269,83 @@ ANTI-REPETITION (TITLE)
     })();
     window.ListingLedger = ListingLedger;
     /* ══ END ══ */
+
+    /* ══ CLOUD HEALTH ══════════════════════════════════════════════════════════════════════════════════════════
+       Keeps the Firebase connection usable after network drops, without anybody reloading the page.
+         - Firestore: when the ledger has said "offline"/"connecting" for 90 s while the browser says it is online (a stream
+           the SDK never revived), the sign-in token is refreshed and Firestore's network is switched off and on again,
+           which rebuilds every listener from its resume token (only changed documents are read). Backoff 1 → 30 min.
+         - Storage: lgListAll() bounds every folder listing and retries once - after refreshing the sign-in token on a
+           401/403 (the token expired while the computer was offline), or after 1.5 s on a server error (500/503).
+       Manual control: CloudHealth.reconnect() (Health & Recovery → Reconnect to cloud). Nothing here polls the network. */
+    window.CloudHealth = (function () {
+      const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
+      const withTimeout = (p, ms, what) => new Promise((res, rej) => {
+        const t = setTimeout(() => { const e = new Error((what || "operation") + " timed out"); e.code = "deadline-exceeded"; rej(e); }, ms);
+        Promise.resolve(p).then((v) => { clearTimeout(t); res(v); }, (e) => { clearTimeout(t); rej(e); });
+      });
+      const log = [];
+      const note = (m) => { log.push({ at: Date.now(), m: String(m).slice(0, 200) }); if (log.length > 40) log.shift(); };
+      let fixing = null, lastFix = 0, fixes = 0, notOkSince = 0, reconnects = 0, authRefreshes = 0, storageRetries = 0;
+      async function refreshAuth() {
+        try {
+          const a = firebase.auth();
+          if (a.currentUser) await withTimeout(a.currentUser.getIdToken(true), 15000, "sign-in refresh");
+          else await withTimeout(a.signInAnonymously(), 15000, "sign-in");
+          authRefreshes++;
+          return true;
+        } catch (e) { note("sign-in refresh failed: " + (e && e.message)); return false; }
+      }
+      function reconnect(why) {
+        if (fixing) return fixing;
+        fixing = (async () => {
+          lastFix = Date.now(); fixes++; reconnects++;
+          note("reconnecting (" + (why || "manual") + ")");
+          await refreshAuth();
+          try { await withTimeout(fsdb.disableNetwork(), 8000, "disable network"); } catch (e) { note("disable network: " + (e && e.message)); }
+          await sleep(300);
+          try { await withTimeout(fsdb.enableNetwork(), 8000, "enable network"); } catch (e) { note("enable network: " + (e && e.message)); }
+          try { window.ListingLedger && window.ListingLedger.flush(); } catch (_) {}
+          try { window.__processedCache = null; } catch (_) {}
+          return true;
+        })().finally(() => { fixing = null; });
+        return fixing;
+      }
+      function tick() {
+        try {
+          const L = window.ListingLedger;
+          if (!L || typeof L.cloudState !== "function") return;
+          const st = L.cloudState();
+          if (st === "ok" || st === "denied") { notOkSince = 0; if (st === "ok") fixes = 0; return; }
+          if (typeof navigator !== "undefined" && navigator.onLine === false) { notOkSince = 0; return; }   // truly offline: the "online" event handles it
+          if (!notOkSince) { notOkSince = Date.now(); return; }
+          const backoff = Math.min(30 * 60000, 60000 * Math.pow(2, Math.max(0, fixes - 1)));
+          if (Date.now() - notOkSince > 90000 && Date.now() - lastFix > backoff) reconnect("cloud " + st + " for " + Math.round((Date.now() - notOkSince) / 1000) + " s");
+        } catch (_) {}
+      }
+      setInterval(tick, 15000);
+      try {
+        window.addEventListener("online", () => setTimeout(() => {
+          try { const L = window.ListingLedger; if (L && L.cloudState() !== "ok") reconnect("back online"); } catch (_) {}
+        }, 8000));
+      } catch (_) {}
+      const errText = (e) => String((e && e.code) || "") + " " + String((e && e.message) || "") + " " + String((e && e.status_) || "");
+      async function lgListAll(ref, ms) {
+        ms = ms || 20000;
+        for (let i = 0; ; i++) {
+          try { return await withTimeout(ref.listAll(), ms, "folder listing"); }
+          catch (e) {
+            const t = errText(e);
+            if (i === 0 && /unauthori[sz]ed|unauthenticated|\b40[13]\b/i.test(t)) { storageRetries++; await refreshAuth(); continue; }
+            if (i === 0 && /storage\/unknown|retry-limit|server-file-wrong-size|\b50[023]\b|internal/i.test(t)) { storageRetries++; await sleep(1500); continue; }
+            throw e;
+          }
+        }
+      }
+      return { reconnect, refreshAuth, lgListAll, log: () => log.slice(),
+        stats: () => ({ reconnects, authRefreshes, storageRetries, notOkForMs: notOkSince ? Date.now() - notOkSince : 0, reconnecting: !!fixing }) };
+    })();
+    window.lgListAll = window.CloudHealth.lgListAll;
 
     /* ══ LIVE MIRROR CORE (agent P) ════════════════════════════════════════
        Every computer sees exactly what the CONTROLLING computer sees, live,
@@ -11629,6 +11730,7 @@ ANTI-REPETITION (TITLE)
         refused) falls through to the normal scan. Returns true when a set was started. */
     async function fastResumeInterrupted() {
         if (!window.autoProcessingEnabled || window.isProcessingSet || !window.PipeGuard || typeof window.PipeGuard.nextResumable !== "function") return false;
+        if (window.PipeGuard.paused && window.PipeGuard.paused()) return false;
         if (window.PipeControl && !window.PipeControl.mayRun("scan")) return false;
         const nr = window.PipeGuard.nextResumable();
         if (!nr) return false;
@@ -11639,7 +11741,7 @@ ANTI-REPETITION (TITLE)
         updateFirebaseStatus(`Restarting ${nr.setName}...`, "working");
         const setRef = storage.ref(COMPLETED_SETS_PATH + "/" + nr.setName);
         let images = 0;
-        try { images = (await setRef.listAll()).items.filter((it) => !/manifest\.json$/i.test(it.name)).length; } catch (_) {}
+        try { images = (await window.lgListAll(setRef, 20000)).items.filter((it) => !/manifest\.json$/i.test(it.name)).length; } catch (_) {}
         if (images < 7) { window.__isScanningFB = false; return false; }                      // folder gone or incomplete: normal scan
         const got = await window.PipeGuard.claim(nr.setName, "scan");
         if (!got.ok) { window.__isScanningFB = false; return false; }
@@ -11691,9 +11793,14 @@ ANTI-REPETITION (TITLE)
             // The finished-sets pile only ever grows (thousands of folders) and is slow to list, so it NEVER blocks the
             // scan: the last known listing is used and refreshed in the background. Whether a chosen set is already
             // archived is checked exactly, for that one set, just before it is claimed (see the candidate loop).
+            // COST: only a page that can pick a set right now (Auto-Pilot on, not mirroring another computer) needs fresh
+            // listings. Every other open page only shows the "N Folders" counts, so it reuses a recent listing.
+            const __canPick = !!window.autoProcessingEnabled && !(window.PipeControl && window.PipeControl.blocked && window.PipeControl.blocked());
+            const __hidden = typeof document !== "undefined" && document.hidden;
+            window.__scanCanPick = __canPick;
             let processedNames = (window.__processedCache && window.__processedCache.names) || [];
-            if ((!window.__processedCache || Date.now() - window.__processedCache.at > 300000) && !window.__processedListing) {
-                window.__processedListing = approvedRef.listAll()
+            if ((!window.__processedCache || Date.now() - window.__processedCache.at > (__canPick ? 300000 : 1800000)) && !window.__processedListing) {
+                window.__processedListing = window.lgListAll(approvedRef, 120000)
                     .then((rr) => { window.__processedCache = { at: Date.now(), names: rr.prefixes.map(p => p.name.replace(/\/$/, "")) }; })
                     .catch(() => {})
                     .then(() => { window.__processedListing = null; });
@@ -11707,8 +11814,14 @@ ANTI-REPETITION (TITLE)
                 if (window.autoProcessingEnabled && !window.isProcessingSet) updateFirebaseStatus(`Scanning: listing waiting folders (${Math.round((Date.now() - __tList) / 1000)}s)...`, "working");
             }, 1000);
             let res;
+            const __wc = window.__waitingCache;
+            const __maxAge = __canPick ? 0 : (__hidden ? 30 * 60000 : 5 * 60000);
             try {
-                res = await Promise.race([listRef.listAll(), new Promise((_, rej) => setTimeout(() => rej(new Error("folder listing timed out")), 15000))]);
+                if (__wc && Date.now() - __wc.at < __maxAge) res = __wc.res;
+                else {
+                    res = await Promise.race([window.lgListAll(listRef, 15000), new Promise((_, rej) => setTimeout(() => rej(new Error("folder listing timed out")), 25000))]);
+                    window.__waitingCache = { at: Date.now(), res };
+                }
             } catch (e) {
                 console.warn("Waiting-folder listing failed; using the ledger's approved/interrupted sets instead:", e && e.message);
                 const names = (window.PipeGuard && window.PipeGuard.waitingNames) ? window.PipeGuard.waitingNames() : [];
@@ -11767,7 +11880,12 @@ ANTI-REPETITION (TITLE)
             // --------------------------------------
 
             // LIVE MIRROR control (agent H): a follower (or a page that is handing the pipeline over) never picks a set.
-            if (window.autoProcessingEnabled && !window.isProcessingSet && (!window.PipeControl || window.PipeControl.mayRun("scan"))) {
+            const __pause = window.PipeGuard && window.PipeGuard.paused ? window.PipeGuard.paused() : null;
+            if (__pause && window.autoProcessingEnabled && !window.isProcessingSet) {
+                // CIRCUIT BREAKER: a problem that is not about one set is in the way - picking the next set would only fail
+                // the same way and reserve another listing ID for nothing.
+                updateFirebaseStatus(`Paused: ${__pause.why} — resumes in ${Math.max(1, Math.round((__pause.until - Date.now()) / 60000))} min (Health & Recovery → Resume now)`, "active");
+            } else if (window.autoProcessingEnabled && !window.isProcessingSet && (!window.PipeControl || window.PipeControl.mayRun("scan"))) {
                 if (newSets.length > 0) {
                     window.__incompleteSetsTracker = window.__incompleteSetsTracker || {};
                     const now = Date.now();
@@ -11884,7 +12002,7 @@ ANTI-REPETITION (TITLE)
                     // Check the first candidates' folders in parallel (read-only): the loop below used to wait for each
                     // folder listing one after another before it could find a ready set.
                     const __pre = new Map();
-                    orderedSets.slice(0, 6).forEach((sr) => { __pre.set(sr.name.replace(/\/$/, ""), sr.listAll().catch(() => null)); });
+                    orderedSets.slice(0, 6).forEach((sr) => { __pre.set(sr.name.replace(/\/$/, ""), window.lgListAll(sr, 20000).catch(() => null)); });
 
                     // Loop through available new sets to find one that is completely ready
                     for (const setRef of orderedSets) {
@@ -11946,9 +12064,11 @@ ANTI-REPETITION (TITLE)
                         // writes a manifest.json next to the slot images;
                         // exclude it from the count so the threshold reflects
                         // image slots only.
-                        let setFiles = __pre.has(setName) ? await __pre.get(setName) : null;
+                        const __hadPre = __pre.has(setName);
+                        let setFiles = __hadPre ? await __pre.get(setName) : null;
                         if (!setFiles) {
-                            try { setFiles = await setRef.listAll(); }
+                            // the prefetch above already listed (and retried) this folder: a failure there is final for this pass
+                            try { if (__hadPre) throw new Error("listing failed"); setFiles = await window.lgListAll(setRef, 20000); }
                             catch (listErr) {
                                 // Storage answered with an error (e.g. HTTP 500) for this one folder: skip it for now, keep scanning.
                                 console.warn(`Skipping ${setName}: folder listing failed (${listErr && listErr.message}). Trying again in 10 minutes.`);
@@ -11989,7 +12109,7 @@ ANTI-REPETITION (TITLE)
                         // Already archived? (the finished-sets listing may be stale or still loading, so ask for THIS set exactly)
                         if (!processedNames.includes(setName)) {
                             let archived = null;
-                            try { archived = await approvedRef.child(setName).listAll(); } catch (_) {}
+                            try { archived = await window.lgListAll(approvedRef.child(setName), 20000); } catch (_) {}
                             if (archived && archived.items && archived.items.length) { processedNames.push(setName); continue; }
                         }
 
@@ -12067,7 +12187,8 @@ ANTI-REPETITION (TITLE)
         // PERF: after a set completes there is normally another ready set
         // waiting, so the 5s re-scan delay was idle time between listings.
         // The idle cadence (no set found) is unchanged at 15s.
-        __scanAt(foundReadySet ? 750 : 15000);
+        // COST: a page that cannot pick a set only refreshes its counts; once a minute is plenty (the listing itself is cached above).
+        __scanAt(foundReadySet ? 750 : (window.__scanCanPick ? 15000 : 60000));
     }
 
     // Helper: Wait function
@@ -12963,6 +13084,13 @@ ANTI-REPETITION (TITLE)
                         lg.note("Etsy daily quota reached", { cooldownMs: 30 * 60 * 1000, noFault: true });
                         return; // no strike, no skip, no archive, no folder decrement
                     }
+                    // A network drop during the upload is not the set's fault either: no strike (two strikes park the set
+                    // for the whole session), and the breaker pauses the pipeline until the connection is back.
+                    if (window.PipeGuard && window.PipeGuard.networkDown && window.PipeGuard.networkDown()) {
+                        lg.note(`network down during upload (${outcome})`, { cooldownMs: 2 * 60 * 1000, noFault: true });
+                        updateFirebaseStatus(`Network down: ${setName} kept for retry`, "");
+                        return;
+                    }
                     window.__setFailureCounts = window.__setFailureCounts || {};
                     const fails = (window.__setFailureCounts[setName] = (window.__setFailureCounts[setName] || 0) + 1);
                     lg.note(`upload ${outcome}`, { cooldownMs: (fails >= 2 ? 60 : 10) * 60 * 1000 });
@@ -13724,6 +13852,50 @@ ANTI-REPETITION (TITLE)
       }
       function shopifyRequestId(name, listingId) { return listingId ? "sp_" + String(listingId) + "_" + fnv(name) : ""; }
 
+      // ---- the circuit breaker --------------------------------------------------------------------------------
+      /*  WHY: a problem that is not about one set (the network or the cloud is down, Etsy quota / sign-in, the listing-ID
+          queue unreachable, or the same failure on set after set) used to end each run with a cooldown on THAT set only, so
+          the scanner simply took the next one - which reserved another listing ID and failed the same way. Hundreds of sets
+          then sat "approved and waiting" holding reserved IDs, re-appearing one by one as their cooldowns ran out. Now such
+          a stop pauses the whole pipeline (this page) for a while; the Health & Recovery panel shows why and resumes it. */
+      const SYSTEMIC = /unreachable|quota|auth_needed|sign.?in|connection lost|network down|cloud|offline/i;
+      const STREAK_SETS = 3, STREAK_WINDOW_MS = 30 * 60000, STREAK_PAUSE_MS = 15 * 60000;
+      let pause = null;                          // {until, why, at}
+      const faultRun = [];                       // [{set, at, msg}] faulty failures since the last success
+      function networkDown() {
+        try {
+          if (typeof navigator !== "undefined" && navigator.onLine === false) return true;
+          const l = L(); const s = l && typeof l.cloudState === "function" ? l.cloudState() : "ok";
+          return s === "offline";
+        } catch (_) { return false; }
+      }
+      function paused() { return pause && pause.until > Date.now() ? pause : null; }
+      function pauseFor(ms, why) {
+        const until = Date.now() + Math.max(30000, Math.min(Number(ms) || 0, 2 * 3600000));
+        if (pause && pause.until >= until) return;
+        pause = { until, why: String(why || "paused").slice(0, 200), at: Date.now() };
+        warn("pipeline paused:", pause.why);
+        say(`Paused: ${pause.why} — resumes by itself in ${Math.max(1, Math.round((until - Date.now()) / 60000))} min (Health & Recovery → Resume now)`, "active");
+        try { window.dispatchEvent(new CustomEvent("pipeline-paused", { detail: Object.assign({}, pause) })); } catch (_) {}
+      }
+      function resumeNow() {
+        pause = null; faultRun.length = 0;
+        try { window.dispatchEvent(new CustomEvent("pipeline-paused", { detail: null })); } catch (_) {}
+        try { if (typeof window.__scanAt === "function") window.__scanAt(300); } catch (_) {}
+      }
+      function noteOutcome(name, f) {
+        try {
+          if (!f) return;
+          if (f.noFault) { if (SYSTEMIC.test(f.msg)) pauseFor(f.cooldownMs || 120000, f.msg); return; }
+          const t = Date.now();
+          faultRun.push({ set: name, at: t, msg: f.msg });
+          while (faultRun.length && t - faultRun[0].at > STREAK_WINDOW_MS) faultRun.shift();
+          if (faultRun.length > 20) faultRun.splice(0, faultRun.length - 20);
+          const sets = new Set(faultRun.map((x) => x.set));
+          if (sets.size >= STREAK_SETS) pauseFor(STREAK_PAUSE_MS, `${sets.size} different sets failed in a row (last: ${f.msg})`);
+        } catch (_) {}
+      }
+
       /*  The per-listing facts (stage flags, pricing request) die with the listing id they belong to. */
       function clearStages(isV) {
         const o = {};
@@ -13901,6 +14073,7 @@ ANTI-REPETITION (TITLE)
           await h.ensureStats(isV, { category: job.category, seed: job.seed });
         };
         h.complete = async () => {
+          faultRun.length = 0;                                  // a set made it all the way: the breaker's failure streak is over
           h.m.archived = 1; h.m.seq = (h.m.seq | 0) + 1; h.done = true; h.finished = true;
           h.save();
           handles.delete(name);
@@ -13925,7 +14098,13 @@ ANTI-REPETITION (TITLE)
           // and meta kept: no error (no failed attempt counted), no cooldown (the next controller may take it at once).
           if (h.handoff) return doRelease(h, "", {});
           if (h.skipped) return doRelease(h, "Skipped by operator", { retry: false });
-          if (h.fail) return doRelease(h, h.fail.noFault ? "" : h.fail.msg, { cooldownMs: h.fail.cooldownMs });
+          if (h.fail) {
+            // A failure while the network is down is not the set's fault: no strike, a short cooldown, and the whole
+            // pipeline pauses (below) instead of moving on to the next set and reserving another listing ID for it.
+            if (!h.fail.noFault && networkDown()) { h.fail.noFault = true; h.fail.msg = ("network down: " + h.fail.msg).slice(0, 300); h.fail.cooldownMs = Math.min(h.fail.cooldownMs || 120000, 120000); }
+            noteOutcome(name, h.fail);
+            return doRelease(h, h.fail.noFault ? "" : h.fail.msg, { cooldownMs: h.fail.cooldownMs });
+          }
           return doRelease(h, "", { cooldownMs: 60000 });          // the run ended early (stopped): not a failure
         };
         handles.set(name, h);
@@ -14262,7 +14441,11 @@ ANTI-REPETITION (TITLE)
           Object.defineProperty(window, "autoProcessingEnabled", {
             configurable: true, enumerable: true,
             get() { return autoVal; },
-            set(v) { autoVal = !!v; writeIntent(); }
+            set(v) {
+              const was = autoVal; autoVal = !!v; writeIntent();
+              // an idle page scans once a minute: Auto-Pilot switching on by any path (restore, hand-over) scans at once
+              if (autoVal && !was) { try { if (window.__isScanningFB) window.__scanKickPending = true; else if (typeof window.__scanAt === "function") window.__scanAt(300); } catch (_) {} }
+            }
           });
         } catch (e) { warn("auto intent not installed:", e && e.message); }
         try {
@@ -14435,6 +14618,20 @@ ANTI-REPETITION (TITLE)
           try { l.onRecoverable(() => trigger("recoverable", 3000)); } catch (_) {}
           try { l.onCloudState((s) => { if (s === "ok") trigger("cloud", 2000); }); } catch (_) {}
           try { l.onLost((x) => { const h = x && handles.get(x.setName); if (h && (!x.token || x.token === h.token)) h.lostFlag = true; }); } catch (_) {}
+          /*  A set that is queued FRESH in the ledger (no failed attempts, no cooldown) - re-approved, or sent back by a person's
+              "Retry now" on any computer - is no longer parked or cooling on THIS page either. Those page-local memories
+              otherwise outlived the reason for them and kept the set invisible to the scanner for the rest of the session. */
+          try {
+            l.onChange((changed) => {
+              (changed || []).forEach((e) => {
+                if (!e || e.state !== "queued" || (e.attempts | 0) || (Number(e.retryAt) || 0) || handles.has(e.setName)) return;
+                const n = e.setName;
+                cool.delete(n);
+                try { const S = window.__manuallySkippedSets; if (S && S.has && S.has(n)) S.delete(n); } catch (_) {}
+                try { if (window.__incompleteSetsTracker) delete window.__incompleteSetsTracker[n]; if (window.__setFailureCounts) delete window.__setFailureCounts[n]; if (window.__fastResumeTried) delete window.__fastResumeTried[n]; } catch (_) {}
+              });
+            });
+          } catch (_) {}
         }
         trigger("boot", 500);
       }
@@ -14449,6 +14646,8 @@ ANTI-REPETITION (TITLE)
         claim, begin, eligibility, isBusy, prioritise, hasReservedId, reservedId, runTail, reconcileArchived,
         pickListingId, noteEnqueued, releaseUnusedId, jobMayRun, jobGate, nextJob, retryLater, jobVerdict, lockJob, onJobProgress, onJobDone, afterJob,
         noteSkip, priorPricing, priorStages, armPricing, resume, boot, hasWorkWaiting, waitingCount, waitingNames, nextResumable, restoreAuto, effectiveMeta,
+        paused, pauseFor, resumeNow, networkDown, faultStreak: () => faultRun.slice(), clearCooldowns: (names) => { (names || [...cool.keys()]).forEach((n) => cool.delete(n)); },
+        cooling: () => [...cool.entries()].filter(([, t]) => t > Date.now()).map(([n, t]) => ({ setName: n, until: t })), activeRuns: () => [...handles.keys()],
         __test: { handles, cool, effectiveMeta, jGet, jAll, isTail, inferFromEntry, shopifyRequestId, isLeader: () => leader, setLeader: (v) => { leader = !!v; },
           restoreAuto, writeIntent, finishCheapTails, becomeLeader, takenIdFor, installQueueBoxes, notMine, setBootPending: (v) => { bootPending = !!v; } }
       };
@@ -14495,7 +14694,8 @@ ANTI-REPETITION (TITLE)
        ══════════════════════════════════════════════════════════════════════════════════════════════════════ */
     window.PipeControl = (function () {
       "use strict";
-      const KEY_RUN = "ctl.run", KEY_AUTO = "ctl.auto", KEY_FOCAL = "ctl.focal", KEY_HIDDEN = "ctl.hidden";
+      const KEY_RUN = "ctl.run", KEY_AUTO = "ctl.auto", KEY_FOCAL = "ctl.focal", KEY_HIDDEN = "ctl.hidden", KEY_NEED = "ctl.need";
+      const NEED_FRESH_MS = 30 * 60000;    // a "this controller cannot publish (no Etsy)" notice older than this is ignored
       const HIDE_ANNOUNCE_MS = 60000;      // a controller tab hidden this long says so (timers of hidden tabs are throttled)
       const WAIT_RELEASE_MS = 75000;       // longest a new controller waits for the old one's claim (lease 60 s + margin)
       const YIELD_MAX_MS = 240000;         // longest a controller that lost the pipeline keeps finishing its step
@@ -14573,6 +14773,28 @@ ANTI-REPETITION (TITLE)
         return !!(job && job.setName && window.isProcessingSet && window.__currentProcessingSetName === job.setName);
       }
       function isHandoffSet(name) { return !!(handoff && !handoff.used && handoff.set && handoff.set === name); }
+      /*  Can THIS browser publish to Etsy (a token, or a refresh token to get one)? A computer that cannot must never take the
+          pipeline over by itself: it would hold the workspace with Auto-Pilot stuck on "connect to Etsy here" while the computer
+          that could publish has been demoted to a follower - the whole pipeline stops with nobody noticing. */
+      function etsyCapable() {
+        try {
+          if (window.accessToken && String(window.accessToken).trim()) return true;
+          return !!String(localStorage.getItem("etsyRefreshToken") || "").trim() || !!String(localStorage.getItem("etsyAccessToken") || "").trim();
+        } catch (_) { return false; }
+      }
+      /*  ctl.need: the controller says it cannot continue Auto-Pilot here (no Etsy session). An Etsy-capable follower takes over. */
+      let needVal = { on: false, at: 0, by: "" };
+      function setNeed(on, why) {
+        try {
+          if (!!needVal.on === !!on) return;
+          needVal = { on: !!on, why: on ? String(why || "etsy") : "", at: Date.now(), by: myId() };
+          const l = lm(); if (l && registered && role() === "controller" && typeof l.touch === "function") l.touch(KEY_NEED);
+        } catch (_) {}
+      }
+      function controllerNeedsEtsy() {
+        const n = val(KEY_NEED), c = ctrl();
+        return !!(n && n.on && c && c.alive && !c.mine && n.by === c.id && Date.now() - (Number(n.at) || 0) < NEED_FRESH_MS);
+      }
       const USER_ACTION = { "create-listing": 1, start: 1, action: 1, user: 1, manual: 1 };
       let ensuring = 0, lastEnsure = 0;
       function ensureControl(why) {
@@ -14958,6 +15180,7 @@ ANTI-REPETITION (TITLE)
         try {
           if (yielding) return;
           autoSnap = null; autoAt = Date.now();                       // `at` moves only with a change: it is the age of the intent, never a write by itself
+          if (autoOn()) setNeed(false);
           modeSync();
           const l = lm(); if (!l || !registered || typeof l.touch !== "function") return;
           const r = role(); if (r === "controller") l.touch(KEY_AUTO);
@@ -15044,10 +15267,13 @@ ANTI-REPETITION (TITLE)
           if ((r !== "follower" && r !== "solo") || yielding) return;
           if (r === "solo" && !claimable()) return;                                  // no cloud: nothing to take over from
           if (window.__staleBuild) return;                       // an out-of-date page never takes work over (it reloads itself when idle)
+          if (!etsyCapable()) return;                            // cannot publish here: taking over would only stall the pipeline
+          if (window.PipeGuard && typeof window.PipeGuard.paused === "function" && window.PipeGuard.paused()) return;   // the circuit breaker is open: nothing to hurry
           const c = ctrl();
           const dead = !c || !c.alive;
           const hiddenCtl = false;     // a background tab is not a stopped tab (its timers run in a worker), so it is never taken from
-          if (!dead && !hiddenCtl) { if (autoTakeTimer) { clearTimeout(autoTakeTimer); autoTakeTimer = 0; } return; }
+          const needy = !dead && controllerNeedsEtsy();          // alive, but it told us it cannot publish: relieve it
+          if (!dead && !hiddenCtl && !needy) { if (autoTakeTimer) { clearTimeout(autoTakeTimer); autoTakeTimer = 0; } return; }
           // Auto-Pilot was on - the controller's own published intent, or this browser's - and not older than the F1 rule allows
           const auto = val(KEY_AUTO), age = auto && auto.on ? Date.now() - (Number(auto.at) || 0) : Infinity;
           // ...or the dead computer was visibly RUNNING the pipeline when it stopped (info().orphaned): that alone says "continue"
@@ -15059,9 +15285,9 @@ ANTI-REPETITION (TITLE)
             autoTakeTimer = 0;
             const r2 = role();
             if ((r2 !== "follower" && r2 !== "solo") || yielding) return;
-            const c2 = ctrl(); if (c2 && c2.alive && !c2.mine && !(hiddenCtl && val(KEY_HIDDEN) && val(KEY_HIDDEN).on)) return;
+            const c2 = ctrl(); if (c2 && c2.alive && !c2.mine && !controllerNeedsEtsy() && !(hiddenCtl && val(KEY_HIDDEN) && val(KEY_HIDDEN).on)) return;
             lastAutoTry = Date.now();
-            const res = dead ? await acquire("controller-lost") : await takeOver("controller-hidden");
+            const res = dead ? await acquire("controller-lost") : await takeOver(needy ? "controller-needs-etsy" : "controller-hidden", { polite: needy });
             if (res.ok) lastAutoTake = Date.now();                                    // the 90 s pause is for a take-over that happened, not for one that was refused
             else warn("auto takeover refused:", res.reason);
           }, 200 + (h % 800));
@@ -15113,10 +15339,15 @@ ANTI-REPETITION (TITLE)
         if (autoOn()) { pendingAdopt = null; return; }
         const a = pendingAdopt;
         const ok = await window.PipeGuard.restoreAuto(0, { scope: a.scope || null, batch: a.batch || null, done: a.done || 0, at: Number(a.at) || 0 });
-        const settle = () => { pendingAdopt = null; try { const l = lm(); if (l && role() === "controller" && typeof l.touch === "function") l.touch(KEY_AUTO); } catch (_) {} };
+        const settle = () => { pendingAdopt = null; setNeed(false); try { const l = lm(); if (l && role() === "controller" && typeof l.touch === "function") l.touch(KEY_AUTO); } catch (_) {} };
         if (ok) { settle(); const c = handoff && handoff.from && handoff.from.label; say("Auto-Pilot continued" + (c ? " from " + c : ""), "active"); }
         else if (window.accessToken) settle();                          // not Etsy: nothing waiting / declined by the F1 rule
-        else say("Auto-Pilot was running on the other computer — connect to Etsy here to continue", "");
+        else {
+          // No Etsy here: say so on the shared workspace, so a computer that CAN publish takes over by itself instead of
+          // the pipeline silently waiting on this one.
+          setNeed(true, "etsy");
+          say("Auto-Pilot is waiting for Etsy — connect to Etsy here, or open the app on a computer that is connected (it takes over by itself)", "");
+        }
       }
       /*  a hand-over edit of ctl.auto arriving after this page already became the controller (the old one's Start Auto was too
           recent to be in the document when it took over): adopt it exactly like the published one */
@@ -15133,6 +15364,7 @@ ANTI-REPETITION (TITLE)
       function onRole(r, info) {
         try {
           const was = prevRole; prevRole = r;
+          if (r !== "controller" && needVal.on) needVal = { on: false, at: Date.now(), by: myId() };   // only a controller's notice means anything
           if (r === "controller") {
             modeSet = "idle"; idleSince = 0;                                      // a new claim starts idle: the first modeSync says what is running
             if (was !== "controller") becameController(info).catch((e) => warn("takeover:", e && e.message));     // resumes the local work itself, after the old controller let go
@@ -15175,6 +15407,7 @@ ANTI-REPETITION (TITLE)
             // only keys whose value differs from the document's, so it must not overwrite the previous controller's content
             l.register(KEY_RUN, { ns: "ctl", throttleMs: 400, read: () => lastRun || { v: 1, set: "" }, apply: (v) => { if (v && v.v === 1) lastRun = v; } });
             l.register(KEY_AUTO, { ns: "ctl", throttleMs: 500, read: readAuto, apply: adoptEdit });
+            l.register(KEY_NEED, { ns: "ctl", throttleMs: 500, read: () => needVal, apply: () => {} });
             registered = true;
           }
           if (typeof l.onCommand === "function") {
@@ -15185,7 +15418,7 @@ ANTI-REPETITION (TITLE)
           }
           if (typeof l.onRole === "function") l.onRole(onRole);
           if (typeof l.onLost === "function") l.onLost(() => { if (!yielding) startYield("lost"); });
-          if (typeof l.onChange === "function") { l.onChange(KEY_HIDDEN, watchdog); l.onChange(KEY_AUTO, watchdog); }
+          if (typeof l.onChange === "function") { l.onChange(KEY_HIDDEN, watchdog); l.onChange(KEY_AUTO, watchdog); l.onChange(KEY_NEED, watchdog); }
         } catch (e) { warn("live wiring:", e && e.message); }
         prevRole = role();
         try { document.addEventListener("visibilitychange", onVisibility); } catch (_) {}
@@ -15202,6 +15435,7 @@ ANTI-REPETITION (TITLE)
       return {
         mayRun, mayRunJob, blocked, ensureControl, acquire, takeOver, isYielding, isHandoffSet, explainBlocked, toggleAutoGate, takePreset, skipGate, cp, sequenceEnded, gate,
         seedFromHandoff, replayMetadata, replayDuplicate, autoChanged, adoptPending, noteFocal, cachedFocal, kickScan, state: role,
+        etsyCapable, controllerNeedsEtsy, controller: ctrl, needsEtsyHere: () => !!needVal.on, autoValue: () => val(KEY_AUTO) || null,
         __test: { watchdog, becameController, startYield, finishYield, onRole, onVisibility, once, unfinishedWork, buildRun, val, ctrl,
           get yielding() { return yielding; }, get handoff() { return handoff; }, get lastRun() { return lastRun; }, doneCmd }
       };
@@ -20332,6 +20566,7 @@ if (typeof module !== "undefined" && module.exports) module.exports = ListingCop
           <!-- Opens the review modal directly. Not a view switch: there is no
                "queue page" to land on, the panel IS the destination. -->
           <button id="dNavQueue" type="button" title="Open the review panel over listings already approved and waiting"><span class="ic">◨</span><span class="lbl">Review Queue</span><span id="dNavQueueBadge" class="badge" style="display:none">0</span></button>
+          <button id="dNavHealth" type="button" title="Connection, control and queue health — and every way to recover"><span class="ic">✚</span><span class="lbl">Health &amp; Recovery</span><span id="dNavHealthBadge" class="badge" style="display:none">!</span></button>
         </div>
         <div class="drail__pipehead">
           <div class="dr-plabel"><span class="dr-plab">Pipeline</span><span class="dr-pset" id="railPipelineSet">Idle</span></div>
@@ -28408,6 +28643,243 @@ async function callOpenAI(payload, opts = {}) {
   };
   if (document.readyState === "loading") document.addEventListener("DOMContentLoaded", init); else init();
   window.addEventListener("load", function () { try { installWraps(); } catch (e) { warn("wraps", e); } });
+})();
+/* ══ END ══ */
+</script>
+<script id="healthRecovery">
+/* ══ HEALTH & RECOVERY ═══════════════════════════════════════════════════════════════════════════════════════
+   One place that answers "why is nothing happening?" and offers every way out, on any computer.
+   Reads only local caches (ListingLedger, LiveMirror, PipeGuard, PipeControl, CloudHealth): opening it, and the
+   rail badge that repaints every 3 s, cost no reads. Only the buttons touch the network:
+     Reconnect to cloud   fresh sign-in token + Firestore network off/on (listeners resume; only changes are read)
+     Run the pipeline here  polite take-over of the workspace (offered only when this computer can publish to Etsy)
+     Connect to Etsy      the normal Etsy sign-in
+     Start Auto-Pilot     the normal Start Auto (on a follower it is sent to the working computer)
+     Retry waiting sets   cooled-down / failed / interrupted / parked sets go back to the queue at once (ledger
+                          transaction; reserved listing ids and finished steps are kept, nothing is published twice)
+     Resume pipeline      lifts the circuit-breaker pause
+     Rescan now           forgets cached folder listings and scans at once
+     Copy diagnostics     a JSON snapshot for support
+     Reload page          last resort: unsent changes are flushed first, Auto-Pilot comes back by itself
+   ═══════════════════════════════════════════════════════════════════════════════════════════════════════════ */
+(function () {
+  "use strict";
+  const $ = (id) => document.getElementById(id);
+  const esc = (s) => String(s == null ? "" : s).replace(/[&<>"']/g, (m) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[m]));
+  const toast = (html, classes) => { try { if (window.M && M.toast) M.toast({ html, classes: classes || "" }); } catch (_) {} };
+  const mins = (ms) => { const m = Math.max(0, Math.round(ms / 60000)); return m < 1 ? "under a minute" : m === 1 ? "1 min" : m < 120 ? m + " min" : Math.round(m / 60) + " h"; };
+  const secs = (ms) => { const s = Math.round(ms / 1000); return s < 90 ? s + " s" : mins(ms); };
+  const plural = (n, w) => n + " " + w + (n === 1 ? "" : "s");
+
+  function snapshot() {
+    const L = window.ListingLedger, G = window.PipeGuard, C = window.PipeControl, LM = window.LiveMirror, CH = window.CloudHealth;
+    const t = Date.now();
+    const s = { at: new Date(t).toISOString(), build: window.APP_BUILD || "", online: typeof navigator === "undefined" || navigator.onLine !== false };
+    s.cloud = L && L.cloudState ? L.cloudState() : "none";
+    s.pendingWrites = L && L.pendingWrites ? L.pendingWrites() : 0;
+    s.cloudStats = CH ? CH.stats() : null;
+    s.role = C && C.state ? C.state() : "solo";
+    s.me = LM && LM.terminal ? LM.terminal.label : "This computer";
+    const c = C && C.controller ? C.controller() : null;
+    s.controller = c ? { label: c.label, alive: !!c.alive, mine: !!c.mine, mode: c.mode || "" } : null;
+    s.etsyHere = C && C.etsyCapable ? C.etsyCapable() : !!window.accessToken;
+    s.controllerNeedsEtsy = C && C.controllerNeedsEtsy ? C.controllerNeedsEtsy() : false;
+    s.needsEtsyHere = C && C.needsEtsyHere ? C.needsEtsyHere() : false;
+    const autoDoc = C && C.autoValue ? C.autoValue() : null;
+    s.autoHere = !!window.autoProcessingEnabled;
+    s.autoAnywhere = s.autoHere || (s.role === "follower" && !!(autoDoc && autoDoc.on));
+    s.processing = window.isProcessingSet ? (window.__currentProcessingSetName || "a set") : "";
+    const p = G && G.paused ? G.paused() : null;
+    s.pause = p ? { why: p.why, leftMs: p.until - t } : null;
+    s.streak = G && G.faultStreak ? G.faultStreak().map((x) => x.set + ": " + x.msg) : [];
+    const q = { ready: [], cooling: [], interrupted: [], running: [], failed: [], skipped: [], parked: [] };
+    let earmarked = 0;
+    const parked = window.__manuallySkippedSets;
+    const coolLocal = new Map(((G && G.cooling) ? G.cooling() : []).map((x) => [x.setName, x.until]));
+    try {
+      (L ? L.list((e) => e.active) : []).forEach((e) => {
+        const n = e.setName, el = G ? G.eligibility(n) : { ok: true };
+        const row = { name: n, state: e.state, err: e.lastError || "", attempts: e.attempts | 0, by: e.claim ? (e.claim.label || e.claim.owner) : "", stage: e.claim ? e.claim.stage : "",
+          retryInMs: Math.max(Number(e.retryAt) || 0, coolLocal.get(n) || 0) - t };
+        if (parked && parked.has && parked.has(n) && e.state !== "failed") q.parked.push(row);
+        else if (el.ok) (el.recover && e.state !== "failed" ? q.interrupted : q.ready).push(row);
+        else if (el.why === "held") q.running.push(row);
+        else if (el.why === "cooldown") q.cooling.push(row);
+        else if (el.why === "skipped") q.skipped.push(row);
+        else if (el.why === "failed") q.failed.push(row);
+        else q.ready.push(row);
+        if (G && G.effectiveMeta && e.state !== "done") {
+          const m = G.effectiveMeta(n, e);
+          if (m.listingId && !m.etsyDone) earmarked++;
+          if (m.vListingId && !m.vEtsyDone) earmarked++;
+        }
+      });
+    } catch (e) { s.listError = String(e && e.message); }
+    s.queue = q; s.earmarkedIds = earmarked;
+    s.waiting = q.ready.length + q.interrupted.length + q.cooling.length + q.failed.length + q.parked.length;
+    s.status = (($("fbText") || {}).textContent || "").trim();
+    s.log = CH ? CH.log().slice(-10).map((x) => new Date(x.at).toLocaleTimeString() + " " + x.m) : [];
+    return s;
+  }
+
+  /*  Problems, most important first. Each carries the one action that fixes it. */
+  function problems(s) {
+    const out = [];
+    if (!s.online) out.push({ lvl: "bad", text: "This computer has no internet connection. Work is kept and sent when it is back.", act: null });
+    else if (s.cloud !== "ok" && s.cloud !== "none") out.push({ lvl: s.cloud === "denied" ? "bad" : "warn",
+      text: s.cloud === "denied" ? "The cloud refused this computer (permission denied) — the queue is kept on this computer only." :
+        `The cloud queue is ${esc(s.cloud)}${s.cloudStats && s.cloudStats.notOkForMs ? " for " + secs(s.cloudStats.notOkForMs) : ""}. It reconnects by itself; you can force it now.`, act: "reconnect" });
+    if (s.pendingWrites) out.push({ lvl: "info", text: `${plural(s.pendingWrites, "change")} waiting to be sent to the cloud.`, act: s.cloud !== "ok" ? "reconnect" : null });
+    if (s.pause) out.push({ lvl: "warn", text: `Pipeline paused: ${esc(s.pause.why)}. It resumes by itself in ${mins(s.pause.leftMs)}.`, act: "resume" });
+    if (s.controllerNeedsEtsy) out.push({ lvl: "bad", text: `${esc(s.controller && s.controller.label)} holds the pipeline but has no Etsy connection, so nothing is being published.`, act: s.etsyHere ? "runhere" : "etsy" });
+    if (s.needsEtsyHere || (s.role === "controller" && !s.etsyHere && s.waiting)) out.push({ lvl: "bad", text: "This computer runs the pipeline but is not connected to Etsy.", act: "etsy" });
+    if (s.controller && !s.controller.alive && !s.controller.mine && s.waiting) out.push({ lvl: "warn", text: `${esc(s.controller.label)} stopped answering. A connected computer takes over by itself; you can take over now.`, act: s.etsyHere ? "runhere" : "etsy" });
+    if (s.waiting && !s.autoAnywhere && !s.processing) out.push({ lvl: "bad", text: `${plural(s.waiting, "approved set")} waiting, but Auto-Pilot is off on every computer.`, act: "start" });
+    const stuck = s.queue.cooling.length + s.queue.failed.length + s.queue.parked.length + (s.autoAnywhere ? 0 : s.queue.interrupted.length);
+    if (stuck) out.push({ lvl: "warn", text: `${plural(stuck, "set")} held back (cooling down after a failure, failed, parked for this session or interrupted).`, act: "retry" });
+    if (s.earmarkedIds) out.push({ lvl: "info", text: `${plural(s.earmarkedIds, "listing ID")} reserved by waiting sets. They are not lost: each set reuses its own reserved ID when it runs, so the ID boxes show fewer.`, act: null });
+    return out;
+  }
+
+  const ACT = {
+    reconnect: ["Reconnect to cloud", async () => { await window.CloudHealth.reconnect("manual"); toast("Reconnecting to the cloud…"); }],
+    runhere: ["Run the pipeline here", async () => {
+      if (!window.PipeControl) return;
+      if (!window.PipeControl.etsyCapable()) { toast("Connect this computer to Etsy first.", "red"); return; }
+      const r = await window.PipeControl.takeOver("health-panel", { polite: true });
+      toast(r && r.ok ? "This computer now runs the pipeline." : "Could not take over: " + esc((r && r.reason) || "no answer"), r && r.ok ? "" : "red");
+    }],
+    etsy: ["Connect to Etsy", async () => { const b = $("connectEtsyBtn"); if (b) b.click(); else toast("Etsy connect button not found.", "red"); }],
+    start: ["Start Auto-Pilot", async () => { const b = $("toggleAuto"); if (b && !window.autoProcessingEnabled) b.click(); }],
+    retry: ["Retry waiting sets now", async (opts) => {
+      const s = snapshot(), q = s.queue;
+      const rows = q.cooling.concat(q.failed, q.parked, q.interrupted, (opts && opts.withSkipped) ? q.skipped : []);
+      const names = rows.map((r) => r.name);
+      const r = window.ListingLedger && window.ListingLedger.retryNow ? await window.ListingLedger.retryNow(names) : { retried: [], skipped: [] };
+      try {
+        const S = window.__manuallySkippedSets;
+        names.forEach((n) => { if (S && S.has && S.has(n)) S.delete(n); });
+        window.__incompleteSetsTracker = {}; window.__setFailureCounts = {}; window.__fastResumeTried = {};
+        if (window.PipeGuard) { window.PipeGuard.clearCooldowns(names); window.PipeGuard.resumeNow(); }
+      } catch (_) {}
+      toast(`${plural(r.retried.length, "set")} back in the queue${r.skipped.length ? ` (${r.skipped.length} left alone: running or finished)` : ""}.`);
+    }],
+    resume: ["Resume pipeline", async () => { if (window.PipeGuard) window.PipeGuard.resumeNow(); toast("Pipeline resumed."); }],
+    rescan: ["Rescan now", async () => {
+      window.__waitingCache = null; window.__processedCache = null; window.__incompleteSetsTracker = {};
+      try { if (window.__isScanningFB) window.__scanKickPending = true; else window.__scanAt(100); } catch (_) {}
+      toast("Scanning now…");
+    }],
+    copy: ["Copy diagnostics", async () => {
+      const txt = JSON.stringify(snapshot(), null, 1);
+      try { await navigator.clipboard.writeText(txt); toast("Diagnostics copied."); }
+      catch (_) { const w = window.open("", "_blank"); if (w) { w.document.write("<pre>" + esc(txt) + "</pre>"); } }
+    }],
+    reload: ["Reload page", async () => {
+      if (window.isProcessingSet && !confirm("A listing is being made on this computer. Reload anyway? It resumes where it stopped.")) return;
+      try { if (window.ListingLedger) await Promise.race([window.ListingLedger.flush(), new Promise((r) => setTimeout(r, 4000))]); } catch (_) {}
+      location.reload();
+    }]
+  };
+
+  function style() {
+    if ($("hrStyle")) return;
+    const st = document.createElement("style"); st.id = "hrStyle";
+    st.textContent = `
+      #hrOverlay{position:fixed;inset:0;background:rgba(20,18,14,.45);z-index:100000;display:flex;align-items:flex-start;justify-content:center;padding:5vh 16px;overflow:auto}
+      #hrBox{background:#fbf8f2;color:#2a2620;border-radius:10px;max-width:760px;width:100%;box-shadow:0 18px 50px rgba(0,0,0,.35);font:13px/1.45 system-ui,-apple-system,Segoe UI,sans-serif}
+      #hrBox header{display:flex;align-items:center;justify-content:space-between;padding:14px 18px;border-bottom:1px solid #e6dfd2}
+      #hrBox h3{margin:0;font:600 17px Georgia,serif}
+      #hrBox .hr-x{border:0;background:none;font-size:20px;cursor:pointer;color:#6b6357}
+      #hrBox section{padding:12px 18px;border-bottom:1px solid #eee7da}
+      #hrBox .hr-p{display:flex;gap:10px;align-items:center;justify-content:space-between;padding:7px 10px;border-radius:7px;margin:5px 0;background:#f2ede3}
+      #hrBox .hr-p.bad{background:#fbe3df}#hrBox .hr-p.warn{background:#fbf0d6}#hrBox .hr-p.ok{background:#e3f1e3}
+      #hrBox button.hr-b{border:1px solid #2a2620;background:#2a2620;color:#fff;border-radius:6px;padding:5px 10px;font-size:12px;cursor:pointer;white-space:nowrap}
+      #hrBox button.hr-b.sec{background:#fff;color:#2a2620}
+      #hrBox button.hr-b:disabled{opacity:.45;cursor:default}
+      #hrBox .hr-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(160px,1fr));gap:6px 14px}
+      #hrBox .hr-k{color:#7a7164;font-size:11px;text-transform:uppercase;letter-spacing:.04em}
+      #hrBox .hr-acts{display:flex;flex-wrap:wrap;gap:6px}
+      #hrBox details{margin-top:6px}#hrBox summary{cursor:pointer;color:#5a5246}
+      #hrBox table{width:100%;border-collapse:collapse;font-size:12px;margin-top:4px}#hrBox td{padding:3px 4px;border-top:1px solid #eee7da;vertical-align:top}
+      #hrBox pre{white-space:pre-wrap;font-size:11px;color:#5a5246;margin:4px 0 0}
+    `;
+    document.head.appendChild(st);
+  }
+
+  let open = false, timer = 0;
+  function rowsTable(rows) {
+    if (!rows.length) return "";
+    return "<table>" + rows.slice(0, 60).map((r) => `<tr><td>${esc(r.name)}</td><td>${esc(r.state)}${r.stage ? " · " + esc(r.stage) : ""}${r.by ? " · " + esc(r.by) : ""}</td><td>${r.retryInMs > 0 ? "again in " + mins(r.retryInMs) : ""}</td><td>${esc(r.err).slice(0, 120)}</td></tr>`).join("") + (rows.length > 60 ? `<tr><td colspan="4">…and ${rows.length - 60} more</td></tr>` : "") + "</table>";
+  }
+  function render() {
+    const box = $("hrBody"); if (!box) return;
+    const s = snapshot(), ps = problems(s), q = s.queue;
+    const ctl = s.role === "controller" ? "This computer" : s.controller ? `${esc(s.controller.label)}${s.controller.alive ? "" : " (not answering)"}` : "Nobody";
+    const btn = (k, sec) => `<button class="hr-b${sec ? " sec" : ""}" data-hr="${k}">${ACT[k][0]}</button>`;
+    box.innerHTML = `
+      <section>${ps.length ? ps.map((p) => `<div class="hr-p ${p.lvl}"><span>${p.text}</span>${p.act ? btn(p.act) : ""}</div>`).join("") : `<div class="hr-p ok"><span>All good — nothing is stuck.</span></div>`}</section>
+      <section class="hr-grid">
+        <div><div class="hr-k">Cloud</div>${esc(s.cloud)}${s.online ? "" : " · offline"}</div>
+        <div><div class="hr-k">Running the pipeline</div>${ctl}</div>
+        <div><div class="hr-k">This computer</div>${esc(s.me)} · ${esc(s.role)} · Etsy ${s.etsyHere ? "connected" : "not connected"}</div>
+        <div><div class="hr-k">Auto-Pilot</div>${s.autoHere ? "on here" : s.autoAnywhere ? "on (other computer)" : "off"}${s.processing ? " · working on " + esc(s.processing) : ""}</div>
+        <div><div class="hr-k">Status</div>${esc(s.status) || "—"}</div>
+        <div><div class="hr-k">Approved sets</div>${q.ready.length} ready · ${q.running.length} in progress · ${q.cooling.length} cooling · ${q.interrupted.length} interrupted · ${q.failed.length} failed · ${q.parked.length} parked · ${q.skipped.length} skipped</div>
+      </section>
+      <section><div class="hr-acts">${["reconnect", "runhere", "etsy", "start", "retry", "resume", "rescan", "copy", "reload"].map((k) => btn(k, true)).join("")}</div>
+        ${q.skipped.length ? `<div style="margin-top:6px"><button class="hr-b sec" data-hr="retry" data-skipped="1">Also retry ${plural(q.skipped.length, "set")} skipped by an operator</button></div>` : ""}
+        <details><summary>Held-back sets</summary>${rowsTable(q.cooling.concat(q.failed, q.parked, q.interrupted, q.skipped)) || "<div>None.</div>"}</details>
+        <details><summary>In progress</summary>${rowsTable(q.running) || "<div>None.</div>"}</details>
+        ${s.streak.length ? `<details><summary>Recent failures</summary><pre>${esc(s.streak.join("\n"))}</pre></details>` : ""}
+        ${s.log.length ? `<details><summary>Connection log</summary><pre>${esc(s.log.join("\n"))}</pre></details>` : ""}
+      </section>`;
+    box.querySelectorAll("[data-hr]").forEach((b) => {
+      const k = b.getAttribute("data-hr");
+      if (k === "runhere" && (s.role === "controller" || !s.etsyHere)) b.disabled = true;
+      if (k === "start" && (s.autoAnywhere)) b.disabled = true;
+      if (k === "resume" && !s.pause) b.disabled = true;
+      if (k === "etsy" && s.etsyHere && window.accessToken) b.disabled = true;
+      b.onclick = async () => {
+        b.disabled = true;
+        try { await ACT[k][1]({ withSkipped: b.getAttribute("data-skipped") === "1" }); } catch (e) { toast("Failed: " + esc(e && e.message), "red"); }
+        setTimeout(render, 600);
+      };
+    });
+  }
+  function show() {
+    style();
+    if (!$("hrOverlay")) {
+      const o = document.createElement("div"); o.id = "hrOverlay";
+      o.innerHTML = `<div id="hrBox" role="dialog" aria-label="Health and recovery"><header><h3>Health &amp; Recovery</h3><button class="hr-x" aria-label="Close">×</button></header><div id="hrBody"></div></div>`;
+      o.addEventListener("click", (e) => { if (e.target === o) hide(); });
+      o.querySelector(".hr-x").onclick = hide;
+      document.body.appendChild(o);
+    }
+    open = true; render();
+    clearInterval(timer); timer = setInterval(() => { if (open) render(); }, 3000);
+  }
+  function hide() { open = false; clearInterval(timer); const o = $("hrOverlay"); if (o) o.remove(); }
+  document.addEventListener("keydown", (e) => { if (open && e.key === "Escape") hide(); });
+
+  // The rail badge: "!" whenever something needs a person. Local only.
+  function badge() {
+    try {
+      const b = $("dNavHealthBadge"); if (!b) return;
+      const ps = problems(snapshot()).filter((p) => p.lvl === "bad" || p.lvl === "warn");
+      b.style.display = ps.length ? "" : "none";
+      b.style.background = ps.some((p) => p.lvl === "bad") ? "#c0392b" : "#d9a441";
+      const btn = $("dNavHealth"); if (btn) btn.title = ps.length ? ps.map((p) => p.text.replace(/<[^>]+>/g, "")).join("\n") : "Everything is healthy";
+    } catch (_) {}
+  }
+  function wire() {
+    const b = $("dNavHealth");
+    if (b && !b.__hr) { b.__hr = true; b.addEventListener("click", show); }
+    setInterval(badge, 3000); badge();
+    window.addEventListener("pipeline-paused", () => { badge(); if (open) render(); });
+  }
+  if (document.readyState === "loading") document.addEventListener("DOMContentLoaded", wire); else wire();
+  window.HealthPanel = { open: show, close: hide, snapshot, problems };
 })();
 /* ══ END ══ */
 </script>

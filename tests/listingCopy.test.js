@@ -78,15 +78,16 @@ const stub = (replies) => { let i = 0; const calls = []; const fn = async (req) 
     assert(/async function fastResumeInterrupted\(\)/.test(html) && /function nextResumable\(\)/.test(html));
     assert(/started = await fastResumeInterrupted\(\)/.test(html) && /return checkFirebaseForSetsFull\(\)/.test(html));
     assert(/window\.__scanAt\(50\);? ?\}? ?catch/.test(html) || /else window\.__scanAt\(50\)/.test(html), "Start Auto triggers a scan at once");
-    assert(/Date\.now\(\) - window\.__processedCache\.at > 300000/.test(html), "finished-sets listing refreshed in the background every 5 min");
+    assert(/Date\.now\(\) - window\.__processedCache\.at > \(__canPick \? 300000 : 1800000\)/.test(html), "finished-sets listing refreshed in the background every 5 min (30 min on a page that cannot pick)");
     assert(/orderedSets\.slice\(0, 6\)\.forEach/.test(html), "candidate folders listed in parallel");
     assert(/Restarting \$\{nr\.setName\}/.test(html));
   });
 
   await t("scan cannot hang: finished-sets listing is background-only, waiting-folder listing has a timeout + ledger fallback, archived check is per set", () => {
-    assert(/window\.__processedListing = approvedRef\.listAll\(\)/.test(html), "done pile refreshed in the background");
-    assert(/folder listing timed out"\)\), 15000\)/.test(html) && /waitingNames/.test(html), "bounded listing with ledger fallback");
-    assert(/archived = await approvedRef\.child\(setName\)\.listAll\(\)/.test(html), "exact per-set archived check");
+    assert(/window\.__processedListing = window\.lgListAll\(approvedRef, 120000\)/.test(html), "done pile refreshed in the background");
+    assert(/async function lgListAll\(ref, ms\)/.test(html) && /window\.lgListAll = window\.CloudHealth\.lgListAll/.test(html), "storage listings are bounded and retried once (token refresh / server error)");
+    assert(/window\.lgListAll\(listRef, 15000\), new Promise\(\(_, rej\) => setTimeout\(\(\) => rej\(new Error\("folder listing timed out"\)\), 25000\)/.test(html) && /waitingNames/.test(html), "bounded listing with ledger fallback");
+    assert(/archived = await window\.lgListAll\(approvedRef\.child\(setName\), 20000\)/.test(html), "exact per-set archived check");
     assert(/Scanning: listing waiting folders \(\$\{Math\.round/.test(html), "status shows elapsed seconds");
   });
 
