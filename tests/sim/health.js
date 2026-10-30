@@ -182,6 +182,24 @@ const check = (ok, what) => { console.log((ok ? 'ok   ' : 'FAIL ') + what); if (
     await c.close();
   }
 
+  if (which === 'h6' || which === 'all') {
+    console.log('\n=== H6: Start Auto pressed on a follower; the working computer cannot start (no Etsy there) ===');
+    const w = await world();
+    const cA = await w.computer({ etsy: false });
+    const pa = await open(cA, 'A'); await sleep(2000); await pa.mouse.click(600, 400);
+    await until(pa, () => window.LiveMirror.state() === 'controller', 8000);
+    const cB = await w.computer();
+    const pb = await open(cB, 'B'); await until(pb, () => window.LiveMirror.state() === 'follower', 10000);
+    await pb.evaluate(() => { window.accessToken = 'sim-token'; window.__pickerOpened = 0; window.AutoScopePicker.open = async () => { window.__pickerOpened++; return { scope: null, batch: 0 }; }; });
+    await pb.evaluate(() => document.getElementById('toggleAuto').click());
+    const t = await until(pb, () => window.LiveMirror.state() === 'controller' && window.autoProcessingEnabled === true, 45000);
+    check(t >= 0, `B takes over and Auto-Pilot runs on B (${t >= 0 ? 'after ' + t + ' ms' : 'never; B is ' + await role(pb) + ', auto ' + await pb.evaluate(() => window.autoProcessingEnabled)})`);
+    check(await pb.evaluate(() => window.__pickerOpened) === 1, 'the source picker opened exactly once (no second dialog)');
+    await until(pa, () => window.LiveMirror.state() === 'follower', 15000);
+    check(await role(pa) === 'follower', 'A became a follower');
+    await cA.close(); await cB.close();
+  }
+
   await browser.close();
   console.log(failures ? `\n${failures} check(s) FAILED` : '\nall checks passed');
   process.exit(failures ? 1 : 0);

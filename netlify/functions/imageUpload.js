@@ -226,6 +226,26 @@ exports.handler = async function (event, context) {
 
     // Forward Etsy's status/body transparently (don't mask as 500)
     if (!response.ok) {
+      // DIAGNOSTICS IN THE CLOUD: Etsy's reason for refusing a photo used to exist only in this function's log and the
+      // uploading browser's console, so from any other computer "upload FAILED" was all anyone could see. The last
+      // refusal is kept in one small Firestore document (readable by every computer: Health & Recovery shows it).
+      if (getDb()) {
+        try {
+          await withDeadline(db.collection("ListingGen_Config").doc("diag~etsyImageUpload").set({
+            kind: "diag",
+            at: Date.now(),
+            listingId,
+            status: response.status,
+            body: String(responseText || "").slice(0, 1500),
+            rank: rank || "",
+            file: file ? { name: String(file.originalFilename || ""), type: String(file.mimetype || ""), size: Number(file.size) || 0 } : null,
+            reassociate: !!reassociateId,
+            count: require("firebase-admin").firestore.FieldValue.increment(1),
+          }, { merge: true }), 1200, null);
+        } catch (error) {
+          console.warn("imageUpload: could not record the Etsy refusal.", error.message);
+        }
+      }
       return {
         statusCode: response.status,
         body: responseText || JSON.stringify({ error: "Etsy image upload failed" }),

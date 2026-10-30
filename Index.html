@@ -62,7 +62,7 @@
 // another automatically, so a tab still running OLD code could end up doing the work. Every tab compares its build with
 // the deployed one (a tiny file, every 2 minutes) and, as soon as it is idle, reloads itself. A stale tab never takes
 // control from another computer.
-window.APP_BUILD = "20261030T151627";
+window.APP_BUILD = "20261030T154200";
 (function () {
   var URL_ = function () { return window.APP_BUILD_URL || ("assets/build.json?t=" + Date.now()); };
   function idle() {
@@ -11576,7 +11576,12 @@ ANTI-REPETITION (TITLE)
         
         // Safeguard: Before starting, verify Etsy API is connected
         if (!window.autoProcessingEnabled) { 
+            if ((!window.accessToken || String(window.accessToken).trim() === "") && typeof window.refreshEtsyAccessToken === "function"
+                && String(localStorage.getItem("etsyRefreshToken") || "").trim()) {
+                try { await window.refreshEtsyAccessToken(); } catch (_) {}        // a stored sign-in is renewed, not refused
+            }
             if (!window.accessToken || String(window.accessToken).trim() === "") {
+                if (window.PipeControl && typeof window.PipeControl.takePreset === "function") window.PipeControl.takePreset();
                 M.toast({ html: "Cannot Start: Please Connect to Etsy first!", classes: "red" });
                 return; // Abort the start sequence
             }
@@ -13093,7 +13098,10 @@ ANTI-REPETITION (TITLE)
                     }
                     window.__setFailureCounts = window.__setFailureCounts || {};
                     const fails = (window.__setFailureCounts[setName] = (window.__setFailureCounts[setName] || 0) + 1);
-                    lg.note(`upload ${outcome}`, { cooldownMs: (fails >= 2 ? 60 : 10) * 60 * 1000 });
+                    // WHY it failed goes into the shared ledger (Health & Recovery on every computer shows it), not just this console.
+                    let jobErr = "";
+                    try { jobErr = String((JSON.parse(localStorage.getItem(`etsyJob:${consumed.jobId || originalEnqueue.jobId}`) || "null") || {}).error || ""); } catch (_) {}
+                    lg.note(`upload ${outcome}${jobErr ? ": " + jobErr : ""}`, { cooldownMs: (fails >= 2 ? 60 : 10) * 60 * 1000 });
                     if (fails >= 2) {
                         window.__manuallySkippedSets = window.__manuallySkippedSets || new Set();
                         window.__manuallySkippedSets.add(setName, "failed-twice");
@@ -14909,7 +14917,18 @@ ANTI-REPETITION (TITLE)
         const picked = await window.AutoScopePicker.open();
         if (!picked) return true;
         const res = await send("start-auto", { scope: picked.scope || "", batch: picked.batch || 0 });
-        toast(res.ok ? `Start Auto sent to ${esc(c.label)}.` : "Start Auto could not be sent: " + esc(reasonText(res)), res.ok ? "" : "red");
+        const started = !!(res && res.ok && !(res.ack && res.ack.result && res.ack.result.ok === false));
+        if (started) { toast(`Auto-Pilot started on ${esc(c.label)}.`); return true; }
+        /*  The working computer did not start it (no answer, no Etsy there, ...). A computer that can publish does not leave the
+            queue waiting on it: it takes the pipeline over and starts here, with the source already picked - no second dialog. */
+        if (etsyCapable()) {
+          toast(`${esc(c.label)} did not start (${esc(reasonText(res))}) — starting on this computer…`);
+          const t = await takeOver("start-auto-here", { polite: true });
+          if (t && t.ok) { preset = { scope: picked.scope || null, batch: Number(picked.batch) || 0 }; return false; }
+          toast("Could not take over: " + esc((t && t.reason) || "no answer"), "red");
+          return true;
+        }
+        toast(`Start Auto could not be done on ${esc(c.label)}: ${esc(reasonText(res))}. Connect this computer to Etsy to run it here.`, "red");
         return true;
       }
       function takePreset() {
@@ -22429,7 +22448,7 @@ https://www.etsy.com/your/shops/me/listing-editor/edit/1822973998
           save({ purgeDone: true, purgeLeftovers: purgeLeftovers.slice(), preservedAlts: Array.from(preservedReservedAlts), harvest: uploadedImageHarvest.slice() });
         }
 
-        let mainUploaded = 0, mainAttempted = 0;
+        let mainUploaded = 0, mainAttempted = 0, lastPhotoFail = "";
         // UPLOAD-RESPONSE HARVEST (quota optimization): Etsy's
         // uploadListingImage response echoes the full created image record —
         // listing_image_id, rank, and permanent i.etsystatic.com CDN URLs.
@@ -22477,7 +22496,7 @@ https://www.etsy.com/your/shops/me/listing-editor/edit/1822973998
           // DAILY-QUOTA FIX: distinguish from an ordinary 429/failure.
           if (isDailyQuotaError(r.status, t)) return { ok: false, authExpired: false, quotaExceeded: true, detail: t };
           console.warn(`${label} HTTP ${r.status}:`, t.slice(0, 200));
-          return { ok: false, authExpired: false, detail: `HTTP ${r.status}` };
+          return { ok: false, authExpired: false, detail: `HTTP ${r.status}: ${String(t || "").replace(/\s+/g, " ").slice(0, 200)}` };
         };
         const uploadImage = (fd, label) => (window.LiveImg ? window.LiveImg.trackEtsyPhoto(fd, label, uploadImageCore) : uploadImageCore(fd, label));   // LIVE MIRROR (agent I)
 
@@ -22528,7 +22547,7 @@ https://www.etsy.com/your/shops/me/listing-editor/edit/1822973998
           if (up.authExpired) fatalUpload = "auth";
           if (up.quotaExceeded) fatalUpload = "quota";
           if (up.ok && typeof bumpCreateProgressPerImage === "function") bumpCreateProgressPerImage();
-          if (!up.ok && !up.authExpired && !up.quotaExceeded) console.warn("Photo upload failed", i + 1, up.detail);
+          if (!up.ok && !up.authExpired && !up.quotaExceeded) { console.warn("Photo upload failed", i + 1, up.detail); lastPhotoFail = String(up.detail || ""); }
           return up;
         }, { shouldAbort: () => !!fatalUpload || !!window.__skipListingRequested || leaseGone() });
 
@@ -22636,7 +22655,7 @@ https://www.etsy.com/your/shops/me/listing-editor/edit/1822973998
         // not a transient race.
         if (mainAttempted > 0 && mainUploaded < mainAttempted) {
           const missing = failedMain.length ? ` (ranks ${failedMain.map(n => n + 1).join(", ")})` : "";
-          throw new Error(`Only ${mainUploaded}/${mainAttempted} main photos uploaded${missing} — failing the job instead of publishing a listing with missing images.`);
+          throw new Error(`Only ${mainUploaded}/${mainAttempted} main photos uploaded${missing} — failing the job instead of publishing a listing with missing images.${lastPhotoFail ? " Etsy said: " + lastPhotoFail : ""}`);
         }
         // --- Stage 1b: Reserved (8–9)  (same pool treatment; 2 items max)
         const reservedIdx = [];
@@ -28687,7 +28706,9 @@ async function callOpenAI(payload, opts = {}) {
     s.needsEtsyHere = C && C.needsEtsyHere ? C.needsEtsyHere() : false;
     const autoDoc = C && C.autoValue ? C.autoValue() : null;
     s.autoHere = !!window.autoProcessingEnabled;
-    s.autoAnywhere = s.autoHere || (s.role === "follower" && !!(autoDoc && autoDoc.on));
+    // The lease itself says whether the working computer runs Auto-Pilot (live~ctrl.mode) - trusted over the mirrored flag,
+    // which an old page may never publish.
+    s.autoAnywhere = s.autoHere || (s.role === "follower" && (!!(autoDoc && autoDoc.on) || !!(c && c.alive && c.mode === "auto")));
     s.processing = window.isProcessingSet ? (window.__currentProcessingSetName || "a set") : "";
     const p = G && G.paused ? G.paused() : null;
     s.pause = p ? { why: p.why, leftMs: p.until - t } : null;
@@ -28716,6 +28737,12 @@ async function callOpenAI(payload, opts = {}) {
       });
     } catch (e) { s.listError = String(e && e.message); }
     s.queue = q; s.earmarkedIds = earmarked;
+    try {
+      const done = L ? L.list("done") : [];
+      s.lastDoneAt = done.reduce((m, e) => Math.max(m, Number(e.doneAt) || 0), 0);
+      s.lastErrors = (L ? L.list((e) => e.active && e.lastError) : []).sort((a, b) => (b.updatedMs || 0) - (a.updatedMs || 0)).slice(0, 5).map((e) => e.setName + ": " + e.lastError);
+    } catch (_) { s.lastDoneAt = 0; s.lastErrors = []; }
+    s.etsyRefusal = diag && diag.at ? diag : null;
     s.waiting = q.ready.length + q.interrupted.length + q.cooling.length + q.failed.length + q.parked.length;
     s.status = (($("fbText") || {}).textContent || "").trim();
     s.log = CH ? CH.log().slice(-10).map((x) => new Date(x.at).toLocaleTimeString() + " " + x.m) : [];
@@ -28730,6 +28757,8 @@ async function callOpenAI(payload, opts = {}) {
       text: s.cloud === "denied" ? "The cloud refused this computer (permission denied) — the queue is kept on this computer only." :
         `The cloud queue is ${esc(s.cloud)}${s.cloudStats && s.cloudStats.notOkForMs ? " for " + secs(s.cloudStats.notOkForMs) : ""}. It reconnects by itself; you can force it now.`, act: "reconnect" });
     if (s.pendingWrites) out.push({ lvl: "info", text: `${plural(s.pendingWrites, "change")} waiting to be sent to the cloud.`, act: s.cloud !== "ok" ? "reconnect" : null });
+    if (s.etsyRefusal && Date.now() - s.etsyRefusal.at < 6 * 3600000) out.push({ lvl: "bad", text: `Etsy is refusing photo uploads (${esc(s.etsyRefusal.status)}${s.etsyRefusal.count ? ", " + s.etsyRefusal.count + "×" : ""}, last ${mins(Date.now() - s.etsyRefusal.at)} ago, listing ${esc(s.etsyRefusal.listingId)}): <code>${esc(String(s.etsyRefusal.body || "").slice(0, 300))}</code>`, act: null });
+    if (s.waiting && s.autoAnywhere && s.lastDoneAt && Date.now() - s.lastDoneAt > 3 * 3600000) out.push({ lvl: "bad", text: `Auto-Pilot is on, but nothing has been published for ${mins(Date.now() - s.lastDoneAt)} while ${plural(s.waiting, "set")} wait. Latest reason: ${esc((s.lastErrors[0] || "unknown").slice(0, 240))}`, act: "copy" });
     if (s.pause) out.push({ lvl: "warn", text: `Pipeline paused: ${esc(s.pause.why)}. It resumes by itself in ${mins(s.pause.leftMs)}.`, act: "resume" });
     if (s.controllerNeedsEtsy) out.push({ lvl: "bad", text: `${esc(s.controller && s.controller.label)} holds the pipeline but has no Etsy connection, so nothing is being published.`, act: s.etsyHere ? "runhere" : "etsy" });
     if (s.needsEtsyHere || (s.role === "controller" && !s.etsyHere && s.waiting)) out.push({ lvl: "bad", text: "This computer runs the pipeline but is not connected to Etsy.", act: "etsy" });
@@ -28750,7 +28779,8 @@ async function callOpenAI(payload, opts = {}) {
       toast(r && r.ok ? "This computer now runs the pipeline." : "Could not take over: " + esc((r && r.reason) || "no answer"), r && r.ok ? "" : "red");
     }],
     etsy: ["Connect to Etsy", async () => { const b = $("connectEtsyBtn"); if (b) b.click(); else toast("Etsy connect button not found.", "red"); }],
-    start: ["Start Auto-Pilot", async () => { const b = $("toggleAuto"); if (b && !window.autoProcessingEnabled) b.click(); }],
+    // Closes this panel first: Start opens the normal source picker, which must not end up hidden behind it.
+    start: ["Start Auto-Pilot", async () => { const b = $("toggleAuto"); hide(); if (b && !window.autoProcessingEnabled) b.click(); }],
     retry: ["Retry waiting sets now", async (opts) => {
       const s = snapshot(), q = s.queue;
       const rows = q.cooling.concat(q.failed, q.parked, q.interrupted, (opts && opts.withSkipped) ? q.skipped : []);
@@ -28807,7 +28837,15 @@ async function callOpenAI(payload, opts = {}) {
     document.head.appendChild(st);
   }
 
-  let open = false, timer = 0;
+  let open = false, timer = 0, diag = null, diagAt = 0;
+  /*  Etsy's last refusal of a photo, kept by the imageUpload function in ListingGen_Config/diag~etsyImageUpload. One read
+      when the panel opens (at most once a minute) - never polled in the background. */
+  async function loadDiag() {
+    if (Date.now() - diagAt < 60000) return;
+    diagAt = Date.now();
+    try { const d = await fsdb.collection("ListingGen_Config").doc("diag~etsyImageUpload").get(); diag = d.exists ? d.data() : null; } catch (_) {}
+    if (open) render();
+  }
   function rowsTable(rows) {
     if (!rows.length) return "";
     return "<table>" + rows.slice(0, 60).map((r) => `<tr><td>${esc(r.name)}</td><td>${esc(r.state)}${r.stage ? " · " + esc(r.stage) : ""}${r.by ? " · " + esc(r.by) : ""}</td><td>${r.retryInMs > 0 ? "again in " + mins(r.retryInMs) : ""}</td><td>${esc(r.err).slice(0, 120)}</td></tr>`).join("") + (rows.length > 60 ? `<tr><td colspan="4">…and ${rows.length - 60} more</td></tr>` : "") + "</table>";
@@ -28831,6 +28869,8 @@ async function callOpenAI(payload, opts = {}) {
         ${q.skipped.length ? `<div style="margin-top:6px"><button class="hr-b sec" data-hr="retry" data-skipped="1">Also retry ${plural(q.skipped.length, "set")} skipped by an operator</button></div>` : ""}
         <details><summary>Held-back sets</summary>${rowsTable(q.cooling.concat(q.failed, q.parked, q.interrupted, q.skipped)) || "<div>None.</div>"}</details>
         <details><summary>In progress</summary>${rowsTable(q.running) || "<div>None.</div>"}</details>
+        ${s.lastErrors && s.lastErrors.length ? `<details open><summary>Latest failure reasons (shared queue)</summary><pre>${esc(s.lastErrors.join("\n"))}</pre></details>` : ""}
+        <div class="hr-k" style="margin-top:6px">Last listing published: ${s.lastDoneAt ? new Date(s.lastDoneAt).toLocaleString() : "unknown"}</div>
         ${s.streak.length ? `<details><summary>Recent failures</summary><pre>${esc(s.streak.join("\n"))}</pre></details>` : ""}
         ${s.log.length ? `<details><summary>Connection log</summary><pre>${esc(s.log.join("\n"))}</pre></details>` : ""}
       </section>`;
@@ -28856,7 +28896,7 @@ async function callOpenAI(payload, opts = {}) {
       o.querySelector(".hr-x").onclick = hide;
       document.body.appendChild(o);
     }
-    open = true; render();
+    open = true; render(); loadDiag();
     clearInterval(timer); timer = setInterval(() => { if (open) render(); }, 3000);
   }
   function hide() { open = false; clearInterval(timer); const o = $("hrOverlay"); if (o) o.remove(); }
