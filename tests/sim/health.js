@@ -200,6 +200,48 @@ const check = (ok, what) => { console.log((ok ? 'ok   ' : 'FAIL ') + what); if (
     await cA.close(); await cB.close();
   }
 
+  if (which === 'h7' || which === 'all') {
+    console.log('\n=== H7: a listing Etsy refuses is quarantined, never handed to the next set ===');
+    const w = await world();
+    const BAD = '4594648840', GOOD = '4594648776', NAME = 'Regular_Necklace_Set_1339';
+    w.store.put('ListingGen_Config/queues', { queueRegNecklace: BAD + ', ' + GOOD + ', 4594629441', queueBeadyNecklace: '', queueStudEarrings: '', queueHoopEarrings: '', queueCharms: '', rev: 7 }, false);
+    const c = await w.computer();
+    const pg = await open(c, 'solo'); await sleep(4000);
+    const r = await pg.evaluate(async ({ BAD, GOOD, NAME }) => {
+      const sleep = (ms) => new Promise(r => setTimeout(r, ms));
+      const Q = window.QueueBoxes, out = {};
+      for (let i = 0; i < 40 && !Q.enabled; i++) await sleep(250);
+      out.peekBefore = Q.peek('queueRegNecklace');
+      out.q = await Q.quarantine('queueRegNecklace', BAD, { reason: 'upload FAILED for ' + NAME + ': Etsy said: HTTP 400', setName: NAME });
+      await sleep(600);
+      out.isQ = Q.isQuarantined(BAD); out.peekAfter = Q.peek('queueRegNecklace');
+      out.box = document.getElementById('queueRegNecklace').value;
+      // a set that still remembers the bad id gets a fresh one
+      const h = window.PipeGuard.begin('Regular_Necklace_Set_1340', { local: true, meta: { seq: 5, listingId: BAD } });
+      window.__lgRun = h; window.__lgPass = 'orig';
+      const t = await Q.take('queueRegNecklace', { setName: 'Regular_Necklace_Set_1340' });
+      out.took = t && t.id; out.handleId = h.m.listingId;
+      window.__lgRun = null;
+      // an older page that tries to reserve it on the ledger is refused
+      out.oldBuildClaim = await window.ListingLedger.claimListingId(BAD, 'Regular_Necklace_Set_1341');
+      // the panel lists it; Return puts it at the END of the box
+      const s = window.HealthPanel.snapshot(); out.panelQ = s.quarantined.map((x) => x.id);
+      out.un = await Q.unquarantine(BAD); await sleep(600);
+      out.boxAfterReturn = document.getElementById('queueRegNecklace').value; out.isQAfter = Q.isQuarantined(BAD);
+      return out;
+    }, { BAD, GOOD, NAME });
+    const qd = (w.store.docs.get('ListingGen_Config/queues') || {}).d || {};
+    const cl = (w.store.docs.get('ListingGen_Config/idclaim~' + BAD) || {}).d || {};
+    check(r.peekBefore === BAD, 'before: the broken listing is first in line');
+    check(r.q && r.q.ok && r.isQ && r.peekAfter === GOOD, `quarantined: next in line is now ${r.peekAfter}`);
+    check(r.took === GOOD && r.handleId === GOOD, `a set that remembered the broken id took a fresh one (${r.took})`);
+    check(r.oldBuildClaim && r.oldBuildClaim.ok === false && r.oldBuildClaim.reason === 'taken', 'an older page cannot reserve the quarantined id (' + JSON.stringify(r.oldBuildClaim) + ')');
+    check(r.panelQ.indexOf(BAD) >= 0, 'Health & Recovery lists the quarantined id');
+    check(r.un && r.un.ok && !r.isQAfter && /4594648840\s*$/.test(r.boxAfterReturn.trim()), 'Return to box puts it at the END: ' + r.boxAfterReturn);
+    check(!(qd.quarantine || {})[BAD] && String(qd.queueRegNecklace).trim().endsWith(BAD) && cl.state === 'released', `cloud: quarantine entry gone, id at the end of the box, reservation ${cl.state}`);
+    await c.close();
+  }
+
   await browser.close();
   console.log(failures ? `\n${failures} check(s) FAILED` : '\nall checks passed');
   process.exit(failures ? 1 : 0);

@@ -62,7 +62,7 @@
 // another automatically, so a tab still running OLD code could end up doing the work. Every tab compares its build with
 // the deployed one (a tiny file, every 2 minutes) and, as soon as it is idle, reloads itself. A stale tab never takes
 // control from another computer.
-window.APP_BUILD = "20261030T154200";
+window.APP_BUILD = "20261030T161717";
 (function () {
   var URL_ = function () { return window.APP_BUILD_URL || ("assets/build.json?t=" + Date.now()); };
   function idle() {
@@ -5825,7 +5825,8 @@ ANTI-REPETITION (TITLE)
         taken: {},              // id -> {box, setName, at}: taken by THIS terminal, upload not recorded yet
         syncedAt: 0, lastRev: -1, lastAtMs: 0, legacySeen: {}, lastToast: 0,
         usedLive: new Map(),    // id -> newest ts ms, from the 600-row Stats window
-        usedHist: new Set(), hist: null, histChecked: false, histBusy: false, histSaveT: null
+        usedHist: new Set(), hist: null, histChecked: false, histBusy: false, histSaveT: null,
+        quar: {}                // id -> {at, reason, sets, box}: QUARANTINED listing ids (cloud field `quarantine`), never handed out
       };
       S.ready = new Promise((res) => { S.readyRes = res; });
       const $ = (id) => document.getElementById(id);
@@ -5835,7 +5836,8 @@ ANTI-REPETITION (TITLE)
       // What the cloud should treat as this terminal's committed text: a box
       // the person is still typing in contributes nothing yet.
       const committedList = (b) => (S.typing[b] && S.base[b] !== undefined) ? S.base[b] : mine(b);
-      const isBad = (id) => { const u = window.__usedListingIds; return !!((u && u.has(id)) || S.taken[id]); };
+      const isBad = (id) => { const u = window.__usedListingIds; return !!((u && u.has(id)) || S.taken[id] || S.quar[id]); };
+      const readQuar = (d) => { S.quar = (d && d.quarantine && typeof d.quarantine === "object" && !Array.isArray(d.quarantine)) ? Object.assign({}, d.quarantine) : {}; };
       // dirty = this box has a real change (ids added/removed) the cloud has not seen; a pure re-order is not one
       const dirtyBoxes = () => QB_BOXES.filter(b => {
         if (S.base[b] === undefined || S.typing[b]) return false;
@@ -5986,6 +5988,7 @@ ANTI-REPETITION (TITLE)
           res = await fsdb.runTransaction(async (tx) => {
             const snap = await tx.get(QUEUES_DOC);
             const d = snap.exists ? (snap.data() || {}) : {};
+            readQuar(d);
             const { orig, lists } = readLists(d);
             dirty.forEach(b => { lists[b] = qbMerge3(cap[b].base, cap[b].mine, lists[b], isBad); });
             const clean = qbSanitize(lists, isBad).lists;
@@ -6007,6 +6010,7 @@ ANTI-REPETITION (TITLE)
         if (fromCache) { if (S.firstSnap) setConn("offline"); return; }   // a cache-only view proves nothing about the cloud
         S.failN = 0; S.firstSnap = true; S.syncedAt = Date.now(); S.readyRes();
         const d = snap.exists ? (snap.data() || {}) : null;
+        if (d) readQuar(d);
         const theirs = {};
         QB_BOXES.forEach(b => { theirs[b] = d ? qbIds(d[b]) : []; });
         let nAdd = 0, nRem = 0, first = false;
@@ -6082,6 +6086,7 @@ ANTI-REPETITION (TITLE)
             out = await fsdb.runTransaction(async (tx) => {
               const snap = await tx.get(QUEUES_DOC);
               const d = snap.exists ? (snap.data() || {}) : {};
+              readQuar(d);
               const { orig, lists } = readLists(d);
               // fold in this terminal's committed-but-unsent edits to THIS box so a fresh paste is usable at once
               if (S.base[b] !== undefined) lists[b] = qbMerge3(S.base[b], committedList(b), lists[b], isBad);
@@ -6140,6 +6145,62 @@ ANTI-REPETITION (TITLE)
         if (setName && L && typeof L.releaseListingId === "function") { try { rel = Promise.resolve(L.releaseListingId(id, setName)).catch(() => {}); } catch (_) {} }
         // release BEFORE the id reappears in the cloud, or another terminal could claim-fail on our own reservation
         return rel.then(() => { scheduleFlush(0); return { ok: true }; });
+      }
+
+      /*  QUARANTINE. A listing id whose upload FAILED (Etsy refused it - not a network, quota or sign-in problem) is never put
+          back at the front of its box: that is how ONE broken listing (4594648840, Oct 2026) failed 11 sets in a row for two
+          days - every failure handed it back, every next set took it first. It goes into the cloud document's `quarantine`
+          map instead (every terminal skips it), its reservation is marked quarantined (older pages are refused it too), and
+          the set takes a fresh id next time. A person can return it (Health & Recovery) once the listing is fixed on Etsy. */
+      const QREF = (id) => fsdb.collection("ListingGen_Config").doc("idclaim~" + id);
+      function quarantine(b, id, opts) {
+        id = String(id || "");
+        if (!/^\d{10}$/.test(id)) return Promise.resolve({ ok: false, reason: "bad-id" });
+        const reason = String((opts && opts.reason) || "upload failed").slice(0, 300), setName = String((opts && opts.setName) || "");
+        delete S.taken[id]; persistTaken();
+        QB_BOXES.forEach(x => { if (mine(x).indexOf(id) >= 0) setBox(x, mine(x).filter(y => y !== id)); });
+        S.quar[id] = { at: Date.now(), reason, sets: setName ? [setName] : [], box: b };
+        refresh();
+        return serial(async () => {
+          try {
+            await fsdb.runTransaction(async (tx) => {
+              const snap = await tx.get(QUEUES_DOC), cs = await tx.get(QREF(id));
+              const d = snap.exists ? (snap.data() || {}) : {};
+              const prev = (d.quarantine && d.quarantine[id]) || {};
+              const sets = Array.from(new Set((Array.isArray(prev.sets) ? prev.sets : []).concat(setName ? [setName] : []))).slice(-20);
+              const upd = { quarantine: { [id]: { at: Date.now(), reason, sets, box: b, count: (Number(prev.count) || 0) + 1 } },
+                rev: (d.rev | 0) + 1, updatedBy: CLIENT_ID, updatedAt: firebase.firestore.FieldValue.serverTimestamp() };
+              QB_BOXES.forEach(x => { const l = qbIds(d[x]); if (l.indexOf(id) >= 0) upd[x] = l.filter(y => y !== id).join(", "); });
+              tx.set(QUEUES_DOC, upd, { merge: true });
+              const c = cs.exists ? (cs.data() || {}) : {};
+              tx.set(QREF(id), { kind: "idclaim", listingId: id, setName: "__quarantine__", state: "quarantined", claimedAt: c.claimedAt || Date.now(), doneAt: 0,
+                owner: CLIENT_ID, rev: (Number(c.rev) || 0) + 1, updatedMs: Date.now(), updatedAt: firebase.firestore.FieldValue.serverTimestamp(), reason }, { merge: false });
+            });
+            S.failN = 0; setConn("ok");
+            note(`Listing ID ${id} quarantined: ${reason.slice(0, 120)}`, true);
+            return { ok: true };
+          } catch (e) { failed(e); return { ok: false, reason: "offline" }; }
+        });
+      }
+      function unquarantine(id, b) {
+        id = String(id || "");
+        const box = QB_BOXES.indexOf(b) >= 0 ? b : ((S.quar[id] && S.quar[id].box) || QB_BOXES[0]);
+        return serial(async () => {
+          try {
+            await fsdb.runTransaction(async (tx) => {
+              const snap = await tx.get(QUEUES_DOC), cs = await tx.get(QREF(id));
+              const d = snap.exists ? (snap.data() || {}) : {};
+              const l = qbIds(d[box]);
+              const upd = { quarantine: { [id]: firebase.firestore.FieldValue.delete() }, rev: (d.rev | 0) + 1, updatedBy: CLIENT_ID, updatedAt: firebase.firestore.FieldValue.serverTimestamp() };
+              if (l.indexOf(id) < 0) upd[box] = l.concat([id]).join(", ");          // the END of the box: a returned id is tried last
+              tx.set(QUEUES_DOC, upd, { merge: true });
+              if (cs.exists && (cs.data() || {}).state === "quarantined") tx.set(QREF(id), { state: "released", setName: "", updatedMs: Date.now(), updatedAt: firebase.firestore.FieldValue.serverTimestamp() }, { merge: true });
+            });
+            delete S.quar[id];
+            S.failN = 0; setConn("ok");
+            return { ok: true };
+          } catch (e) { failed(e); return { ok: false, reason: "offline" }; }
+        });
       }
 
       // ---- used-ID completeness: 600-row window + cached older history ----
@@ -6228,7 +6289,9 @@ ANTI-REPETITION (TITLE)
 
       const QB = {
         enabled: false,
-        start, take, putBack, scrub, noteStatsWindow,
+        start, take, putBack, scrub, noteStatsWindow, quarantine, unquarantine,
+        isQuarantined: (id) => !!S.quar[String(id)],
+        quarantined: () => Object.keys(S.quar).map((id) => Object.assign({ id }, S.quar[id])),
         peek: (b) => mine(b).find(x => !isBad(x)) || null,
         count: (b) => mine(b).length,
         committed: (b) => { S.typing[b] = false; },                 // saveQueue(): typed text is now final
@@ -13076,9 +13139,17 @@ ANTI-REPETITION (TITLE)
                     try { liveStatus = (JSON.parse(localStorage.getItem(`etsyJob:${consumed.jobId}`) || "null") || {}).status; } catch (_) {}
                     const stillRunning = liveStatus === "RUNNING" || liveStatus === "PAUSED";
                     console.warn(`Original upload for ${setName} ended ${outcome}${stillRunning ? " (job still RUNNING — listing ID NOT restored)" : ""}; keeping the folder.`);
+                    let jobErr = "";
+                    try { jobErr = String((JSON.parse(localStorage.getItem(`etsyJob:${consumed.jobId || originalEnqueue.jobId}`) || "null") || {}).error || ""); } catch (_) {}
                     if (!stillRunning && consumed.queueId && consumed.listingId) {
-                        restoreListingId(consumed.queueId, consumed.listingId);
-                        await lg.idRestored("");   // ID is free again: drop the reservation + the ledger claim on it
+                        // Not the listing's fault (quota, sign-in, network, still unknown): the id goes back to the front as before.
+                        // Etsy REFUSED it: the id is quarantined, never handed to the next set (one broken listing used to fail
+                        // every set after it - each failure put it back first in line). The set gets a fresh id next time.
+                        const netDown = !!(window.PipeGuard && window.PipeGuard.networkDown && window.PipeGuard.networkDown());
+                        const notListing = outcome === "QUOTA_HALT" || outcome === "AUTH_NEEDED" || outcome === "TIMEOUT" || netDown || /lease_lost/i.test(jobErr);
+                        if (notListing || !(window.QueueBoxes && window.QueueBoxes.enabled && typeof window.QueueBoxes.quarantine === "function")) restoreListingId(consumed.queueId, consumed.listingId);
+                        else await window.QueueBoxes.quarantine(consumed.queueId, consumed.listingId, { reason: `upload ${outcome} for ${setName}${jobErr ? ": " + jobErr : ""}`, setName });
+                        await lg.idRestored("");   // drop the set's reservation either way: it takes a fresh id (or the restored one) next time
                     }
                     // DAILY-QUOTA FIX: this outcome isn't the set's fault —
                     // don't strike it or mark it skipped. The job's own
@@ -13099,8 +13170,6 @@ ANTI-REPETITION (TITLE)
                     window.__setFailureCounts = window.__setFailureCounts || {};
                     const fails = (window.__setFailureCounts[setName] = (window.__setFailureCounts[setName] || 0) + 1);
                     // WHY it failed goes into the shared ledger (Health & Recovery on every computer shows it), not just this console.
-                    let jobErr = "";
-                    try { jobErr = String((JSON.parse(localStorage.getItem(`etsyJob:${consumed.jobId || originalEnqueue.jobId}`) || "null") || {}).error || ""); } catch (_) {}
                     lg.note(`upload ${outcome}${jobErr ? ": " + jobErr : ""}`, { cooldownMs: (fails >= 2 ? 60 : 10) * 60 * 1000 });
                     if (fails >= 2) {
                         window.__manuallySkippedSets = window.__manuallySkippedSets || new Set();
@@ -13231,10 +13300,19 @@ ANTI-REPETITION (TITLE)
                         if (liveStatus2 === "RUNNING" || liveStatus2 === "PAUSED") {
                             console.warn(`Variant upload ended ${outcome2} but the job is still RUNNING — listing ID NOT restored.`);
                         } else {
-                            console.warn(`Variant upload ended ${outcome2}; restoring ID ${consumed2.listingId}.`);
-                            restoreListingId(consumed2.queueId, consumed2.listingId);
+                            let jobErr2 = "";
+                            try { jobErr2 = String((JSON.parse(localStorage.getItem(`etsyJob:${consumed2.jobId}`) || "null") || {}).error || ""); } catch (_) {}
+                            const notListing2 = outcome2 === "QUOTA_HALT" || outcome2 === "AUTH_NEEDED" || outcome2 === "TIMEOUT" || /lease_lost/i.test(jobErr2)
+                                || !!(window.PipeGuard && window.PipeGuard.networkDown && window.PipeGuard.networkDown());
+                            if (notListing2 || !(window.QueueBoxes && window.QueueBoxes.enabled && typeof window.QueueBoxes.quarantine === "function")) {
+                                console.warn(`Variant upload ended ${outcome2}; restoring ID ${consumed2.listingId}.`);
+                                restoreListingId(consumed2.queueId, consumed2.listingId);
+                                window.M?.toast?.({ html: `Variant upload ${outcome2} — listing ID returned to queue.` });
+                            } else {
+                                // Etsy refused this listing: quarantined (see QueueBoxes.quarantine), never handed to the next set.
+                                await window.QueueBoxes.quarantine(consumed2.queueId, consumed2.listingId, { reason: `variant upload ${outcome2} for ${setName}${jobErr2 ? ": " + jobErr2 : ""}`, setName });
+                            }
                             await lg.idRestored("v");
-                            window.M?.toast?.({ html: `Variant upload ${outcome2} — listing ID returned to queue.` });
                         }
                     }
                     if (outcome2 !== "DONE") {
@@ -13753,7 +13831,7 @@ ANTI-REPETITION (TITLE)
         try { list = q.takenBy(name); } catch (_) { return null; }
         if (!Array.isArray(list)) list = list ? [list] : [];
         const items = list.map((x) => (x && typeof x === "object" ? x : { id: x }))
-          .filter((x) => /^\d{10}$/.test(String(x.id)) && !no.has(String(x.id)) && !notMine.has(String(x.id)) && !usedId(x.id));
+          .filter((x) => /^\d{10}$/.test(String(x.id)) && !no.has(String(x.id)) && !notMine.has(String(x.id)) && !usedId(x.id) && !(q.isQuarantined && q.isQuarantined(String(x.id))));
         items.sort((a, b) => (b.at || 0) - (a.at || 0));
         return items.length ? { id: String(items[0].id), queueId: items[0].queueId || "" } : null;
       }
@@ -13770,6 +13848,8 @@ ANTI-REPETITION (TITLE)
         const v = window.__lgPass === "variant", key = v ? "vListingId" : "listingId";
         const other = v ? h.m.listingId : h.m.vListingId;
         h.idBlock = "";
+        const quarantined = (id) => { try { return !!(id && q.isQuarantined && q.isQuarantined(String(id))); } catch (_) { return false; } };
+        if (h.m[key] && !h.m[v ? "vEtsyDone" : "etsyDone"] && quarantined(h.m[key])) h.remember(Object.assign({ [key]: "" }, clearStages(v)));   // Etsy refused that listing: never reuse it
         const held = h.m[key] && !h.m[v ? "vEtsyDone" : "etsyDone"] ? { id: String(h.m[key]), queueId: b } : null;
         const cand = held || takenIdFor(h.setName, [other, h.m.etsyDone ? h.m.listingId : ""]);
         if (cand) {
@@ -28743,6 +28823,7 @@ async function callOpenAI(payload, opts = {}) {
       s.lastErrors = (L ? L.list((e) => e.active && e.lastError) : []).sort((a, b) => (b.updatedMs || 0) - (a.updatedMs || 0)).slice(0, 5).map((e) => e.setName + ": " + e.lastError);
     } catch (_) { s.lastDoneAt = 0; s.lastErrors = []; }
     s.etsyRefusal = diag && diag.at ? diag : null;
+    try { s.quarantined = window.QueueBoxes && window.QueueBoxes.quarantined ? window.QueueBoxes.quarantined() : []; } catch (_) { s.quarantined = []; }
     s.waiting = q.ready.length + q.interrupted.length + q.cooling.length + q.failed.length + q.parked.length;
     s.status = (($("fbText") || {}).textContent || "").trim();
     s.log = CH ? CH.log().slice(-10).map((x) => new Date(x.at).toLocaleTimeString() + " " + x.m) : [];
@@ -28766,6 +28847,7 @@ async function callOpenAI(payload, opts = {}) {
     if (s.waiting && !s.autoAnywhere && !s.processing) out.push({ lvl: "bad", text: `${plural(s.waiting, "approved set")} waiting, but Auto-Pilot is off on every computer.`, act: "start" });
     const stuck = s.queue.cooling.length + s.queue.failed.length + s.queue.parked.length + (s.autoAnywhere ? 0 : s.queue.interrupted.length);
     if (stuck) out.push({ lvl: "warn", text: `${plural(stuck, "set")} held back (cooling down after a failure, failed, parked for this session or interrupted).`, act: "retry" });
+    if (s.quarantined && s.quarantined.length) out.push({ lvl: "info", text: `${plural(s.quarantined.length, "listing ID")} quarantined because Etsy refused their photos — no set will use them. Check them on Etsy; return one to its box below once it is fixed.`, act: null });
     if (s.earmarkedIds) out.push({ lvl: "info", text: `${plural(s.earmarkedIds, "listing ID")} reserved by waiting sets. They are not lost: each set reuses its own reserved ID when it runs, so the ID boxes show fewer.`, act: null });
     return out;
   }
@@ -28867,6 +28949,7 @@ async function callOpenAI(payload, opts = {}) {
       </section>
       <section><div class="hr-acts">${["reconnect", "runhere", "etsy", "start", "retry", "resume", "rescan", "copy", "reload"].map((k) => btn(k, true)).join("")}</div>
         ${q.skipped.length ? `<div style="margin-top:6px"><button class="hr-b sec" data-hr="retry" data-skipped="1">Also retry ${plural(q.skipped.length, "set")} skipped by an operator</button></div>` : ""}
+        ${s.quarantined && s.quarantined.length ? `<details open><summary>Quarantined listing IDs</summary><table>${s.quarantined.map((x) => `<tr><td><a href="https://www.etsy.com/your/shops/me/listing-editor/edit/${esc(x.id)}" target="_blank" rel="noopener">${esc(x.id)}</a></td><td>${esc(String(x.reason || "").slice(0, 160))}${x.sets && x.sets.length ? "<br>sets: " + esc(x.sets.slice(-5).join(", ")) : ""}</td><td><button class="hr-b sec" data-hrq="${esc(x.id)}">Return to box</button></td></tr>`).join("")}</table></details>` : ""}
         <details><summary>Held-back sets</summary>${rowsTable(q.cooling.concat(q.failed, q.parked, q.interrupted, q.skipped)) || "<div>None.</div>"}</details>
         <details><summary>In progress</summary>${rowsTable(q.running) || "<div>None.</div>"}</details>
         ${s.lastErrors && s.lastErrors.length ? `<details open><summary>Latest failure reasons (shared queue)</summary><pre>${esc(s.lastErrors.join("\n"))}</pre></details>` : ""}
@@ -28874,6 +28957,16 @@ async function callOpenAI(payload, opts = {}) {
         ${s.streak.length ? `<details><summary>Recent failures</summary><pre>${esc(s.streak.join("\n"))}</pre></details>` : ""}
         ${s.log.length ? `<details><summary>Connection log</summary><pre>${esc(s.log.join("\n"))}</pre></details>` : ""}
       </section>`;
+    box.querySelectorAll("[data-hrq]").forEach((b) => {
+      b.onclick = async () => {
+        const id = b.getAttribute("data-hrq");
+        if (!confirm(`Return listing ${id} to its ID box? Only do this once the listing works on Etsy again - it goes to the END of the box.`)) return;
+        b.disabled = true;
+        const r = await window.QueueBoxes.unquarantine(id);
+        toast(r && r.ok ? `Listing ${esc(id)} returned to its box.` : "Could not return it: " + esc((r && r.reason) || "offline"), r && r.ok ? "" : "red");
+        setTimeout(render, 400);
+      };
+    });
     box.querySelectorAll("[data-hr]").forEach((b) => {
       const k = b.getAttribute("data-hr");
       if (k === "runhere" && (s.role === "controller" || !s.etsyHere)) b.disabled = true;
