@@ -25367,6 +25367,20 @@ https://www.etsy.com/your/shops/me/listing-editor/edit/1822973998
         return !missing().length;
       }
       function changed() { clearTimeout(state.timer); state.timer = setTimeout(() => sync("saved here"), 1500); }
+      /*  Boxes 9-10 ON SCREEN. Every page starts as a follower, whose boxes mirror the working computer (empty at first);
+          after it takes the pipeline over those empty boxes stayed, although the images were saved here. A page that is
+          not a follower shows its saved images in any empty box (checked every 3 s; reads storage only when a box is empty). */
+      function showSaved() {
+        try {
+          if (role() === "follower") return;
+          const shown = Array.isArray(window.reservedPhotos) ? window.reservedPhotos : (window.reservedPhotos = []);
+          if ([0, 1].every((i) => shown[i] && isRealReservedSrc(shown[i].src))) return;
+          const sv = saved(); let put = false;
+          [0, 1].forEach((i) => { if (!(shown[i] && isRealReservedSrc(shown[i].src)) && real(sv[i])) { while (shown.length < i) shown.push(null); shown[i] = sv[i]; put = true; } });
+          if (put && typeof updateStaticPreviewGrid === "function") updateStaticPreviewGrid();
+        } catch (_) {}
+      }
+      setInterval(showSaved, 3000);
       return { sync, ensure, changed, missing, log: () => state.log.slice(), sigOf };
     })();
     /* ══ END BRAND IMAGES ══ */
