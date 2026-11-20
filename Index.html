@@ -1706,6 +1706,10 @@ window.APP_BUILD = "20261120T145011";
     .apiWidget .awInfo:hover{color:var(--ink); background:none}
     .apiWidget .awInfo.warnDot{color:var(--gold)}
     .apiWidget.awUnavailable{border-color:var(--clay); background:var(--claySoft)}
+    .apiWidget .awRow[hidden]{display:none}
+    .apiWidget .awReset{font-size:11.5px; color:var(--ink); white-space:nowrap; overflow:hidden; text-overflow:ellipsis; font-variant-numeric:tabular-nums; min-width:0}
+    .apiWidget .awReset.waiting{color:var(--clay); font-weight:700}
+    .apiWidget .awReset.ready{color:var(--sage); font-weight:700}
     @media(max-width:1400px){.apiWidget{display:none}}
     /* the create-listing progress bar lives beside the status chip while
        a job runs; give it a sane inline size in the flex row */
@@ -2422,6 +2426,10 @@ window.APP_BUILD = "20261120T145011";
       <span class="awNum" id="awKeyNum">…</span>
       <span class="awBar"><i id="awKeyBar"></i></span>
       <span class="awQps" aria-hidden="true"></span>
+    </div>
+    <div class="awRow awResetRow" data-row="reset" id="awResetRow" hidden>
+      <span class="awLabel">Reset</span>
+      <span class="awReset" id="awResetText">…</span>
     </div>
     <button
       class="awInfo"
@@ -27426,6 +27434,34 @@ async function callOpenAI(payload, opts = {}) {
         bar.parentElement.className = "awBar" + (state ? " " + state : "");
       };
 
+      // ETSY RESET STATUS (20 Nov 2026) — free: uses only what etsyApiUsage already returns, never contacts Etsy.
+      // Etsy's daily limit is a rolling 24-hour window, so with no Etsy call since `etsy_last_contact_at` the whole
+      // limit is back 24 hours later (etsy_full_reset_at). Some calls may come back sooner as older calls age out.
+      const fmtToronto = (ms) => ms ? new Date(Number(ms)).toLocaleString("en-US", { timeZone: "America/Toronto", weekday: "short", hour: "numeric", minute: "2-digit" }) : "unknown";
+      const fmtLeft = (ms) => { const m = Math.max(0, Math.ceil(ms / 60000)); const h = Math.floor(m / 60); return h ? h + "h " + String(m % 60).padStart(2, "0") + "m" : m + "m"; };
+      function renderEtsyReset(data) {
+        const row = byId("awResetRow"), el = byId("awResetText");
+        if (!row || !el || !data) return;
+        const stop = data.etsy_stop || null;
+        const remaining = data.etsy_remaining_today == null ? null : Number(data.etsy_remaining_today);
+        const exhausted = !!(stop && stop.stopped) || (Number.isFinite(remaining) && remaining <= 0);
+        const fullAt = Number(data.etsy_full_reset_at) || 0;
+        if (!exhausted || !fullAt) { row.hidden = true; return; }
+        row.hidden = false;
+        const now = Date.now() + (Number(data._skew) || 0);
+        const stoppedNote = stop && stop.stopped ? "Etsy stopped since " + fmtToronto(stop.since) + " Toronto. " : "";
+        if (now < fullAt) {
+          el.textContent = "Full 5,000 by " + fmtToronto(fullAt) + " · " + fmtLeft(fullAt - now);
+          el.className = "awReset waiting";
+          row.title = stoppedNote + "Etsy's daily limit is a rolling 24-hour window: each call stops counting about 24 hours after it was made, so some calls may come back sooner. No Etsy call has been recorded since " + fmtToronto(data.etsy_last_contact_at) + " Toronto, so the full limit should be back by " + fmtToronto(fullAt) + " Toronto. This estimate never contacts Etsy.";
+        } else {
+          el.textContent = stop && stop.stopped ? "Limit should be reset · press Resume Etsy" : "Limit should be reset";
+          el.className = "awReset ready";
+          row.title = stoppedNote + "More than 24 hours have passed since the last Etsy call (" + fmtToronto(data.etsy_last_contact_at) + " Toronto), so Etsy's rolling 24-hour window should be clear." + (stop && stop.stopped ? " The shop's stop switch is still on: press Resume Etsy in Brites Manager → Settings to start again." : "");
+        }
+      }
+      setInterval(() => { try { renderEtsyReset(lastUsageSnapshot); } catch (_) {} }, 30000);
+
       async function refreshApiUsage() {
         if (refreshInFlight) return lastUsageSnapshot;
         refreshInFlight = true;
@@ -27441,6 +27477,7 @@ async function callOpenAI(payload, opts = {}) {
             throw new Error(data.error || "API statistics unavailable");
           }
           lastUsageSnapshot = data;
+          data._skew = Number(data.server_time || Date.now()) - Date.now();
 
           const used = Number(data.count || 0);
           const budget = Number(data.budget || 2500);
@@ -27482,6 +27519,8 @@ async function callOpenAI(payload, opts = {}) {
             setBar("awKeyBar", 0, "");
           }
 
+          renderEtsyReset(data);
+
           const now = Number(data.server_time || Date.now());
           const counterAge = data.count_since
             ? now - Number(data.count_since)
@@ -27498,7 +27537,7 @@ async function callOpenAI(payload, opts = {}) {
             "App = this Listing Generator’s verified Etsy calls today, resets " +
             "11:59 PM Toronto, capped at " + budget.toLocaleString() +
             " (50% of Etsy’s " + (keyLimit || 5000).toLocaleString() + "/day).\n" +
-            "Key = Etsy’s own meter for the WHOLE API key (every app), reset at midnight UTC.\n" +
+            "Key = Etsy’s own meter for the WHOLE API key (every app), a rolling 24-hour window: each call stops counting 24 h after it was made.\n" +
             "QPS = highest calls-per-second observed across all server instances, " +
             "hard-capped at " + qpsCap + ".";
           const notes = [];
