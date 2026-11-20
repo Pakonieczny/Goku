@@ -62,7 +62,7 @@
 // another automatically, so a tab still running OLD code could end up doing the work. Every tab compares its build with
 // the deployed one (a tiny file, every 2 minutes) and, as soon as it is idle, reloads itself. A stale tab never takes
 // control from another computer.
-window.APP_BUILD = "20261120T045421";
+window.APP_BUILD = "20261120T145011";
 (function () {
   var URL_ = function () { return window.APP_BUILD_URL || ("assets/build.json?t=" + Date.now()); };
   function idle() {
@@ -11705,7 +11705,7 @@ ANTI-REPETITION (TITLE)
                   window.__autoBatchDone = 0;
                   if (typeof window.updateRailBatch === "function") window.updateRailBatch();
                   if(window.isProcessingSet) {
-                       updateFirebaseStatus("Pausing after set...", "working");
+                       updateFirebaseStatus("Stopping — nothing more is sent to Etsy", "working");
                   } else {
                        updateFirebaseStatus("Auto Paused", "");
                   }
@@ -12649,6 +12649,8 @@ ANTI-REPETITION (TITLE)
         let stage = "unknown";
         try {
           const job = JSON.parse(localStorage.getItem(`etsyJob:${jobId}`) || "null");
+          if (!window.autoProcessingEnabled && job && !job.manual && job.status !== "RUNNING") return false;   // Auto-Pilot stopped: the job is kept, paused
+        
           last = Number(job && (job.lastActivityAt || 0)) || 0;
           stage = String(job && (job.stage || job.status) || "unknown");
         } catch (_) {}
@@ -12727,7 +12729,17 @@ ANTI-REPETITION (TITLE)
         // returns, `lg.finish()` gives the set back with its stage and without a failure or a cooldown, and the computer
         // that took over continues from the recorded stage with the content published here (ctl.run). It is never placed
         // inside an Etsy job: a write in flight is finished first.
-        const cpx = (n) => (window.PipeControl ? window.PipeControl.cp(lg, n) : false);
+        const cpx = async (n) => (autoStop() || (window.PipeControl ? await window.PipeControl.cp(lg, n) : false));
+        /*  STOP MEANS STOP (owner's rule): once Auto-Pilot is off the sequence goes no further. The set goes back to the
+            queue as it is (no failure, no cooldown) and continues from its recorded stage after the next Start Auto. */
+        function autoStop() {
+            if (window.autoProcessingEnabled) return false;
+            lg.userStop = true;
+            updateFirebaseStatus(`Auto stopped — ${setName} kept; it continues where it stopped when you press Start Auto`, "");
+            return true;
+        }
+        // An upload job that has not finished (paused by Stop, or never started because Auto-Pilot was off).
+        const jobHeld = (id) => { try { const st = (JSON.parse(localStorage.getItem(`etsyJob:${id}`) || "null") || {}).status; return st === "PAUSED" || st === "QUEUED"; } catch (_) { return false; } };
         updateFirebaseStatus(`Processing: ${setName}`, "working");
 
         try {
@@ -13125,6 +13137,7 @@ ANTI-REPETITION (TITLE)
             
             // Wait for queue to process. The daemon removes jobs from localStorage "etsyUploadJobs".
             await waitForQueueDrain(originalEnqueue.jobId);
+            if (jobHeld(originalEnqueue.jobId) && autoStop()) return;      // paused by Stop: kept, not a failure
 
             // PERF: the drain above already returned; awaitJobOutcome() below
             // polls for the terminal status, so this 3s buffer was dead time.
@@ -13325,6 +13338,7 @@ ANTI-REPETITION (TITLE)
                          return;
                      }
                      await waitForQueueDrain(variantEnqueue.jobId);
+                     if (jobHeld(variantEnqueue.jobId) && autoStop()) return;
                     // Variant verify: original already succeeded so the set is
                     // still archived, but a failed variant must give its ID back.
                     const consumed2 = window.__lastConsumedListing || {};
@@ -14232,7 +14246,7 @@ ANTI-REPETITION (TITLE)
           if (h.lost()) { handles.delete(name); return; }                // not ours any more: leave it to the new owner
           // LIVE MIRROR control: handed to another computer at a safe boundary. The set goes back to `queued` with its stage
           // and meta kept: no error (no failed attempt counted), no cooldown (the next controller may take it at once).
-          if (h.handoff) return doRelease(h, "", {});
+          if (h.handoff || h.userStop) return doRelease(h, "", {});
           if (h.skipped) return doRelease(h, "Skipped by operator", { retry: false });
           if (h.fail) {
             // A failure while the network is down is not the set's fault: no strike, a short cooldown, and the whole
@@ -14677,6 +14691,17 @@ ANTI-REPETITION (TITLE)
           // LIVE MIRROR control: one decision for "may this page run the pipeline now" - a follower adopts nothing, claims nothing.
           // (It is called again the moment this page takes the pipeline over.)
           if (window.PipeControl && !window.PipeControl.mayRun("resume")) return false;
+          // STOP MEANS STOP (owner's rule): with Auto-Pilot off nothing is restarted, adopted or sent to Etsy. Only a page load
+          // whose Auto-Pilot was still on (a crash / reload, never a Stop: Stop clears the intent) brings the work back.
+          if (!window.autoProcessingEnabled) {
+            const it = ls.json(INTENT, null);
+            const restoring = bootPending && it && it.on && Date.now() - (Number(it.at) || 0) <= INTENT_TTL_MS;
+            if (!restoring) {
+              bootPending = false;
+              try { if (window.PipeControl) await window.PipeControl.adoptPending(); } catch (_) {}   // a Start Auto pressed on another computer
+              return false;
+            }
+          }
           // 1. Etsy jobs left in this browser's queue (their sequence died with the old page)
           const queue = readQueue(), sets = new Set();
           let jobs = 0, waitingCloud = false, waitingHeld = 0;
@@ -22143,6 +22168,9 @@ https://www.etsy.com/your/shops/me/listing-editor/edit/1822973998
         jobId,
         createdAt: nowIso(),
         status: "QUEUED",
+        // STOP MEANS STOP: a job the automation made (not a person's own Create Listing click) never writes to Etsy
+        // while Auto-Pilot is off; it waits, paused, for the next Start Auto.
+        manual: !window.isProcessingSet,
         progress: 0,
         step: 0,
         listingId: String(listingId),
@@ -22243,8 +22271,12 @@ https://www.etsy.com/your/shops/me/listing-editor/edit/1822973998
           quarantined. A per-second 429 (not the daily quota) is the same kind of "not now". Both are retried here
           with a growing pause (about 2 minutes in all) before the caller ever sees them. */
       const BUSY_BACKOFF_MS = [2000, 4000, 8000, 15000, 25000, 40000];
-      let lastErr = null, busyTries = 0;
+      let lastErr = null, busyTries = 0, lastR = null;
       for (let attempt = 0; attempt <= BACKOFF_MS.length; attempt++) {
+        if (attempt > 0 && window.__etsyJobIsAuto && !window.autoProcessingEnabled) {   // STOP MEANS STOP: no retry after Auto-Pilot was stopped
+          if (lastR) return lastR;
+          if (lastErr) throw lastErr;
+        }
         if (attempt > 0) {
           // Image uploads mark only the retry attempt for a bounded
           // idempotency lookup. The normal first attempt avoids a Firestore
@@ -22257,14 +22289,16 @@ https://www.etsy.com/your/shops/me/listing-editor/edit/1822973998
         }
         try {
           let r = await etsyFetchWithTimeout(url, opts, timeoutMs, label);
-          while (busyTries < BUSY_BACKOFF_MS.length && await isEtsyBusyResponse(r)) {
+          while (busyTries < BUSY_BACKOFF_MS.length && !(window.__etsyJobIsAuto && !window.autoProcessingEnabled) && await isEtsyBusyResponse(r)) {
             const waitMs = BUSY_BACKOFF_MS[busyTries++];
             window.__DIAG.log("etsy-busy-retry", { label, status: r.status, try: busyTries, waitMs });
             console.warn(`${label}: Etsy says the listing is busy (HTTP ${r.status}) — trying again in ${Math.round(waitMs / 1000)} s.`);
             if (opts.body && typeof opts.body.set === "function") { try { opts.body.set("retryCheck", "1"); } catch (_) {} }
             await new Promise(res => setTimeout(res, waitMs));
+            if (window.__etsyJobIsAuto && !window.autoProcessingEnabled) break;     // Auto-Pilot stopped while waiting: send nothing more
             r = await etsyFetchWithTimeout(url, opts, timeoutMs, label);
           }
+          lastR = r;
           if (!RETRY_STATUSES.length || !RETRY_STATUSES.includes(r.status) || attempt === BACKOFF_MS.length) return r;
           lastErr = null; // transient status — loop for another attempt
         } catch (e) {
@@ -22369,8 +22403,14 @@ https://www.etsy.com/your/shops/me/listing-editor/edit/1822973998
       // set's lease is provably ours (PipeGuard.jobMayRun); checked before every
       // image and every later stage, so a terminal that lost its claim (slept,
       // lost the cloud, was taken over) stops instead of racing its successor.
-      const leaseGone = () => !!(window.PipeGuard && window.PipeGuard.jobGate(job) !== "go");
+      /*  STOP MEANS STOP (owner's rule): once Auto-Pilot is off, nothing the automation started writes to Etsy again.
+          Checked before every request, exactly like the lease: the job is PAUSED (kept, not failed) and continues
+          from its recorded stage after the next Start Auto. A person's own Create Listing click is not affected. */
+      window.__etsyJobIsAuto = !job.manual;
+      const autoStopped = () => !job.manual && !window.autoProcessingEnabled;
+      const leaseGone = () => autoStopped() || !!(window.PipeGuard && window.PipeGuard.jobGate(job) !== "go");
       const leaseCheck = () => {
+        if (autoStopped()) { const se = new Error("auto stopped"); se.leaseLost = true; se.leaseWait = true; se.autoStopped = true; throw se; }
         const g = window.PipeGuard ? window.PipeGuard.jobGate(job) : "go";
         if (g !== "go") { const le = new Error("lease lost"); le.leaseLost = true; le.leaseWait = g === "wait"; throw le; }
       };
@@ -22761,9 +22801,10 @@ https://www.etsy.com/your/shops/me/listing-editor/edit/1822973998
           window.__DIAG.log("image-repair-start", { listingId, missing: failedMain.slice() });
           save({ stage: "IMAGE_REPAIR", lastActivityAt: Date.now() });
           for (const i of failedMain.slice()) {
-            if (fatalUpload || window.__skipListingRequested) break;
+            if (fatalUpload || window.__skipListingRequested || autoStopped()) break;
             for (let attempt = 1; attempt <= 2; attempt++) {
               await new Promise(r => setTimeout(r, 600 * attempt));
+              if (autoStopped()) break;
               let blob = null;
               try {
                 blob = job.storage?.photos === "idb"
@@ -22793,6 +22834,7 @@ https://www.etsy.com/your/shops/me/listing-editor/edit/1822973998
             }
           }
           window.__DIAG.log("image-repair-end", { listingId, stillMissing: failedMain.slice(), uploaded: mainUploaded, attempted: mainAttempted });
+          if (!fatalUpload) leaseCheck();
           if (fatalUpload === "auth") {
             save({ status: "AUTH_NEEDED", error: "token_expired" });
             window.M?.toast?.({ html: 'Etsy session expired — click "Connect to Etsy", then re-run this listing.' });
@@ -22886,9 +22928,10 @@ https://www.etsy.com/your/shops/me/listing-editor/edit/1822973998
         if (failedReserved.length && !fatalUpload && !window.__skipListingRequested) {
           console.warn(`Image repair: ${failedReserved.length} reserved photo(s) missing — retrying serially.`);
           for (const i of failedReserved.slice()) {
-            if (fatalUpload || window.__skipListingRequested) break;
+            if (fatalUpload || window.__skipListingRequested || autoStopped()) break;
             for (let attempt = 1; attempt <= 3; attempt++) {
               await new Promise(r => setTimeout(r, [600, 3000, 10000][attempt - 1]));
+              if (autoStopped()) break;
               let blob = null;
               try {
                 blob = job.storage?.reserved === "idb"
@@ -22928,6 +22971,7 @@ https://www.etsy.com/your/shops/me/listing-editor/edit/1822973998
             return;
           }
         }
+        if (!fatalUpload) leaseCheck();
         if (failedReserved.length && !window.__skipListingRequested) {
           throw new Error(`Photo${failedReserved.length > 1 ? "s" : ""} ${failedReserved.map(n => 9 + n).join(" and ")} (brand image) could not be uploaded — failing the job instead of publishing a listing without ${failedReserved.length > 1 ? "them" : "it"}.${lastReservedFail ? " Etsy said: " + lastReservedFail : ""}`);
         }
@@ -22946,6 +22990,7 @@ https://www.etsy.com/your/shops/me/listing-editor/edit/1822973998
           for (let pass = 0; pass < LEFTOVER_WAIT_MS.length && remaining.length; pass++) {
             if (LEFTOVER_WAIT_MS[pass]) await new Promise(r => setTimeout(r, LEFTOVER_WAIT_MS[pass]));
             if (pass && window.__skipListingRequested) break;
+            leaseCheck();
             const del = await etsyFetchWithTransientRetry(
               `/.netlify/functions/listingImagesPurge?listingId=${encodeURIComponent(listingId)}&token=${encodeURIComponent(token)}&imageIds=${encodeURIComponent(remaining.join(","))}`,
               { method: "POST" }, 60000, pass ? `Deferred leftover removal (retry ${pass})` : "Deferred leftover removal");
@@ -23125,6 +23170,11 @@ https://www.etsy.com/your/shops/me/listing-editor/edit/1822973998
       } catch (err) {
         if (err && err.leaseLost) {
           // The claim is not provably ours: nothing more is written to Etsy for now.
+          if (err.autoStopped) {
+            console.info(`Etsy job ${jobId}: Auto-Pilot was stopped — paused before the next Etsy write.`);
+            save({ status: "PAUSED", stage: "AUTO_STOPPED", attempt: Math.max(0, (Number(job.attempt) || 1) - 1) });
+            return;
+          }
           if (err.leaseWait) {
             // ...but it may well come back (a missed heartbeat, a slow takeover hand-over). The
             // job is PAUSED, not failed: it stays queued and continues from its recorded stage.
@@ -23190,7 +23240,10 @@ https://www.etsy.com/your/shops/me/listing-editor/edit/1822973998
           // pipeline can move on (the Skip handler also clears the queue).
           if (window.__skipListingRequested) break;
 
-          const q = JSON.parse(localStorage.getItem("etsyUploadJobs") || "[]");
+          const qAll = JSON.parse(localStorage.getItem("etsyUploadJobs") || "[]");
+          // STOP MEANS STOP: with Auto-Pilot off, the automation's jobs stay where they are (paused, kept); only a
+          // person's own Create Listing click is sent to Etsy.
+          const q = window.autoProcessingEnabled ? qAll : qAll.filter((id) => { try { return !!(JSON.parse(localStorage.getItem(`etsyJob:${id}`) || "null") || {}).manual; } catch (_) { return false; } });
           if (!q.length) break;
           let nextId = q[0]; // FIFO
           // DURABLE PIPELINE: ...except a job still waiting for its set's claim (an earlier
@@ -23250,6 +23303,7 @@ https://www.etsy.com/your/shops/me/listing-editor/edit/1822973998
         }
       } finally {
         window.__etsyUploadDaemon = false;
+        window.__etsyJobIsAuto = false;
       }
     }
 
@@ -25263,6 +25317,7 @@ https://www.etsy.com/your/shops/me/listing-editor/edit/1822973998
         const token = window.accessToken, L = window.ListingLedger, G = window.PipeGuard;
         if (!token || !L || !G || !G.effectiveMeta || typeof fetchImageViaChunkedProxy !== "function") { note("Etsy not connected or listing history not loaded yet"); return 0; }
         if (!force && Date.now() - state.lastEtsyTry < 30 * 60000) return 0;
+        if (!force && !window.autoProcessingEnabled) { note("Auto-Pilot is off: Etsy is not contacted"); return 0; }
         // The newest listings may be the very ones published WITHOUT photos 9-10: look further back (one Etsy call each,
         // stopping at the first listing that has them).
         const done = (L.list("done") || []).slice().sort((a, b) => (Number(b.doneAt) || 0) - (Number(a.doneAt) || 0)).slice(0, 40);
@@ -27497,6 +27552,9 @@ async function callOpenAI(payload, opts = {}) {
         if (!force && lastProbeAt && Date.now() - lastProbeAt < 60000) {
           return;
         }
+        // STOP MEANS STOP (owner's rule): with Auto-Pilot off the page does not contact Etsy by itself. The meter keeps
+        // showing the last reading (free, from the cloud) until Auto-Pilot runs again.
+        if (force !== true && !window.autoProcessingEnabled) return;     // (load / focus listeners pass an Event here, not `true`)
         probeInFlight = true;
         lastProbeAt = Date.now(); // throttle failures too; never probe-loop
         try {
