@@ -62,7 +62,7 @@
 // another automatically, so a tab still running OLD code could end up doing the work. Every tab compares its build with
 // the deployed one (a tiny file, every 2 minutes) and, as soon as it is idle, reloads itself. A stale tab never takes
 // control from another computer.
-window.APP_BUILD = "20261030T161717";
+window.APP_BUILD = "20261120T044700";
 (function () {
   var URL_ = function () { return window.APP_BUILD_URL || ("assets/build.json?t=" + Date.now()); };
   function idle() {
@@ -6869,6 +6869,7 @@ ANTI-REPETITION (TITLE)
         }
 
         state.pending = true;
+        state.since = Date.now();   // Health & Recovery: how long the pipeline has waited for a person
         state.setName = String(setName || "");
         state.originalValue = String(generatedValue || "").trim();
         state.previousTitle = document.title;
@@ -9553,6 +9554,8 @@ ANTI-REPETITION (TITLE)
       return { open, close: () => close("cancelled"), RV_STATUS,
                /*  LIVE MIRROR: the pending session ends with a result produced elsewhere (no saves here). */
                resolveExternal: (res) => { if (!pending) return false; close("external", res); return true; },
+               /*  Health & Recovery: a review the pipeline is waiting on, put back on screen if it is not showing. */
+               reveal: () => { if (!pending || !overlay) return false; overlay.classList.add("open"); return true; },
                isOpen: () => !!pending && !!overlay && overlay.classList.contains("open"),
                gateId: () => (gateInfo && gateInfo.id) || "",
                liveInfo: () => ({ watching: watchers.size, names: [...watchers.keys()], rows: rows.map((r) => r.setName), remoteRegen: regenRemote.size }),
@@ -10969,9 +10972,17 @@ ANTI-REPETITION (TITLE)
             } else if (!document.getElementById("rvOverlay")) {
                 console.warn("Review panel skipped — #rvOverlay is missing from the DOM.");
             }
-            const reviewResult = (window.ReviewPanel && document.getElementById("rvOverlay") && rvRows.length)
-                ? await (window.RvLive ? window.RvLive.gateReview(rvRows, currentSetName) : window.ReviewPanel.open(rvRows))
-                : await showBatchReviewPopup(preparedOk);
+            /*  UNATTENDED RELIABILITY: from here the pipeline waits for a PERSON. The status used to keep saying
+                "identifying charms for review (100/100)..." and Health & Recovery said "reason: unknown". */
+            const waitN = rvRows.length || preparedOk.length;
+            window.__reviewWait = { n: waitN, set: currentSetName, since: Date.now(), kind: "batch" };
+            updateFirebaseStatus(`PAUSED — waiting for you to review ${waitN} listing${waitN === 1 ? "" : "s"} (Review panel)`, "working");
+            let reviewResult;
+            try {
+                reviewResult = (window.ReviewPanel && document.getElementById("rvOverlay") && rvRows.length)
+                    ? await (window.RvLive ? window.RvLive.gateReview(rvRows, currentSetName) : window.ReviewPanel.open(rvRows))
+                    : await showBatchReviewPopup(preparedOk);
+            } finally { window.__reviewWait = null; }
             try { if (window.RvLive) window.RvLive.gateEnd(); } catch (_) {}
             document.title = prevTitle;
             if (!reviewResult) return null; // popup could not be shown — fallback
@@ -13141,12 +13152,26 @@ ANTI-REPETITION (TITLE)
                     console.warn(`Original upload for ${setName} ended ${outcome}${stillRunning ? " (job still RUNNING — listing ID NOT restored)" : ""}; keeping the folder.`);
                     let jobErr = "";
                     try { jobErr = String((JSON.parse(localStorage.getItem(`etsyJob:${consumed.jobId || originalEnqueue.jobId}`) || "null") || {}).error || ""); } catch (_) {}
+                    /*  UNATTENDED RELIABILITY: "Etsy said not now" is not "Etsy refused this listing". A failure that is
+                        only Etsy being busy (409 "being edited by another process", a per-second 429, a 5xx), a leftover
+                        image Etsy would not delete yet, or photo bytes missing on this computer, neither quarantines the
+                        listing ID nor strikes the set (two strikes parked it for the session). Both are bounded: an ID
+                        that fails this way 3 times is quarantined after all, and a set that fails this way 4 times is
+                        treated as an ordinary failure. */
+                    const transientFail = (typeof isEtsyBusyText === "function" && isEtsyBusyText(jobErr)) ||
+                        /leftover image\(s\) could not be removed|saved image data is missing|HTTP (408|425|5\d\d)\b/i.test(jobErr);
+                    window.__idTransientFails = window.__idTransientFails || {};
+                    window.__setTransientFails = window.__setTransientFails || {};
+                    const idTransient = transientFail && consumed.listingId
+                        ? (window.__idTransientFails[String(consumed.listingId)] = (window.__idTransientFails[String(consumed.listingId)] || 0) + 1) : 0;
+                    const setTransient = transientFail ? (window.__setTransientFails[setName] = (window.__setTransientFails[setName] || 0) + 1) : 0;
                     if (!stillRunning && consumed.queueId && consumed.listingId) {
                         // Not the listing's fault (quota, sign-in, network, still unknown): the id goes back to the front as before.
                         // Etsy REFUSED it: the id is quarantined, never handed to the next set (one broken listing used to fail
                         // every set after it - each failure put it back first in line). The set gets a fresh id next time.
                         const netDown = !!(window.PipeGuard && window.PipeGuard.networkDown && window.PipeGuard.networkDown());
-                        const notListing = outcome === "QUOTA_HALT" || outcome === "AUTH_NEEDED" || outcome === "TIMEOUT" || netDown || /lease_lost/i.test(jobErr);
+                        const notListing = outcome === "QUOTA_HALT" || outcome === "AUTH_NEEDED" || outcome === "TIMEOUT" || netDown || /lease_lost/i.test(jobErr) ||
+                            (transientFail && idTransient < 3);
                         if (notListing || !(window.QueueBoxes && window.QueueBoxes.enabled && typeof window.QueueBoxes.quarantine === "function")) restoreListingId(consumed.queueId, consumed.listingId);
                         else await window.QueueBoxes.quarantine(consumed.queueId, consumed.listingId, { reason: `upload ${outcome} for ${setName}${jobErr ? ": " + jobErr : ""}`, setName });
                         await lg.idRestored("");   // drop the set's reservation either way: it takes a fresh id (or the restored one) next time
@@ -13165,6 +13190,11 @@ ANTI-REPETITION (TITLE)
                     if (window.PipeGuard && window.PipeGuard.networkDown && window.PipeGuard.networkDown()) {
                         lg.note(`network down during upload (${outcome})`, { cooldownMs: 2 * 60 * 1000, noFault: true });
                         updateFirebaseStatus(`Network down: ${setName} kept for retry`, "");
+                        return;
+                    }
+                    if (transientFail && setTransient < 4) {
+                        lg.note(`Etsy was busy (${outcome}${jobErr ? ": " + jobErr.slice(0, 160) : ""}) — retrying shortly`, { cooldownMs: 3 * 60 * 1000, noFault: true });
+                        updateFirebaseStatus(`Etsy busy: ${setName} kept for retry in 3 min`, "");
                         return;
                     }
                     window.__setFailureCounts = window.__setFailureCounts || {};
@@ -13302,8 +13332,16 @@ ANTI-REPETITION (TITLE)
                         } else {
                             let jobErr2 = "";
                             try { jobErr2 = String((JSON.parse(localStorage.getItem(`etsyJob:${consumed2.jobId}`) || "null") || {}).error || ""); } catch (_) {}
+                            // Same rule as the original pass: Etsy being busy is not the listing's fault (bounded: 3 per ID).
+                            const vTransient = (typeof isEtsyBusyText === "function" && isEtsyBusyText(jobErr2)) ||
+                                /leftover image\(s\) could not be removed|saved image data is missing|HTTP (408|425|5\d\d)\b/i.test(jobErr2);
+                            window.__idTransientFails = window.__idTransientFails || {};
+                            const vIdTransient = vTransient ? (window.__idTransientFails[String(consumed2.listingId)] = (window.__idTransientFails[String(consumed2.listingId)] || 0) + 1) : 0;
+                            window.__variantTransient = window.__variantTransient || {};
+                            if (vTransient) window.__variantTransient[setName] = (window.__variantTransient[setName] || 0) + 1;
                             const notListing2 = outcome2 === "QUOTA_HALT" || outcome2 === "AUTH_NEEDED" || outcome2 === "TIMEOUT" || /lease_lost/i.test(jobErr2)
-                                || !!(window.PipeGuard && window.PipeGuard.networkDown && window.PipeGuard.networkDown());
+                                || !!(window.PipeGuard && window.PipeGuard.networkDown && window.PipeGuard.networkDown())
+                                || (vTransient && vIdTransient < 3);
                             if (notListing2 || !(window.QueueBoxes && window.QueueBoxes.enabled && typeof window.QueueBoxes.quarantine === "function")) {
                                 console.warn(`Variant upload ended ${outcome2}; restoring ID ${consumed2.listingId}.`);
                                 restoreListingId(consumed2.queueId, consumed2.listingId);
@@ -13320,10 +13358,14 @@ ANTI-REPETITION (TITLE)
                         // (the set was archived without it). Retry it on the next
                         // attempt — the original is recorded as live, so only the
                         // variant is redone — and only give up after three tries.
-                        const vTries = (Number(lg.m.vTries) || 0) + 1;
+                        // A busy Etsy does not use up one of the three tries (bounded: 6 busy failures per set and session).
+                        const vBusy = !!(window.__variantTransient && window.__variantTransient[setName] && window.__variantTransient[setName] <= 6) &&
+                            (() => { try { const e = String((JSON.parse(localStorage.getItem(`etsyJob:${(window.__lastConsumedListing || {}).jobId}`) || "null") || {}).error || "");
+                              return (typeof isEtsyBusyText === "function" && isEtsyBusyText(e)) || /leftover image\(s\) could not be removed|saved image data is missing|HTTP (408|425|5\d\d)\b/i.test(e); } catch (_) { return false; } })();
+                        const vTries = (Number(lg.m.vTries) || 0) + (vBusy ? 0 : 1);
                         if (outcome2 === "QUOTA_HALT" || outcome2 === "AUTH_NEEDED" || vTries < 3) {
                             await lg.stage("variant-failed", { vTries });
-                            lg.note(`variant upload ${outcome2}`, { cooldownMs: 5 * 60 * 1000, noFault: outcome2 === "QUOTA_HALT" || outcome2 === "AUTH_NEEDED" });
+                            lg.note(`variant upload ${outcome2}${vBusy ? " (Etsy busy)" : ""}`, { cooldownMs: (vBusy ? 3 : 5) * 60 * 1000, noFault: vBusy || outcome2 === "QUOTA_HALT" || outcome2 === "AUTH_NEEDED" });
                             return;
                         }
                         await lg.stage("variant-skipped", { vSkipped: "failed:" + outcome2, vTries });
@@ -13789,10 +13831,23 @@ ANTI-REPETITION (TITLE)
       }
       function prioritise(list) {
         if (!L() || !Array.isArray(list)) return list;
-        const first = [], rest = [];
-        // LIVE MIRROR control: the set another computer was working on when this one took over goes first ("exactly where it left off")
-        list.forEach((sr) => { const n = String((sr && sr.name) || sr).replace(/\/$/, ""); (eligibility(n).recover || (window.PipeControl && window.PipeControl.isHandoffSet(n)) ? first : rest).push(sr); });
-        if (first.length) { const all = first.concat(rest); list.length = 0; all.forEach((x) => list.push(x)); }
+        /*  Three tiers, each keeping the category order:
+              1. interrupted sets / the set another computer was handing over ("exactly where it left off")
+              2. APPROVED sets (a ledger entry with the operator's wording) — publishable with nobody at the screen
+              3. sets not approved yet — picking one opens the review gate, which waits for a person
+            UNATTENDED RELIABILITY (2026-11-19): tier 2 did not exist. One unapproved folder ahead of the approved
+            ones in category order sent the pipeline into the review gate (100 charms identified, then a wait for a
+            person) while approved sets sat behind it: nothing was published until someone came back. */
+        const first = [], approved = [], rest = [];
+        list.forEach((sr) => {
+          const n = String((sr && sr.name) || sr).replace(/\/$/, "");
+          const el = eligibility(n);
+          if (el.recover || (window.PipeControl && window.PipeControl.isHandoffSet(n))) first.push(sr);
+          else if (el.ok && !el.unapproved) approved.push(sr);
+          else rest.push(sr);
+        });
+        const all = first.concat(approved, rest);
+        list.length = 0; all.forEach((x) => list.push(x));
         return list;
       }
       function hasReservedId(name) {
@@ -22044,7 +22099,8 @@ https://www.etsy.com/your/shops/me/listing-editor/edit/1822973998
       // Reserved (8–9) from reservedPhotos [{src,name,meta}], also deduped.
       // PHOTO BUDGET: when Brand images are OFF, skip the whole block —
       // saves 2 API calls per listing with zero effect on product photos.
-      const rawReserved = photoBudget.includeBrand === false ? [] : Array.from(window.reservedPhotos || []);
+      if (photoBudget.includeBrand !== false) { try { if (window.BrandStore) await window.BrandStore.ensure(); } catch (_) {} }
+      const rawReserved = photoBudget.includeBrand === false ? [] : resolveReservedPhotosForJob();
       if (photoBudget.includeBrand === false && (window.reservedPhotos || []).length) {
         console.log("Photo budget: Brand images OFF — skipping reserved uploads.");
         window.__DIAG.log("photo-budget-brand-off", { skipped: (window.reservedPhotos || []).length });
@@ -22187,7 +22243,14 @@ https://www.etsy.com/your/shops/me/listing-editor/edit/1822973998
     async function etsyFetchWithTransientRetry(url, opts = {}, timeoutMs = 90000, label = "request", cfg = {}) {
       const RETRY_STATUSES = cfg.noRetry ? [] : [408, 502, 503, 504];
       const BACKOFF_MS = cfg.noRetry ? [] : [2500];
-      let lastErr = null;
+      /*  UNATTENDED RELIABILITY (2026-11-19). Live: Etsy answered 409 "The Listing with listing_id … is being edited
+          by another process. Please try again in a few moments." 417 times. That answer means the request was NOT
+          applied, so waiting and sending it again is always safe — even for a non-idempotent call. It used to be
+          returned as a failure: photos went missing, leftover removal failed, the set was struck and its listing ID
+          quarantined. A per-second 429 (not the daily quota) is the same kind of "not now". Both are retried here
+          with a growing pause (about 2 minutes in all) before the caller ever sees them. */
+      const BUSY_BACKOFF_MS = [2000, 4000, 8000, 15000, 25000, 40000];
+      let lastErr = null, busyTries = 0;
       for (let attempt = 0; attempt <= BACKOFF_MS.length; attempt++) {
         if (attempt > 0) {
           // Image uploads mark only the retry attempt for a bounded
@@ -22200,7 +22263,15 @@ https://www.etsy.com/your/shops/me/listing-editor/edit/1822973998
           await new Promise(r => setTimeout(r, BACKOFF_MS[attempt - 1]));
         }
         try {
-          const r = await etsyFetchWithTimeout(url, opts, timeoutMs, label);
+          let r = await etsyFetchWithTimeout(url, opts, timeoutMs, label);
+          while (busyTries < BUSY_BACKOFF_MS.length && await isEtsyBusyResponse(r)) {
+            const waitMs = BUSY_BACKOFF_MS[busyTries++];
+            window.__DIAG.log("etsy-busy-retry", { label, status: r.status, try: busyTries, waitMs });
+            console.warn(`${label}: Etsy says the listing is busy (HTTP ${r.status}) — trying again in ${Math.round(waitMs / 1000)} s.`);
+            if (opts.body && typeof opts.body.set === "function") { try { opts.body.set("retryCheck", "1"); } catch (_) {} }
+            await new Promise(res => setTimeout(res, waitMs));
+            r = await etsyFetchWithTimeout(url, opts, timeoutMs, label);
+          }
           if (!RETRY_STATUSES.length || !RETRY_STATUSES.includes(r.status) || attempt === BACKOFF_MS.length) return r;
           lastErr = null; // transient status — loop for another attempt
         } catch (e) {
@@ -22209,6 +22280,21 @@ https://www.etsy.com/your/shops/me/listing-editor/edit/1822973998
         }
       }
       if (lastErr) throw lastErr;
+    }
+    /*  "Not now" from Etsy: 409 "is being edited by another process", or a per-second 429 (never the daily quota,
+        which isDailyQuotaError handles by pausing the run). Reads a clone, so the caller still gets the body. */
+    async function isEtsyBusyResponse(r) {
+      if (!r || (r.status !== 409 && r.status !== 429)) return false;
+      let t = "";
+      try { t = await r.clone().text(); } catch (_) {}
+      if (r.status === 429) return !isDailyQuotaError(429, t);
+      return /being edited by another process|try again in a few moments/i.test(t);
+    }
+    /*  The same test on an error message (a job's recorded error, a photo's failure detail). */
+    function isEtsyBusyText(s) {
+      const t = String(s || "");
+      return /being edited by another process|try again in a few moments/i.test(t) ||
+        (/HTTP 429\b/.test(t) && !/exceeded daily rate limit/i.test(t));
     }
 
     // DAILY-QUOTA FIX: Etsy's "Exceeded daily rate limit" 429 is NOT
@@ -22602,7 +22688,11 @@ https://www.etsy.com/your/shops/me/listing-editor/edit/1822973998
         // If missing images ever reappear, set this to 1 — that is the fully
         // serial behaviour the pipeline had before, and the repair pass plus
         // the completeness check will still guarantee a whole gallery.
-        const ETSY_UPLOAD_CONCURRENCY = 2;
+        //
+        // 2026-11-19: they reappeared — Etsy answered 409 "being edited by
+        // another process" 417 times, and photos 9-10 went missing. One at a
+        // time now: Etsy accepts a single write to a listing at once.
+        const ETSY_UPLOAD_CONCURRENCY = 1;
         let fatalUpload = null;   // "auth" | "quota"
 
         const mainIdx = [];
@@ -22613,7 +22703,9 @@ https://www.etsy.com/your/shops/me/listing-editor/edit/1822973998
           const blob = job.storage?.photos === "idb"
             ? (await idbGetBlob(job.photoKeyBases[i]))
             : await (async () => { const du = lsLoadLarge(job.photoKeyBases[i]); return du ? (await fetch(du)).blob() : null; })();
-          if (!blob) return { skipped: true };
+          // A photo whose saved bytes are gone is a MISSING photo, not a skipped one: counting it as skipped let the
+          // completeness check pass with photos (or all of them) absent.
+          if (!blob) { lastPhotoFail = `photo ${i + 1}: its saved image data is missing on this computer`; return { ok: false, detail: lastPhotoFail }; }
           const fd = new FormData();
           fd.append("listingId", listingId);
           fd.append("token", token);
@@ -22753,7 +22845,7 @@ https://www.etsy.com/your/shops/me/listing-editor/edit/1822973998
           const blob = job.storage?.reserved === "idb"
             ? (await idbGetBlob(job.reservedKeyBases[i]))
             : await (async () => { const du = lsLoadLarge(job.reservedKeyBases[i]); return du ? (await fetch(du)).blob() : null; })();
-          if (!blob) return { skipped: true };
+          if (!blob) return { ok: false, detail: `photo ${9 + i}: its saved image data is missing on this computer` };
           const fd = new FormData();
           fd.append("listingId", listingId);
           fd.append("token", token);
@@ -22767,7 +22859,6 @@ https://www.etsy.com/your/shops/me/listing-editor/edit/1822973998
           if (up.authExpired) fatalUpload = "auth";
           if (up.quotaExceeded) fatalUpload = "quota";
           if (up.ok && typeof bumpCreateProgressPerImage === "function") bumpCreateProgressPerImage();
-          // Reserved slots are optional — a failure here never fails the job.
           if (!up.ok && !up.authExpired && !up.quotaExceeded) console.warn("Reserved upload failed", 9 + i, up.detail);
           return up;
         }, { shouldAbort: () => !!fatalUpload || !!window.__skipListingRequested || leaseGone() });
@@ -22785,9 +22876,12 @@ https://www.etsy.com/your/shops/me/listing-editor/edit/1822973998
           return;
         }
 
-        // Reserved brand images get the same serial repair treatment. They stay
-        // NON-FATAL by design (a missing packaging shot is cosmetic, unlike a
-        // missing product photo), but one retry each recovers the common case.
+        // Photos 9-10 (brand images) get the same serial repair as the product
+        // photos. 2026-11-19: they used to be optional with a single retry 0.6 s
+        // later, so while Etsy said "being edited by another process" they were
+        // simply left off the listing. Now a 9 or 10 that still cannot be
+        // uploaded fails the job (the set is retried) instead of publishing a
+        // listing without it.
         for (let k = 0; k < reservedRun.results.length; k++) {
           const r = reservedRun.results[k];
           const i = reservedIdx[k];
@@ -22795,31 +22889,40 @@ https://www.etsy.com/your/shops/me/listing-editor/edit/1822973998
           if (r && !r.ok) failedReserved.push(i);
           else if (up && !up.skipped && !up.ok) failedReserved.push(i);
         }
+        let lastReservedFail = "";
         if (failedReserved.length && !fatalUpload && !window.__skipListingRequested) {
           console.warn(`Image repair: ${failedReserved.length} reserved photo(s) missing — retrying serially.`);
-          for (const i of failedReserved) {
+          for (const i of failedReserved.slice()) {
             if (fatalUpload || window.__skipListingRequested) break;
-            await new Promise(r => setTimeout(r, 600));
-            let blob = null;
-            try {
-              blob = job.storage?.reserved === "idb"
-                ? (await idbGetBlob(job.reservedKeyBases[i]))
-                : await (async () => { const du = lsLoadLarge(job.reservedKeyBases[i]); return du ? (await fetch(du)).blob() : null; })();
-            } catch (_) { blob = null; }
-            if (!blob) continue;
-            const fd = new FormData();
-            fd.append("listingId", listingId);
-            fd.append("token", token);
-            fd.append("fileName", job.reservedNames[i] || `reserved_photo_${i}.jpg`);
-            fd.append("rank", 9 + i);
-            fd.append("alt_text", job.reservedMeta[i] || "");
-            fd.append("operationKey", `${job.jobId}:reserved:${i}`);
-            fd.append("retryCheck", "1");
-            fd.append("file", blob, job.reservedNames[i] || `reserved_photo_${i}.jpg`);
-            const up = await uploadImage(fd, `Reserved ${9 + i} (repair)`);
-            if (up.authExpired) { fatalUpload = "auth"; break; }
-            if (up.quotaExceeded) { fatalUpload = "quota"; break; }
-            if (up.ok && typeof bumpCreateProgressPerImage === "function") bumpCreateProgressPerImage();
+            for (let attempt = 1; attempt <= 3; attempt++) {
+              await new Promise(r => setTimeout(r, [600, 3000, 10000][attempt - 1]));
+              let blob = null;
+              try {
+                blob = job.storage?.reserved === "idb"
+                  ? (await idbGetBlob(job.reservedKeyBases[i]))
+                  : await (async () => { const du = lsLoadLarge(job.reservedKeyBases[i]); return du ? (await fetch(du)).blob() : null; })();
+              } catch (_) { blob = null; }
+              if (!blob) { lastReservedFail = `photo ${9 + i}: its saved image data is missing on this computer`; break; }
+              const fd = new FormData();
+              fd.append("listingId", listingId);
+              fd.append("token", token);
+              fd.append("fileName", job.reservedNames[i] || `reserved_photo_${i}.jpg`);
+              fd.append("rank", 9 + i);
+              fd.append("alt_text", job.reservedMeta[i] || "");
+              fd.append("operationKey", `${job.jobId}:reserved:${i}`);
+              fd.append("retryCheck", "1");
+              fd.append("file", blob, job.reservedNames[i] || `reserved_photo_${i}.jpg`);
+              const up = await uploadImage(fd, `Reserved ${9 + i} (repair ${attempt})`);
+              if (up.authExpired) { fatalUpload = "auth"; break; }
+              if (up.quotaExceeded) { fatalUpload = "quota"; break; }
+              if (up.ok) {
+                const at = failedReserved.indexOf(i);
+                if (at > -1) failedReserved.splice(at, 1);
+                if (typeof bumpCreateProgressPerImage === "function") bumpCreateProgressPerImage();
+                break;
+              }
+              lastReservedFail = String(up.detail || "");
+            }
           }
           if (fatalUpload === "auth") {
             save({ status: "AUTH_NEEDED", error: "token_expired" });
@@ -22832,18 +22935,43 @@ https://www.etsy.com/your/shops/me/listing-editor/edit/1822973998
             return;
           }
         }
+        if (failedReserved.length && !window.__skipListingRequested) {
+          throw new Error(`Photo${failedReserved.length > 1 ? "s" : ""} ${failedReserved.map(n => 9 + n).join(" and ")} (brand image) could not be uploaded — failing the job instead of publishing a listing without ${failedReserved.length > 1 ? "them" : "it"}.${lastReservedFail ? " Etsy said: " + lastReservedFail : ""}`);
+        }
 
         // Remove any leftovers the pre-upload purge had to defer (they are
         // no longer the listing's last image now that the uploads landed).
         // If they STILL cannot be removed, fail the job HERE — before the
         // Shopify stage can copy a dirty gallery.
         if (purgeLeftovers.length) {
-          const del = await etsyFetchWithTransientRetry(
-            `/.netlify/functions/listingImagesPurge?listingId=${encodeURIComponent(listingId)}&token=${encodeURIComponent(token)}&imageIds=${encodeURIComponent(purgeLeftovers.join(","))}`,
-            { method: "POST" }, 60000, "Deferred leftover removal");
-          const dj = await del.json().catch(() => ({}));
-          window.__DIAG.log("purge-leftovers", { listingId, requested: purgeLeftovers, removed: (dj && dj.removed) || 0, failures: ((dj && dj.failures) || []).slice(0, 3) });
-          if (!dj || Number(dj.removed) < purgeLeftovers.length) {
+          /*  UNATTENDED RELIABILITY: the server tries each delete twice, 1.2 s apart. While Etsy still says the
+              listing is "being edited by another process" that is not enough, and the set failed here (live:
+              Charms_Set_435, its listing ID quarantined). Ask again for only the images still there, with a
+              growing pause, before giving up. A delete is idempotent (404 = already gone). */
+          let remaining = purgeLeftovers.slice(), removedTotal = 0, dj = null;
+          const LEFTOVER_WAIT_MS = [0, 3000, 8000, 15000, 30000, 45000];
+          for (let pass = 0; pass < LEFTOVER_WAIT_MS.length && remaining.length; pass++) {
+            if (LEFTOVER_WAIT_MS[pass]) await new Promise(r => setTimeout(r, LEFTOVER_WAIT_MS[pass]));
+            if (pass && window.__skipListingRequested) break;
+            const del = await etsyFetchWithTransientRetry(
+              `/.netlify/functions/listingImagesPurge?listingId=${encodeURIComponent(listingId)}&token=${encodeURIComponent(token)}&imageIds=${encodeURIComponent(remaining.join(","))}`,
+              { method: "POST" }, 60000, pass ? `Deferred leftover removal (retry ${pass})` : "Deferred leftover removal");
+            dj = await del.json().catch(() => ({}));
+            window.__DIAG.log("purge-leftovers", { listingId, pass, requested: remaining, removed: (dj && dj.removed) || 0, failures: ((dj && dj.failures) || []).slice(0, 3) });
+            const failedIds = new Set(((dj && dj.failures) || []).map(f => String(f && f.imgId)).filter(Boolean));
+            const removedNow = Number(dj && dj.removed) || 0;
+            if (!del.ok && !failedIds.size) continue;                       // the call itself failed: ask again
+            removedTotal += removedNow;
+            remaining = failedIds.size ? remaining.filter(id => failedIds.has(String(id))) : (removedNow >= remaining.length ? [] : remaining);
+            // Only "busy" / server-side answers are worth waiting for; anything else is final.
+            const retryable = ((dj && dj.failures) || []).every(f => {
+              const st = Number(f && f.status) || 0;
+              return st === 0 || st === 408 || st === 409 || st === 425 || st >= 500 || (st === 429 && !isDailyQuotaError(429, f && f.detail));
+            });
+            if (!retryable) break;
+          }
+          if (dj && typeof dj === "object") dj.removed = removedTotal;
+          if (!dj || removedTotal < purgeLeftovers.length) {
             // DAILY-QUOTA FIX: this is the exact path that used to mask a
             // 429 "Exceeded daily rate limit" as a generic "leftover image(s)
             // could not be removed" failure — which then burned this set's
@@ -25034,9 +25162,206 @@ https://www.etsy.com/your/shops/me/listing-editor/edit/1822973998
       const stored = localStorage.getItem("reservedPhotos");
       window.reservedPhotos = stored ? JSON.parse(stored) : [];
     }
-    function saveReservedPhotos() {
-      localStorage.setItem("reservedPhotos", JSON.stringify(window.reservedPhotos));
+    /*  PHOTOS 9-10 (the two brand images) for an Etsy job. window.reservedPhotos is what the page SHOWS: on a
+        computer that followed another one it is the mirrored view — a 1x1 placeholder until the picture arrives —
+        and it stays that way when that computer then takes the pipeline over without a reload. Uploading it gave
+        listings a blank or missing photo 9/10. A slot that is not a real picture is taken from this computer's saved
+        brand images instead. */
+    function isRealReservedSrc(src) {
+      const s = String(src || "");
+      if (!s) return false;
+      if (/^data:image\/gif;base64,R0lGODlhAQABA/i.test(s)) return false;     // the 1x1 placeholder
+      return /^(data:image\/|blob:|https?:)/i.test(s);
     }
+    function resolveReservedPhotosForJob() {
+      const shown = Array.from(window.reservedPhotos || []);
+      let saved = [];
+      try { saved = JSON.parse(localStorage.getItem("reservedPhotos") || "[]") || []; } catch (_) { saved = []; }
+      const out = [];
+      for (let i = 0; i < 2; i++) {
+        const a = shown[i], b = saved[i];
+        if (a && isRealReservedSrc(a.src)) out.push(a);
+        else if (b && isRealReservedSrc(b.src)) out.push(b);
+        else out.push(null);
+      }
+      if (!out[0] && !out[1] && (shown.length || saved.length)) console.warn("Photos 9-10: no usable brand image on this computer.");
+      window.__reservedMissingOnJob = out.filter(Boolean).length < 2;
+      return out;
+    }
+    function saveReservedPhotos() {
+      // Two full-size images as data URLs: a full localStorage threw here and the brand images were simply not kept.
+      if (!persistReservedLocal(window.reservedPhotos)) console.warn("Photos 9-10: could not save on this computer (storage full) — the cloud copy is used instead.");
+      try { localStorage.setItem("reservedPhotosAt", String(Date.now())); } catch (_) {}
+      try { if (window.BrandStore) window.BrandStore.changed(); } catch (_) {}
+    }
+    function persistReservedLocal(list) {
+      const txt = JSON.stringify(list || []);
+      try { localStorage.setItem("reservedPhotos", txt); return true; } catch (_) {}
+      try { if (typeof pruneEtsyStorage === "function") pruneEtsyStorage({ aggressive: true }); localStorage.setItem("reservedPhotos", txt); return true; } catch (_) {}
+      return false;
+    }
+
+    /* ══ BRAND IMAGES (photos 9-10) — one shared copy for every computer ════════════════════════════════════════
+       They lived only in each browser's localStorage. A computer that never had them, one whose storage was full,
+       or one that took the pipeline over after following another computer (whose boxes 9-10 were a mirrored view
+       that a reload empties) published listings without them, and nothing said so.
+       Now the cloud keeps one copy (ListingGen_Config: brand~idx + brand~s<slot>~c<k> chunks, under the 1 MB
+       document limit), and every computer:
+         · fills an empty box 9/10 from the cloud copy at start and before every Etsy job;
+         · publishes its own saved images when the cloud has none, or when they were changed here more recently;
+         · when nobody has them at all, takes photos 9 and 10 of the newest published listing on Etsy (the pipeline
+           always puts the brand images at ranks 9-10) and keeps them.
+       A box emptied with its X button is refilled from the cloud: these images are meant to be on every listing.
+       Costs: one document read per page load when nothing is missing; chunk reads/writes only when an image changes. */
+    window.BrandStore = (function () {
+      "use strict";
+      const COLL = "ListingGen_Config", IDX = "brand~idx", CH = 700000;
+      const chunkId = (slot, k) => `brand~s${slot}~c${k}`;
+      const db = () => (typeof fsdb !== "undefined" ? fsdb : null);
+      const real = (x) => !!(x && isRealReservedSrc(x.src) && /^data:image\//i.test(String(x.src)));
+      const role = () => { try { return window.LiveMirror && window.LiveMirror.state ? window.LiveMirror.state() : "solo"; } catch (_) { return "solo"; } };
+      const saved = () => { try { return JSON.parse(localStorage.getItem("reservedPhotos") || "[]") || []; } catch (_) { return []; } };
+      const localAt = () => Number(localStorage.getItem("reservedPhotosAt")) || 0;
+      function sigOf(s) {
+        s = String(s || "");
+        let h = 2166136261;
+        const step = Math.max(1, Math.floor(s.length / 4000));
+        for (let i = 0; i < s.length; i += step) { h ^= s.charCodeAt(i); h = Math.imul(h, 16777619) >>> 0; }
+        return s.length + ":" + h.toString(36);
+      }
+      const state = { lastSync: 0, lastEtsyTry: 0, busy: null, timer: null, log: [] };
+      const note = (m) => { state.log.push({ at: Date.now(), m }); if (state.log.length > 20) state.log.shift(); console.log("[brand] " + m); };
+
+      async function readIndex() {
+        const d = db(); if (!d) return null;
+        const s = await d.collection(COLL).doc(IDX).get();
+        return s.exists ? (s.data() || null) : null;
+      }
+      async function readSlot(slot, c) {
+        const d = db(); if (!d || !c || !(c.chunks > 0)) return null;
+        const parts = await Promise.all(Array.from({ length: c.chunks }, (_, k) => d.collection(COLL).doc(chunkId(slot, k)).get()));
+        if (parts.some((p) => !p.exists || (p.data() || {}).sig !== c.sig)) return null;     // a write still under way
+        const src = parts.map((p) => String((p.data() || {}).d || "")).join("");
+        return sigOf(src) === c.sig ? src : null;
+      }
+      async function writeSlot(slot, x) {
+        const d = db(); if (!d) return null;
+        const src = String(x.src), sig = sigOf(src), n = Math.ceil(src.length / CH);
+        for (let k = 0; k < n; k++) await d.collection(COLL).doc(chunkId(slot, k)).set({ sig, d: src.slice(k * CH, (k + 1) * CH) });
+        return { sig, chunks: n, name: String(x.name || `brand_${9 + slot}.jpg`), meta: String(x.meta || "").slice(0, 250), id: String(x.id || "brand-" + slot) };
+      }
+      function useSlot(slot, x) {
+        const list = saved();
+        while (list.length < slot) list.push(null);
+        list[slot] = x;
+        persistReservedLocal(list);
+        if (role() !== "follower") {                      // a follower's boxes are the mirrored view of the working computer
+          if (!Array.isArray(window.reservedPhotos)) window.reservedPhotos = [];
+          while (window.reservedPhotos.length < slot) window.reservedPhotos.push(null);
+          window.reservedPhotos[slot] = x;
+        }
+      }
+      function missing() {
+        const shown = Array.from(window.reservedPhotos || []), sv = saved();
+        return [0, 1].filter((i) => !(shown[i] && isRealReservedSrc(shown[i].src)) && !real(sv[i]));
+      }
+
+      async function fromEtsy(slots) {
+        const token = window.accessToken, L = window.ListingLedger, G = window.PipeGuard;
+        if (!token || !L || !G || !G.effectiveMeta || typeof fetchImageViaChunkedProxy !== "function") return 0;
+        if (Date.now() - state.lastEtsyTry < 30 * 60000) return 0;
+        const done = (L.list("done") || []).slice().sort((a, b) => (Number(b.doneAt) || 0) - (Number(a.doneAt) || 0)).slice(0, 6);
+        if (!done.length) return 0;                                          // the ledger is not loaded yet: try again later
+        state.lastEtsyTry = Date.now();
+        const want = new Set(slots);
+        let got = 0;
+        for (const e of done) {
+          if (!want.size) break;
+          let id = ""; try { id = String(G.effectiveMeta(e.setName, e).listingId || ""); } catch (_) {}
+          if (!id) continue;
+          try {
+            const r = await fetch(`/.netlify/functions/etsyProxy?listingId=${encodeURIComponent(id)}&includes=Images`, { headers: { "access-token": String(token) } });
+            if (!r.ok) continue;
+            const j = await r.json().catch(() => null);
+            const imgs = (j && (j.images || j.Images)) || [];
+            if (imgs.length < 9) continue;                                   // not a full gallery: its 9/10 are not brand images
+            for (const slot of [...want]) {
+              const im = imgs.find((x) => Number(x.rank) === 9 + slot);
+              const url = im && (im.url_fullxfull || im.url_570xN);
+              if (!url) continue;
+              const blobUrl = await fetchImageViaChunkedProxy(url);
+              const blob = await (await fetch(blobUrl)).blob();
+              try { URL.revokeObjectURL(blobUrl); } catch (_) {}
+              const src = await new Promise((res, rej) => { const fr = new FileReader(); fr.onload = () => res(String(fr.result)); fr.onerror = rej; fr.readAsDataURL(blob); });
+              if (!/^data:image\//i.test(src)) continue;
+              useSlot(slot, { src, name: `brand_${9 + slot}.jpg`, meta: String(im.alt_text || "").slice(0, 250), id: "brand-" + slot });
+              want.delete(slot); got++;
+              note(`photo ${9 + slot} recovered from Etsy listing ${id}`);
+            }
+          } catch (err) { note(`could not read listing ${id} from Etsy: ${err && err.message}`); }
+        }
+        return got;
+      }
+
+      async function syncNow(reason) {
+        const d = db(); if (!d) return;
+        let idx = null;
+        try { idx = await readIndex(); } catch (e) { note("cloud copy unreachable: " + (e && e.message)); return; }
+        let changed = false;
+        const at = localAt(), cAt = Number(idx && idx.at) || 0;
+        // 1) take from the cloud: an empty box, or a newer image saved on another computer
+        for (const slot of [0, 1]) {
+          const c = idx && idx.slots && idx.slots[slot];
+          if (!c || !c.sig) continue;
+          const mine = saved()[slot];
+          const shownNow = (window.reservedPhotos || [])[slot];
+          const empty = !real(mine) && !(shownNow && isRealReservedSrc(shownNow.src));
+          if (!empty && !(cAt > at && real(mine) && sigOf(mine.src) !== c.sig)) continue;
+          try {
+            const src = await readSlot(slot, c);
+            if (src) { useSlot(slot, { src, name: c.name, meta: c.meta, id: c.id }); changed = true; note(`photo ${9 + slot} restored from the cloud copy (${reason})`); }
+          } catch (e) { note("reading the cloud copy failed: " + (e && e.message)); }
+        }
+        if (changed) { try { localStorage.setItem("reservedPhotosAt", String(cAt)); } catch (_) {} }
+        // 2) nobody has them anywhere: the newest published listing on Etsy has them at ranks 9-10
+        let left = missing();
+        if (left.length && (role() === "controller" || role() === "solo")) {
+          if (await fromEtsy(left)) { changed = true; try { localStorage.setItem("reservedPhotosAt", String(Date.now())); } catch (_) {} }
+        }
+        if (changed && role() !== "follower" && typeof updateStaticPreviewGrid === "function") { try { updateStaticPreviewGrid(); } catch (_) {} }
+        // 3) give the cloud what it lacks (or what was changed here last). Only this computer's SAVED copy is sent,
+        //    never a mirrored preview of another computer's boxes. An empty box never clears the cloud copy.
+        const sv = saved(), nowAt = localAt();
+        const slots = (idx && Array.isArray(idx.slots)) ? idx.slots.slice(0, 2) : [null, null];
+        let wrote = false;
+        for (const slot of [0, 1]) {
+          const mine = sv[slot]; if (!real(mine)) continue;
+          const c = slots[slot];
+          if (c && c.sig === sigOf(mine.src)) continue;
+          if (c && nowAt <= cAt) continue;                                   // the cloud copy is the newer one
+          try { slots[slot] = await writeSlot(slot, mine); wrote = true; } catch (e) { note("saving the cloud copy failed: " + (e && e.message)); }
+        }
+        if (wrote) {
+          const by = (window.LiveMirror && window.LiveMirror.terminal && window.LiveMirror.terminal.label) || "a computer";
+          try { await d.collection(COLL).doc(IDX).set({ v: 1, at: Math.max(nowAt, Date.now()), by, slots: [slots[0] || null, slots[1] || null] }); note("cloud copy updated"); } catch (e) { note("saving the cloud copy failed: " + (e && e.message)); }
+        }
+        state.lastSync = Date.now();
+      }
+      function sync(reason) {
+        if (state.busy) return state.busy;
+        state.busy = syncNow(reason || "sync").catch((e) => note("sync failed: " + (e && e.message))).finally(() => { state.busy = null; });
+        return state.busy;
+      }
+      /*  Before an Etsy job: make sure both boxes have a real picture (bounded wait, never blocks the run). */
+      async function ensure() {
+        if (!missing().length) return true;
+        await Promise.race([sync("before upload"), new Promise((r) => setTimeout(r, 25000))]);
+        return !missing().length;
+      }
+      function changed() { clearTimeout(state.timer); state.timer = setTimeout(() => sync("saved here"), 1500); }
+      return { sync, ensure, changed, missing, log: () => state.log.slice(), sigOf };
+    })();
+    /* ══ END BRAND IMAGES ══ */
 
     // Preserve aspect ratio (COVER) into a square canvas — no stretching.
     async function resizeImage(dataURL, width, height) {
@@ -25390,7 +25715,8 @@ https://www.etsy.com/your/shops/me/listing-editor/edit/1822973998
             removeBtn.textContent = "X";
             removeBtn.addEventListener("click", ev => {
               ev.stopPropagation();
-              window.reservedPhotos.splice(rIndex, 1);
+              // Empties THIS box (splice shifted photo 10 into box 9). The shared brand copy refills it.
+              window.reservedPhotos[rIndex] = null;
               saveReservedPhotos();
               updateStaticPreviewGrid();
             });
@@ -25540,6 +25866,9 @@ https://www.etsy.com/your/shops/me/listing-editor/edit/1822973998
     document.addEventListener("DOMContentLoaded", async () => {
       loadPositions();
       loadReservedPhotos();
+      // Photos 9-10: fill empty boxes from the shared copy (or the newest Etsy listing), and keep checking.
+      setTimeout(() => { try { window.BrandStore && window.BrandStore.sync("page start"); } catch (_) {} }, 5000);
+      setInterval(() => { try { if (window.BrandStore && window.BrandStore.missing().length) window.BrandStore.sync("still missing"); } catch (_) {} }, 10 * 60000);
       restoreDataAfterRedirect();
       let urlParams = new URLSearchParams(window.location.search);
       let code = urlParams.get("code");
@@ -28826,6 +29155,18 @@ async function callOpenAI(payload, opts = {}) {
     try { s.quarantined = window.QueueBoxes && window.QueueBoxes.quarantined ? window.QueueBoxes.quarantined() : []; } catch (_) { s.quarantined = []; }
     s.waiting = q.ready.length + q.interrupted.length + q.cooling.length + q.failed.length + q.parked.length;
     s.status = (($("fbText") || {}).textContent || "").trim();
+    // A pipeline step that waits for a PERSON (the batch review, or the one-set description approval).
+    const rw = window.__reviewWait, da = window.__descriptionApproval;
+    s.reviewWait = rw ? { n: rw.n, set: rw.set, forMs: t - rw.since, kind: rw.kind }
+      : (da && da.pending ? { n: 1, set: da.setName || (window.__currentProcessingSetName || ""), forMs: da.since ? t - da.since : 0, kind: "desc" } : null);
+    // Photos 9-10: the brand images this computer would put on the listings it publishes.
+    try {
+      const saved = JSON.parse(localStorage.getItem("reservedPhotos") || "[]") || [];
+      const shown = Array.from(window.reservedPhotos || []);
+      const real = (x) => x && typeof isRealReservedSrc === "function" ? isRealReservedSrc(x.src) : !!(x && x.src);
+      s.brandImages = [0, 1].filter((i) => real(shown[i]) || real(saved[i])).length;
+    } catch (_) { s.brandImages = null; }
+    s.brandOn = !(window.etsyPhotoBudget && window.etsyPhotoBudget.includeBrand === false);
     s.log = CH ? CH.log().slice(-10).map((x) => new Date(x.at).toLocaleTimeString() + " " + x.m) : [];
     return s;
   }
@@ -28839,7 +29180,10 @@ async function callOpenAI(payload, opts = {}) {
         `The cloud queue is ${esc(s.cloud)}${s.cloudStats && s.cloudStats.notOkForMs ? " for " + secs(s.cloudStats.notOkForMs) : ""}. It reconnects by itself; you can force it now.`, act: "reconnect" });
     if (s.pendingWrites) out.push({ lvl: "info", text: `${plural(s.pendingWrites, "change")} waiting to be sent to the cloud.`, act: s.cloud !== "ok" ? "reconnect" : null });
     if (s.etsyRefusal && Date.now() - s.etsyRefusal.at < 6 * 3600000) out.push({ lvl: "bad", text: `Etsy is refusing photo uploads (${esc(s.etsyRefusal.status)}${s.etsyRefusal.count ? ", " + s.etsyRefusal.count + "×" : ""}, last ${mins(Date.now() - s.etsyRefusal.at)} ago, listing ${esc(s.etsyRefusal.listingId)}): <code>${esc(String(s.etsyRefusal.body || "").slice(0, 300))}</code>`, act: null });
-    if (s.waiting && s.autoAnywhere && s.lastDoneAt && Date.now() - s.lastDoneAt > 3 * 3600000) out.push({ lvl: "bad", text: `Auto-Pilot is on, but nothing has been published for ${mins(Date.now() - s.lastDoneAt)} while ${plural(s.waiting, "set")} wait. Latest reason: ${esc((s.lastErrors[0] || "unknown").slice(0, 240))}`, act: "copy" });
+    if (s.reviewWait) out.push({ lvl: "bad", text: s.reviewWait.kind === "desc"
+        ? `The pipeline is waiting for you: approve the Listing Description of ${esc(s.reviewWait.set)}${s.reviewWait.forMs > 60000 ? " (waiting " + mins(s.reviewWait.forMs) + ")" : ""}.`
+        : `The pipeline is waiting for you: review ${plural(s.reviewWait.n, "listing")} (starting with ${esc(s.reviewWait.set)})${s.reviewWait.forMs > 60000 ? " — waiting " + mins(s.reviewWait.forMs) : ""}. Nothing more is published until they are approved.`, act: "review" });
+    if (s.waiting && s.autoAnywhere && s.lastDoneAt && Date.now() - s.lastDoneAt > 3 * 3600000) out.push({ lvl: "bad", text: `Auto-Pilot is on, but nothing has been published for ${mins(Date.now() - s.lastDoneAt)} while ${plural(s.waiting, "set")} wait. Latest reason: ${esc(((s.reviewWait ? "waiting for a person to review listings" : s.lastErrors[0]) || "unknown").slice(0, 240))}`, act: "copy" });
     if (s.pause) out.push({ lvl: "warn", text: `Pipeline paused: ${esc(s.pause.why)}. It resumes by itself in ${mins(s.pause.leftMs)}.`, act: "resume" });
     if (s.controllerNeedsEtsy) out.push({ lvl: "bad", text: `${esc(s.controller && s.controller.label)} holds the pipeline but has no Etsy connection, so nothing is being published.`, act: s.etsyHere ? "runhere" : "etsy" });
     if (s.needsEtsyHere || (s.role === "controller" && !s.etsyHere && s.waiting)) out.push({ lvl: "bad", text: "This computer runs the pipeline but is not connected to Etsy.", act: "etsy" });
@@ -28848,6 +29192,8 @@ async function callOpenAI(payload, opts = {}) {
     const stuck = s.queue.cooling.length + s.queue.failed.length + s.queue.parked.length + (s.autoAnywhere ? 0 : s.queue.interrupted.length);
     if (stuck) out.push({ lvl: "warn", text: `${plural(stuck, "set")} held back (cooling down after a failure, failed, parked for this session or interrupted).`, act: "retry" });
     if (s.quarantined && s.quarantined.length) out.push({ lvl: "info", text: `${plural(s.quarantined.length, "listing ID")} quarantined because Etsy refused their photos — no set will use them. Check them on Etsy; return one to its box below once it is fixed.`, act: null });
+    if (s.brandOn && s.brandImages != null && s.brandImages < 2 && (s.role === "controller" || s.role === "solo"))
+      out.push({ lvl: "warn", text: `Photos 9 and 10: this computer has ${s.brandImages} of its 2 brand images. It fills them by itself from the shared copy or from your newest Etsy listing (checked every 10 minutes and before every upload). If this stays, drop the two images into preview boxes 9 and 10 once — every computer then gets them.`, act: "brand" });
     if (s.earmarkedIds) out.push({ lvl: "info", text: `${plural(s.earmarkedIds, "listing ID")} reserved by waiting sets. They are not lost: each set reuses its own reserved ID when it runs, so the ID boxes show fewer.`, act: null });
     return out;
   }
@@ -28877,6 +29223,19 @@ async function callOpenAI(payload, opts = {}) {
       toast(`${plural(r.retried.length, "set")} back in the queue${r.skipped.length ? ` (${r.skipped.length} left alone: running or finished)` : ""}.`);
     }],
     resume: ["Resume pipeline", async () => { if (window.PipeGuard) window.PipeGuard.resumeNow(); toast("Pipeline resumed."); }],
+    brand: ["Restore photos 9-10 now", async () => {
+      if (!window.BrandStore) return;
+      await window.BrandStore.sync("Health & Recovery");
+      const left = window.BrandStore.missing().length;
+      toast(left ? `Photos 9-10: ${left} still missing — ${esc((window.BrandStore.log().slice(-1)[0] || {}).m || "no copy found")}` : "Photos 9 and 10 are back.", left ? "red" : "");
+    }],
+    review: ["Show the review", async () => {
+      hide();
+      const da = window.__descriptionApproval;
+      if (da && da.pending) { const c = $("listingDescContainer"); if (c) c.scrollIntoView({ behavior: "smooth", block: "center" }); return; }
+      const RP = window.ReviewPanel;
+      if (!(RP && RP.isOpen && RP.isOpen()) && !(RP && RP.reveal && RP.reveal())) toast("The review is still being prepared — it opens by itself in a moment.");
+    }],
     rescan: ["Rescan now", async () => {
       window.__waitingCache = null; window.__processedCache = null; window.__incompleteSetsTracker = {};
       try { if (window.__isScanningFB) window.__scanKickPending = true; else window.__scanAt(100); } catch (_) {}
