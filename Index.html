@@ -27468,9 +27468,23 @@ async function callOpenAI(payload, opts = {}) {
         const remaining = data.etsy_remaining_today == null ? null : Number(data.etsy_remaining_today);
         const exhausted = !!(stop && stop.stopped) || (Number.isFinite(remaining) && remaining <= 0);
         const fullAt = Number(data.etsy_full_reset_at) || 0;
-        if (!exhausted || !fullAt) { row.hidden = true; return; }
         row.hidden = false;
         const now = Date.now() + (Number(data._skew) || 0);
+        const lbl = row.querySelector(".awLabel");
+        if (lbl) lbl.textContent = exhausted && fullAt ? "Reset" : "Etsy";
+        if (!exhausted || !fullAt) {
+          // ETSY ROW ALWAYS ON (20 Nov 2026): while Etsy has calls, keep the Check Etsy button and Etsy's last answer visible.
+          const chk0 = etsyCheckText(lastEtsyCheck, now);
+          if (chk0 && now - Number(lastEtsyCheck.checkedAt) < 24 * 3600 * 1000) {
+            el.textContent = chk0.text;
+            el.className = "awReset " + chk0.cls;
+            row.title = "Etsy's answer to Check Etsy at " + fmtToronto(lastEtsyCheck.checkedAt) + " Toronto: " + chk0.text + ".\n\nPress Check Etsy for a fresh count (uses one Etsy call, no retries).";
+          } else {
+            el.textContent = "Not checked today";
+            el.className = "awReset";
+            row.title = "Press Check Etsy to ask Etsy how many calls are left (uses one Etsy call, no retries).";
+          }
+        } else {
         const stoppedNote = stop && stop.stopped ? "Etsy stopped since " + fmtToronto(stop.since) + " Toronto. " : "";
         let estText, estCls, estTitle;
         if (now < fullAt) {
@@ -27491,6 +27505,7 @@ async function callOpenAI(payload, opts = {}) {
           el.textContent = estText;
           el.className = "awReset " + estCls;
           row.title = (now < fullAt ? "Full 5,000 should be back by " + fmtToronto(fullAt) + " Toronto. " : "") + estTitle + "\n\nPress Check Etsy to ask Etsy directly (uses one Etsy call).";
+        }
         }
         const btn = byId("awCheckBtn");
         if (btn && !btn.dataset.busy) {
