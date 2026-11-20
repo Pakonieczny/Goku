@@ -73,6 +73,8 @@ exports.handler = async (event) => {
   const allowedHosts = new Set([
     "firebasestorage.googleapis.com",
     "storage.googleapis.com",
+    // Etsy's image CDN: photos 9-10 (brand images) are recovered from the shop's newest listing when no computer has them.
+    "i.etsystatic.com",
   ]);
   if (!allowedHosts.has(u.hostname)) {
     return errorResponse(400, "Disallowed host");
