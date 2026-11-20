@@ -13837,23 +13837,10 @@ ANTI-REPETITION (TITLE)
       }
       function prioritise(list) {
         if (!L() || !Array.isArray(list)) return list;
-        /*  Three tiers, each keeping the category order:
-              1. interrupted sets / the set another computer was handing over ("exactly where it left off")
-              2. APPROVED sets (a ledger entry with the operator's wording) — publishable with nobody at the screen
-              3. sets not approved yet — picking one opens the review gate, which waits for a person
-            UNATTENDED RELIABILITY (2026-11-19): tier 2 did not exist. One unapproved folder ahead of the approved
-            ones in category order sent the pipeline into the review gate (100 charms identified, then a wait for a
-            person) while approved sets sat behind it: nothing was published until someone came back. */
-        const first = [], approved = [], rest = [];
-        list.forEach((sr) => {
-          const n = String((sr && sr.name) || sr).replace(/\/$/, "");
-          const el = eligibility(n);
-          if (el.recover || (window.PipeControl && window.PipeControl.isHandoffSet(n))) first.push(sr);
-          else if (el.ok && !el.unapproved) approved.push(sr);
-          else rest.push(sr);
-        });
-        const all = first.concat(approved, rest);
-        list.length = 0; all.forEach((x) => list.push(x));
+        const first = [], rest = [];
+        // LIVE MIRROR control: the set another computer was working on when this one took over goes first ("exactly where it left off")
+        list.forEach((sr) => { const n = String((sr && sr.name) || sr).replace(/\/$/, ""); (eligibility(n).recover || (window.PipeControl && window.PipeControl.isHandoffSet(n)) ? first : rest).push(sr); });
+        if (first.length) { const all = first.concat(rest); list.length = 0; all.forEach((x) => list.push(x)); }
         return list;
       }
       function hasReservedId(name) {
