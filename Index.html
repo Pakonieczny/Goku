@@ -62,7 +62,7 @@
 // another automatically, so a tab still running OLD code could end up doing the work. Every tab compares its build with
 // the deployed one (a tiny file, every 2 minutes) and, as soon as it is idle, reloads itself. A stale tab never takes
 // control from another computer.
-window.APP_BUILD = "20261120T044700";
+window.APP_BUILD = "20261120T045421";
 (function () {
   var URL_ = function () { return window.APP_BUILD_URL || ("assets/build.json?t=" + Date.now()); };
   function idle() {
@@ -25266,11 +25266,13 @@ https://www.etsy.com/your/shops/me/listing-editor/edit/1822973998
         return [0, 1].filter((i) => !(shown[i] && isRealReservedSrc(shown[i].src)) && !real(sv[i]));
       }
 
-      async function fromEtsy(slots) {
+      async function fromEtsy(slots, force) {
         const token = window.accessToken, L = window.ListingLedger, G = window.PipeGuard;
-        if (!token || !L || !G || !G.effectiveMeta || typeof fetchImageViaChunkedProxy !== "function") return 0;
-        if (Date.now() - state.lastEtsyTry < 30 * 60000) return 0;
-        const done = (L.list("done") || []).slice().sort((a, b) => (Number(b.doneAt) || 0) - (Number(a.doneAt) || 0)).slice(0, 6);
+        if (!token || !L || !G || !G.effectiveMeta || typeof fetchImageViaChunkedProxy !== "function") { note("Etsy not connected or listing history not loaded yet"); return 0; }
+        if (!force && Date.now() - state.lastEtsyTry < 30 * 60000) return 0;
+        // The newest listings may be the very ones published WITHOUT photos 9-10: look further back (one Etsy call each,
+        // stopping at the first listing that has them).
+        const done = (L.list("done") || []).slice().sort((a, b) => (Number(b.doneAt) || 0) - (Number(a.doneAt) || 0)).slice(0, 40);
         if (!done.length) return 0;                                          // the ledger is not loaded yet: try again later
         state.lastEtsyTry = Date.now();
         const want = new Set(slots);
@@ -25284,7 +25286,7 @@ https://www.etsy.com/your/shops/me/listing-editor/edit/1822973998
             if (!r.ok) continue;
             const j = await r.json().catch(() => null);
             const imgs = (j && (j.images || j.Images)) || [];
-            if (imgs.length < 9) continue;                                   // not a full gallery: its 9/10 are not brand images
+            if (imgs.length < 9) { note(`listing ${id} has only ${imgs.length} photos — looking further back`); continue; }
             for (const slot of [...want]) {
               const im = imgs.find((x) => Number(x.rank) === 9 + slot);
               const url = im && (im.url_fullxfull || im.url_570xN);
@@ -25303,7 +25305,7 @@ https://www.etsy.com/your/shops/me/listing-editor/edit/1822973998
         return got;
       }
 
-      async function syncNow(reason) {
+      async function syncNow(reason, force) {
         const d = db(); if (!d) return;
         let idx = null;
         try { idx = await readIndex(); } catch (e) { note("cloud copy unreachable: " + (e && e.message)); return; }
@@ -25326,7 +25328,7 @@ https://www.etsy.com/your/shops/me/listing-editor/edit/1822973998
         // 2) nobody has them anywhere: the newest published listing on Etsy has them at ranks 9-10
         let left = missing();
         if (left.length && (role() === "controller" || role() === "solo")) {
-          if (await fromEtsy(left)) { changed = true; try { localStorage.setItem("reservedPhotosAt", String(Date.now())); } catch (_) {} }
+          if (await fromEtsy(left, force)) { changed = true; try { localStorage.setItem("reservedPhotosAt", String(Date.now())); } catch (_) {} }
         }
         if (changed && role() !== "follower" && typeof updateStaticPreviewGrid === "function") { try { updateStaticPreviewGrid(); } catch (_) {} }
         // 3) give the cloud what it lacks (or what was changed here last). Only this computer's SAVED copy is sent,
@@ -25347,9 +25349,9 @@ https://www.etsy.com/your/shops/me/listing-editor/edit/1822973998
         }
         state.lastSync = Date.now();
       }
-      function sync(reason) {
+      function sync(reason, force) {
         if (state.busy) return state.busy;
-        state.busy = syncNow(reason || "sync").catch((e) => note("sync failed: " + (e && e.message))).finally(() => { state.busy = null; });
+        state.busy = syncNow(reason || "sync", !!force).catch((e) => note("sync failed: " + (e && e.message))).finally(() => { state.busy = null; });
         return state.busy;
       }
       /*  Before an Etsy job: make sure both boxes have a real picture (bounded wait, never blocks the run). */
@@ -25867,7 +25869,8 @@ https://www.etsy.com/your/shops/me/listing-editor/edit/1822973998
       loadPositions();
       loadReservedPhotos();
       // Photos 9-10: fill empty boxes from the shared copy (or the newest Etsy listing), and keep checking.
-      setTimeout(() => { try { window.BrandStore && window.BrandStore.sync("page start"); } catch (_) {} }, 5000);
+      // Several early tries: Etsy sign-in and the listing history arrive some seconds after the page.
+      [5000, 30000, 90000, 180000].forEach((ms, k) => setTimeout(() => { try { if (window.BrandStore && (k === 0 || window.BrandStore.missing().length)) window.BrandStore.sync("page start", k > 0); } catch (_) {} }, ms));
       setInterval(() => { try { if (window.BrandStore && window.BrandStore.missing().length) window.BrandStore.sync("still missing"); } catch (_) {} }, 10 * 60000);
       restoreDataAfterRedirect();
       let urlParams = new URLSearchParams(window.location.search);
@@ -29225,7 +29228,7 @@ async function callOpenAI(payload, opts = {}) {
     resume: ["Resume pipeline", async () => { if (window.PipeGuard) window.PipeGuard.resumeNow(); toast("Pipeline resumed."); }],
     brand: ["Restore photos 9-10 now", async () => {
       if (!window.BrandStore) return;
-      await window.BrandStore.sync("Health & Recovery");
+      await window.BrandStore.sync("Health & Recovery", true);
       const left = window.BrandStore.missing().length;
       toast(left ? `Photos 9-10: ${left} still missing — ${esc((window.BrandStore.log().slice(-1)[0] || {}).m || "no copy found")}` : "Photos 9 and 10 are back.", left ? "red" : "");
     }],
