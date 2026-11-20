@@ -100,12 +100,18 @@ window.APP_BUILD = "20261120T045421";
       var r = await fetch(URL_(), { cache: "no-store" });
       if (!r.ok) return { ok: false };
       var j = await r.json();
-      if (j && j.build && String(j.build) !== String(window.APP_BUILD)) {
+      /*  Only a NEWER deployed build makes this page stale (build ids are UTC timestamps, so they sort as text).
+          2026-11-19: a deploy that published the page a minute before its build.json made every page that loaded in
+          that minute call ITSELF stale ("deployed" = the older id). A stale page never takes the pipeline over, the flag
+          was never cleared, and after 3 reloads the guard stopped reloading for an hour: the pipeline stood still. */
+      if (j && j.build && String(j.build) !== String(window.APP_BUILD) && String(j.build) > String(window.APP_BUILD)) {
         if (!window.__staleBuild) { try { if (window.M && M.toast) M.toast({ html: "A new version is available. This page refreshes when it is idle." }); } catch (_) {} }
         window.__staleBuild = String(j.build);
         whenIdleReload();
         return { ok: true, stale: true };
       }
+      // Up to date (or newer than what build.json says yet): never stale, and a flag left from earlier is lifted.
+      if (window.__staleBuild) { window.__staleBuild = null; clearTimeout(tickT); }
       return { ok: true, stale: false };
     } catch (_) { return { ok: false }; }
   }
