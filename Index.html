@@ -1707,7 +1707,10 @@ window.APP_BUILD = "20261120T145011";
     .apiWidget .awInfo.warnDot{color:var(--gold)}
     .apiWidget.awUnavailable{border-color:var(--clay); background:var(--claySoft)}
     .apiWidget .awRow[hidden]{display:none}
-    .apiWidget .awReset{font-size:11.5px; color:var(--ink); white-space:nowrap; overflow:hidden; text-overflow:ellipsis; font-variant-numeric:tabular-nums; min-width:0}
+    .apiWidget .awReset{font-size:11.5px; color:var(--ink); white-space:nowrap; overflow:hidden; text-overflow:ellipsis; font-variant-numeric:tabular-nums; min-width:0; flex:1 1 auto}
+    .apiWidget .awCheck{flex:0 0 auto; margin:0 0 0 auto; border:1px solid var(--line); background:var(--card); color:var(--ink); font-size:10.5px; font-weight:700; padding:2px 8px; border-radius:999px; line-height:1.2; cursor:pointer; width:auto; height:auto; min-height:0; box-shadow:none; text-transform:none; letter-spacing:0}
+    .apiWidget .awCheck:hover{background:var(--paper2)}
+    .apiWidget .awCheck:disabled{opacity:.5; cursor:default}
     .apiWidget .awReset.waiting{color:var(--clay); font-weight:700}
     .apiWidget .awReset.ready{color:var(--sage); font-weight:700}
     @media(max-width:1400px){.apiWidget{display:none}}
@@ -2430,6 +2433,7 @@ window.APP_BUILD = "20261120T145011";
     <div class="awRow awResetRow" data-row="reset" id="awResetRow" hidden>
       <span class="awLabel">Reset</span>
       <span class="awReset" id="awResetText">…</span>
+      <button class="awCheck" id="awCheckBtn" type="button">Check Etsy</button>
     </div>
     <button
       class="awInfo"
@@ -27434,11 +27438,29 @@ async function callOpenAI(payload, opts = {}) {
         bar.parentElement.className = "awBar" + (state ? " " + state : "");
       };
 
-      // ETSY RESET STATUS (20 Nov 2026) — free: uses only what etsyApiUsage already returns, never contacts Etsy.
+      // ETSY RESET STATUS (20 Nov 2026) — the countdown is free: it uses only what etsyApiUsage already returns.
       // Etsy's daily limit is a rolling 24-hour window, so with no Etsy call since `etsy_last_contact_at` the whole
       // limit is back 24 hours later (etsy_full_reset_at). Some calls may come back sooner as older calls age out.
+      // CHECK ETSY NOW: the button asks Etsy directly — exactly one Etsy call per press, at most one per minute for the
+      // whole shop (etsyCheckNow.js). Its last answer is kept on this computer and shown instead of the estimate.
       const fmtToronto = (ms) => ms ? new Date(Number(ms)).toLocaleString("en-US", { timeZone: "America/Toronto", weekday: "short", hour: "numeric", minute: "2-digit" }) : "unknown";
+      const fmtClock = (ms) => ms ? new Date(Number(ms)).toLocaleString("en-US", { timeZone: "America/Toronto", hour: "numeric", minute: "2-digit" }) : "unknown";
       const fmtLeft = (ms) => { const m = Math.max(0, Math.ceil(ms / 60000)); const h = Math.floor(m / 60); return h ? h + "h " + String(m % 60).padStart(2, "0") + "m" : m + "m"; };
+      let lastEtsyCheck = null;
+      try { lastEtsyCheck = JSON.parse(localStorage.getItem("lgEtsyCheck") || "null"); } catch (_) { lastEtsyCheck = null; }
+      let etsyCheckBusyUntil = 0;
+      function etsyCheckText(c, now) {
+        if (!c || !c.checkedAt) return null;
+        if (c.kind === "ok" && c.remaining != null) {
+          return { text: "Etsy: " + Number(c.remaining).toLocaleString() + " calls left", cls: Number(c.remaining) > 0 ? "ready" : "waiting" };
+        }
+        if (c.kind === "limited") {
+          if (c.retryAt && now < c.retryAt) return { text: "Etsy: retry in ~" + fmtLeft(c.retryAt - now), cls: "waiting" };
+          if (c.retryAt) return { text: "Retry time passed · check", cls: "waiting" };
+          return { text: "Etsy: still limited", cls: "waiting" };
+        }
+        return { text: "Check failed · try again", cls: "waiting" };
+      }
       function renderEtsyReset(data) {
         const row = byId("awResetRow"), el = byId("awResetText");
         if (!row || !el || !data) return;
@@ -27450,17 +27472,67 @@ async function callOpenAI(payload, opts = {}) {
         row.hidden = false;
         const now = Date.now() + (Number(data._skew) || 0);
         const stoppedNote = stop && stop.stopped ? "Etsy stopped since " + fmtToronto(stop.since) + " Toronto. " : "";
+        let estText, estCls, estTitle;
         if (now < fullAt) {
-          el.textContent = "Full 5,000 by " + fmtToronto(fullAt) + " · " + fmtLeft(fullAt - now);
-          el.className = "awReset waiting";
-          row.title = stoppedNote + "Etsy's daily limit is a rolling 24-hour window: each call stops counting about 24 hours after it was made, so some calls may come back sooner. No Etsy call has been recorded since " + fmtToronto(data.etsy_last_contact_at) + " Toronto, so the full limit should be back by " + fmtToronto(fullAt) + " Toronto. This estimate never contacts Etsy.";
+          estText = fmtToronto(fullAt) + " · in " + fmtLeft(fullAt - now);
+          estCls = "waiting";
+          estTitle = stoppedNote + "Etsy's daily limit is a rolling 24-hour window: each call stops counting about 24 hours after it was made, so some calls may come back sooner. No Etsy call has been recorded since " + fmtToronto(data.etsy_last_contact_at) + " Toronto, so the full limit should be back by " + fmtToronto(fullAt) + " Toronto. This estimate never contacts Etsy.";
         } else {
-          el.textContent = stop && stop.stopped ? "Limit should be reset · press Resume Etsy" : "Limit should be reset";
-          el.className = "awReset ready";
-          row.title = stoppedNote + "More than 24 hours have passed since the last Etsy call (" + fmtToronto(data.etsy_last_contact_at) + " Toronto), so Etsy's rolling 24-hour window should be clear." + (stop && stop.stopped ? " The shop's stop switch is still on: press Resume Etsy in Brites Manager → Settings to start again." : "");
+          estText = "Should be reset now";
+          estCls = "ready";
+          estTitle = stoppedNote + "More than 24 hours have passed since the last Etsy call (" + fmtToronto(data.etsy_last_contact_at) + " Toronto), so Etsy's rolling 24-hour window should be clear." + (stop && stop.stopped ? " The shop's stop switch is still on: press Resume Etsy in Brites Manager → Settings to start again." : "");
+        }
+        const chk = etsyCheckText(lastEtsyCheck, now);
+        if (chk && now - Number(lastEtsyCheck.checkedAt) < 24 * 3600 * 1000) {
+          el.textContent = chk.text;
+          el.className = "awReset " + chk.cls;
+          row.title = "Etsy's answer to Check Etsy at " + fmtToronto(lastEtsyCheck.checkedAt) + " Toronto: " + chk.text + (lastEtsyCheck.kind === "limited" && lastEtsyCheck.retryAt ? " (Etsy suggested retrying at " + fmtToronto(lastEtsyCheck.retryAt) + " Toronto)" : "") + (lastEtsyCheck.kind === "ok" && Number(lastEtsyCheck.remaining) > 0 && stop && stop.stopped ? ". Etsy has calls available again: press Resume Etsy in Brites Manager → Settings to start the shop again" : "") + ".\n\nEstimate without contacting Etsy: full 5,000 by " + fmtToronto(fullAt) + " Toronto.\n" + estTitle;
+        } else {
+          el.textContent = estText;
+          el.className = "awReset " + estCls;
+          row.title = (now < fullAt ? "Full 5,000 should be back by " + fmtToronto(fullAt) + " Toronto. " : "") + estTitle + "\n\nPress Check Etsy to ask Etsy directly (uses one Etsy call).";
+        }
+        const btn = byId("awCheckBtn");
+        if (btn && !btn.dataset.busy) {
+          const wait = etsyCheckBusyUntil - Date.now();
+          btn.disabled = wait > 0;
+          btn.textContent = "Check Etsy";
+          btn.title = wait > 0
+            ? "One check per minute for the whole shop. Next check possible in " + Math.ceil(wait / 1000) + " s."
+            : "Ask Etsy directly how many calls are left. Uses exactly one Etsy call, no retries.";
         }
       }
-      setInterval(() => { try { renderEtsyReset(lastUsageSnapshot); } catch (_) {} }, 30000);
+      async function checkEtsyNow() {
+        const btn = byId("awCheckBtn");
+        if (!btn || btn.dataset.busy || btn.disabled) return;
+        btn.dataset.busy = "1"; btn.disabled = true; btn.textContent = "Checking…";
+        const toast = (html) => { try { if (window.M && M.toast) M.toast({ html }); } catch (_) {} };
+        try {
+          const r = await fetch("/.netlify/functions/etsyCheckNow", {
+            method: "POST", cache: "no-store",
+            headers: { "Content-Type": "application/json", "X-Edit-Passcode": window.LG_PASS || "" },
+            body: "{}",
+          });
+          const d = await r.json().catch(() => ({}));
+          if (!r.ok || !d.ok) throw new Error(d.error || ("HTTP " + r.status));
+          if (d.kind && d.kind !== "pending") {
+            lastEtsyCheck = { kind: d.kind, status: d.status, remaining: d.remaining, limit: d.limit, retryAt: d.retryAt, retryAfterSec: d.retryAfterSec, checkedAt: d.checkedAt };
+            try { localStorage.setItem("lgEtsyCheck", JSON.stringify(lastEtsyCheck)); } catch (_) {}
+          }
+          etsyCheckBusyUntil = Number(d.nextAllowedAt) || (Date.now() + 60000);
+          if (d.cached) toast("Etsy was checked less than a minute ago, so no new call was made. Showing that answer.");
+        } catch (e) {
+          toast("Check Etsy failed: " + String((e && e.message) || e).replace(/[<>&]/g, ""));
+          etsyCheckBusyUntil = Date.now() + 5000;
+        } finally {
+          delete btn.dataset.busy;
+          renderEtsyReset(lastUsageSnapshot);
+          // the check recorded Etsy's fresh reading; the usage endpoint caches for 10 s
+          setTimeout(() => { try { refreshApiUsage(); } catch (_) {} }, 11000);
+        }
+      }
+      document.addEventListener("click", (e) => { if (e.target && e.target.id === "awCheckBtn") checkEtsyNow(); });
+      setInterval(() => { try { renderEtsyReset(lastUsageSnapshot); } catch (_) {} }, 10000);
 
       async function refreshApiUsage() {
         if (refreshInFlight) return lastUsageSnapshot;
